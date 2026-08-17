@@ -100,6 +100,46 @@ end
     @test getloglikelihood(accs) ≈ logpdf(Normal(), 2.0)
 end
 
+@testset "tilde in value position" begin
+    @model function parser_inner()
+        return 1
+    end
+
+    @model function tilde_value_position()
+        retval = x ~ parser_inner()
+    end
+
+    stmt = only(filter(x -> x isa Wren.ModelExpr, tilde_value_position().stmts))
+    @test stmt isa Wren.JuliaExpr
+    @test stmt.head == :(=)
+    @test stmt.args[1] == :retval
+    @test stmt.args[2] isa Wren.Sample
+    @test stmt.args[2].lhs == :x
+    @test stmt.args[2].rhs isa Wren.JuliaExpr
+    @test stmt.args[2].rhs.head == :call
+    @test stmt.args[2].rhs.args == [:parser_inner]
+end
+
+@testset "distribution tilde value" begin
+    @model function distribution_tilde_value()
+        retval = x ~ Normal()
+        @observe retval ~ Normal()
+    end
+
+    x = 0.5
+    source = FromParams(VarNamedTuple(; x), nothing)
+    accs = evaluate(distribution_tilde_value(), source, Wren.default_accumulators())
+    @test get_raw_values(accs) == VarNamedTuple(; x)
+    @test getlogprior(accs) ≈ logpdf(Normal(), x)
+    @test getloglikelihood(accs) ≈ logpdf(Normal(), x)
+
+    conditioned_model = distribution_tilde_value() | VarNamedTuple(; x)
+    accs = evaluate(conditioned_model, FromPrior(), Wren.default_accumulators())
+    @test get_raw_values(accs) == VarNamedTuple()
+    @test getlogprior(accs) == 0
+    @test getloglikelihood(accs) ≈ 2 * logpdf(Normal(), x)
+end
+
 @testset "control flow" begin
     @model function control_flow(n, events)
         if n == 0

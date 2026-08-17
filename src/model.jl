@@ -94,6 +94,8 @@ function emit_model_expr(stmt::Sample, accs, conditioned, latent_source)
             $(stmt.lhs) = $val
             $accs = $(accumulate_assume!!)($accs, $val, $vn, $rhs, $template)
         end
+        # `x ~ dist` evaluates to the value of x
+        $val
     end
 end
 
@@ -228,7 +230,6 @@ function lower_model_expr(expr::Expr, mod::Module, statement_position::Bool=fals
     end
 
     if expr.head == :call && expr.args[1] == :~
-        statement_position || error("@model: ~ must be used as a statement")
         length(expr.args) == 3 || error("@model: expected ~ to have 2 arguments")
         lhs, rhs = expr.args[2:3]
         return Sample(lhs, lower_model_expr(rhs, mod))
