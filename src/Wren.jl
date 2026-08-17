@@ -20,4 +20,6 @@ end
 
 include("model.jl")
 
+export @model, condition, conditioned, evaluate
+
 end # module Wren

@@ -12,9 +12,9 @@ using VarNames
     end
     model = f()
     accs = Wren.default_accumulators()
-    display(model.evaluation_fn(accs, model.args))
-    display(@b model.evaluation_fn($accs, $(model.args)))
-    @info Wren.view_evaluation_fn(model)
+    display(evaluate(model, accs))
+    display(@b evaluate($model, $accs))
+    # @info Wren.view_evaluation_fn(model)
 end
 
 @testset "arg" begin
@@ -24,9 +24,24 @@ end
     d = [100.0]
     model = g(d)
     accs = Wren.default_accumulators()
-    display(model.evaluation_fn(accs, model.args))
-    display(@b model.evaluation_fn($accs, $(model.args)))
-    @info Wren.view_evaluation_fn(model)
+    display(evaluate(model, accs))
+    display(@b evaluate($model, $accs))
+end
+
+@testset "cond" begin
+    @model function h()
+        x ~ Normal()
+        y ~ Normal(x)
+    end
+    model = h()
+    accs = Wren.default_accumulators()
+    display(evaluate(model, accs))
+    display(@b evaluate($model, $accs))
+
+    model = h() | VarNamedTuple(y = 1.0)
+    accs = Wren.default_accumulators()
+    display(evaluate(model, accs))
+    display(@b evaluate($model, $accs))
 end
 
 end # module WrenTests

@@ -13,7 +13,7 @@ struct Deterministic{L,R} <: ModelExpr
     rhs::R
 end
 
-struct Model{A<:NamedTuple,F}
+struct Model{A<:NamedTuple,C<:VarNamedTuple,F}
     # Arguments passed to the model
     args::A
     # todo: kwargs
@@ -21,13 +21,16 @@ struct Model{A<:NamedTuple,F}
     # Module that the model was defined in. Required to make RGF resolve globals / functions
     # defined in that module.
     mod::Module
+    conditioned::C
     # The cached evaluation function
     evaluation_fn::F
+end
 
-    function Model(args::A, stmts::Vector{Union{ModelExpr,LineNumberNode}}, mod::Module) where A<:NamedTuple
-        evaluation_fn = make_evaluation_fn(args, stmts, mod)
-        new{A,typeof(evaluation_fn)}(args, stmts, mod, evaluation_fn)
-    end
+function Model(
+    args::NamedTuple, stmts::Vector{Union{ModelExpr,LineNumberNode}}, mod::Module
+)
+    evaluation_fn = make_evaluation_fn(args, stmts, mod)
+    return Model(args, stmts, mod, VarNamedTuple(), evaluation_fn)
 end
 
 ## output
@@ -53,22 +56,34 @@ function make_evaluation_fn(::NamedTuple{argnames}, stmts::Vector{Union{ModelExp
     end
 
     @gensym accs
+    @gensym conditioned
     for stmt in stmts
         if stmt isa Sample
             @gensym rhs val vn
             push!(body.args, :($rhs = $(stmt.rhs))) # evaluate rhs once only
-            push!(body.args, :($val = $(rand)($rhs)))
-            # TODO: the following line should use BangBang as per DynamicPPL
-            push!(body.args, :($(stmt.lhs) = $val))
             push!(body.args, :($vn = $(varname(stmt.lhs, false))))
             template = get_top_level_symbol(stmt.lhs)
-            push!(body.args, :($accs = $(accumulate_assume!!)($accs, $val, $vn, $rhs, $template)))
+            push!(body.args, quote
+                if $(haskey)($conditioned, $vn)
+                    $val = $(getindex)($conditioned, $vn)
+                    $(stmt.lhs) = $val
+                    $accs = $(accumulate_observe!!)(
+                        $accs, $val, $vn, $rhs, $template
+                    )
+                else
+                    $val = $(rand)($rhs)
+                    $(stmt.lhs) = $val
+                    $accs = $(accumulate_assume!!)(
+                        $accs, $val, $vn, $rhs, $template
+                    )
+                end
+            end)
         elseif stmt isa Deterministic
             push!(body.args, :($(stmt.lhs) = $(stmt.rhs)))
         end
     end
     push!(body.args, :(return $accs))
-    return @RuntimeGeneratedFunction(mod, :(function ($accs, $model_args)
+    return @RuntimeGeneratedFunction(mod, :(function ($accs, $model_args, $conditioned)
         $body
     end))
 end
@@ -77,6 +92,18 @@ end
 function view_evaluation_fn(m::Model)
     return RuntimeGeneratedFunctions.get_expression(m.evaluation_fn)
 end
+
+@inline function evaluate(model::Model, accs::AccumulatorTuple)
+    return model.evaluation_fn(accs, model.args, model.conditioned)
+end
+
+conditioned(model::Model) = model.conditioned
+
+function condition(model::Model, values::VarNamedTuple)
+    new_conditioned = merge(model.conditioned, values)
+    return Model(model.args, model.stmts, model.mod, new_conditioned, model.evaluation_fn)
+end
+Base.:|(model::Model, values::VarNamedTuple) = condition(model, values)
 
 ## macro stuff
 
@@ -155,5 +182,3 @@ function _model(expr::Expr)
         $function_expr
     end
 end
-
-export @model
