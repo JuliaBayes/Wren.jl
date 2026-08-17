@@ -1,0 +1,17 @@
+name = "Wren"
+uuid = "bcabdda7-19af-429b-97ac-a6b557ca0f6c"
+version = "0.1.0"
+authors = ["Penelope Yong <penelopeysm@gmail.com>"]
+
+[deps]
+DensityInterface = "b429d917-457f-4dbc-8f4c-0cc954292b1d"
+RuntimeGeneratedFunctions = "7e49a35a-f44a-4d26-94aa-eba1b4ca6b47"
+VarNames = "09a315b2-63fc-4165-8d7f-d59368e770cc"
+
+[compat]
+DensityInterface = "0.4"
+RuntimeGeneratedFunctions = "0.5"
+VarNames = "0.1"
+
+[sources]
+VarNames = {rev = "main", url = "https://github.com/JuliaBayes/VarNames.jl"}
