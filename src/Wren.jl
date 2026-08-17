@@ -22,6 +22,7 @@ end
 
 include("latents/latents.jl")
 include("model.jl")
+include("model_display.jl")
 
 export @model,
     @observe,

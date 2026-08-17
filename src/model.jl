@@ -35,6 +35,10 @@ struct ForStatement{I,B} <: ModelExpr
     iterator::I
     body::B
 end
+struct LocalStatement{L,R} <: ModelExpr
+    lhs::L
+    rhs::R
+end
 
 struct Model{A<:NamedTuple,C<:VarNamedTuple,F}
     # Arguments passed to the model
@@ -133,11 +137,27 @@ function emit_statements(stmts, accs, conditioned, latent_source)
         elseif stmt isa ForStatement
             loop_body = emit_statements(stmt.body, accs, conditioned, latent_source)
             push!(body.args, Expr(:for, stmt.iterator, loop_body))
+        elseif stmt isa LocalStatement
+            rhs = emit_control_flow(stmt.rhs, accs, conditioned, latent_source)
+            push!(body.args, Expr(:local, Expr(:(=), stmt.lhs, rhs)))
         elseif stmt isa LineNumberNode
             push!(body.args, stmt)
         end
     end
     return body
+end
+
+function emit_control_flow(stmt, accs, conditioned, latent_source)
+    if stmt isa IfStatement
+        return emit_if(stmt, accs, conditioned, latent_source)
+    elseif stmt isa WhileStatement
+        body = emit_statements(stmt.body, accs, conditioned, latent_source)
+        return Expr(:while, stmt.condition, body)
+    elseif stmt isa ForStatement
+        body = emit_statements(stmt.body, accs, conditioned, latent_source)
+        return Expr(:for, stmt.iterator, body)
+    end
+    error("Expected a control-flow statement")
 end
 
 function emit_if(stmt::IfStatement, accs, conditioned, latent_source)
@@ -208,30 +228,30 @@ function get_function_name_and_args(signature::Expr)
     end
 end
 
-function to_modelexprs(expr, expr_head_stack::Tuple=())
+function to_modelexprs(expr, mod::Module, expr_head_stack::Tuple=())
     dest = Union{ModelExpr,LineNumberNode}[]
-    return to_modelexprs!(dest, expr, expr_head_stack)
+    return to_modelexprs!(dest, expr, mod, expr_head_stack)
 end
 
-function to_modelexprs!(dest, lnn::LineNumberNode, ::Tuple)
+function to_modelexprs!(dest, lnn::LineNumberNode, ::Module, ::Tuple)
     push!(dest, lnn)
     return dest
 end
 
-function to_if_statement(expr::Expr, expr_head_stack::Tuple)
+function to_if_statement(expr::Expr, mod::Module, expr_head_stack::Tuple)
     condition = expr.args[1]
-    then_branch = to_modelexprs(expr.args[2], (:if, expr_head_stack...))
+    then_branch = to_modelexprs(expr.args[2], mod, (:if, expr_head_stack...))
     else_branch = if length(expr.args) == 2
         nothing
     elseif Meta.isexpr(expr.args[3], :elseif)
-        to_if_statement(expr.args[3], expr_head_stack)
+        to_if_statement(expr.args[3], mod, expr_head_stack)
     else
-        to_modelexprs(expr.args[3], (:if, expr_head_stack...))
+        to_modelexprs(expr.args[3], mod, (:if, expr_head_stack...))
     end
     return IfStatement(condition, then_branch, else_branch)
 end
 
-function to_modelexprs!(dest, expr::Expr, expr_head_stack::Tuple)
+function to_modelexprs!(dest, expr::Expr, mod::Module, expr_head_stack::Tuple)
     if expr.head == :macrocall && expr.args[1] == Symbol("@observe")
         observed_expr = last(expr.args)
         if !(observed_expr isa Expr && observed_expr.head == :call && observed_expr.args[1] == :~)
@@ -244,12 +264,29 @@ function to_modelexprs!(dest, expr::Expr, expr_head_stack::Tuple)
         return dest
     end
 
+    if expr.head == :macrocall
+        expanded = macroexpand(mod, expr; recursive=false)
+        return to_modelexprs!(dest, expanded, mod, expr_head_stack)
+    end
+
     if expr.head == :call && expr.args[1] == :~
         # lhs ~ rhs
         length(expr.args) == 3 || error("@model: expected ~ to have 2 arguments")
         lhs, rhs = expr.args[2:3]
         push!(dest, Sample(lhs, rhs))
         return dest
+    end
+
+    if expr.head == :local && length(expr.args) == 1
+        assignment = only(expr.args)
+        if Meta.isexpr(assignment, :(=)) &&
+                assignment.args[2] isa Expr &&
+                assignment.args[2].head in (:if, :while, :for)
+            lhs, rhs = assignment.args
+            control_flow = only(to_modelexprs(rhs, mod, expr_head_stack))
+            push!(dest, LocalStatement(lhs, control_flow))
+            return dest
+        end
     end
 
     if expr.head == :(=) && expr.args[1] isa Symbol && !isempty(expr_head_stack) && first(expr_head_stack) != :for
@@ -266,14 +303,14 @@ function to_modelexprs!(dest, expr::Expr, expr_head_stack::Tuple)
     end
 
     if expr.head == :if
-        push!(dest, to_if_statement(expr, expr_head_stack))
+        push!(dest, to_if_statement(expr, mod, expr_head_stack))
         return dest
     end
 
     if expr.head == :while
         condition, body = expr.args
         push!(dest, WhileStatement(
-            condition, to_modelexprs(body, (:while, expr_head_stack...))
+            condition, to_modelexprs(body, mod, (:while, expr_head_stack...))
         ))
         return dest
     end
@@ -281,7 +318,7 @@ function to_modelexprs!(dest, expr::Expr, expr_head_stack::Tuple)
     if expr.head == :for
         iterator, body = expr.args
         push!(dest, ForStatement(
-            iterator, to_modelexprs(body, (:for, expr_head_stack...))
+            iterator, to_modelexprs(body, mod, (:for, expr_head_stack...))
         ))
         return dest
     end
@@ -289,7 +326,7 @@ function to_modelexprs!(dest, expr::Expr, expr_head_stack::Tuple)
     if expr.head == :block
         expr_head_stack = (expr.head, expr_head_stack...)
         for stmt in expr.args
-            to_modelexprs!(dest, stmt, expr_head_stack)
+            to_modelexprs!(dest, stmt, mod, expr_head_stack)
         end
         return dest
     end
@@ -298,7 +335,7 @@ function to_modelexprs!(dest, expr::Expr, expr_head_stack::Tuple)
     return dest
 end
 
-function to_modelexprs!(dest, expr, ::Tuple)
+function to_modelexprs!(dest, expr, ::Module, ::Tuple)
     push!(dest, OtherStatement(expr))
     return dest
 end
@@ -318,14 +355,14 @@ function to_namedtuple(args_expr::Expr)
 end
 
 macro model(expr)
-    _model(expr)
+    _model(expr, __module__)
 end
 
 macro observe(expr)
     error("@observe must be used inside @model")
 end
 
-function _model(expr::Expr)
+function _model(expr::Expr, mod::Module)
     # Sanity check
     expr.head == :function || error("@model: expected a function definition")
     length(expr.args) == 2 || error("@model: expected function expr with 2 expr-args")
@@ -337,7 +374,7 @@ function _model(expr::Expr)
     signature, body = expr.args
 
     model_args = to_namedtuple(fargs_expr)
-    model_exprs = to_modelexprs(body)
+    model_exprs = to_modelexprs(body, mod)
     function_body = :($(Model)($model_args, $model_exprs, @__MODULE__))
     function_expr = Expr(:function, esc(signature), function_body)
 

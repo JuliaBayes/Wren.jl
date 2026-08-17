@@ -14,13 +14,20 @@ function run_model(model, latent_source=FromPrior())
     return result
 end
 
+macro sample_x()
+    return esc(:(x ~ Normal()))
+end
+
+macro observe_y()
+    return esc(:(@observe y ~ Normal()))
+end
+
 @testset "macro" begin
     @model function f()
         x ~ Normal()
     end
     model = f()
     run_model(model)
-    # @info Wren.view_evaluation_fn(model)
 end
 
 @testset "arg" begin
@@ -47,6 +54,26 @@ end
         @observe y ~ Normal()
     end
     run_model(k())
+end
+
+@testset "macro expansion" begin
+    @model function expanded_macros()
+        @sample_x
+        y = 0.25
+        @observe_y
+        xs = Vector{Float64}(undef, 2)
+        @inbounds for i in eachindex(xs)
+            xs[i] ~ Normal()
+        end
+    end
+
+    values = (0.5, 1.0, 2.0)
+    params = VarNamedTuple(; x=values[1], xs=collect(values[2:3]))
+    source = FromParams(params, nothing)
+    accs = evaluate(expanded_macros(), source, Wren.default_accumulators())
+
+    @test getlogprior(accs) ≈ sum(logpdf(Normal(), value) for value in values)
+    @test getloglikelihood(accs) ≈ logpdf(Normal(), 0.25)
 end
 
 @testset "control flow" begin
