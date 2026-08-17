@@ -78,23 +78,32 @@ end
 emit_model_expr(stmt::OtherStatement, accs, conditioned, latent_source) = stmt.expr
 
 function emit_model_expr(stmt::Sample, accs, conditioned, latent_source)
-    @gensym rhs val vn
+    @gensym rhs val vn child_source child_accs
     rhs_expr = emit_model_expr(stmt.rhs, accs, conditioned, latent_source)
     vn_expr = remove_escapes(varname(stmt.lhs, false))
     template = get_top_level_symbol(stmt.lhs)
     return quote
         $rhs = $rhs_expr
         $vn = $vn_expr
-        if $(haskey)($conditioned, $vn)
-            $val = $(getindex)($conditioned, $vn)
-            $(stmt.lhs) = $val
-            $accs = $(accumulate_observe!!)($accs, $val, $vn, $rhs, $template)
+        if $rhs isa $(Model)
+            $child_source = $(scope)($latent_source, $vn)
+            $child_accs = $(map)($(split), $accs)
+            $val, $child_accs = $(evaluate)($rhs, $child_source, $child_accs)
+            $accs = $(combine_with_namespace)(
+                $accs, $child_accs, $vn, $(stmt.lhs isa Symbol ? nothing : template)
+            )
         else
-            $val = $(get_latent)($latent_source, $vn, $rhs)
-            $(stmt.lhs) = $val
-            $accs = $(accumulate_assume!!)($accs, $val, $vn, $rhs, $template)
+            if $(haskey)($conditioned, $vn)
+                $val = $(getindex)($conditioned, $vn)
+                $(stmt.lhs) = $val
+                $accs = $(accumulate_observe!!)($accs, $val, $vn, $rhs, $template)
+            else
+                $val = $(get_latent)($latent_source, $vn, $rhs)
+                $(stmt.lhs) = $val
+                $accs = $(accumulate_assume!!)($accs, $val, $vn, $rhs, $template)
+            end
         end
-        # `x ~ dist` evaluates to the value of x
+        # A tilde expression evaluates to the sampled value or submodel return value.
         $val
     end
 end
@@ -114,10 +123,14 @@ end
 
 function emit_model_expr(stmt::ReturnStatement, accs, conditioned, latent_source)
     body = Expr(:block)
+    @gensym retval
     if stmt.expr !== nothing
-        push!(body.args, emit_model_expr(stmt.expr, accs, conditioned, latent_source))
+        return_expr = emit_model_expr(stmt.expr, accs, conditioned, latent_source)
+        push!(body.args, :($retval = $return_expr))
+    else
+        push!(body.args, :($retval = nothing))
     end
-    push!(body.args, :(return $accs))
+    push!(body.args, :(return ($retval, $accs)))
     return body
 end
 
@@ -138,7 +151,7 @@ function make_evaluation_fn(::NamedTuple{argnames}, stmts::Vector{Union{ModelExp
 
     @gensym accs conditioned latent_source
     append!(body.args, emit_statements(stmts, accs, conditioned, latent_source).args)
-    push!(body.args, :(return $accs))
+    push!(body.args, :(return (nothing, $accs)))
     return @RuntimeGeneratedFunction(mod, :(function (
         $latent_source, $accs, $model_args, $conditioned
     )
@@ -160,7 +173,7 @@ end
 end
 
 function Base.rand(rng::AbstractRNG, model::Model)
-    accs = evaluate(model, FromPrior(rng), AccumulatorTuple(RawValueAccumulator()))
+    _, accs = evaluate(model, FromPrior(rng), AccumulatorTuple(RawValueAccumulator()))
     return get_raw_values(accs)
 end
 

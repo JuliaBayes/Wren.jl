@@ -161,6 +161,14 @@ function combine(acc::LogProbAccumulator, acc2::LogProbAccumulator)
     end
     return basetypeof(acc)(logp(acc) + logp(acc2))
 end
+function combine_with_namespace(
+    acc::LogProbAccumulator,
+    acc2::LogProbAccumulator,
+    ::VarName,
+    template,
+)
+    return combine(acc, acc2)
+end
 
 acclogp(acc::LogProbAccumulator, val) = basetypeof(acc)(logp(acc) + val)
 acclogp(acc::LogProbAccumulator{NoLogProb}, val) = basetypeof(acc)(val)

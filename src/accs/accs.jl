@@ -118,6 +118,13 @@ See also: [`split`](@ref)
 function combine end
 
 """
+    combine_with_namespace(parent, child, vn, template)
+
+Embed the contents of `child` beneath `vn`, then combine it with `parent`.
+"""
+function combine_with_namespace end
+
+"""
     promote_for_threadsafe_eval(acc::AbstractAccumulator, ::Type{T}) where {T}
 
 Convert `acc` to a new accumulator that works with threadsafe evaluation. The type parameter
@@ -239,6 +246,20 @@ end
 
 function Base.map(func::Function, at::AccumulatorTuple)
     return AccumulatorTuple(map(func, at.nt))
+end
+
+function combine_with_namespace(
+    parent::AccumulatorTuple,
+    child::AccumulatorTuple,
+    vn::VarName,
+    template,
+)
+    keys(parent) == keys(child) ||
+        throw(ArgumentError("Cannot combine AccumulatorTuples with different accumulators"))
+    combined = map(values(parent.nt), values(child.nt)) do parent_acc, child_acc
+        combine_with_namespace(parent_acc, child_acc, vn, template)
+    end
+    return AccumulatorTuple(combined)
 end
 
 """

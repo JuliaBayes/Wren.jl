@@ -106,5 +106,17 @@ for acc_type in (:VNTAccumulator, :TSVNTAccumulator)
             end
             return update_values(acc1, merge(acc1.values, acc2.values))
         end
+        function combine_with_namespace(
+            acc1::$acc_type{AccName},
+            acc2::$acc_type{AccName},
+            vn::VarName,
+            template,
+        ) where {AccName}
+            isempty(acc2.values) && return acc1
+            nested_values = VarNames.templated_setindex!!(
+                VarNamedTuple(), acc2.values, vn, template
+            )
+            return combine(acc1, update_values(acc2, nested_values))
+        end
     end
 end

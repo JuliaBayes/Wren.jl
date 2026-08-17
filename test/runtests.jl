@@ -8,7 +8,7 @@ using VarNames
 
 function run_model(model, latent_source=FromPrior())
     accs = Wren.default_accumulators()
-    result = evaluate(model, latent_source, accs)
+    _, result = evaluate(model, latent_source, accs)
     display(result)
     display(@b evaluate($model, $latent_source, $accs))
     return result
@@ -70,7 +70,7 @@ end
     values = (0.5, 1.0, 2.0)
     params = VarNamedTuple(; x=values[1], xs=collect(values[2:3]))
     source = FromParams(params, nothing)
-    accs = evaluate(expanded_macros(), source, Wren.default_accumulators())
+    _, accs = evaluate(expanded_macros(), source, Wren.default_accumulators())
 
     @test getlogprior(accs) ≈ sum(logpdf(Normal(), value) for value in values)
     @test getloglikelihood(accs) ≈ logpdf(Normal(), 0.25)
@@ -91,11 +91,11 @@ end
     params = VarNamedTuple(; y=0.5, z=2.0)
     source = FromParams(params, nothing)
 
-    accs = evaluate(nested_if(true), source, Wren.default_accumulators())
+    _, accs = evaluate(nested_if(true), source, Wren.default_accumulators())
     @test getlogprior(accs) ≈ logpdf(Normal(), 0.5)
     @test getloglikelihood(accs) ≈ logpdf(Normal(), 0.5)
 
-    accs = evaluate(nested_if(false), source, Wren.default_accumulators())
+    _, accs = evaluate(nested_if(false), source, Wren.default_accumulators())
     @test getlogprior(accs) ≈ logpdf(Normal(), 2.0)
     @test getloglikelihood(accs) ≈ logpdf(Normal(), 2.0)
 end
@@ -128,16 +128,68 @@ end
 
     x = 0.5
     source = FromParams(VarNamedTuple(; x), nothing)
-    accs = evaluate(distribution_tilde_value(), source, Wren.default_accumulators())
+    _, accs = evaluate(distribution_tilde_value(), source, Wren.default_accumulators())
     @test get_raw_values(accs) == VarNamedTuple(; x)
     @test getlogprior(accs) ≈ logpdf(Normal(), x)
     @test getloglikelihood(accs) ≈ logpdf(Normal(), x)
 
     conditioned_model = distribution_tilde_value() | VarNamedTuple(; x)
-    accs = evaluate(conditioned_model, FromPrior(), Wren.default_accumulators())
+    _, accs = evaluate(conditioned_model, FromPrior(), Wren.default_accumulators())
     @test get_raw_values(accs) == VarNamedTuple()
     @test getlogprior(accs) == 0
     @test getloglikelihood(accs) ≈ 2 * logpdf(Normal(), x)
+end
+
+@testset "return values" begin
+    @model function explicit_return()
+        return x ~ Normal()
+    end
+
+    x = 0.5
+    source = FromParams(VarNamedTuple(; x), nothing)
+    retval, accs = evaluate(explicit_return(), source, Wren.default_accumulators())
+    @test retval == x
+    @test getlogprior(accs) ≈ logpdf(Normal(), x)
+
+    @model function bare_return(events)
+        push!(events, :before)
+        return
+        push!(events, :after)
+    end
+
+    events = Symbol[]
+    retval, _ = evaluate(bare_return(events), FromPrior(), Wren.default_accumulators())
+    @test retval === nothing
+    @test events == [:before]
+
+    @model function fallthrough()
+        x ~ Normal()
+    end
+
+    retval, _ = evaluate(fallthrough(), source, Wren.default_accumulators())
+    @test retval === nothing
+end
+
+@testset "submodel return value" begin
+    @model function returning_inner()
+        a ~ Normal()
+        return 2a
+    end
+
+    @model function returning_outer(inner)
+        x = :namespace_sentinel
+        retval = x ~ inner
+        return (x, retval + 1)
+    end
+
+    a = 0.5
+    source = FromParams(VarNamedTuple(; x=VarNamedTuple(; a)), nothing)
+    retval, accs = evaluate(
+        returning_outer(returning_inner()), source, Wren.default_accumulators()
+    )
+    @test retval == (:namespace_sentinel, 2a + 1)
+    @test get_raw_values(accs) == VarNamedTuple(; x=VarNamedTuple(; a))
+    @test getlogjoint(accs) ≈ logpdf(Normal(), a)
 end
 
 @testset "control flow" begin
@@ -169,7 +221,7 @@ end
     values = [0.25, -0.5]
     source = FromParams(VarNamedTuple(; xs=values), nothing)
     events = Symbol[]
-    accs = evaluate(control_flow(2, events), source, Wren.default_accumulators())
+    _, accs = evaluate(control_flow(2, events), source, Wren.default_accumulators())
     expected_logp = sum(logpdf(Normal(), value) for value in values)
 
     @test events == [:even, :finished]
@@ -179,7 +231,7 @@ end
     @test getloglikelihood(accs) ≈ expected_logp
 
     events = Symbol[]
-    accs = evaluate(control_flow(0, events), FromPrior(), Wren.default_accumulators())
+    _, accs = evaluate(control_flow(0, events), FromPrior(), Wren.default_accumulators())
     @test events == [:empty]
     @test get_raw_values(accs) == VarNamedTuple()
 end
