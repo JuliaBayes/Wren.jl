@@ -16,6 +16,12 @@ struct Deterministic{L,R} <: ModelExpr
     lhs::L
     rhs::R
 end
+struct ReturnStatement{E} <: ModelExpr
+    expr::E
+end
+struct OtherStatement{E} <: ModelExpr
+    expr::E
+end
 
 struct Model{A<:NamedTuple,C<:VarNamedTuple,F}
     # Arguments passed to the model
@@ -94,6 +100,16 @@ function make_evaluation_fn(::NamedTuple{argnames}, stmts::Vector{Union{ModelExp
             )))
         elseif stmt isa Deterministic
             push!(body.args, :($(stmt.lhs) = $(stmt.rhs)))
+        elseif stmt isa ReturnStatement
+            # need to evaluate the original return value in case it has
+            # side effects.
+            stmt.expr !== nothing && push!(body.args, stmt.expr)
+            # but we don't actually return it -- only the accs
+            push!(body.args, :(return $accs))
+        elseif stmt isa OtherStatement
+            push!(body.args, stmt.expr)
+        elseif stmt isa LineNumberNode
+            push!(body.args, stmt)
         end
     end
     push!(body.args, :(return $accs))
@@ -171,6 +187,10 @@ function to_modelexprs(expr::Expr, expr_head_stack::Tuple=())
         return [Deterministic(lhs, rhs)]
     end
 
+    if expr.head == :return
+        return [ReturnStatement(only(expr.args))]
+    end
+
     if expr.head == :block
         expr_head_stack = (expr.head, expr_head_stack...)
         exprs = vcat([to_modelexprs(stmt, expr_head_stack) for stmt in expr.args]...)
@@ -178,9 +198,10 @@ function to_modelexprs(expr::Expr, expr_head_stack::Tuple=())
         return convert(Vector{Union{ModelExpr,LineNumberNode}}, exprs)
     end
 
-    # Something else
-    error("todo")
+    return [OtherStatement(expr)]
 end
+
+to_modelexprs(expr, ::Tuple=()) = [OtherStatement(expr)]
 
 function to_namedtuple(args_expr::Expr)
     args_expr.head == :tuple || error("@model: expected a tuple of arguments")
