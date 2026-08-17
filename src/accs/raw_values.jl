@@ -51,9 +51,7 @@ function accumulate_assume!!(
     # The exception catching is probably slow, but it's ok since it only happens inside
     # check_model.
     new_vnt = try
-        VarNames.templated_setindex_no_overwrite!!(
-            acc.values, new_val, vn, template
-        )
+        VarNames.templated_setindex_no_overwrite!!(acc.values, new_val, vn, template)
     catch e
         # Don't error immediately, save it for later.
         if e isa VarNames.MustNotOverwriteError
@@ -83,12 +81,13 @@ function combine(
     new_values = acc1.values
     for (vn, val) in pairs(acc2.values)
         top_sym = VarNames.getsym(vn)
-        template_from_acc2_values = get(
-            acc2.values.data, top_sym, VarNames.NoTemplate()
-        )
+        template_from_acc2_values = get(acc2.values.data, top_sym, VarNames.NoTemplate())
         new_values = try
             VarNames.templated_setindex_no_overwrite!!(
-                new_values, val, vn, template_from_acc2_values
+                new_values,
+                val,
+                vn,
+                template_from_acc2_values,
             )
         catch e
             if e isa VarNames.MustNotOverwriteError
@@ -97,7 +96,10 @@ function combine(
                 # Note: if `acc1` and `acc2` have different templates
                 # `templated_setindex!!` uses the structure inside `acc1`'s values.
                 VarNames.templated_setindex!!(
-                    new_values, val, vn, template_from_acc2_values
+                    new_values,
+                    val,
+                    vn,
+                    template_from_acc2_values,
                 )
             else
                 rethrow(e)

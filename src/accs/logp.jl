@@ -166,13 +166,15 @@ acclogp(acc::LogProbAccumulator, val) = basetypeof(acc)(logp(acc) + val)
 acclogp(acc::LogProbAccumulator{NoLogProb}, val) = basetypeof(acc)(val)
 
 function Base.convert(
-    ::Type{AccType}, acc::LogProbAccumulator
+    ::Type{AccType},
+    acc::LogProbAccumulator,
 ) where {T,AccType<:LogProbAccumulator{T}}
     return AccType(convert(T, logp(acc)))
 end
 
 function promote_for_threadsafe_eval(
-    acc::LogProbAccumulator, ::Type{Tparam_eltype}
+    acc::LogProbAccumulator,
+    ::Type{Tparam_eltype},
 ) where {Tparam_eltype}
     return basetypeof(acc)(convert(Tparam_eltype, logp(acc)))
 end
@@ -198,9 +200,7 @@ logp(acc::LogPriorAccumulator) = acc.logp
 
 accumulator_name(::Type{<:LogPriorAccumulator}) = :LogPrior
 
-function accumulate_assume!!(
-    acc::LogPriorAccumulator, val, vn, right, template
-)
+function accumulate_assume!!(acc::LogPriorAccumulator, val, vn, right, template)
     return acclogp(acc, DensityInterface.logdensityof(right, val))
 end
 accumulate_observe!!(acc::LogPriorAccumulator, val, vn, right, template) = acc
@@ -244,9 +244,7 @@ logp(acc::LogJacobianAccumulator) = acc.logjac
 
 accumulator_name(::Type{<:LogJacobianAccumulator}) = :LogJacobian
 
-function accumulate_assume!!(
-    acc::LogJacobianAccumulator, val, vn, right, template
-)
+function accumulate_assume!!(acc::LogJacobianAccumulator, val, vn, right, template)
     return acc
     # TODO: implement logjac
     # return acclogp(acc, logjac)
@@ -270,9 +268,7 @@ logp(acc::LogLikelihoodAccumulator) = acc.logp
 
 accumulator_name(::Type{<:LogLikelihoodAccumulator}) = :LogLikelihood
 
-function accumulate_assume!!(
-    acc::LogLikelihoodAccumulator, val, vn, right, template
-)
+function accumulate_assume!!(acc::LogLikelihoodAccumulator, val, vn, right, template)
     return acc
 end
 function accumulate_observe!!(acc::LogLikelihoodAccumulator, val, vn, right, template)

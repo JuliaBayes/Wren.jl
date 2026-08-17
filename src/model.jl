@@ -12,32 +12,15 @@ struct Observe{L,R} <: ModelExpr
     lhs::L
     rhs::R
 end
-struct Deterministic{L,R} <: ModelExpr
-    lhs::L
-    rhs::R
-end
 struct ReturnStatement{E} <: ModelExpr
     expr::E
 end
 struct OtherStatement{E} <: ModelExpr
     expr::E
 end
-struct IfStatement{C,T,E} <: ModelExpr
-    condition::C
-    then_branch::T
-    else_branch::E
-end
-struct WhileStatement{C,B} <: ModelExpr
-    condition::C
-    body::B
-end
-struct ForStatement{I,B} <: ModelExpr
-    iterator::I
-    body::B
-end
-struct LocalStatement{L,R} <: ModelExpr
-    lhs::L
-    rhs::R
+struct JuliaExpr{A} <: ModelExpr
+    head::Symbol
+    args::A
 end
 
 struct Model{A<:NamedTuple,C<:VarNamedTuple,F}
@@ -85,90 +68,63 @@ function remove_escapes(expr::Expr)
     return Expr(expr.head, map(remove_escapes, expr.args)...)
 end
 
-function emit_statements(stmts, accs, conditioned, latent_source)
-    body = Expr(:block)
-    for stmt in stmts
-        if stmt isa Sample
-            @gensym rhs val vn
-            push!(body.args, :($rhs = $(stmt.rhs))) # evaluate rhs once only
-            vn_expr = remove_escapes(varname(stmt.lhs, false))
-            push!(body.args, :($vn = $vn_expr))
-            template = get_top_level_symbol(stmt.lhs)
-            push!(body.args, quote
-                if $(haskey)($conditioned, $vn)
-                    $val = $(getindex)($conditioned, $vn)
-                    $(stmt.lhs) = $val
-                    $accs = $(accumulate_observe!!)(
-                        $accs, $val, $vn, $rhs, $template
-                    )
-                else
-                    $val = $(get_latent)($latent_source, $vn, $rhs)
-                    $(stmt.lhs) = $val
-                    $accs = $(accumulate_assume!!)(
-                        $accs, $val, $vn, $rhs, $template
-                    )
-                end
-            end)
-        elseif stmt isa Observe
-            @gensym rhs val vn
-            push!(body.args, :($val = $(stmt.lhs)))
-            push!(body.args, :($rhs = $(stmt.rhs)))
-            vn_expr = remove_escapes(varname(stmt.lhs, false))
-            push!(body.args, :($vn = $vn_expr))
-            template = get_top_level_symbol(stmt.lhs)
-            push!(body.args, :($accs = $(accumulate_observe!!)(
-                $accs, $val, $vn, $rhs, $template
-            )))
-        elseif stmt isa Deterministic
-            push!(body.args, :($(stmt.lhs) = $(stmt.rhs)))
-        elseif stmt isa ReturnStatement
-            # need to evaluate the original return value in case it has
-            # side effects.
-            stmt.expr !== nothing && push!(body.args, stmt.expr)
-            # but we don't actually return it -- only the accs
-            push!(body.args, :(return $accs))
-        elseif stmt isa OtherStatement
-            push!(body.args, stmt.expr)
-        elseif stmt isa IfStatement
-            push!(body.args, emit_if(stmt, accs, conditioned, latent_source))
-        elseif stmt isa WhileStatement
-            loop_body = emit_statements(stmt.body, accs, conditioned, latent_source)
-            push!(body.args, Expr(:while, stmt.condition, loop_body))
-        elseif stmt isa ForStatement
-            loop_body = emit_statements(stmt.body, accs, conditioned, latent_source)
-            push!(body.args, Expr(:for, stmt.iterator, loop_body))
-        elseif stmt isa LocalStatement
-            rhs = emit_control_flow(stmt.rhs, accs, conditioned, latent_source)
-            push!(body.args, Expr(:local, Expr(:(=), stmt.lhs, rhs)))
-        elseif stmt isa LineNumberNode
-            push!(body.args, stmt)
+emit_model_expr(expr, accs, conditioned, latent_source) = expr
+function emit_model_expr(stmt::JuliaExpr, accs, conditioned, latent_source)
+    args = map(
+        arg -> emit_model_expr(arg, accs, conditioned, latent_source), stmt.args
+    )
+    return Expr(stmt.head, args...)
+end
+emit_model_expr(stmt::OtherStatement, accs, conditioned, latent_source) = stmt.expr
+
+function emit_model_expr(stmt::Sample, accs, conditioned, latent_source)
+    @gensym rhs val vn
+    rhs_expr = emit_model_expr(stmt.rhs, accs, conditioned, latent_source)
+    vn_expr = remove_escapes(varname(stmt.lhs, false))
+    template = get_top_level_symbol(stmt.lhs)
+    return quote
+        $rhs = $rhs_expr
+        $vn = $vn_expr
+        if $(haskey)($conditioned, $vn)
+            $val = $(getindex)($conditioned, $vn)
+            $(stmt.lhs) = $val
+            $accs = $(accumulate_observe!!)($accs, $val, $vn, $rhs, $template)
+        else
+            $val = $(get_latent)($latent_source, $vn, $rhs)
+            $(stmt.lhs) = $val
+            $accs = $(accumulate_assume!!)($accs, $val, $vn, $rhs, $template)
         end
     end
+end
+
+function emit_model_expr(stmt::Observe, accs, conditioned, latent_source)
+    @gensym rhs val vn
+    rhs_expr = emit_model_expr(stmt.rhs, accs, conditioned, latent_source)
+    vn_expr = remove_escapes(varname(stmt.lhs, false))
+    template = get_top_level_symbol(stmt.lhs)
+    return quote
+        $val = $(stmt.lhs)
+        $rhs = $rhs_expr
+        $vn = $vn_expr
+        $accs = $(accumulate_observe!!)($accs, $val, $vn, $rhs, $template)
+    end
+end
+
+function emit_model_expr(stmt::ReturnStatement, accs, conditioned, latent_source)
+    body = Expr(:block)
+    if stmt.expr !== nothing
+        push!(body.args, emit_model_expr(stmt.expr, accs, conditioned, latent_source))
+    end
+    push!(body.args, :(return $accs))
     return body
 end
 
-function emit_control_flow(stmt, accs, conditioned, latent_source)
-    if stmt isa IfStatement
-        return emit_if(stmt, accs, conditioned, latent_source)
-    elseif stmt isa WhileStatement
-        body = emit_statements(stmt.body, accs, conditioned, latent_source)
-        return Expr(:while, stmt.condition, body)
-    elseif stmt isa ForStatement
-        body = emit_statements(stmt.body, accs, conditioned, latent_source)
-        return Expr(:for, stmt.iterator, body)
+function emit_statements(stmts, accs, conditioned, latent_source)
+    body = Expr(:block)
+    for stmt in stmts
+        push!(body.args, emit_model_expr(stmt, accs, conditioned, latent_source))
     end
-    error("Expected a control-flow statement")
-end
-
-function emit_if(stmt::IfStatement, accs, conditioned, latent_source)
-    then_branch = emit_statements(stmt.then_branch, accs, conditioned, latent_source)
-    if stmt.else_branch === nothing
-        return Expr(:if, stmt.condition, then_branch)
-    end
-    else_branch = stmt.else_branch isa IfStatement ?
-        emit_if(stmt.else_branch, accs, conditioned, latent_source) :
-        emit_statements(stmt.else_branch, accs, conditioned, latent_source)
-    return Expr(:if, stmt.condition, then_branch, else_branch)
+    return body
 end
 
 function make_evaluation_fn(::NamedTuple{argnames}, stmts::Vector{Union{ModelExpr,LineNumberNode}}, mod::Module) where {argnames}
@@ -228,31 +184,34 @@ function get_function_name_and_args(signature::Expr)
     end
 end
 
-function to_modelexprs(expr, mod::Module, expr_head_stack::Tuple=())
+function to_modelexprs(expr, mod::Module)
     dest = Union{ModelExpr,LineNumberNode}[]
-    return to_modelexprs!(dest, expr, mod, expr_head_stack)
+    if Meta.isexpr(expr, :block)
+        for stmt in expr.args
+            to_modelexprs!(dest, stmt, mod)
+        end
+    else
+        to_modelexprs!(dest, expr, mod)
+    end
+    return dest
 end
 
-function to_modelexprs!(dest, lnn::LineNumberNode, ::Module, ::Tuple)
+function to_modelexprs!(dest, lnn::LineNumberNode, ::Module)
     push!(dest, lnn)
     return dest
 end
 
-function to_if_statement(expr::Expr, mod::Module, expr_head_stack::Tuple)
-    condition = expr.args[1]
-    then_branch = to_modelexprs(expr.args[2], mod, (:if, expr_head_stack...))
-    else_branch = if length(expr.args) == 2
-        nothing
-    elseif Meta.isexpr(expr.args[3], :elseif)
-        to_if_statement(expr.args[3], mod, expr_head_stack)
-    else
-        to_modelexprs(expr.args[3], mod, (:if, expr_head_stack...))
-    end
-    return IfStatement(condition, then_branch, else_branch)
+function to_modelexprs!(dest, expr, mod::Module)
+    lowered = lower_model_expr(expr, mod, true)
+    push!(dest, lowered isa ModelExpr ? lowered : OtherStatement(lowered))
+    return dest
 end
 
-function to_modelexprs!(dest, expr::Expr, mod::Module, expr_head_stack::Tuple)
+lower_model_expr(expr, ::Module, ::Bool=false) = expr
+
+function lower_model_expr(expr::Expr, mod::Module, statement_position::Bool=false)
     if expr.head == :macrocall && expr.args[1] == Symbol("@observe")
+        statement_position || error("@observe must be used as a statement")
         observed_expr = last(expr.args)
         if !(observed_expr isa Expr && observed_expr.head == :call && observed_expr.args[1] == :~)
             error("@observe: expected an expression of the form `value ~ distribution`")
@@ -260,84 +219,38 @@ function to_modelexprs!(dest, expr::Expr, mod::Module, expr_head_stack::Tuple)
         length(observed_expr.args) == 3 ||
             error("@observe: expected ~ to have 2 arguments")
         lhs, rhs = observed_expr.args[2:3]
-        push!(dest, Observe(lhs, rhs))
-        return dest
+        return Observe(lhs, lower_model_expr(rhs, mod))
     end
 
     if expr.head == :macrocall
         expanded = macroexpand(mod, expr; recursive=false)
-        return to_modelexprs!(dest, expanded, mod, expr_head_stack)
+        return lower_model_expr(expanded, mod, statement_position)
     end
 
     if expr.head == :call && expr.args[1] == :~
-        # lhs ~ rhs
+        statement_position || error("@model: ~ must be used as a statement")
         length(expr.args) == 3 || error("@model: expected ~ to have 2 arguments")
         lhs, rhs = expr.args[2:3]
-        push!(dest, Sample(lhs, rhs))
-        return dest
-    end
-
-    if expr.head == :local && length(expr.args) == 1
-        assignment = only(expr.args)
-        if Meta.isexpr(assignment, :(=)) &&
-                assignment.args[2] isa Expr &&
-                assignment.args[2].head in (:if, :while, :for)
-            lhs, rhs = assignment.args
-            control_flow = only(to_modelexprs(rhs, mod, expr_head_stack))
-            push!(dest, LocalStatement(lhs, control_flow))
-            return dest
-        end
-    end
-
-    if expr.head == :(=) && expr.args[1] isa Symbol && !isempty(expr_head_stack) && first(expr_head_stack) != :for
-        # lhs = rhs
-        length(expr.args) == 2 || error("@model: expected = to have 2 arguments")
-        lhs, rhs = expr.args
-        push!(dest, Deterministic(lhs, rhs))
-        return dest
+        return Sample(lhs, lower_model_expr(rhs, mod))
     end
 
     if expr.head == :return
-        push!(dest, ReturnStatement(only(expr.args)))
-        return dest
+        value = only(expr.args)
+        return ReturnStatement(value === nothing ? nothing : lower_model_expr(value, mod))
     end
 
-    if expr.head == :if
-        push!(dest, to_if_statement(expr, mod, expr_head_stack))
-        return dest
+    if expr.head in (:quote, :function, :(->), :macro, :module, :baremodule)
+        return OtherStatement(expr)
     end
 
-    if expr.head == :while
-        condition, body = expr.args
-        push!(dest, WhileStatement(
-            condition, to_modelexprs(body, mod, (:while, expr_head_stack...))
-        ))
-        return dest
+    args = map(enumerate(expr.args)) do (index, arg)
+        child_is_statement = expr.head in (:block, :toplevel) ||
+                             expr.head in (:if, :elseif) && index >= 2 ||
+                             expr.head in (:while, :for) && index == 2 ||
+                             expr.head == :let && index == length(expr.args)
+        lower_model_expr(arg, mod, child_is_statement)
     end
-
-    if expr.head == :for
-        iterator, body = expr.args
-        push!(dest, ForStatement(
-            iterator, to_modelexprs(body, mod, (:for, expr_head_stack...))
-        ))
-        return dest
-    end
-
-    if expr.head == :block
-        expr_head_stack = (expr.head, expr_head_stack...)
-        for stmt in expr.args
-            to_modelexprs!(dest, stmt, mod, expr_head_stack)
-        end
-        return dest
-    end
-
-    push!(dest, OtherStatement(expr))
-    return dest
-end
-
-function to_modelexprs!(dest, expr, ::Module, ::Tuple)
-    push!(dest, OtherStatement(expr))
-    return dest
+    return JuliaExpr(expr.head, args)
 end
 
 function to_namedtuple(args_expr::Expr)

@@ -58,7 +58,11 @@ function PointwiseLogProb{Prior,Likelihood}() where {Prior,Likelihood}
 end
 Base.copy(plp::PointwiseLogProb) = plp
 function (plp::PointwiseLogProb{Prior,Likelihood,Factorised})(
-    val, tval, logjac, vn, dist
+    val,
+    tval,
+    logjac,
+    vn,
+    dist,
 ) where {Prior,Likelihood,Factorised}
     return if Prior
         _maybe_pointwise_logpdf(dist, val, Val{Factorised}())
@@ -132,10 +136,16 @@ log-prior probabilities (for random variables) and log-likelihoods (for observed
 $(_FACTORIZE_KWARG_DOC)
 """
 function pointwise_logdensities(
-    model::Model, init_strat::AbstractInitStrategy; factorize=false
+    model::Model,
+    init_strat::AbstractInitStrategy;
+    factorize=false,
 )
     return _pointwise_logdensities(
-        model, init_strat, Val(true), Val(true); factorize=factorize
+        model,
+        init_strat,
+        Val(true),
+        Val(true);
+        factorize=factorize,
     )
 end
 
@@ -152,10 +162,16 @@ from the given initialisation strategy.
 $(_FACTORIZE_KWARG_DOC)
 """
 function pointwise_loglikelihoods(
-    model::Model, init_strat::AbstractInitStrategy; factorize=false
+    model::Model,
+    init_strat::AbstractInitStrategy;
+    factorize=false,
 )
     return _pointwise_logdensities(
-        model, init_strat, Val(false), Val(true); factorize=factorize
+        model,
+        init_strat,
+        Val(false),
+        Val(true);
+        factorize=factorize,
     )
 end
 
@@ -172,9 +188,15 @@ obtained from the given initialisation strategy.
 $(_FACTORIZE_KWARG_DOC)
 """
 function pointwise_prior_logdensities(
-    model::Model, init_strat::AbstractInitStrategy; factorize=false
+    model::Model,
+    init_strat::AbstractInitStrategy;
+    factorize=false,
 )
     return _pointwise_logdensities(
-        model, init_strat, Val(true), Val(false); factorize=factorize
+        model,
+        init_strat,
+        Val(true),
+        Val(false);
+        factorize=factorize,
     )
 end

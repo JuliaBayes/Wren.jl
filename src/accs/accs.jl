@@ -162,7 +162,10 @@ function pretty_print(io::IO, at::AccumulatorTuple, prefix::String)
         return nothing
     end
     println(
-        io, "AccumulatorTuple with ", naccs, naccs == 1 ? " accumulator:" : " accumulators"
+        io,
+        "AccumulatorTuple with ",
+        naccs,
+        naccs == 1 ? " accumulator:" : " accumulators",
     )
     for (i, (name, acc)) in enumerate(pairs(at.nt))
         tree_symbol = i == naccs ? "└─ " : "├─ "
@@ -228,7 +231,8 @@ end
 Delete the accumulator with name `accname` from `at`. Returns a new `AccumulatorTuple`.
 """
 function deleteacc!!(
-    accs::AccumulatorTuple{N,<:NamedTuple{names}}, ::Val{T}
+    accs::AccumulatorTuple{N,<:NamedTuple{names}},
+    ::Val{T},
 ) where {N,names,T}
     return AccumulatorTuple(NamedTuple{filter(x -> x != T, names)}(accs.nt))
 end
@@ -245,7 +249,9 @@ Update the accumulator with name `accname` in `at` by calling `func` on it.
 Returns a new `AccumulatorTuple`.
 """
 function map_accumulator(
-    func::Function, at::AccumulatorTuple, ::Val{accname}
+    func::Function,
+    at::AccumulatorTuple,
+    ::Val{accname},
 ) where {accname}
     # Would like to write this as
     # return Accessors.@set at.nt[accname] = func(at[accname], args...)

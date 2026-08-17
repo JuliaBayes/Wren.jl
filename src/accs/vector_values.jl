@@ -6,7 +6,11 @@ const VECTORVAL_ACCNAME = :VectorValue
 Generate a `TransformedValue` that always has a vector as its stored value.
 """
 function _get_vector_tval(
-    val, tval::TransformedValue{V,T}, logjac, vn, dist
+    val,
+    tval::TransformedValue{V,T},
+    logjac,
+    vn,
+    dist,
 ) where {V<:AbstractVector,T}
     # If it's already an AbstractVector transformed value, then we are done.
     # `tval.transform` could be a DynamicLink(), Unlink(), or some fixed transform that
@@ -24,7 +28,11 @@ function _get_vector_tval(val, tval::TransformedValue{V,T}, logjac, vn, dist) wh
     )
 end
 function _get_vector_tval(
-    val, ::TransformedValue{V,NoTransform}, logjac, vn, dist
+    val,
+    ::TransformedValue{V,NoTransform},
+    logjac,
+    vn,
+    dist,
 ) where {V}
     # This is an untransformed value, so we need to vectorise it. We can do this by applying
     # to_vec(dist).
@@ -34,7 +42,11 @@ function _get_vector_tval(
     return TransformedValue(new_val, Unlink())
 end
 function _get_vector_tval(
-    val, ::TransformedValue{V,NoTransform}, logjac, vn, dist
+    val,
+    ::TransformedValue{V,NoTransform},
+    logjac,
+    vn,
+    dist,
 ) where {V<:AbstractVector}
     # This is the same as above but just shortcircuited because `to_vec` should always
     # return TypedIdentity. Note that this method needs to be preserved to avoid method

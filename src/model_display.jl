@@ -1,37 +1,19 @@
-_model_expr_to_expr(stmt::Sample) = Expr(:call, :~, stmt.lhs, stmt.rhs)
+_model_expr_to_expr(expr) = expr
+function _model_expr_to_expr(stmt::JuliaExpr)
+    return Expr(stmt.head, map(_model_expr_to_expr, stmt.args)...)
+end
+function _model_expr_to_expr(stmt::Sample)
+    return Expr(:call, :~, stmt.lhs, _model_expr_to_expr(stmt.rhs))
+end
 function _model_expr_to_expr(stmt::Observe)
-    tilde = Expr(:call, :~, stmt.lhs, stmt.rhs)
+    tilde = Expr(:call, :~, stmt.lhs, _model_expr_to_expr(stmt.rhs))
     return Expr(:macrocall, Symbol("@observe"), nothing, tilde)
 end
-_model_expr_to_expr(stmt::Deterministic) = Expr(:(=), stmt.lhs, stmt.rhs)
-_model_expr_to_expr(stmt::ReturnStatement) = Expr(:return, stmt.expr)
+function _model_expr_to_expr(stmt::ReturnStatement)
+    value = stmt.expr === nothing ? nothing : _model_expr_to_expr(stmt.expr)
+    return Expr(:return, value)
+end
 _model_expr_to_expr(stmt::OtherStatement) = stmt.expr
-
-function _model_exprs_to_block(stmts)
-    return Expr(:block, map(_model_expr_to_expr, filter(x -> x isa ModelExpr, stmts))...)
-end
-
-function _model_if_to_expr(stmt::IfStatement, head::Symbol=:if)
-    args = Any[stmt.condition, _model_exprs_to_block(stmt.then_branch)]
-    if stmt.else_branch isa IfStatement
-        push!(args, _model_if_to_expr(stmt.else_branch, :elseif))
-    elseif stmt.else_branch !== nothing
-        push!(args, _model_exprs_to_block(stmt.else_branch))
-    end
-    return Expr(head, args...)
-end
-
-_model_expr_to_expr(stmt::IfStatement) = _model_if_to_expr(stmt)
-function _model_expr_to_expr(stmt::WhileStatement)
-    return Expr(:while, stmt.condition, _model_exprs_to_block(stmt.body))
-end
-function _model_expr_to_expr(stmt::ForStatement)
-    return Expr(:for, stmt.iterator, _model_exprs_to_block(stmt.body))
-end
-function _model_expr_to_expr(stmt::LocalStatement)
-    rhs = _model_expr_to_expr(stmt.rhs)
-    return Expr(:local, Expr(:(=), stmt.lhs, rhs))
-end
 
 function _show_model_expr(io::IO, stmt::ModelExpr, indent::Int=0)
     expr = deepcopy(_model_expr_to_expr(stmt))

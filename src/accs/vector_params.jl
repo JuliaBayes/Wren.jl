@@ -29,7 +29,11 @@ const VECTOR_ACC_NAME = :VectorParamAccumulator
 DynamicPPL.accumulator_name(::Type{<:VectorParamAccumulator}) = VECTOR_ACC_NAME
 
 function DynamicPPL.accumulate_observe!!(
-    acc::VectorParamAccumulator, ::Distribution, val, ::Union{VarName,Nothing}, ::Any
+    acc::VectorParamAccumulator,
+    ::Distribution,
+    val,
+    ::Union{VarName,Nothing},
+    ::Any,
 )
     return acc
 end
@@ -104,7 +108,9 @@ end
 function DynamicPPL.combine(acc1::VectorParamAccumulator, acc2::VectorParamAccumulator)
     if acc1.vn_ranges != acc2.vn_ranges
         throw(
-            ArgumentError("Cannot combine VectorParamAccumulators with different vn_ranges")
+            ArgumentError(
+                "Cannot combine VectorParamAccumulators with different vn_ranges",
+            ),
         )
     end
     if any(acc1.set_indices .& acc2.set_indices)
@@ -114,9 +120,8 @@ function DynamicPPL.combine(acc1::VectorParamAccumulator, acc2::VectorParamAccum
             ),
         )
     end
-    Accessors.@set acc1.vals = BangBang.setindex!!(
-        acc1.vals, acc2.vals[acc2.set_indices], acc2.set_indices
-    )
+    Accessors.@set acc1.vals =
+        BangBang.setindex!!(acc1.vals, acc2.vals[acc2.set_indices], acc2.set_indices)
     acc1.set_indices .= acc1.set_indices .| acc2.set_indices
     return acc1
 end

@@ -44,7 +44,7 @@ end
         y ~ Normal(x)
     end
     run_model(h())
-    run_model(h() | VarNamedTuple(y = 1.0))
+    run_model(h() | VarNamedTuple(y=1.0))
 end
 
 @testset "observe macro" begin
@@ -74,6 +74,30 @@ end
 
     @test getlogprior(accs) ≈ sum(logpdf(Normal(), value) for value in values)
     @test getloglikelihood(accs) ≈ logpdf(Normal(), 0.25)
+end
+
+@testset "nested expressions" begin
+    @model function nested_if(flag)
+        x = if flag
+            y ~ Normal()
+            y
+        else
+            z ~ Normal()
+            z
+        end
+        @observe x ~ Normal()
+    end
+
+    params = VarNamedTuple(; y=0.5, z=2.0)
+    source = FromParams(params, nothing)
+
+    accs = evaluate(nested_if(true), source, Wren.default_accumulators())
+    @test getlogprior(accs) ≈ logpdf(Normal(), 0.5)
+    @test getloglikelihood(accs) ≈ logpdf(Normal(), 0.5)
+
+    accs = evaluate(nested_if(false), source, Wren.default_accumulators())
+    @test getlogprior(accs) ≈ logpdf(Normal(), 2.0)
+    @test getloglikelihood(accs) ≈ logpdf(Normal(), 2.0)
 end
 
 @testset "control flow" begin

@@ -1,17 +1,29 @@
 const FIXED_TRANSFORM_ACCNAME = :FixedTransformAccumulator
 
 function _get_fixed_transform(
-    val, tv::TransformedValue{V,DynamicLink}, logjac, vn, dist
+    val,
+    tv::TransformedValue{V,DynamicLink},
+    logjac,
+    vn,
+    dist,
 ) where {V}
     return FixedTransform(Bijectors.VectorBijectors.from_linked_vec(dist))
 end
 function _get_fixed_transform(
-    val, tv::TransformedValue{V,<:Union{Unlink,NoTransform}}, logjac, vn, dist
+    val,
+    tv::TransformedValue{V,<:Union{Unlink,NoTransform}},
+    logjac,
+    vn,
+    dist,
 ) where {V}
     return FixedTransform(Bijectors.VectorBijectors.from_vec(dist))
 end
 function _get_fixed_transform(
-    val, tv::TransformedValue{V,<:FixedTransform}, logjac, vn, dist
+    val,
+    tv::TransformedValue{V,<:FixedTransform},
+    logjac,
+    vn,
+    dist,
 ) where {V}
     return tv.transform
 end
@@ -72,7 +84,8 @@ executing the model multiple times and is thus not foolproof (it may be that you
 just happen to be the same each time).
 """
 function get_fixed_transforms(
-    model::DynamicPPL.Model, transform_strategy::AbstractTransformStrategy
+    model::DynamicPPL.Model,
+    transform_strategy::AbstractTransformStrategy,
 )
     rng = Random.default_rng()
     accs = OnlyAccsVarInfo(FixedTransformAccumulator())

@@ -24,7 +24,8 @@ struct VNTAccumulator{AccName,F,VNT<:VarNamedTuple} <: AbstractAccumulator
     values::VNT
 end
 function VNTAccumulator{AccName}(
-    f::F, values::VarNamedTuple=VarNamedTuple()
+    f::F,
+    values::VarNamedTuple=VarNamedTuple(),
 ) where {AccName,F}
     return VNTAccumulator{AccName,F,typeof(values)}(f, values)
 end
@@ -53,7 +54,8 @@ struct TSVNTAccumulator{AccName,F} <: AbstractAccumulator
     end
 end
 function promote_for_threadsafe_eval(
-    acc::VNTAccumulator{AccName,F}, ::Type
+    acc::VNTAccumulator{AccName,F},
+    ::Type,
 ) where {AccName,F}
     return TSVNTAccumulator{AccName}(acc.f, acc.values)
 end
@@ -69,21 +71,25 @@ for acc_type in (:VNTAccumulator, :TSVNTAccumulator)
         accumulator_name(::$acc_type{AccName}) where {AccName} = AccName
 
         function update_values(
-            acc::$acc_type{AccName}, new_values::VarNamedTuple
+            acc::$acc_type{AccName},
+            new_values::VarNamedTuple,
         ) where {AccName}
             return $acc_type{AccName}(acc.f, new_values)
         end
 
         function accumulate_assume!!(
-            acc::$acc_type{AccName}, val, vn, right, template
+            acc::$acc_type{AccName},
+            val,
+            vn,
+            right,
+            template,
         ) where {AccName}
             new_val = acc.f(val, vn, right)
             return if new_val isa DoNotAccumulate
                 acc
             else
-                new_values = VarNames.templated_setindex!!(
-                    acc.values, new_val, vn, template
-                )
+                new_values =
+                    VarNames.templated_setindex!!(acc.values, new_val, vn, template)
                 update_values(acc, new_values)
             end
         end
