@@ -17,7 +17,7 @@ struct FromParams{P<:VarNamedTuple,S<:Union{AbstractLatentSource,Nothing}} <:
     params::P
     fallback::S
 end
-FromParams(params::VarNamedTuple) = FromParams(params, FromPrior())
+FromParams(params::VarNamedTuple) = FromParams(params, nothing)
 function get_latent(source::FromParams, vn::VarName, right)
     if haskey(source.params, vn)
         return source.params[vn]

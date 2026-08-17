@@ -1,0 +1,274 @@
+module WrenExprTests
+
+using Wren
+using Test
+using Distributions
+using DensityInterface: logdensityof
+using Chairmarks
+using VarNames
+
+macro sample_x()
+    return esc(:(x ~ Normal()))
+end
+macro observe_y()
+    return esc(:(@observe y ~ Normal()))
+end
+
+@testset "Expr tests" begin
+    @testset "basic models" begin
+        @testset "1x sample" begin
+            @model function simple_normal()
+                x ~ Normal()
+                return nothing
+            end
+            model = simple_normal()
+            @test model.name === :simple_normal
+            retval, accs = evaluate(model, FromPrior(), Wren.default_accumulators())
+            rawvals = get_raw_values(accs)
+            @test retval === nothing
+            @test rawvals isa VarNamedTuple
+            @test only(keys(rawvals)) == @vn(x)
+            @test getlogprior(accs) ≈ logdensityof(Normal(), rawvals[@vn(x)])
+            @test iszero(getloglikelihood(accs))
+        end
+
+        @testset "1x sample with model argument" begin
+            @model function sample_with_arg(m)
+                x ~ Normal(m[1])
+                return nothing
+            end
+            d = [100.0]
+            model = sample_with_arg(d)
+            retval, accs = evaluate(model, FromPrior(), Wren.default_accumulators())
+            @test retval === nothing
+            @test get_raw_values(accs) isa VarNamedTuple
+            @test getlogprior(accs) ≈ logdensityof(Normal(d[1]), get_raw_values(accs)[@vn(x)])
+            @test iszero(getloglikelihood(accs))
+        end
+    end
+
+    @testset "conditioning" begin
+        @model function x_and_y()
+            x ~ Normal()
+            y ~ Normal(x)
+            return nothing
+        end
+
+        @testset "before conditioning" begin
+            model = x_and_y()
+            @test model.name === :x_and_y
+            retval, accs = evaluate(model, FromPrior(), Wren.default_accumulators())
+            rawvals = get_raw_values(accs)
+            @test retval === nothing
+            @test rawvals isa VarNamedTuple
+            @test collect(keys(rawvals)) == [@vn(x), @vn(y)]
+            @test getlogprior(accs) ≈ logdensityof(Normal(), rawvals[@vn(x)]) + logdensityof(Normal(rawvals[@vn(x)]), rawvals[@vn(y)])
+            @test iszero(getloglikelihood(accs))
+        end
+
+        @testset "after conditioning" begin
+            conditioned_model = x_and_y() | VarNamedTuple(y=1.0)
+            @test conditioned_model.name === :x_and_y # shouldn't be changed.
+            retval, accs = evaluate(conditioned_model, FromPrior(), Wren.default_accumulators())
+            rawvals = get_raw_values(accs)
+            @test retval === nothing
+            @test rawvals isa VarNamedTuple
+            @test collect(keys(rawvals)) == [@vn(x)]
+            @test getlogprior(accs) ≈ logdensityof(Normal(), rawvals[@vn(x)])
+            @test getloglikelihood(accs) ≈ logdensityof(Normal(rawvals[@vn(x)]), 1.0)
+        end
+    end
+
+    @testset "observe macro" begin
+        @model function observe_macro()
+            x ~ Normal()
+            y = x + 1
+            @observe y ~ Normal()
+            return nothing
+        end
+        model = observe_macro()
+        @test model.name === :observe_macro
+        retval, accs = evaluate(model, FromPrior(), Wren.default_accumulators())
+        rawvals = get_raw_values(accs)
+        @test retval === nothing
+        @test rawvals isa VarNamedTuple
+        @test collect(keys(rawvals)) == [@vn(x)]
+        @test getlogprior(accs) ≈ logdensityof(Normal(), rawvals[@vn(x)])
+        @test getloglikelihood(accs) ≈ logdensityof(Normal(), rawvals[@vn(x)] + 1)
+    end
+
+    @testset "macros inside models" begin
+        # A bit pathological, but it works so why not test it
+        @model function with_macros()
+            @sample_x
+            y = 0.25
+            @observe_y
+            xs = Vector{Float64}(undef, 2)
+            @inbounds for i in eachindex(xs)
+                xs[i] ~ Normal()
+            end
+        end
+        params = VarNamedTuple(; x=0.5, xs=[1.0, 2.0])
+        source = FromParams(params)
+        _, accs = evaluate(with_macros(), source, Wren.default_accumulators())
+        @test getlogprior(accs) ≈ sum(logdensityof.(Ref(Normal()), [0.5, 1.0, 2.0]))
+        @test getloglikelihood(accs) ≈ logdensityof(Normal(), 0.25)
+    end
+
+    @testset "nested expressions" begin
+        @model function nested_if(flag)
+            x = if flag
+                y ~ Normal()
+                y
+            else
+                z ~ Normal()
+                z
+            end
+            @observe x ~ Normal()
+        end
+
+        params = VarNamedTuple(; y=0.5, z=2.0)
+        source = FromParams(params)
+
+        _, accs = evaluate(nested_if(true), source, Wren.default_accumulators())
+        @test getlogprior(accs) ≈ logdensityof(Normal(), 0.5)
+        @test getloglikelihood(accs) ≈ logdensityof(Normal(), 0.5)
+
+        _, accs = evaluate(nested_if(false), source, Wren.default_accumulators())
+        @test getlogprior(accs) ≈ logdensityof(Normal(), 2.0)
+        @test getloglikelihood(accs) ≈ logdensityof(Normal(), 2.0)
+    end
+end
+
+@testset "a = b ~ c syntax" begin
+    @testset "macro parses it correctly" begin
+        # Essentially we want `a = b ~ c` to be parsed as `a = Sample(b, c)`.
+        @model function parser_inner()
+            return 1
+        end
+
+        @model function tilde_value_position()
+            retval = x ~ parser_inner()
+        end
+
+        stmt = only(
+            filter(x -> x isa Wren.AbstractWrenExpr, tilde_value_position().stmts)
+        )
+        @test stmt isa Wren.WrenExpr
+        @test stmt.head == :(=)
+        @test stmt.args[1] == :retval
+        @test stmt.args[2] isa Wren.Sample
+        @test stmt.args[2].lhs == :x
+        @test stmt.args[2].rhs isa Wren.WrenExpr
+        @test stmt.args[2].rhs.head == :call
+        @test stmt.args[2].rhs.args == [:parser_inner]
+    end
+
+    @testset "with distributions" begin
+        @model function distribution_tilde_value()
+            retval = x ~ Normal()
+            @observe retval ~ Normal()
+        end
+
+        x = 0.5
+        source = FromParams(VarNamedTuple(; x))
+        _, accs = evaluate(distribution_tilde_value(), source, Wren.default_accumulators())
+        @test get_raw_values(accs) == VarNamedTuple(; x)
+        @test getlogprior(accs) ≈ logdensityof(Normal(), x)
+        @test getloglikelihood(accs) ≈ logdensityof(Normal(), x)
+
+        conditioned_model = distribution_tilde_value() | VarNamedTuple(; x)
+        _, accs = evaluate(conditioned_model, FromPrior(), Wren.default_accumulators())
+        @test get_raw_values(accs) == VarNamedTuple()
+        @test iszero(getlogprior(accs))
+        @test getloglikelihood(accs) ≈ 2 * logdensityof(Normal(), x)
+    end
+end
+
+
+@testset "return values" begin
+    @testset "returning a tilde statement" begin
+        @model function explicit_return_sample()
+            return x ~ Normal()
+        end
+        model = explicit_return_sample()
+        retval, accs = evaluate(model, FromPrior(), Wren.default_accumulators())
+        @test retval == get_raw_values(accs)[@vn(x)]
+    end
+
+    @testset "bare return" begin
+        @model function bare_return(events)
+            # Mutate `events` to test that the return statement does indeed exit early
+            push!(events, :before)
+            return
+            push!(events, :after)
+        end
+        events = Symbol[]
+        retval, _ = evaluate(bare_return(events), FromPrior(), Wren.default_accumulators())
+        @test retval === nothing
+        @test events == [:before]
+    end
+
+    @testset "fallthrough / implicit return" begin
+        @model function fallthrough_sample()
+            x ~ Normal()
+        end
+        model = fallthrough_sample()
+        retval, accs = evaluate(model, FromPrior(), Wren.default_accumulators())
+        @test retval == get_raw_values(accs)[@vn(x)]
+
+        @model function fallthrough_value()
+            x ~ Normal()
+            2
+        end
+        model = fallthrough_value()
+        retval, accs = evaluate(model, FromPrior(), Wren.default_accumulators())
+        @test retval == 2
+    end
+end
+
+@testset "control flow" begin
+    @model function control_flow(n, events)
+        if n == 0
+            return push!(events, :empty)
+        elseif iseven(n)
+            push!(events, :even)
+        else
+            push!(events, :odd)
+        end
+
+        xs = Vector{Float64}(undef, n)
+        for i in 1:n
+            xs[i] ~ Normal()
+        end
+
+        i = 1
+        while i <= n
+            @observe xs[i] ~ Normal()
+            i += 1
+        end
+
+        push!(events, :finished)
+        return
+        push!(events, :unreachable)
+    end
+
+    values = [0.25, -0.5]
+    source = FromParams(VarNamedTuple(; xs=values))
+    events = Symbol[]
+    _, accs = evaluate(control_flow(2, events), source, Wren.default_accumulators())
+    expected_logp = sum(logdensityof(Normal(), value) for value in values)
+
+    @test events == [:even, :finished]
+    raw_xs = get_raw_values(accs).data.xs
+    @test VarNames.densify!!(raw_xs) == values
+    @test getlogprior(accs) ≈ expected_logp
+    @test getloglikelihood(accs) ≈ expected_logp
+
+    events = Symbol[]
+    _, accs = evaluate(control_flow(0, events), FromPrior(), Wren.default_accumulators())
+    @test events == [:empty]
+    @test get_raw_values(accs) == VarNamedTuple()
+end
+
+end # module WrenExprTests

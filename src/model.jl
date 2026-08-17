@@ -2,32 +2,13 @@ using RuntimeGeneratedFunctions
 
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
-abstract type ModelExpr end
-# TODO: type bounds on L and R probably Union{Expr,Symbol}
-struct Sample{L,R} <: ModelExpr
-    lhs::L
-    rhs::R
-end
-struct Observe{L,R} <: ModelExpr
-    lhs::L
-    rhs::R
-end
-struct ReturnStatement{E} <: ModelExpr
-    expr::E
-end
-struct OtherStatement{E} <: ModelExpr
-    expr::E
-end
-struct JuliaExpr{A} <: ModelExpr
-    head::Symbol
-    args::A
-end
-
 struct Model{A<:NamedTuple,C<:VarNamedTuple,F}
+    # Name of the function declared with @model
+    name::Symbol
     # Arguments passed to the model
     args::A
     # todo: kwargs
-    stmts::Vector{Union{ModelExpr,LineNumberNode}}
+    stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}}
     # Module that the model was defined in. Required to make RGF resolve globals / functions
     # defined in that module.
     mod::Module
@@ -37,10 +18,13 @@ struct Model{A<:NamedTuple,C<:VarNamedTuple,F}
 end
 
 function Model(
-    args::NamedTuple, stmts::Vector{Union{ModelExpr,LineNumberNode}}, mod::Module
+    name::Symbol,
+    args::NamedTuple,
+    stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}},
+    mod::Module,
 )
     evaluation_fn = make_evaluation_fn(args, stmts, mod)
-    return Model(args, stmts, mod, VarNamedTuple(), evaluation_fn)
+    return Model(name, args, stmts, mod, VarNamedTuple(), evaluation_fn)
 end
 
 ## output
@@ -69,7 +53,7 @@ function remove_escapes(expr::Expr)
 end
 
 emit_model_expr(expr, accs, conditioned, latent_source) = expr
-function emit_model_expr(stmt::JuliaExpr, accs, conditioned, latent_source)
+function emit_model_expr(stmt::WrenExpr, accs, conditioned, latent_source)
     args = map(
         arg -> emit_model_expr(arg, accs, conditioned, latent_source), stmt.args
     )
@@ -142,16 +126,21 @@ function emit_statements(stmts, accs, conditioned, latent_source)
     return body
 end
 
-function make_evaluation_fn(::NamedTuple{argnames}, stmts::Vector{Union{ModelExpr,LineNumberNode}}, mod::Module) where {argnames}
+function make_evaluation_fn(
+    ::NamedTuple{argnames},
+    stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}},
+    mod::Module,
+) where {argnames}
     body = Expr(:block)
     @gensym model_args
     for k in argnames
         push!(body.args, :($(k) = $model_args.$k))
     end
 
-    @gensym accs conditioned latent_source
-    append!(body.args, emit_statements(stmts, accs, conditioned, latent_source).args)
-    push!(body.args, :(return (nothing, $accs)))
+    @gensym accs conditioned latent_source retval
+    model_body = emit_statements(stmts, accs, conditioned, latent_source)
+    push!(body.args, :($retval = $model_body))
+    push!(body.args, :(return ($retval, $accs)))
     return @RuntimeGeneratedFunction(mod, :(function (
         $latent_source, $accs, $model_args, $conditioned
     )
@@ -163,29 +152,6 @@ end
 function view_evaluation_fn(m::Model)
     return RuntimeGeneratedFunctions.get_expression(m.evaluation_fn)
 end
-
-@inline function evaluate(
-    model::Model,
-    latent_source::AbstractLatentSource,
-    accs::AccumulatorTuple,
-)
-    return model.evaluation_fn(latent_source, accs, model.args, model.conditioned)
-end
-
-function Base.rand(rng::AbstractRNG, model::Model)
-    _, accs = evaluate(model, FromPrior(rng), AccumulatorTuple(RawValueAccumulator()))
-    return get_raw_values(accs)
-end
-
-Base.rand(model::Model) = rand(default_rng(), model)
-
-conditioned(model::Model) = model.conditioned
-
-function condition(model::Model, values::VarNamedTuple)
-    new_conditioned = merge(model.conditioned, values)
-    return Model(model.args, model.stmts, model.mod, new_conditioned, model.evaluation_fn)
-end
-Base.:|(model::Model, values::VarNamedTuple) = condition(model, values)
 
 ## macro stuff
 
@@ -199,72 +165,14 @@ function get_function_name_and_args(signature::Expr)
     end
 end
 
-function to_modelexprs(expr, mod::Module)
-    dest = Union{ModelExpr,LineNumberNode}[]
-    if Meta.isexpr(expr, :block)
-        for stmt in expr.args
-            to_modelexprs!(dest, stmt, mod)
-        end
-    else
-        to_modelexprs!(dest, expr, mod)
-    end
-    return dest
-end
-
-function to_modelexprs!(dest, lnn::LineNumberNode, ::Module)
-    push!(dest, lnn)
-    return dest
-end
-
-function to_modelexprs!(dest, expr, mod::Module)
-    lowered = lower_model_expr(expr, mod, true)
-    push!(dest, lowered isa ModelExpr ? lowered : OtherStatement(lowered))
-    return dest
-end
-
-lower_model_expr(expr, ::Module, ::Bool=false) = expr
-
-function lower_model_expr(expr::Expr, mod::Module, statement_position::Bool=false)
-    if expr.head == :macrocall && expr.args[1] == Symbol("@observe")
-        statement_position || error("@observe must be used as a statement")
-        observed_expr = last(expr.args)
-        if !(observed_expr isa Expr && observed_expr.head == :call && observed_expr.args[1] == :~)
-            error("@observe: expected an expression of the form `value ~ distribution`")
-        end
-        length(observed_expr.args) == 3 ||
-            error("@observe: expected ~ to have 2 arguments")
-        lhs, rhs = observed_expr.args[2:3]
-        return Observe(lhs, lower_model_expr(rhs, mod))
-    end
-
-    if expr.head == :macrocall
-        expanded = macroexpand(mod, expr; recursive=false)
-        return lower_model_expr(expanded, mod, statement_position)
-    end
-
-    if expr.head == :call && expr.args[1] == :~
-        length(expr.args) == 3 || error("@model: expected ~ to have 2 arguments")
-        lhs, rhs = expr.args[2:3]
-        return Sample(lhs, lower_model_expr(rhs, mod))
-    end
-
-    if expr.head == :return
-        value = only(expr.args)
-        return ReturnStatement(value === nothing ? nothing : lower_model_expr(value, mod))
-    end
-
-    if expr.head in (:quote, :function, :(->), :macro, :module, :baremodule)
-        return OtherStatement(expr)
-    end
-
-    args = map(enumerate(expr.args)) do (index, arg)
-        child_is_statement = expr.head in (:block, :toplevel) ||
-                             expr.head in (:if, :elseif) && index >= 2 ||
-                             expr.head in (:while, :for) && index == 2 ||
-                             expr.head == :let && index == length(expr.args)
-        lower_model_expr(arg, mod, child_is_statement)
-    end
-    return JuliaExpr(expr.head, args)
+function Base.show(io::IO, ::MIME"text/plain", model::Model)
+    println(io, "Model ", model.name)
+    print(io, "  arguments: ")
+    show(io, model.args)
+    print(io, "\n  conditioned: ")
+    show(io, model.conditioned)
+    println(io, "\n  expressions:")
+    return _show_wren_exprs(io, model.stmts, 4)
 end
 
 function to_namedtuple(args_expr::Expr)
@@ -296,13 +204,14 @@ function _model(expr::Expr, mod::Module)
 
     # Generate a new symbol for the model's body, since we want the original
     # symbol to directly create the `Model`.
-    _, fargs = get_function_name_and_args(expr.args[1])
+    fname, fargs = get_function_name_and_args(expr.args[1])
+    fname isa Symbol || error("@model: expected function name to be a symbol")
     fargs_expr = Expr(:tuple, fargs...)
     signature, body = expr.args
 
     model_args = to_namedtuple(fargs_expr)
-    model_exprs = to_modelexprs(body, mod)
-    function_body = :($(Model)($model_args, $model_exprs, @__MODULE__))
+    model_exprs = to_wren_exprs(body, mod)
+    function_body = :($(Model)($(QuoteNode(fname)), $model_args, $model_exprs, @__MODULE__))
     function_expr = Expr(:function, esc(signature), function_body)
 
     return quote

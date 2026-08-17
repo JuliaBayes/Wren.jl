@@ -1,5 +1,6 @@
 [deps]
 Chairmarks = "0ca39b1e-fe0b-4e98-acfc-b1656634c4de"
+DensityInterface = "b429d917-457f-4dbc-8f4c-0cc954292b1d"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 VarNames = "09a315b2-63fc-4165-8d7f-d59368e770cc"

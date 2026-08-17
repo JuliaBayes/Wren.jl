@@ -209,7 +209,7 @@ logp(acc::LogPriorAccumulator) = acc.logp
 accumulator_name(::Type{<:LogPriorAccumulator}) = :LogPrior
 
 function accumulate_assume!!(acc::LogPriorAccumulator, val, vn, right, template)
-    return acclogp(acc, DensityInterface.logdensityof(right, val))
+    return acclogp(acc, logdensityof(right, val))
 end
 accumulate_observe!!(acc::LogPriorAccumulator, val, vn, right, template) = acc
 
@@ -280,5 +280,5 @@ function accumulate_assume!!(acc::LogLikelihoodAccumulator, val, vn, right, temp
     return acc
 end
 function accumulate_observe!!(acc::LogLikelihoodAccumulator, val, vn, right, template)
-    return acclogp(acc, DensityInterface.logdensityof(right, val))
+    return acclogp(acc, logdensityof(right, val))
 end

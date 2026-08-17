@@ -8,11 +8,11 @@ function _maybe_pointwise_logpdf(dist::D, value::V, ::Val{true}) where {D<:Distr
     )
         PartitionedDistributions.pointwise_conditional_logpdfs(dist, value)
     else
-        logpdf(dist, value)
+        logdensityof(dist, value)
     end
 end
 function _maybe_pointwise_logpdf(dist::Distribution, value, ::Val{false})
-    return logpdf(dist, value)
+    return logdensityof(dist, value)
 end
 
 const _FACTORIZE_KWARG_DOC = """
@@ -26,7 +26,7 @@ conditional log-probability of `y[i]` given all the other elements of `y` (often
 leave-one-out cross-validation.
 
 In contrast, if `factorize=false`, then the log-density for `y ~ MvNormal(...)` will be a
-single scalar corresponding to `logpdf(MvNormal(...), y)`.
+single scalar corresponding to `logdensityof(MvNormal(...), y)`.
 
 Note that the sum of the factorised log-densities may not, in general, be equal to the
 log-density of the full distribution: they will only be equal if the original distribution
