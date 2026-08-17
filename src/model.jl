@@ -137,9 +137,8 @@ function _model(expr::Expr)
 
     # Generate a new symbol for the model's body, since we want the original
     # symbol to directly create the `Model`.
-    fname, fargs = get_function_name_and_args(expr.args[1])
+    _, fargs = get_function_name_and_args(expr.args[1])
     fargs_expr = Expr(:tuple, fargs...)
-    # TODO use signature properly
     signature, body = expr.args
 
     model_args = to_namedtuple(fargs_expr)
