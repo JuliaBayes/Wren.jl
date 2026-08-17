@@ -11,8 +11,9 @@ using VarNames
         x ~ Normal()
     end
     model = f()
-    @info model.evaluation_fn(model.args)
-    display(@b model.evaluation_fn(model.args))
+    accs = Wren.default_accumulators()
+    display(model.evaluation_fn(accs, model.args))
+    display(@b model.evaluation_fn($accs, $(model.args)))
     @info Wren.view_evaluation_fn(model)
 end
 
@@ -22,8 +23,9 @@ end
     end
     d = [100.0]
     model = g(d)
-    @info model.evaluation_fn(model.args)
-    display(@b model.evaluation_fn(model.args))
+    accs = Wren.default_accumulators()
+    display(model.evaluation_fn(accs, model.args))
+    display(@b model.evaluation_fn($accs, $(model.args)))
     @info Wren.view_evaluation_fn(model)
 end
 

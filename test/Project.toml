@@ -1,8 +1,10 @@
 [deps]
+Chairmarks = "0ca39b1e-fe0b-4e98-acfc-b1656634c4de"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
-Wren = "bcabdda7-19af-429b-97ac-a6b557ca0f6c"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 VarNames = "09a315b2-63fc-4165-8d7f-d59368e770cc"
+Wren = "bcabdda7-19af-429b-97ac-a6b557ca0f6c"
 
 [sources]
 VarNames = {rev = "main", url = "https://github.com/JuliaBayes/VarNames.jl"}
+Wren = {path = "../"}

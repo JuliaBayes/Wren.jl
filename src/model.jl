@@ -1,5 +1,6 @@
 using RuntimeGeneratedFunctions
-using VarNames: VarNames, varname, VarName, VarNamedTuple
+
+RuntimeGeneratedFunctions.init(@__MODULE__)
 
 abstract type ModelExpr end
 # TODO: type bounds on L and R probably Union{Expr,Symbol}
@@ -13,17 +14,18 @@ struct Deterministic{L,R} <: ModelExpr
 end
 
 struct Model{A<:NamedTuple,F}
+    # Arguments passed to the model
     args::A
     # todo: kwargs
     stmts::Vector{Union{ModelExpr,LineNumberNode}}
     # Module that the model was defined in. Required to make RGF resolve globals / functions
     # defined in that module.
     mod::Module
-    # Runtime generated evaluation function
+    # The cached evaluation function
     evaluation_fn::F
 
     function Model(args::A, stmts::Vector{Union{ModelExpr,LineNumberNode}}, mod::Module) where A<:NamedTuple
-        evaluation_fn = make_sample_fn(args, stmts, mod)
+        evaluation_fn = make_evaluation_fn(args, stmts, mod)
         new{A,typeof(evaluation_fn)}(args, stmts, mod, evaluation_fn)
     end
 end
@@ -32,39 +34,41 @@ end
 
 get_top_level_symbol(expr::Symbol) = expr
 function get_top_level_symbol(expr::Expr)
-    # TODO(penelopeysm): what about Meta.isexpr(expr, :$)?
     return if Meta.isexpr(expr, :ref)
         get_top_level_symbol(expr.args[1])
     elseif Meta.isexpr(expr, :.)
         get_top_level_symbol(expr.args[1])
     else
+        # TODO(penelopeysm): not sure if Meta.isexpr(expr, :$) needs to be handled
         error("unreachable")
     end
 end
 
-function make_sample_fn(::NamedTuple{argnames}, stmts::Vector{Union{ModelExpr,LineNumberNode}}, mod::Module) where {argnames}
+function make_evaluation_fn(::NamedTuple{argnames}, stmts::Vector{Union{ModelExpr,LineNumberNode}}, mod::Module) where {argnames}
     body = Expr(:block)
-    # insert model arguments at the top of the function body
+    # Insert model arguments at the top of the function body.
     @gensym model_args
     for k in argnames
         push!(body.args, :($(k) = $model_args.$k))
     end
-    @gensym v
-    push!(body.args, :($v = $(VarNamedTuple)()))
+
+    @gensym accs
     for stmt in stmts
         if stmt isa Sample
-            @gensym val vn
-            push!(body.args, :($val = $(rand)($(stmt.rhs))))
+            @gensym rhs val vn
+            push!(body.args, :($rhs = $(stmt.rhs))) # evaluate rhs once only
+            push!(body.args, :($val = $(rand)($rhs)))
+            # TODO: the following line should use BangBang as per DynamicPPL
             push!(body.args, :($(stmt.lhs) = $val))
-            # TODO: this line should use BangBang as per DynamicPPL
             push!(body.args, :($vn = $(varname(stmt.lhs, false))))
-            push!(body.args, :($v = $(VarNames.templated_setindex!!)($v, $val, $vn, $(get_top_level_symbol(stmt.lhs)))))
+            template = get_top_level_symbol(stmt.lhs)
+            push!(body.args, :($accs = $(accumulate_assume!!)($accs, $val, $vn, $rhs, $template)))
         elseif stmt isa Deterministic
             push!(body.args, :($(stmt.lhs) = $(stmt.rhs)))
         end
     end
-    push!(body.args, :(return $v))
-    return @RuntimeGeneratedFunction(mod, :(function ($model_args,)
+    push!(body.args, :(return $accs))
+    return @RuntimeGeneratedFunction(mod, :(function ($accs, $model_args)
         $body
     end))
 end
