@@ -22,6 +22,19 @@ end
 struct OtherStatement{E} <: ModelExpr
     expr::E
 end
+struct IfStatement{C,T,E} <: ModelExpr
+    condition::C
+    then_branch::T
+    else_branch::E
+end
+struct WhileStatement{C,B} <: ModelExpr
+    condition::C
+    body::B
+end
+struct ForStatement{I,B} <: ModelExpr
+    iterator::I
+    body::B
+end
 
 struct Model{A<:NamedTuple,C<:VarNamedTuple,F}
     # Arguments passed to the model
@@ -57,22 +70,25 @@ function get_top_level_symbol(expr::Expr)
     end
 end
 
-function make_evaluation_fn(::NamedTuple{argnames}, stmts::Vector{Union{ModelExpr,LineNumberNode}}, mod::Module) where {argnames}
-    body = Expr(:block)
-    # Insert model arguments at the top of the function body.
-    @gensym model_args
-    for k in argnames
-        push!(body.args, :($(k) = $model_args.$k))
-    end
+# VarNames.varname(:(xs[i])) returns something like
+#     VarName{:xs}(Index((esc(i),), ...))
+# which gets `i` from the caller's scope. However, when we insert this expression into a
+# larger Expr (as in `@model` and its RGF), we want to take `i` from the scope of the larger
+# Expr itself, rather than the caller's scope. That necessitates removing the `esc()` call.
+remove_escapes(x) = x
+function remove_escapes(expr::Expr)
+    expr.head == :escape && return remove_escapes(only(expr.args))
+    return Expr(expr.head, map(remove_escapes, expr.args)...)
+end
 
-    @gensym accs
-    @gensym conditioned
-    @gensym latent_source
+function emit_statements(stmts, accs, conditioned, latent_source)
+    body = Expr(:block)
     for stmt in stmts
         if stmt isa Sample
             @gensym rhs val vn
             push!(body.args, :($rhs = $(stmt.rhs))) # evaluate rhs once only
-            push!(body.args, :($vn = $(varname(stmt.lhs, false))))
+            vn_expr = remove_escapes(varname(stmt.lhs, false))
+            push!(body.args, :($vn = $vn_expr))
             template = get_top_level_symbol(stmt.lhs)
             push!(body.args, quote
                 if $(haskey)($conditioned, $vn)
@@ -93,7 +109,8 @@ function make_evaluation_fn(::NamedTuple{argnames}, stmts::Vector{Union{ModelExp
             @gensym rhs val vn
             push!(body.args, :($val = $(stmt.lhs)))
             push!(body.args, :($rhs = $(stmt.rhs)))
-            push!(body.args, :($vn = $(varname(stmt.lhs, false))))
+            vn_expr = remove_escapes(varname(stmt.lhs, false))
+            push!(body.args, :($vn = $vn_expr))
             template = get_top_level_symbol(stmt.lhs)
             push!(body.args, :($accs = $(accumulate_observe!!)(
                 $accs, $val, $vn, $rhs, $template
@@ -108,10 +125,41 @@ function make_evaluation_fn(::NamedTuple{argnames}, stmts::Vector{Union{ModelExp
             push!(body.args, :(return $accs))
         elseif stmt isa OtherStatement
             push!(body.args, stmt.expr)
+        elseif stmt isa IfStatement
+            push!(body.args, emit_if(stmt, accs, conditioned, latent_source))
+        elseif stmt isa WhileStatement
+            loop_body = emit_statements(stmt.body, accs, conditioned, latent_source)
+            push!(body.args, Expr(:while, stmt.condition, loop_body))
+        elseif stmt isa ForStatement
+            loop_body = emit_statements(stmt.body, accs, conditioned, latent_source)
+            push!(body.args, Expr(:for, stmt.iterator, loop_body))
         elseif stmt isa LineNumberNode
             push!(body.args, stmt)
         end
     end
+    return body
+end
+
+function emit_if(stmt::IfStatement, accs, conditioned, latent_source)
+    then_branch = emit_statements(stmt.then_branch, accs, conditioned, latent_source)
+    if stmt.else_branch === nothing
+        return Expr(:if, stmt.condition, then_branch)
+    end
+    else_branch = stmt.else_branch isa IfStatement ?
+        emit_if(stmt.else_branch, accs, conditioned, latent_source) :
+        emit_statements(stmt.else_branch, accs, conditioned, latent_source)
+    return Expr(:if, stmt.condition, then_branch, else_branch)
+end
+
+function make_evaluation_fn(::NamedTuple{argnames}, stmts::Vector{Union{ModelExpr,LineNumberNode}}, mod::Module) where {argnames}
+    body = Expr(:block)
+    @gensym model_args
+    for k in argnames
+        push!(body.args, :($(k) = $model_args.$k))
+    end
+
+    @gensym accs conditioned latent_source
+    append!(body.args, emit_statements(stmts, accs, conditioned, latent_source).args)
     push!(body.args, :(return $accs))
     return @RuntimeGeneratedFunction(mod, :(function (
         $latent_source, $accs, $model_args, $conditioned
@@ -160,8 +208,30 @@ function get_function_name_and_args(signature::Expr)
     end
 end
 
-to_modelexprs(lnn::LineNumberNode, ::Tuple=()) = [lnn]
-function to_modelexprs(expr::Expr, expr_head_stack::Tuple=())
+function to_modelexprs(expr, expr_head_stack::Tuple=())
+    dest = Union{ModelExpr,LineNumberNode}[]
+    return to_modelexprs!(dest, expr, expr_head_stack)
+end
+
+function to_modelexprs!(dest, lnn::LineNumberNode, ::Tuple)
+    push!(dest, lnn)
+    return dest
+end
+
+function to_if_statement(expr::Expr, expr_head_stack::Tuple)
+    condition = expr.args[1]
+    then_branch = to_modelexprs(expr.args[2], (:if, expr_head_stack...))
+    else_branch = if length(expr.args) == 2
+        nothing
+    elseif Meta.isexpr(expr.args[3], :elseif)
+        to_if_statement(expr.args[3], expr_head_stack)
+    else
+        to_modelexprs(expr.args[3], (:if, expr_head_stack...))
+    end
+    return IfStatement(condition, then_branch, else_branch)
+end
+
+function to_modelexprs!(dest, expr::Expr, expr_head_stack::Tuple)
     if expr.head == :macrocall && expr.args[1] == Symbol("@observe")
         observed_expr = last(expr.args)
         if !(observed_expr isa Expr && observed_expr.head == :call && observed_expr.args[1] == :~)
@@ -170,38 +240,68 @@ function to_modelexprs(expr::Expr, expr_head_stack::Tuple=())
         length(observed_expr.args) == 3 ||
             error("@observe: expected ~ to have 2 arguments")
         lhs, rhs = observed_expr.args[2:3]
-        return [Observe(lhs, rhs)]
+        push!(dest, Observe(lhs, rhs))
+        return dest
     end
 
     if expr.head == :call && expr.args[1] == :~
         # lhs ~ rhs
         length(expr.args) == 3 || error("@model: expected ~ to have 2 arguments")
         lhs, rhs = expr.args[2:3]
-        return [Sample(lhs, rhs)]
+        push!(dest, Sample(lhs, rhs))
+        return dest
     end
 
     if expr.head == :(=) && expr.args[1] isa Symbol && !isempty(expr_head_stack) && first(expr_head_stack) != :for
         # lhs = rhs
         length(expr.args) == 2 || error("@model: expected = to have 2 arguments")
         lhs, rhs = expr.args
-        return [Deterministic(lhs, rhs)]
+        push!(dest, Deterministic(lhs, rhs))
+        return dest
     end
 
     if expr.head == :return
-        return [ReturnStatement(only(expr.args))]
+        push!(dest, ReturnStatement(only(expr.args)))
+        return dest
+    end
+
+    if expr.head == :if
+        push!(dest, to_if_statement(expr, expr_head_stack))
+        return dest
+    end
+
+    if expr.head == :while
+        condition, body = expr.args
+        push!(dest, WhileStatement(
+            condition, to_modelexprs(body, (:while, expr_head_stack...))
+        ))
+        return dest
+    end
+
+    if expr.head == :for
+        iterator, body = expr.args
+        push!(dest, ForStatement(
+            iterator, to_modelexprs(body, (:for, expr_head_stack...))
+        ))
+        return dest
     end
 
     if expr.head == :block
         expr_head_stack = (expr.head, expr_head_stack...)
-        exprs = vcat([to_modelexprs(stmt, expr_head_stack) for stmt in expr.args]...)
-        # The above infers to `Any`
-        return convert(Vector{Union{ModelExpr,LineNumberNode}}, exprs)
+        for stmt in expr.args
+            to_modelexprs!(dest, stmt, expr_head_stack)
+        end
+        return dest
     end
 
-    return [OtherStatement(expr)]
+    push!(dest, OtherStatement(expr))
+    return dest
 end
 
-to_modelexprs(expr, ::Tuple=()) = [OtherStatement(expr)]
+function to_modelexprs!(dest, expr, ::Tuple)
+    push!(dest, OtherStatement(expr))
+    return dest
+end
 
 function to_namedtuple(args_expr::Expr)
     args_expr.head == :tuple || error("@model: expected a tuple of arguments")
