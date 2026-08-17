@@ -12,8 +12,8 @@ using VarNames
     end
     model = f()
     accs = Wren.default_accumulators()
-    display(evaluate(model, accs))
-    display(@b evaluate($model, $accs))
+    display(evaluate(model, FromPrior(), accs))
+    display(@b evaluate($model, $(FromPrior()), $accs))
     # @info Wren.view_evaluation_fn(model)
 end
 
@@ -24,8 +24,8 @@ end
     d = [100.0]
     model = g(d)
     accs = Wren.default_accumulators()
-    display(evaluate(model, accs))
-    display(@b evaluate($model, $accs))
+    display(evaluate(model, FromPrior(), accs))
+    display(@b evaluate($model, $(FromPrior()), $accs))
 end
 
 @testset "cond" begin
@@ -35,13 +35,13 @@ end
     end
     model = h()
     accs = Wren.default_accumulators()
-    display(evaluate(model, accs))
-    display(@b evaluate($model, $accs))
+    display(evaluate(model, FromPrior(), accs))
+    display(@b evaluate($model, $(FromPrior()), $accs))
 
     model = h() | VarNamedTuple(y = 1.0)
     accs = Wren.default_accumulators()
-    display(evaluate(model, accs))
-    display(@b evaluate($model, $accs))
+    display(evaluate(model, FromPrior(), accs))
+    display(@b evaluate($model, $(FromPrior()), $accs))
 end
 
 @testset "observe macro" begin
@@ -52,8 +52,8 @@ end
     end
     model = k()
     accs = Wren.default_accumulators()
-    display(evaluate(model, accs))
-    display(@b evaluate($model, $accs))
+    display(evaluate(model, FromPrior(), accs))
+    display(@b evaluate($model, $(FromPrior()), $accs))
 end
 
 end # module WrenTests

@@ -61,6 +61,7 @@ function make_evaluation_fn(::NamedTuple{argnames}, stmts::Vector{Union{ModelExp
 
     @gensym accs
     @gensym conditioned
+    @gensym latent_source
     for stmt in stmts
         if stmt isa Sample
             @gensym rhs val vn
@@ -75,7 +76,7 @@ function make_evaluation_fn(::NamedTuple{argnames}, stmts::Vector{Union{ModelExp
                         $accs, $val, $vn, $rhs, $template
                     )
                 else
-                    $val = $(rand)($rhs)
+                    $val = $(get_latent)($latent_source, $vn, $rhs)
                     $(stmt.lhs) = $val
                     $accs = $(accumulate_assume!!)(
                         $accs, $val, $vn, $rhs, $template
@@ -96,7 +97,9 @@ function make_evaluation_fn(::NamedTuple{argnames}, stmts::Vector{Union{ModelExp
         end
     end
     push!(body.args, :(return $accs))
-    return @RuntimeGeneratedFunction(mod, :(function ($accs, $model_args, $conditioned)
+    return @RuntimeGeneratedFunction(mod, :(function (
+        $latent_source, $accs, $model_args, $conditioned
+    )
         $body
     end))
 end
@@ -106,9 +109,20 @@ function view_evaluation_fn(m::Model)
     return RuntimeGeneratedFunctions.get_expression(m.evaluation_fn)
 end
 
-@inline function evaluate(model::Model, accs::AccumulatorTuple)
-    return model.evaluation_fn(accs, model.args, model.conditioned)
+@inline function evaluate(
+    model::Model,
+    latent_source::AbstractLatentSource,
+    accs::AccumulatorTuple,
+)
+    return model.evaluation_fn(latent_source, accs, model.args, model.conditioned)
 end
+
+function Base.rand(rng::AbstractRNG, model::Model)
+    accs = evaluate(model, FromPrior(rng), AccumulatorTuple(RawValueAccumulator()))
+    return get_raw_values(accs)
+end
+
+Base.rand(model::Model) = rand(default_rng(), model)
 
 conditioned(model::Model) = model.conditioned
 
