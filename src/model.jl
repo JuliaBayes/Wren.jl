@@ -8,6 +8,10 @@ struct Sample{L,R} <: ModelExpr
     lhs::L
     rhs::R
 end
+struct Observe{L,R} <: ModelExpr
+    lhs::L
+    rhs::R
+end
 struct Deterministic{L,R} <: ModelExpr
     lhs::L
     rhs::R
@@ -78,6 +82,15 @@ function make_evaluation_fn(::NamedTuple{argnames}, stmts::Vector{Union{ModelExp
                     )
                 end
             end)
+        elseif stmt isa Observe
+            @gensym rhs val vn
+            push!(body.args, :($val = $(stmt.lhs)))
+            push!(body.args, :($rhs = $(stmt.rhs)))
+            push!(body.args, :($vn = $(varname(stmt.lhs, false))))
+            template = get_top_level_symbol(stmt.lhs)
+            push!(body.args, :($accs = $(accumulate_observe!!)(
+                $accs, $val, $vn, $rhs, $template
+            )))
         elseif stmt isa Deterministic
             push!(body.args, :($(stmt.lhs) = $(stmt.rhs)))
         end
@@ -119,6 +132,17 @@ end
 
 to_modelexprs(lnn::LineNumberNode, ::Tuple=()) = [lnn]
 function to_modelexprs(expr::Expr, expr_head_stack::Tuple=())
+    if expr.head == :macrocall && expr.args[1] == Symbol("@observe")
+        observed_expr = last(expr.args)
+        if !(observed_expr isa Expr && observed_expr.head == :call && observed_expr.args[1] == :~)
+            error("@observe: expected an expression of the form `value ~ distribution`")
+        end
+        length(observed_expr.args) == 3 ||
+            error("@observe: expected ~ to have 2 arguments")
+        lhs, rhs = observed_expr.args[2:3]
+        return [Observe(lhs, rhs)]
+    end
+
     if expr.head == :call && expr.args[1] == :~
         # lhs ~ rhs
         length(expr.args) == 3 || error("@model: expected ~ to have 2 arguments")
@@ -161,6 +185,11 @@ end
 macro model(expr)
     _model(expr)
 end
+
+macro observe(expr)
+    error("@observe must be used inside @model")
+end
+
 function _model(expr::Expr)
     # Sanity check
     expr.head == :function || error("@model: expected a function definition")

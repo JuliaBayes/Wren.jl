@@ -44,4 +44,16 @@ end
     display(@b evaluate($model, $accs))
 end
 
+@testset "observe macro" begin
+    @model function k()
+        x ~ Normal()
+        y = x + 1
+        @observe y ~ Normal()
+    end
+    model = k()
+    accs = Wren.default_accumulators()
+    display(evaluate(model, accs))
+    display(@b evaluate($model, $accs))
+end
+
 end # module WrenTests
