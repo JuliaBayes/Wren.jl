@@ -30,31 +30,38 @@ rand(model)
 
 ## Just tell me whether it's better
 
-Normal = `@model f() = x ~ Normal()`
-
-Eight schools = the above
+Go to `bench/` and run `julia +1.13 run.jl`:
 
 ```
-model           backend            DPPL lp     Wren lp   speedup  lp alx   DPPL grad   Wren grad   speedup  grad alx
-────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-normal          ForwardDiff       2.430 ns    2.837 ns     0.86x     0/0   16.715 ns   18.079 ns     0.92x       3/3
-normal          ReverseDiff       2.513 ns    3.425 ns     0.73x     0/0    1.830 μs    1.760 μs     1.04x     64/59
-normal          ReverseDiffCpl    2.699 ns    3.840 ns     0.70x     0/0  827.528 ns  753.205 ns     1.10x       3/3
-normal          MooncakeFwd       2.552 ns    3.640 ns     0.70x     0/0  113.477 ns  104.541 ns     1.09x     10/10
-normal          MooncakeRvs       2.543 ns    3.884 ns     0.65x     0/0   62.719 ns   75.540 ns     0.83x       2/2
-normal          DifferFwd         2.395 ns    2.682 ns     0.89x     0/0   31.100 ns   34.211 ns     0.91x       6/6
-normal          DifferRvs         2.573 ns    2.953 ns     0.87x     0/0   48.107 ns   53.301 ns     0.90x       2/2
-normal          EnzymeFwd         2.560 ns    2.982 ns     0.86x     0/0   86.547 ns   87.786 ns     0.99x       5/5
-normal          EnzymeRvs         2.507 ns    2.847 ns     0.88x     0/0   11.299 ns   11.778 ns     0.96x       2/2
-eight schools   ForwardDiff      74.115 ns   60.898 ns     1.22x     4/4  349.537 ns  353.365 ns     0.99x     11/11
-eight schools   ReverseDiff      74.216 ns   61.485 ns     1.21x     4/4   20.250 μs   20.792 μs     0.97x   596/592
-eight schools   ReverseDiffCpl   72.255 ns   60.224 ns     1.20x     4/4    7.417 μs    7.021 μs     1.06x       6/4
-eight schools   MooncakeFwd      74.562 ns   61.492 ns     1.21x     4/4    3.260 μs    2.467 μs     1.32x   148/148
-eight schools   MooncakeRvs      75.161 ns   61.678 ns     1.22x     4/4  685.070 ns  526.316 ns     1.30x     12/12
-eight schools   DifferFwd        74.034 ns   61.912 ns     1.20x     4/4    2.798 μs    2.440 μs     1.15x   168/168
+model           backend            DPPL lp     Wren lp   speedup   lp allocs   DPPL grad   Wren grad   speedup     grad allocs
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+normal          ForwardDiff       2.580 ns    2.992 ns     0.86x         0/0   16.889 ns   15.501 ns     1.09x             3/3
+normal          ReverseDiff       2.677 ns    3.614 ns     0.74x         0/0    1.935 μs    1.958 μs     0.99x           64/63
+normal          ReverseDiffCpl    2.851 ns    4.050 ns     0.70x         0/0  758.538 ns  729.175 ns     1.04x             3/3
+normal          MooncakeFwd       2.717 ns    3.874 ns     0.70x         0/0  114.629 ns   85.985 ns     1.33x           10/10
+normal          MooncakeRvs       2.738 ns    4.043 ns     0.68x         0/0   73.677 ns   36.966 ns     1.99x             2/2
+normal          DifferFwd         2.513 ns    2.844 ns     0.88x         0/0   31.382 ns   35.405 ns     0.89x             6/6
+normal          DifferRvs         2.600 ns    2.988 ns     0.87x         0/0   38.046 ns   37.197 ns     1.02x             2/2
+normal          EnzymeFwd         2.575 ns    2.983 ns     0.86x         0/0   86.111 ns   87.009 ns     0.99x             5/5
+normal          EnzymeRvs         2.521 ns    2.848 ns     0.89x         0/0   11.387 ns   11.786 ns     0.97x             2/2
+normal          ReactantRvs              —    9.375 μs         —        —/21           —   15.959 μs         —            —/27
+eight schools   ForwardDiff      75.867 ns   62.063 ns     1.22x         4/4  358.466 ns  348.129 ns     1.03x           11/11
+eight schools   ReverseDiff      75.714 ns   61.850 ns     1.22x         4/4   20.458 μs   21.000 μs     0.97x         596/592
+eight schools   ReverseDiffCpl   74.773 ns   64.381 ns     1.16x         4/4    6.521 μs    6.292 μs     1.04x             6/4
+eight schools   MooncakeFwd      76.951 ns   63.278 ns     1.22x         4/4    3.429 μs    2.579 μs     1.33x         148/148
+eight schools   MooncakeRvs      77.247 ns   63.968 ns     1.21x         4/4  689.103 ns  524.860 ns     1.31x           12/12
+eight schools   DifferFwd        76.110 ns   62.046 ns     1.23x         4/4    2.891 μs    2.542 μs     1.14x         168/168
 eight schools   DifferRvs       ERROR: Differ.build_ctx: could not derive a reverse rule for `Tuple{typeof(Wren._vec...
-eight schools   EnzymeFwd        75.781 ns   62.796 ns     1.21x     4/4  550.717 ns  462.848 ns     1.19x     49/49
-eight schools   EnzymeRvs        73.809 ns   61.648 ns     1.20x     4/4  230.991 ns  165.858 ns     1.39x     13/11
+eight schools   EnzymeFwd        76.572 ns   63.743 ns     1.20x         4/4  648.513 ns  566.295 ns     1.15x           49/49
+eight schools   EnzymeRvs        76.328 ns   62.821 ns     1.21x         4/4  232.143 ns  163.745 ns     1.42x           13/11
+mnist           ForwardDiff      68.666 μs   67.041 μs     1.02x       28/26   15.778 ms   16.147 ms     0.98x         872/810
+mnist           ReverseDiff     ERROR: MethodError: vcat(::Matrix{ReverseDiff.TrackedReal{Float64, Float64, ReverseD...
+mnist           ReverseDiffCpl  ERROR: MethodError: vcat(::Matrix{ReverseDiff.TrackedReal{Float64, Float64, ReverseD...
+mnist           MooncakeFwd      68.792 μs   66.959 μs     1.03x       28/26  241.755 ms  238.317 ms     1.01x 4827661/4826183
+mnist           MooncakeRvs      68.291 μs   66.750 μs     1.02x       28/26  684.083 μs  678.500 μs     1.01x         179/175
+mnist           EnzymeFwd        68.416 μs   67.084 μs     1.02x       28/26   65.227 ms   69.347 ms     0.94x     14063/13229
+mnist           EnzymeRvs        67.708 μs   66.417 μs     1.02x       28/26  366.875 μs  257.209 μs     1.43x          125/83
+mnist           ReactantRvs              —   70.584 μs         —        —/21           —  105.333 μs         —            —/28
 ```
 
 ## What's taken from DynamicPPL

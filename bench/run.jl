@@ -62,11 +62,6 @@ const BACKENDS = (
         dppl=ADTypes.AutoEnzyme(; mode=Enzyme.set_runtime_activity(Enzyme.Reverse)),
     ),
     (
-        name="ReactantFwd",
-        wren=ADTypes.AutoReactant(ADTypes.AutoEnzyme(; mode=Forward)),
-        dppl=nothing,
-    ),
-    (
         name="ReactantRvs",
         wren=ADTypes.AutoReactant(ADTypes.AutoEnzyme(; mode=Reverse)),
         dppl=nothing,
