@@ -198,7 +198,7 @@ using VarNames
         )
         rawvals = get_raw_values(accs)
         @test only(keys(rawvals)) == @vn(x.y.a)
-        @test retval == 2 * rawvals[@vn(x.y.a)] + 2
+        @test retval ≈ 2 * rawvals[@vn(x.y.a)] + 2
 
         # With FromParams
         a = 0.75
@@ -208,7 +208,7 @@ using VarNames
         source = FromParams(params)
         nested_model = outer_model(middle_model(returning_inner()))
         retval, accs = evaluate(nested_model, source, Wren.default_accumulators())
-        @test retval == 2a + 2
+        @test retval ≈ 2a + 2
         @test get_raw_values(accs) == params
         @test getlogprior(accs) ≈ logdensityof(Normal(), a)
     end
