@@ -153,7 +153,7 @@ function print_header()
         lpad("speedup", 10),
         lpad("grad allocs", 14),
     )
-    println(repeat('─', 133))
+    println(repeat('─', 126))
 end
 
 function print_result(model_name, backend_name, result)
