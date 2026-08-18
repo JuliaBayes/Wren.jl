@@ -59,7 +59,7 @@ function Wren.VecModel(
     # the model args here.
     model_args = Reactant.to_rarray(model.args)
 
-    lp_at = Wren._VecModelLP(
+    lp_func = Wren._VecModelLP(
         model.evaluation_fn,
         model_args,
         model.conditioned,
@@ -70,8 +70,8 @@ function Wren.VecModel(
     )
 
     reactant_sample = Reactant.to_rarray(sample)
-    value_and_gradient_at = ValueAndGradientCallable(lp_at, adtype)
-    compiled_lp = Reactant.@allowscalar Reactant.@compile lp_at(reactant_sample)
+    value_and_gradient_at = ValueAndGradientCallable(lp_func, adtype)
+    compiled_lp = Reactant.@allowscalar Reactant.@compile lp_func(reactant_sample)
     compiled_value_and_gradient = Reactant.@allowscalar Reactant.@compile value_and_gradient_at(
         reactant_sample
     )
@@ -83,20 +83,21 @@ function Wren.VecModel(
         getlogp,
         parameter_space,
         ranges_and_transforms,
-        sample,
         accs,
-        lp_at,
+        length(sample),
+        lp_func,
         adprep,
+        sample,
     )
 end
 
 const ReactantWrenModel = Wren.VecModel{M,A} where {M<:Wren.Model,A<:AutoReactant}
 _to_host(x::Reactant.ConcreteRNumber{T}) where {T} = T(x)
 function Wren.lp(vecmodel::ReactantWrenModel, params::AbstractVector)
-    return _to_host(vecmodel._adprep.primal(Reactant.to_rarray(params)))
+    return _to_host(vecmodel.adprep.primal(Reactant.to_rarray(params)))
 end
 function Wren.lp_and_grad(vecmodel::ReactantWrenModel, params::AbstractVector)
-    value, grad = vecmodel._adprep.value_and_gradient(Reactant.to_rarray(params))
+    value, grad = vecmodel.adprep.value_and_gradient(Reactant.to_rarray(params))
     return _to_host(value), Array(grad)
 end
 function Wren.lp_and_grad!(grad::AbstractVector, vecmodel::ReactantWrenModel, params::AbstractVector)

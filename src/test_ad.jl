@@ -159,7 +159,7 @@ function run_ad(
             vecmodel.getlogp,
             vecmodel.parameter_space,
             vecmodel.ranges_and_transforms,
-            vecmodel._sample,
+            vecmodel.sample,
         )
         value, grad = lp_and_grad(reference, params)
         value, collect(grad)
