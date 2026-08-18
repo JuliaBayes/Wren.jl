@@ -75,7 +75,7 @@ determinant of the Jacobian from model space to the target representation.
 """
 function apply_parameter_space(
     parameter_space::AbstractParameterSpace,
-    tval::TransformedValue{<:AbstractVector{<:Real},AsUnconstrainedVec},
+    tval::TransformedValue{<:AbstractVector{<:Number},AsUnconstrainedVec},
     vn::VarName,
     dist,
 )
@@ -98,7 +98,7 @@ end
 
 function apply_parameter_space(
     parameter_space::AbstractParameterSpace,
-    tval::TransformedValue{<:AbstractVector{<:Real},AsVec},
+    tval::TransformedValue{<:AbstractVector{<:Number},AsVec},
     vn::VarName,
     dist,
 )

@@ -118,7 +118,7 @@ constructors, `copy`, `show`, `==`, `isequal`, `hash`, `split`, and `combine`.
 This type has no great conceptual significance, it just reduces code duplication between
 types like LogPriorAccumulator, LogJacobianAccumulator, and LogLikelihoodAccumulator.
 """
-abstract type LogProbAccumulator{T<:Real} <: AbstractAccumulator end
+abstract type LogProbAccumulator{T<:Number} <: AbstractAccumulator end
 
 """
     LogProbAccumulator{T}()
@@ -129,7 +129,7 @@ Create a new `LogProbAccumulator` accumulator with the log prior initialized to 
 
 Create a new `LogProbAccumulator{Wren.LogProbType}` accumulator.
 """
-(::Type{AccType})() where {T<:Real,AccType<:LogProbAccumulator{T}} = AccType(zero(T))
+(::Type{AccType})() where {T<:Number,AccType<:LogProbAccumulator{T}} = AccType(zero(T))
 (::Type{AccType})() where {AccType<:LogProbAccumulator} = AccType{LogProbType}()
 
 Base.copy(acc::LogProbAccumulator) = acc
@@ -188,7 +188,7 @@ function promote_for_threadsafe_eval(
 end
 
 """
-    LogPriorAccumulator{T<:Real} <: LogProbAccumulator{T}
+    LogPriorAccumulator{T<:Number} <: LogProbAccumulator{T}
 
 An accumulator that tracks the cumulative log prior during model execution.
 
@@ -198,7 +198,7 @@ space, so it is independent of the parameter space.
 # Fields
 $(TYPEDFIELDS)
 """
-struct LogPriorAccumulator{T<:Real} <: LogProbAccumulator{T}
+struct LogPriorAccumulator{T<:Number} <: LogProbAccumulator{T}
     "the scalar log prior value"
     logp::T
 end
@@ -221,7 +221,7 @@ end
 accumulate_observe!!(acc::LogPriorAccumulator, val, vn, right, template) = acc
 
 """
-    LogJacobianAccumulator{T<:Real} <: LogProbAccumulator{T}
+    LogJacobianAccumulator{T<:Number} <: LogProbAccumulator{T}
 
 An accumulator that tracks the cumulative forward log absolute determinant of the
 Jacobian from the distribution's original space to the representation selected by the
@@ -248,7 +248,7 @@ parameter space.
 # Fields
 $(TYPEDFIELDS)
 """
-struct LogJacobianAccumulator{T<:Real} <: LogProbAccumulator{T}
+struct LogJacobianAccumulator{T<:Number} <: LogProbAccumulator{T}
     "the forward log absolute determinant of the selected transform Jacobian"
     logjac::T
 end
@@ -271,14 +271,14 @@ end
 accumulate_observe!!(acc::LogJacobianAccumulator, val, vn, right, template) = acc
 
 """
-    LogLikelihoodAccumulator{T<:Real} <: LogProbAccumulator{T}
+    LogLikelihoodAccumulator{T<:Number} <: LogProbAccumulator{T}
 
 An accumulator that tracks the cumulative log likelihood during model execution.
 
 # Fields
 $(TYPEDFIELDS)
 """
-struct LogLikelihoodAccumulator{T<:Real} <: LogProbAccumulator{T}
+struct LogLikelihoodAccumulator{T<:Number} <: LogProbAccumulator{T}
     "the scalar log likelihood value"
     logp::T
 end

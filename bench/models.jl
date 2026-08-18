@@ -4,11 +4,12 @@ using DelimitedFiles
 using Distributions
 using LinearAlgebra: I
 using LogExpFunctions: softmax
+using ProbabilityMeasures: ProbabilityMeasures as PM
 using Wren: Wren, VarNamedTuple
 using DynamicPPL: DynamicPPL, filldist
 
 Wren.@model function wren_normal()
-    x ~ Normal()
+    x ~ PM.Normal(0.0, 1.0)
     return nothing
 end
 

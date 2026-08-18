@@ -75,7 +75,7 @@ struct VecModel{
     R<:VarNamedTuple,
     AC<:AccumulatorTuple,
     L<:_VecModelLP,
-    P<:DI.GradientPrep,
+    P,
     X<:AbstractVector,
 }
     model::M
@@ -88,6 +88,41 @@ struct VecModel{
     _lp::L
     _adprep::P
     _sample::X
+
+    function VecModel(
+        model::M,
+        adtype::A,
+        getlogp::F,
+        parameter_space::S,
+        ranges_and_transforms::R,
+        params::X,
+        accs::AC,
+        lp_at::L,
+        adprep::P,
+    ) where {
+        M<:Model,
+        A<:DI.AbstractADType,
+        F,
+        S<:AbstractParameterSpace,
+        R<:VarNamedTuple,
+        X<:AbstractVector,
+        AC<:AccumulatorTuple,
+        L<:_VecModelLP,
+        P,
+    }
+        return new{M,A,F,S,R,AC,L,P,X}(
+            model,
+            adtype,
+            getlogp,
+            parameter_space,
+            ranges_and_transforms,
+            accs,
+            length(params),
+            lp_at,
+            adprep,
+            params,
+        )
+    end
 
     function VecModel(
         model::M,
@@ -132,17 +167,16 @@ struct VecModel{
         else
             DI.prepare_gradient(_vecmodel_lp, adtype, params, map(DI.Constant, args)...)
         end
-        return new{M,A,F,S,R,typeof(accs),typeof(lp_at),typeof(adprep),X}(
+        return VecModel(
             model,
             adtype,
             getlogp,
             parameter_space,
             ranges_and_transforms,
+            params,
             accs,
-            length(params),
             lp_at,
             adprep,
-            params,
         )
     end
 end
@@ -157,7 +191,7 @@ function VecModel(
     values = if params isa VarNamedTuple
         params
     else
-        _vector_values(model, params, parameter_space)
+        _draw_vector_values(model, params, parameter_space)
     end
     _validate_vector_values(values, parameter_space)
     ranges_and_transforms, sample = _ranges_and_params(values)
@@ -180,7 +214,7 @@ function _validate_vector_values(
     return nothing
 end
 
-function _vector_values(
+function _draw_vector_values(
     model::Model,
     source::AbstractLatentSource,
     parameter_space::AbstractParameterSpace,
@@ -300,7 +334,7 @@ end
 
 """Draw a parameter vector compatible with `vecmodel`."""
 function Base.rand(rng::AbstractRNG, vecmodel::VecModel)
-    values = _vector_values(vecmodel.model, FromPrior(rng), vecmodel.parameter_space)
+    values = _draw_vector_values(vecmodel.model, FromPrior(rng), vecmodel.parameter_space)
     ranges_and_transforms, params = _ranges_and_params(values)
     ranges_and_transforms == vecmodel.ranges_and_transforms || throw(
         ArgumentError(

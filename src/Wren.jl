@@ -78,4 +78,7 @@ export @model,
 using VarNames: @vn, @vnt, VarNamedTuple, VarName
 export @vn, @vnt, VarNamedTuple, VarName
 
+using DensityInterface: logdensityof
+export logdensityof
+
 end # module Wren

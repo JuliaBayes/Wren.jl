@@ -1,21 +1,31 @@
 [deps]
+ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
 Bijectors = "76274a88-744f-5084-9051-94815aaf08c4"
 Chairmarks = "0ca39b1e-fe0b-4e98-acfc-b1656634c4de"
+ChangesOfVariables = "9e997f8a-9a97-42d5-a9f1-ce6bfc15e2c0"
 DensityInterface = "b429d917-457f-4dbc-8f4c-0cc954292b1d"
 DifferentiationInterface = "a0c0ee7d-e4b9-4e03-894e-1c5f64a51d63"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
+Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
+InverseFunctions = "3587e190-3f89-42d0-90ee-14403ec27112"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+ProbabilityMeasures = "d96443b0-2461-4412-bb6f-797ac5201ef9"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+Reactant = "3c362404-f566-11ee-1572-e11a4b42c853"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 VarNames = "09a315b2-63fc-4165-8d7f-d59368e770cc"
 Wren = "bcabdda7-19af-429b-97ac-a6b557ca0f6c"
 
-[compat]
-Bijectors = "0.15.17"
-DifferentiationInterface = "0.7"
-ForwardDiff = "1"
-
 [sources]
+ProbabilityMeasures = {rev = "main", url = "https://github.com/rsenne/ProbabilityMeasures.jl"}
 VarNames = {rev = "main", url = "https://github.com/JuliaBayes/VarNames.jl"}
-Wren = {path = "../"}
+Wren = {path = ".."}
+
+[compat]
+ADTypes = "1"
+Bijectors = "0.15.17, 0.16"
+DifferentiationInterface = "0.7"
+Enzyme = "0.13"
+ForwardDiff = "1"
+Reactant = "0.2"

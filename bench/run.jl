@@ -14,55 +14,15 @@ using LogDensityProblems
 using Mooncake
 using Printf
 using Random: Xoshiro
+using Reactant
 using ReverseDiff
 using Statistics: median
 using Wren
 
-# Wren's parameter-space metadata is passive. Keep these rules benchmark-local until Differ
-# is released and Wren can provide a package extension for it.
-function Differ.frule!!(
-    ::Differ.Dual{typeof(Wren._get_range_and_transform)},
-    ranges_and_transforms::Differ.Dual,
-    vn::Differ.Dual,
-)
-    result = Wren._get_range_and_transform(
-        Differ.primal(ranges_and_transforms), Differ.primal(vn)
-    )
-    return Differ.Dual(result, Differ.NoTangent())
-end
-function Differ.frule!!(
-    ::Differ.Dual{typeof(Wren.target_transform)},
-    parameter_space::Differ.Dual,
-    vn::Differ.Dual,
-)
-    result = Wren.target_transform(Differ.primal(parameter_space), Differ.primal(vn))
-    return Differ.Dual(result, Differ.NoTangent())
-end
-function Differ.rrule!!(
-    ::Differ.CoDual{typeof(Wren._get_range_and_transform),Differ.NoFData},
-    ::Differ.AbstractCtx,
-    ranges_and_transforms::Differ.CoDual,
-    vn::Differ.CoDual,
-)
-    result = Wren._get_range_and_transform(
-        Differ.primal(ranges_and_transforms), Differ.primal(vn)
-    )
-    pullback(_) = (Differ.NoRData(), Differ.NoRData(), Differ.NoRData())
-    return Differ.CoDual(result, Differ.NoFData()), pullback
-end
-
-function Differ.rrule!!(
-    ::Differ.CoDual{typeof(Wren.target_transform),Differ.NoFData},
-    ::Differ.AbstractCtx,
-    parameter_space::Differ.CoDual,
-    vn::Differ.CoDual,
-)
-    result = Wren.target_transform(Differ.primal(parameter_space), Differ.primal(vn))
-    pullback(_) = (Differ.NoRData(), Differ.NoRData(), Differ.NoRData())
-    return Differ.CoDual(result, Differ.NoFData()), pullback
-end
-
 include("models.jl")
+include("pmtransforms.jl")
+include("differ_rules.jl")
+
 using .BenchmarkModels
 
 const BENCHMARK_SECONDS = parse(Float64, get(ENV, "WREN_BENCH_SECONDS", "1.0"))
@@ -101,6 +61,16 @@ const BACKENDS = (
         wren=ADTypes.AutoEnzyme(; mode=Reverse),
         dppl=ADTypes.AutoEnzyme(; mode=Enzyme.set_runtime_activity(Enzyme.Reverse)),
     ),
+    (
+        name="ReactantFwd",
+        wren=ADTypes.AutoReactant(ADTypes.AutoEnzyme(; mode=Forward)),
+        dppl=nothing,
+    ),
+    (
+        name="ReactantRvs",
+        wren=ADTypes.AutoReactant(ADTypes.AutoEnzyme(; mode=Reverse)),
+        dppl=nothing,
+    ),
 )
 
 function vector_values(model, seed)
@@ -135,9 +105,38 @@ end
 function benchmark_pair(models, backend, seed)
     values, params = vector_values(models.wren, seed)
     wren_model = Wren.VecModel(models.wren, backend.wren; params=values)
-    dppl_model = dppl_density(models.dppl, backend.dppl)
 
     wren_value, wren_grad = Wren.lp_and_grad(wren_model, params)
+
+    if backend.dppl === nothing
+        reference = Wren.VecModel(
+            models.wren,
+            ADTypes.AutoForwardDiff();
+            params=values,
+        )
+        reference_value, reference_grad = Wren.lp_and_grad(reference, params)
+        @assert isapprox(wren_value, reference_value; rtol=1e-8, atol=1e-8)
+        @assert isapprox(wren_grad, reference_grad; rtol=1e-7, atol=1e-8)
+
+        Wren.lp(wren_model, params)
+        wren_lp = median(@be Wren.lp($wren_model, $params) seconds=BENCHMARK_SECONDS)
+        Wren.lp_and_grad(wren_model, params)
+        wren_grad_bench =
+            median(@be Wren.lp_and_grad($wren_model, $params) seconds=BENCHMARK_SECONDS)
+
+        return (
+            dppl_lp=nothing,
+            wren_lp=wren_lp.time,
+            dppl_lp_allocs=nothing,
+            wren_lp_allocs=wren_lp.allocs,
+            dppl_grad=nothing,
+            wren_grad=wren_grad_bench.time,
+            dppl_grad_allocs=nothing,
+            wren_grad_allocs=wren_grad_bench.allocs,
+        )
+    end
+
+    dppl_model = dppl_density(models.dppl, backend.dppl)
     dppl_value, dppl_grad = LogDensityProblems.logdensity_and_gradient(dppl_model, params)
     @assert isapprox(wren_value, dppl_value; rtol=1e-8, atol=1e-8)
     @assert isapprox(wren_grad, dppl_grad; rtol=1e-7, atol=1e-8)
@@ -186,6 +185,22 @@ function print_header()
 end
 
 function print_result(model_name, backend_name, result)
+    if result.dppl_lp === nothing
+        @printf(
+            "%-16s%-14s%12s%12s%10s%12s%12s%12s%10s%16s\n",
+            model_name,
+            backend_name,
+            "—",
+            pretty_time(result.wren_lp),
+            "—",
+            "—/$(round(Int, result.wren_lp_allocs))",
+            "—",
+            pretty_time(result.wren_grad),
+            "—",
+            "—/$(round(Int, result.wren_grad_allocs))",
+        )
+        return nothing
+    end
     @printf(
         "%-16s%-14s%12s%12s%9.2fx%12s%12s%12s%9.2fx%16s\n",
         model_name,
@@ -213,6 +228,7 @@ function main()
     for (model_index, models) in enumerate(BenchmarkModels.models())
         for (backend_index, backend) in enumerate(BACKENDS)
             seed = 468 + 10 * model_index + backend_index
+            backend.wren isa ADTypes.AutoReactant && models.name != "normal" && continue
             if models.name == "mnist" && contains(backend.name, "Differ")
                 @printf(
                     "%-16s%-16sSKIPPED: Differ AD backend is not compatible with MNIST model\n",
