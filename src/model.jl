@@ -62,7 +62,7 @@ end
 emit_model_expr(stmt::OtherStatement, accs, conditioned, latent_source) = stmt.expr
 
 function emit_model_expr(stmt::Sample, accs, conditioned, latent_source)
-    @gensym rhs val vn child_source child_accs
+    @gensym rhs val logjac vn child_source child_accs
     rhs_expr = emit_model_expr(stmt.rhs, accs, conditioned, latent_source)
     vn_expr = remove_escapes(varname(stmt.lhs, false))
     template = get_top_level_symbol(stmt.lhs)
@@ -82,9 +82,11 @@ function emit_model_expr(stmt::Sample, accs, conditioned, latent_source)
                 $(stmt.lhs) = $val
                 $accs = $(accumulate_observe!!)($accs, $val, $vn, $rhs, $template)
             else
-                $val = $(get_latent)($latent_source, $vn, $rhs)
+                $val, $logjac = $(get_latent)($latent_source, $vn, $rhs)
                 $(stmt.lhs) = $val
-                $accs = $(accumulate_assume!!)($accs, $val, $vn, $rhs, $template)
+                $accs = $(accumulate_assume!!)(
+                    $accs, $val, $vn, $rhs, $logjac, $template
+                )
             end
         end
         # A tilde expression evaluates to the sampled value or submodel return value.

@@ -11,11 +11,11 @@ not enforced.
 
 The function `f` should have the signature:
 
-    f(val, vn, dist) -> value_to_store
+    f(val, vn, dist, logjac) -> value_to_store
 
-where `val`, `vn`, and `dist` have their usual meanings in accumulate_assume!! (see its
-docstring for more details). If a value does not need to be accumulated, this can be
-signalled by returning `DoNotAccumulate()` from `f`.
+where the arguments have their usual meanings in [`accumulate_assume!!`](@ref). If a value
+does not need to be accumulated, this can be signalled by returning `DoNotAccumulate()`
+from `f`.
 
 If `f` is a struct (and not a function), you also need to define `Base.copy` on `f`.
 """
@@ -82,9 +82,10 @@ for acc_type in (:VNTAccumulator, :TSVNTAccumulator)
             val,
             vn,
             right,
+            logjac,
             template,
         ) where {AccName}
-            new_val = acc.f(val, vn, right)
+            new_val = acc.f(val, vn, right, logjac)
             return if new_val isa DoNotAccumulate
                 acc
             else

@@ -12,7 +12,7 @@ seen so far.
 An accumulator type `T <: AbstractAccumulator` must implement the following methods:
 - `accumulator_name(acc::T)` or `accumulator_name(::Type{T})`
 - `accumulate_observe!!(acc::T, val, vn, dist, template)`
-- `accumulate_assume!!(acc::T, val, vn, dist, template)`
+- `accumulate_assume!!(acc::T, val, vn, dist, logjac, template)`
 - `reset(acc::T)`
 - `Base.copy(acc::T)`
 
@@ -21,6 +21,8 @@ In these functions:
   the original unlinked space), or the value on the left-hand side of an observe
   statement.
 - `dist` is the distribution on the RHS of the tilde statement.
+- `logjac` is the forward log absolute determinant of the Jacobian for the transform from
+  the distribution's original space to the space supplied by the latent source.
 - `vn` is the `VarName` that is on the left-hand side of the tilde-statement. If the
   tilde-statement is a literal observation like `0.0 ~ Normal()`, then `vn` is `nothing`.
 - `template` is a value that conveys the shape of the top-level symbol in `vn`, and is
@@ -59,7 +61,7 @@ See also: [`accumulate_assume!!`](@ref)
 function accumulate_observe!! end
 
 """
-    accumulate_assume!!(acc::AbstractAccumulator, val, tval, logjac, vn, right, template)
+    accumulate_assume!!(acc::AbstractAccumulator, val, vn, dist, logjac, template)
 
 Update `acc` in a `tilde_assume!!` call. Returns the updated `acc`.
 
@@ -286,12 +288,12 @@ function map_accumulator(
 end
 
 """
-    accumulate_assume!!(at::AccumulatorTuple, val, vn, right, template)
+    accumulate_assume!!(at::AccumulatorTuple, val, vn, dist, logjac, template)
 
 Update all the accumulators of `at` by calling `accumulate_assume!!` on them.
 """
-function accumulate_assume!!(at::AccumulatorTuple, val, vn, right, template)
-    return map(acc -> accumulate_assume!!(acc, val, vn, right, template), at)
+function accumulate_assume!!(at::AccumulatorTuple, val, vn, right, logjac, template)
+    return map(acc -> accumulate_assume!!(acc, val, vn, right, logjac, template), at)
 end
 
 """

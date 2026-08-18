@@ -11,7 +11,7 @@ _safe_copy(val::SubArray) = collect(val)
 
 struct GetRawValues end
 Base.copy(g::GetRawValues) = g
-(g::GetRawValues)(val, vn, right) = _safe_copy(val)
+(g::GetRawValues)(val, vn, right, logjac) = _safe_copy(val)
 
 """
     RawValueAccumulator() <: AbstractAccumulator
@@ -45,6 +45,7 @@ function accumulate_assume!!(
     val,
     vn,
     right,
+    logjac,
     template,
 )
     new_val = _safe_copy(val)

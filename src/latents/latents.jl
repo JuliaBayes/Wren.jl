@@ -1,6 +1,12 @@
 abstract type AbstractLatentSource end
 
-"""Get the value of the latent variable `vn` from the source `source`, plus the logjac."""
+"""
+    get_latent(source, vn, dist) -> (value, logjac)
+
+Get latent variable `vn` from `source` and return its value in the distribution's original
+space together with the forward log absolute determinant of the Jacobian for the transform
+from original space to the source's parameter space.
+"""
 function get_latent end
 
 """Return a latent source scoped to the variables beneath `vn`."""

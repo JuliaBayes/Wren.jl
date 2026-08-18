@@ -208,7 +208,7 @@ logp(acc::LogPriorAccumulator) = acc.logp
 
 accumulator_name(::Type{<:LogPriorAccumulator}) = :LogPrior
 
-function accumulate_assume!!(acc::LogPriorAccumulator, val, vn, right, template)
+function accumulate_assume!!(acc::LogPriorAccumulator, val, vn, right, logjac, template)
     return acclogp(acc, logdensityof(right, val))
 end
 accumulate_observe!!(acc::LogPriorAccumulator, val, vn, right, template) = acc
@@ -252,10 +252,15 @@ logp(acc::LogJacobianAccumulator) = acc.logjac
 
 accumulator_name(::Type{<:LogJacobianAccumulator}) = :LogJacobian
 
-function accumulate_assume!!(acc::LogJacobianAccumulator, val, vn, right, template)
-    return acc
-    # TODO: implement logjac
-    # return acclogp(acc, logjac)
+function accumulate_assume!!(
+    acc::LogJacobianAccumulator,
+    val,
+    vn,
+    right,
+    logjac,
+    template,
+)
+    return acclogp(acc, logjac)
 end
 accumulate_observe!!(acc::LogJacobianAccumulator, val, vn, right, template) = acc
 
@@ -276,7 +281,14 @@ logp(acc::LogLikelihoodAccumulator) = acc.logp
 
 accumulator_name(::Type{<:LogLikelihoodAccumulator}) = :LogLikelihood
 
-function accumulate_assume!!(acc::LogLikelihoodAccumulator, val, vn, right, template)
+function accumulate_assume!!(
+    acc::LogLikelihoodAccumulator,
+    val,
+    vn,
+    right,
+    logjac,
+    template,
+)
     return acc
 end
 function accumulate_observe!!(acc::LogLikelihoodAccumulator, val, vn, right, template)
