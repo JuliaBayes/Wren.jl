@@ -40,4 +40,8 @@ export @model,
     getloglikelihood,
     getlogprior
 
+# Reexports
+using VarNames: @vn, @vnt, VarNamedTuple, VarName
+export @vn, @vnt, VarNamedTuple, VarName
+
 end # module Wren
