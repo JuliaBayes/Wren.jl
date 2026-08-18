@@ -10,16 +10,11 @@ using Wren: Wren
 
 Stores the Reactant-compiled functions.
 """
-struct ReactantPrep{P,G,G2}
+struct ReactantPrep{P,G}
     primal::P
     value_and_gradient::G
-    value_and_gradient!::G2
 end
 struct ValueAndGradientCallable{F,A}
-    f::F
-    adtype::A
-end
-struct ValueAndGradientCallable!{F,A}
     f::F
     adtype::A
 end
@@ -32,11 +27,6 @@ function (f::ValueAndGradientCallable)(params)
     result = Enzyme.gradient(_with_primal(f.adtype.mode), f.f, params)
     return result.val, only(result.derivs)
 end
-function (f::ValueAndGradientCallable!)(params, grad)
-    result = Enzyme.gradient!(_with_primal(f.adtype.mode), grad, f.f, params)
-    return result.val, grad
-end
-
 function Wren.VecModel(
     model::Wren.Model,
     adtype::AutoReactant;
@@ -57,9 +47,21 @@ function Wren.VecModel(
         Wren.LogJacobianAccumulator(),
         Wren.LogLikelihoodAccumulator(),
     )
+
+    # TODO(penelopeysm): This **shouldn't** be necessary, in an ideal world. The model
+    # arguments should be 'constant' data that Reactant doesn't need to trace -- only
+    # the parameters should be traced.
+    # However, Reactant gets incredibly slow when doing some matmuls with untraced arrays.
+    # See e.g.
+    #  - https://github.com/EnzymeAD/Reactant.jl/issues/3167
+    #  - https://github.com/EnzymeAD/Reactant.jl/issues/3195
+    # and there are probably more examples which we haven't found. So we just blanket-trace
+    # the model args here.
+    model_args = Reactant.to_rarray(model.args)
+
     lp_at = Wren._VecModelLP(
         model.evaluation_fn,
-        model.args,
+        model_args,
         model.conditioned,
         getlogp,
         parameter_space,
@@ -69,13 +71,11 @@ function Wren.VecModel(
 
     reactant_sample = Reactant.to_rarray(sample)
     value_and_gradient_at = ValueAndGradientCallable(lp_at, adtype)
-    value_and_gradient_at! = ValueAndGradientCallable!(lp_at, adtype)
     compiled_lp = Reactant.@allowscalar Reactant.@compile lp_at(reactant_sample)
     compiled_value_and_gradient = Reactant.@allowscalar Reactant.@compile value_and_gradient_at(
         reactant_sample
     )
-    compiled_value_and_gradient! = Reactant.@allowscalar Reactant.@compile value_and_gradient_at!(reactant_sample, reactant_sample)
-    adprep = ReactantPrep(compiled_lp, compiled_value_and_gradient, compiled_value_and_gradient!)
+    adprep = ReactantPrep(compiled_lp, compiled_value_and_gradient)
 
     return Wren.VecModel(
         model,
@@ -100,10 +100,15 @@ function Wren.lp_and_grad(vecmodel::ReactantWrenModel, params::AbstractVector)
     return _to_host(value), Array(grad)
 end
 function Wren.lp_and_grad!(grad::AbstractVector, vecmodel::ReactantWrenModel, params::AbstractVector)
-    # TODO(penelopeysm): This doesn't work yet
-    @warn "lp_and_grad! doesn't work correctly yet"
-    value, grad = vecmodel._adprep.value_and_gradient!(Reactant.to_rarray(params), Reactant.to_rarray(grad))
-    return _to_host(value), Array(grad)
+    length(grad) == vecmodel.dimension || throw(
+        DimensionMismatch(
+            "VecModel expects a gradient buffer of length $(vecmodel.dimension), but " *
+            "received one of length $(length(grad)).",
+        ),
+    )
+    value, allocating_grad = Wren.lp_and_grad(vecmodel, params)
+    copyto!(grad, allocating_grad)
+    return value, grad
 end
 
 end # module WrenReactantExt

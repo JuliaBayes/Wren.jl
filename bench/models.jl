@@ -6,7 +6,8 @@ using LinearAlgebra: I
 using LogExpFunctions: softmax
 using ProbabilityMeasures: ProbabilityMeasures as PM
 using Wren: Wren, VarNamedTuple
-using DynamicPPL: DynamicPPL, filldist
+using DynamicPPL: DynamicPPL, filldist, @addlogprob!
+using ..PMTransforms: PMTransforms
 
 Wren.@model function wren_normal()
     x ~ PM.Normal(0.0, 1.0)
@@ -51,14 +52,13 @@ D = size(image_vec, 2)
 
 Wren.@model function wren_mnist(X, y, C)
     N, D = size(X)
-    W ~ filldist(Normal(), C - 1, D)
-    b ~ filldist(Normal(), C - 1)
+    W ~ PMTransforms.IsoNormal(C - 1, D)
+    b ~ PMTransforms.IsoNormal(C - 1)
     nonreference_logits = W * X' .+ b # (C-1) x N
     logits = vcat(zeros(eltype(nonreference_logits), 1, N), nonreference_logits)
     probabilities = softmax(logits; dims=1)
-    for i in 1:N
-        @observe y[i] ~ Categorical(probabilities[:, i])
-    end
+    # Reactant.@trace generates a closure, which RGF doesn't like. :/
+    @observe y ~ PMTransforms.MvCategorical(probabilities)
 end
 
 DynamicPPL.@model function dppl_mnist(X, y, C)
@@ -68,16 +68,15 @@ DynamicPPL.@model function dppl_mnist(X, y, C)
     nonreference_logits = W * X' .+ b
     logits = vcat(zeros(eltype(nonreference_logits), 1, N), nonreference_logits)
     probabilities = softmax(logits; dims=1)
-    for i in 1:N
-        y[i] ~ Categorical(probabilities[:, i])
-    end
+    linear_indices = y .+ (eachindex(y) .- 1) .* size(probabilities, 1)
+    @addlogprob! sum(log, probabilities[linear_indices])
 end
 
 function models()
     return (
         (name="normal", wren=wren_normal(), dppl=dppl_normal()),
         (name="eight schools", wren=wren_eight_schools(EIGHT_SCHOOLS_Y, EIGHT_SCHOOLS_SIGMA, EIGHT_SCHOOLS_J), dppl=dppl_eight_schools(EIGHT_SCHOOLS_Y, EIGHT_SCHOOLS_SIGMA, EIGHT_SCHOOLS_J)),
-        (name="mnist", wren=wren_mnist(image_vec, labels, C), dppl=dppl_mnist(image_vec, labels, C))
+        (name="mnist", wren=wren_mnist(image_vec, labels, C), dppl=dppl_mnist(image_vec, labels, C)),
     )
 end
 

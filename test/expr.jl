@@ -7,11 +7,8 @@ using DensityInterface: logdensityof
 using Chairmarks
 using VarNames
 
-macro sample_x()
-    return esc(:(x ~ Normal()))
-end
-macro observe_y()
-    return esc(:(@observe y ~ Normal()))
+macro preserve(expr)
+    return esc(expr)
 end
 
 @testset "Expr tests" begin
@@ -110,14 +107,15 @@ end
     end
 
     @testset "macros inside models" begin
-        # A bit pathological, but it works so why not test it
         @model function with_macros()
-            @sample_x
-            y = 0.25
-            @observe_y
-            xs = Vector{Float64}(undef, 2)
-            @inbounds for i in eachindex(xs)
-                xs[i] ~ Normal()
+            @preserve begin
+                x ~ Normal()
+                y = 0.25
+                @observe y ~ Normal()
+                xs = Vector{Float64}(undef, 2)
+                @inbounds for i in eachindex(xs)
+                    xs[i] ~ Normal()
+                end
             end
         end
         params = VarNamedTuple(; x=0.5, xs=[1.0, 2.0])

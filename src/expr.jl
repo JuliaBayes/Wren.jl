@@ -67,9 +67,15 @@ function lower_wren_expr(expr::Expr, mod::Module, statement_position::Bool=false
         return Observe(lhs, lower_wren_expr(rhs, mod))
     end
 
+    # Preserve external macros for Julia to expand after Wren has lowered any
+    # probabilistic statements that are visible in their arguments. In particular,
+    # expanding a control-flow macro here may hide its body inside generated closures.
+    # Macros whose expansions introduce new probabilistic statements are unsupported.
     if expr.head == :macrocall
-        expanded = macroexpand(mod, expr; recursive=false)
-        return lower_wren_expr(expanded, mod, statement_position)
+        args = map(enumerate(expr.args)) do (index, arg)
+            index <= 2 ? arg : lower_wren_expr(arg, mod, statement_position)
+        end
+        return WrenExpr(:macrocall, args)
     end
 
     if expr.head == :call && expr.args[1] == :~

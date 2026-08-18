@@ -19,8 +19,8 @@ using ReverseDiff
 using Statistics: median
 using Wren
 
-include("models.jl")
 include("pmtransforms.jl")
+include("models.jl")
 include("differ_rules.jl")
 
 using .BenchmarkModels
@@ -228,15 +228,11 @@ function main()
     for (model_index, models) in enumerate(BenchmarkModels.models())
         for (backend_index, backend) in enumerate(BACKENDS)
             seed = 468 + 10 * model_index + backend_index
-            backend.wren isa ADTypes.AutoReactant && models.name != "normal" && continue
-            if models.name == "mnist" && contains(backend.name, "Differ")
-                @printf(
-                    "%-16s%-16sSKIPPED: Differ AD backend is not compatible with MNIST model\n",
-                    models.name,
-                    backend.name,
-                )
-                continue
-            end
+            # eight-schools not yet compatible with Reactant
+            backend.wren isa ADTypes.AutoReactant && contains(models.name, "eight") && continue
+            # mnist causes Differ to stackoverflow
+            backend.wren isa Differ.AutoDifferForwards && contains(models.name, "mnist") && continue
+            backend.wren isa Differ.AutoDifferReverse && contains(models.name, "mnist") && continue
             try
                 result = benchmark_pair(models, backend, seed)
                 print_result(models.name, backend.name, result)
