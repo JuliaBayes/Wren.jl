@@ -28,6 +28,35 @@ rand(model)
 # └─ theta => [-5.645093320047867, -3.2642262056243085, -1.4107903497807133, -6.381125278012095, -7.83320633960707, -5.479364446358099, -5.0377262033159305, -4.311316591708384]
 ```
 
+## Just tell me whether it's better
+
+Normal = `@model f() = x ~ Normal()`
+
+Eight schools = the above
+
+```
+model           backend            DPPL lp     Wren lp   speedup  lp alx   DPPL grad   Wren grad   speedup  grad alx
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+normal          ForwardDiff       2.430 ns    2.837 ns     0.86x     0/0   16.715 ns   18.079 ns     0.92x       3/3
+normal          ReverseDiff       2.513 ns    3.425 ns     0.73x     0/0    1.830 μs    1.760 μs     1.04x     64/59
+normal          ReverseDiffCpl    2.699 ns    3.840 ns     0.70x     0/0  827.528 ns  753.205 ns     1.10x       3/3
+normal          MooncakeFwd       2.552 ns    3.640 ns     0.70x     0/0  113.477 ns  104.541 ns     1.09x     10/10
+normal          MooncakeRvs       2.543 ns    3.884 ns     0.65x     0/0   62.719 ns   75.540 ns     0.83x       2/2
+normal          DifferFwd         2.395 ns    2.682 ns     0.89x     0/0   31.100 ns   34.211 ns     0.91x       6/6
+normal          DifferRvs         2.573 ns    2.953 ns     0.87x     0/0   48.107 ns   53.301 ns     0.90x       2/2
+normal          EnzymeFwd         2.560 ns    2.982 ns     0.86x     0/0   86.547 ns   87.786 ns     0.99x       5/5
+normal          EnzymeRvs         2.507 ns    2.847 ns     0.88x     0/0   11.299 ns   11.778 ns     0.96x       2/2
+eight schools   ForwardDiff      74.115 ns   60.898 ns     1.22x     4/4  349.537 ns  353.365 ns     0.99x     11/11
+eight schools   ReverseDiff      74.216 ns   61.485 ns     1.21x     4/4   20.250 μs   20.792 μs     0.97x   596/592
+eight schools   ReverseDiffCpl   72.255 ns   60.224 ns     1.20x     4/4    7.417 μs    7.021 μs     1.06x       6/4
+eight schools   MooncakeFwd      74.562 ns   61.492 ns     1.21x     4/4    3.260 μs    2.467 μs     1.32x   148/148
+eight schools   MooncakeRvs      75.161 ns   61.678 ns     1.22x     4/4  685.070 ns  526.316 ns     1.30x     12/12
+eight schools   DifferFwd        74.034 ns   61.912 ns     1.20x     4/4    2.798 μs    2.440 μs     1.15x   168/168
+eight schools   DifferRvs       ERROR: Differ.build_ctx: could not derive a reverse rule for `Tuple{typeof(Wren._vec...
+eight schools   EnzymeFwd        75.781 ns   62.796 ns     1.21x     4/4  550.717 ns  462.848 ns     1.19x     49/49
+eight schools   EnzymeRvs        73.809 ns   61.648 ns     1.20x     4/4  230.991 ns  165.858 ns     1.39x     13/11
+```
+
 ## What's taken from DynamicPPL
 
 Much of the code in Wren is taken from [DynamicPPL.jl](https://github.com/TuringLang/DynamicPPL.jl), which my colleagues and I developed for two years.
