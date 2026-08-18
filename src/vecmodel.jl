@@ -18,37 +18,49 @@ By default the vector is in [`UnconstrainedSpace`](@ref) and `lp` returns
 [`getlogjoint_transformed`](@ref). Use the `parameter_space` and `getlogp` keywords to
 select different behaviour.
 """
-struct _VecModelLP{M<:Model,F,S<:AbstractParameterSpace,R<:VarNamedTuple}
-    model::M
+struct _VecModelLP{
+    E,
+    A<:NamedTuple,
+    C<:VarNamedTuple,
+    F,
+    S<:AbstractParameterSpace,
+    R<:VarNamedTuple,
+    AC<:AccumulatorTuple,
+}
+    evaluation_fn::E
+    model_args::A
+    conditioned::C
     getlogp::F
     parameter_space::S
     ranges_and_transforms::R
+    accs::AC
 end
 
 function _vecmodel_lp(
     params::AbstractVector,
-    model::Model,
+    evaluation_fn,
+    model_args::NamedTuple,
+    conditioned::VarNamedTuple,
     getlogp,
     parameter_space::AbstractParameterSpace,
     ranges_and_transforms::VarNamedTuple,
+    accs::AccumulatorTuple,
 )
-    accs = AccumulatorTuple(
-        LogPriorAccumulator(),
-        LogJacobianAccumulator(),
-        LogLikelihoodAccumulator(),
-    )
     source = FromVector(params, ranges_and_transforms)
-    _, accs = evaluate(model, source, parameter_space, accs)
+    _, accs = evaluation_fn(source, parameter_space, accs, model_args, conditioned)
     return getlogp(accs)
 end
 
 function (f::_VecModelLP)(params::AbstractVector)
     return _vecmodel_lp(
         params,
-        f.model,
+        f.evaluation_fn,
+        f.model_args,
+        f.conditioned,
         f.getlogp,
         f.parameter_space,
         f.ranges_and_transforms,
+        f.accs,
     )
 end
 
@@ -61,6 +73,7 @@ struct VecModel{
     F,
     S<:AbstractParameterSpace,
     R<:VarNamedTuple,
+    AC<:AccumulatorTuple,
     L<:_VecModelLP,
     P<:DI.GradientPrep,
     X<:AbstractVector,
@@ -70,6 +83,7 @@ struct VecModel{
     getlogp::F
     parameter_space::S
     ranges_and_transforms::R
+    _accs::AC
     dimension::Int
     _lp::L
     _adprep::P
@@ -90,19 +104,41 @@ struct VecModel{
         R<:VarNamedTuple,
         X<:AbstractVector,
     }
-        lp_at = _VecModelLP(model, getlogp, parameter_space, ranges_and_transforms)
-        args = (model, getlogp, parameter_space, ranges_and_transforms)
+        accs = AccumulatorTuple(
+            LogPriorAccumulator(),
+            LogJacobianAccumulator(),
+            LogLikelihoodAccumulator(),
+        )
+        lp_at = _VecModelLP(
+            model.evaluation_fn,
+            model.args,
+            model.conditioned,
+            getlogp,
+            parameter_space,
+            ranges_and_transforms,
+            accs,
+        )
+        args = (
+            model.evaluation_fn,
+            model.args,
+            model.conditioned,
+            getlogp,
+            parameter_space,
+            ranges_and_transforms,
+            accs,
+        )
         adprep = if _use_closure(adtype)
             DI.prepare_gradient(lp_at, adtype, params)
         else
             DI.prepare_gradient(_vecmodel_lp, adtype, params, map(DI.Constant, args)...)
         end
-        return new{M,A,F,S,R,typeof(lp_at),typeof(adprep),X}(
+        return new{M,A,F,S,R,typeof(accs),typeof(lp_at),typeof(adprep),X}(
             model,
             adtype,
             getlogp,
             parameter_space,
             ranges_and_transforms,
+            accs,
             length(params),
             lp_at,
             adprep,
@@ -211,10 +247,13 @@ function lp_and_grad(vecmodel::VecModel, params::AbstractVector)
             vecmodel._adprep,
             vecmodel.adtype,
             prepared_params,
-            DI.Constant(vecmodel.model),
+            DI.Constant(vecmodel.model.evaluation_fn),
+            DI.Constant(vecmodel.model.args),
+            DI.Constant(vecmodel.model.conditioned),
             DI.Constant(vecmodel.getlogp),
             DI.Constant(vecmodel.parameter_space),
             DI.Constant(vecmodel.ranges_and_transforms),
+            DI.Constant(vecmodel._accs),
         )
     end
 end
@@ -248,10 +287,13 @@ function lp_and_grad!(grad::AbstractVector, vecmodel::VecModel, params::Abstract
             vecmodel._adprep,
             vecmodel.adtype,
             prepared_params,
-            DI.Constant(vecmodel.model),
+            DI.Constant(vecmodel.model.evaluation_fn),
+            DI.Constant(vecmodel.model.args),
+            DI.Constant(vecmodel.model.conditioned),
             DI.Constant(vecmodel.getlogp),
             DI.Constant(vecmodel.parameter_space),
             DI.Constant(vecmodel.ranges_and_transforms),
+            DI.Constant(vecmodel._accs),
         )
     end
 end
