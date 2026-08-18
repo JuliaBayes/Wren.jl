@@ -22,8 +22,9 @@ include("accs/accs.jl")
 include("accs/logp.jl")
 include("accs/vnt.jl")
 include("accs/raw_values.jl")
-include("accs/accessors.jl")
 include("space.jl")
+include("accs/vector_values.jl")
+include("accs/accessors.jl")
 include("latents/latents.jl")
 include("model.jl")
 include("interface.jl")
@@ -41,6 +42,7 @@ export @model,
     UnconstrainedSpace,
     AsOriginal,
     TransformedValue,
+    VectorValueAccumulator,
     OriginalSpace,
     apply_parameter_space,
     condition,
@@ -48,11 +50,13 @@ export @model,
     evaluate,
     get_latent,
     get_raw_values,
+    get_vector_values,
     getlogjac,
     getlogjoint,
     getlogjoint_transformed,
     getloglikelihood,
     getlogprior,
+    internal_values_as_vector,
     target_transform
 
 # Reexports

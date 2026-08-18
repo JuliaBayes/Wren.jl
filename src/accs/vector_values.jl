@@ -1,137 +1,79 @@
-const VECTORVAL_ACCNAME = :VectorValue
+const VECTOR_VALUE_ACCNAME = :VectorValue
 
 """
-    _get_vector_tval(val, tval, logjac, vn, dist)
+    _get_vector_tval(val, tval, vn, dist, logjac)
 
-Generate a `TransformedValue` that always has a vector as its stored value.
+Return `tval` with a vector as its stored value.
 """
 function _get_vector_tval(
     val,
-    tval::TransformedValue{V,T},
-    logjac,
+    tval::TransformedValue{<:AbstractVector,<:AbstractTransform},
     vn,
     dist,
-) where {V<:AbstractVector,T}
-    # If it's already an AbstractVector transformed value, then we are done.
-    # `tval.transform` could be a DynamicLink(), Unlink(), or some fixed transform that
-    # vectorises; it doesn't matter.
+    logjac,
+)
     return tval
 end
-function _get_vector_tval(val, tval::TransformedValue{V,T}, logjac, vn, dist) where {V,T}
-    # If it's *not* an AbstractVector transformed value, then in principle, we need to
-    # vectorise it before storing. We *could* do this by reversing the transformation, and
-    # then applying a vectorisation transform; but the truth is that this is most likely to
-    # be a user error where they tried to use a FixedTransform that does not vectorise. So
-    # we just error here.
-    return error(
-        "Expected a vectorised or untransformed value for variable $vn, but got a TransformedValue with a value of $(tval.value).",
-    )
-end
+
 function _get_vector_tval(
     val,
-    ::TransformedValue{V,NoTransform},
-    logjac,
+    ::TransformedValue{<:Any,AsOriginal},
     vn,
     dist,
-) where {V}
-    # This is an untransformed value, so we need to vectorise it. We can do this by applying
-    # to_vec(dist).
-    f = Bijectors.VectorBijectors.to_vec(dist)
-    new_val, logjac = with_logabsdet_jacobian(f, val)
-    @assert iszero(logjac) # otherwise we're in trouble...
-    return TransformedValue(new_val, Unlink())
-end
-function _get_vector_tval(
-    val,
-    ::TransformedValue{V,NoTransform},
     logjac,
-    vn,
-    dist,
-) where {V<:AbstractVector}
-    # This is the same as above but just shortcircuited because `to_vec` should always
-    # return TypedIdentity. Note that this method needs to be preserved to avoid method
-    # ambiguities.
-    return TransformedValue(val, Unlink())
+)
+    value = inverse(from_vec(dist))(val)
+    return TransformedValue(value, AsVec())
 end
 
-# This is equivalent to `varinfo.values` where `varinfo isa VarInfo`
+# Resolve the overlap between the two methods above for original values which are already
+# vectors. The distribution's vectorisation may still be meaningful, so do not assume that
+# the raw vector is already in the required representation.
+function _get_vector_tval(
+    val,
+    ::TransformedValue{<:AbstractVector,AsOriginal},
+    vn,
+    dist,
+    logjac,
+)
+    value = inverse(from_vec(dist))(val)
+    return TransformedValue(value, AsVec())
+end
+
+function _get_vector_tval(val, tval::TransformedValue, vn, dist, logjac)
+    return error(
+        "Expected a vectorised or original value for variable $vn, but got a " *
+        "TransformedValue with a value of $(tval.value).",
+    )
+end
+
 """
     VectorValueAccumulator()
 
-An accumulator that collects vectorised values, i.e. `TransformedValue{<:AbstractVector}`.
+An accumulator that collects parameter values as
+`TransformedValue{<:AbstractVector}` objects.
 
-The exact type of the vectorised value (i.e., `tval.transform`) will depend on the transform
-strategy that the model was evaluated with, and specifically, is equal to
-`target_transform(transform_strategy, vn)`; *except* for the case where `target_transform`
-is `Untransformed`, i.e., no transformation is to be applied. In this case, the
-`VectorValueAccumulator` will apply a vectorisation transform to the untransformed value,
-i.e., generate a `TransformedValue` with `Unlink()` as the transform.
+Values already represented as vectors are stored unchanged. Values represented by
+[`AsOriginal`](@ref) are vectorised using [`from_vec`](@ref) and stored as [`AsVec`](@ref).
+Thus, the stored transform agrees with the selected parameter space while every stored
+value has a uniform vector representation.
 """
-VectorValueAccumulator() = VNTAccumulator{VECTORVAL_ACCNAME}(_get_vector_tval)
+VectorValueAccumulator() = VNTAccumulator{VECTOR_VALUE_ACCNAME}(_get_vector_tval)
 
 """
-    internal_values_as_vector(vnt::VarNamedTuple)
+    internal_values_as_vector(values::VarNamedTuple)
 
-Concatenate all the values in `vnt` into a single vector. This will error if any of the
-values in `vnt` contain non-vector values.
-
-```jldoctest
-julia> using DynamicPPL
-
-julia> vnt = @vnt begin
-           x := TransformedValue([1.0, 2.0], Unlink())
-           y := TransformedValue([3.0], DynamicLink())
-       end
-VarNamedTuple
-├─ x => TransformedValue{Vector{Float64}, Unlink}([1.0, 2.0], Unlink())
-└─ y => TransformedValue{Vector{Float64}, DynamicLink}([3.0], DynamicLink())
-
-julia> internal_values_as_vector(vnt)
-3-element Vector{Float64}:
- 1.0
- 2.0
- 3.0
-```
-
-This is equivalent to `varinfo[:]` (for `varinfo::VarInfo`). However, instead of using a
-`VarInfo` object, we strongly recommend that you use a `VectorValueAccumulator` and then
-call `get_vector_values` on the accumulator.
-
-```jldoctest
-julia> using DynamicPPL, Distributions, LinearAlgebra
-
-julia> vector_acc = VectorValueAccumulator();
-
-julia> @model function f()
-           x ~ MvNormal(zeros(2), I)
-           y ~ Beta(2, 2)
-       end;
-
-julia> accs = OnlyAccsVarInfo(vector_acc);
-
-julia> # note InitFromParams provides parameters in untransformed space
-       _, accs = init!!(f(), accs, InitFromParams((x = [1.0, 2.0], y = 0.5)), LinkAll());
-
-julia> # but because we specified LinkAll(), the vectorised values are transformed
-       vector_vals = get_vector_values(accs)
-VarNamedTuple
-├─ x => TransformedValue{Vector{Float64}, DynamicLink}([1.0, 2.0], DynamicLink())
-└─ y => TransformedValue{Vector{Float64}, DynamicLink}([0.0], DynamicLink())
-
-julia> # we can extract the internal values as a single vector
-       internal_values_as_vector(vector_vals)
-3-element Vector{Float64}:
- 1.0
- 2.0
- 0.0
-```
+Concatenate the internal vectors of the `TransformedValue`s in `values`. An error is
+thrown if any stored value is not a vector.
 """
-function internal_values_as_vector(vnt::VarNamedTuple)
-    return mapfoldl(pair -> _as_vector(pair.second), vcat, vnt; init=Union{}[])
+function internal_values_as_vector(values::VarNamedTuple)
+    return mapfoldl(pair -> _as_vector(pair.second), vcat, values; init=Union{}[])
 end
-_as_vector(val::TransformedValue{T}) where {T<:AbstractVector} = val.value
-function _as_vector(val::TransformedValue{T}) where {T}
+
+_as_vector(tval::TransformedValue{<:AbstractVector}) = tval.value
+function _as_vector(tval::TransformedValue)
     return error(
-        "Expected a TransformedValue with a vector as its value, but got a TransformedValue with a value of $val.",
+        "Expected a TransformedValue containing a vector, but got one containing " *
+        "$(tval.value).",
     )
 end

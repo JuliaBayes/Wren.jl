@@ -6,6 +6,7 @@ authors = ["Penelope Yong <penelopeysm@gmail.com>"]
 [deps]
 ChangesOfVariables = "9e997f8a-9a97-42d5-a9f1-ce6bfc15e2c0"
 DensityInterface = "b429d917-457f-4dbc-8f4c-0cc954292b1d"
+DifferentiationInterface = "a0c0ee7d-e4b9-4e03-894e-1c5f64a51d63"
 DocStringExtensions = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
 InverseFunctions = "3587e190-3f89-42d0-90ee-14403ec27112"
 Preferences = "21216c6a-2e73-6563-6e65-726566657250"
@@ -17,16 +18,17 @@ VarNames = "09a315b2-63fc-4165-8d7f-d59368e770cc"
 Bijectors = "76274a88-744f-5084-9051-94815aaf08c4"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 
-[extensions]
-WrenBijectorsExt = ["Bijectors", "Distributions"]
-
 [sources]
 VarNames = {rev = "main", url = "https://github.com/JuliaBayes/VarNames.jl"}
+
+[extensions]
+WrenBijectorsExt = ["Bijectors", "Distributions"]
 
 [compat]
 Bijectors = "0.15.17, 0.16"
 ChangesOfVariables = "0.1"
 DensityInterface = "0.4"
+DifferentiationInterface = "0.7.21"
 Distributions = "0.25"
 DocStringExtensions = "0.9"
 InverseFunctions = "0.1"

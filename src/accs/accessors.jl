@@ -1,6 +1,10 @@
 """Return the raw, untransformed model values."""
 get_raw_values(accs::AccumulatorTuple) = getacc(accs, Val(RAW_VALUE_ACCNAME)).values
 
+"""Return the vectorised parameter values."""
+get_vector_values(accs::AccumulatorTuple) =
+    getacc(accs, Val(VECTOR_VALUE_ACCNAME)).values
+
 """Return the accumulated log prior."""
 getlogprior(accs::AccumulatorTuple) = getacc(accs, Val(:LogPrior)).logp
 
