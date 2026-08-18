@@ -176,18 +176,18 @@ function print_header()
         lpad("DPPL lp", 12),
         lpad("Wren lp", 12),
         lpad("speedup", 10),
-        lpad("lp alx", 8),
+        lpad("lp allocs", 12),
         lpad("DPPL grad", 12),
         lpad("Wren grad", 12),
         lpad("speedup", 10),
-        lpad("grad alx", 10),
+        lpad("grad allocs", 16),
     )
-    println(repeat('─', 116))
+    println(repeat('─', 126))
 end
 
 function print_result(model_name, backend_name, result)
     @printf(
-        "%-16s%-14s%12s%12s%9.2fx%8s%12s%12s%9.2fx%10s\n",
+        "%-16s%-14s%12s%12s%9.2fx%12s%12s%12s%9.2fx%16s\n",
         model_name,
         backend_name,
         pretty_time(result.dppl_lp),
@@ -213,6 +213,14 @@ function main()
     for (model_index, models) in enumerate(BenchmarkModels.models())
         for (backend_index, backend) in enumerate(BACKENDS)
             seed = 468 + 10 * model_index + backend_index
+            if models.name == "mnist" && contains(backend.name, "Differ")
+                @printf(
+                    "%-16s%-16sSKIPPED: Differ AD backend is not compatible with MNIST model\n",
+                    models.name,
+                    backend.name,
+                )
+                continue
+            end
             try
                 result = benchmark_pair(models, backend, seed)
                 print_result(models.name, backend.name, result)
