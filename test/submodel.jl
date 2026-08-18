@@ -20,7 +20,10 @@ using VarNames
 
         # With FromPrior
         retval, accs = evaluate(
-            returning_outer(returning_inner()), FromPrior(), Wren.default_accumulators()
+            returning_outer(returning_inner()),
+            FromPrior(),
+            OriginalSpace(),
+            Wren.default_accumulators(),
         )
         rawvals = get_raw_values(accs)
         a = rawvals[@vn(x.a)]
@@ -34,7 +37,10 @@ using VarNames
             x.a := 0.5
         end
         retval, accs = evaluate(
-            returning_outer(returning_inner()), FromParams(params), Wren.default_accumulators()
+            returning_outer(returning_inner()),
+            FromParams(params),
+            OriginalSpace(),
+            Wren.default_accumulators(),
         )
         rawvals = get_raw_values(accs)
         @test retval == (nothing, 2 * params[@vn(x.a)] + 1)
@@ -58,6 +64,7 @@ using VarNames
         retval, accs = evaluate(
             undefined_namespace_outer(returning_inner()),
             FromPrior(),
+            OriginalSpace(),
             Wren.default_accumulators(),
         )
         rawvals = get_raw_values(accs)
@@ -72,6 +79,7 @@ using VarNames
         retval, accs = evaluate(
             undefined_namespace_outer(returning_inner()),
             FromParams(params),
+            OriginalSpace(),
             Wren.default_accumulators(),
         )
         rawvals = get_raw_values(accs)
@@ -93,7 +101,10 @@ using VarNames
 
         # With FromPrior
         retval, accs = evaluate(
-            indexed_outer(indexed_inner()), FromPrior(), Wren.default_accumulators()
+            indexed_outer(indexed_inner()),
+            FromPrior(),
+            OriginalSpace(),
+            Wren.default_accumulators(),
         )
         raw_values = get_raw_values(accs)
         @test size(raw_values.data.x) == (2, 2) # tests that templated_setindex worked
@@ -111,7 +122,10 @@ using VarNames
         end
         source = FromParams(params)
         retval, accs = evaluate(
-            indexed_outer(indexed_inner()), source, Wren.default_accumulators()
+            indexed_outer(indexed_inner()),
+            source,
+            OriginalSpace(),
+            Wren.default_accumulators(),
         )
         raw_values = get_raw_values(accs)
 
@@ -148,6 +162,7 @@ using VarNames
         retval, accs = evaluate(
             likelihood_outer(likelihood_inner() | VarNamedTuple(; obs = obs)),
             source,
+            OriginalSpace(),
             Wren.default_accumulators(),
         )
 
@@ -170,7 +185,10 @@ using VarNames
         end
 
         retval, accs = evaluate(
-            empty_outer(empty_inner()), FromPrior(), Wren.default_accumulators()
+            empty_outer(empty_inner()),
+            FromPrior(),
+            OriginalSpace(),
+            Wren.default_accumulators(),
         )
         @test retval == 42
         @test get_raw_values(accs) == VarNamedTuple()
@@ -194,7 +212,7 @@ using VarNames
 
         # With FromPrior
         retval, accs = evaluate(
-            nested_model, FromPrior(), Wren.default_accumulators()
+            nested_model, FromPrior(), OriginalSpace(), Wren.default_accumulators()
         )
         rawvals = get_raw_values(accs)
         @test only(keys(rawvals)) == @vn(x.y.a)
@@ -207,7 +225,9 @@ using VarNames
         end
         source = FromParams(params)
         nested_model = outer_model(middle_model(returning_inner()))
-        retval, accs = evaluate(nested_model, source, Wren.default_accumulators())
+        retval, accs = evaluate(
+            nested_model, source, OriginalSpace(), Wren.default_accumulators()
+        )
         @test retval ≈ 2a + 2
         @test get_raw_values(accs) == params
         @test getlogprior(accs) ≈ logdensityof(Normal(), a)

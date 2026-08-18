@@ -11,7 +11,7 @@ not enforced.
 
 The function `f` should have the signature:
 
-    f(val, vn, dist, logjac) -> value_to_store
+    f(val, tval, vn, dist, logjac) -> value_to_store
 
 where the arguments have their usual meanings in [`accumulate_assume!!`](@ref). If a value
 does not need to be accumulated, this can be signalled by returning `DoNotAccumulate()`
@@ -80,12 +80,13 @@ for acc_type in (:VNTAccumulator, :TSVNTAccumulator)
         function accumulate_assume!!(
             acc::$acc_type{AccName},
             val,
+            tval,
             vn,
             right,
             logjac,
             template,
         ) where {AccName}
-            new_val = acc.f(val, vn, right, logjac)
+            new_val = acc.f(val, tval, vn, right, logjac)
             return if new_val isa DoNotAccumulate
                 acc
             else

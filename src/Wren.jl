@@ -1,7 +1,9 @@
 module Wren
 
+using ChangesOfVariables: ChangesOfVariables
 using DensityInterface: DensityInterface, logdensityof
 using DocStringExtensions: TYPEDFIELDS
+using InverseFunctions: inverse
 using Random: AbstractRNG, default_rng
 using VarNames: VarNames, varname, VarName, VarNamedTuple
 
@@ -21,6 +23,7 @@ include("accs/logp.jl")
 include("accs/vnt.jl")
 include("accs/raw_values.jl")
 include("accs/accessors.jl")
+include("space.jl")
 include("latents/latents.jl")
 include("model.jl")
 include("interface.jl")
@@ -28,17 +31,29 @@ include("interface.jl")
 export @model,
     @observe,
     AbstractLatentSource,
+    AbstractTransform,
+    AbstractParameterSpace,
+    AsUnconstrainedVec,
+    AsVec,
     FromParams,
     FromPrior,
+    FixedTransform,
+    UnconstrainedSpace,
+    AsOriginal,
+    TransformedValue,
+    OriginalSpace,
+    apply_parameter_space,
     condition,
     conditioned,
     evaluate,
     get_latent,
     get_raw_values,
+    getlogjac,
     getlogjoint,
     getlogjoint_transformed,
     getloglikelihood,
-    getlogprior
+    getlogprior,
+    target_transform
 
 # Reexports
 using VarNames: @vn, @vnt, VarNamedTuple, VarName

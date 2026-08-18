@@ -12,17 +12,20 @@ seen so far.
 An accumulator type `T <: AbstractAccumulator` must implement the following methods:
 - `accumulator_name(acc::T)` or `accumulator_name(::Type{T})`
 - `accumulate_observe!!(acc::T, val, vn, dist, template)`
-- `accumulate_assume!!(acc::T, val, vn, dist, logjac, template)`
+- `accumulate_assume!!(acc::T, val, tval, vn, dist, logjac, template)`
 - `reset(acc::T)`
 - `Base.copy(acc::T)`
 
 In these functions:
-- `val` is the new value of the random variable sampled from a distribution (always in
-  the original unlinked space), or the value on the left-hand side of an observe
+- `val` is the new value of the random variable supplied by a latent source (always in
+  the distribution's original space), or the value on the left-hand side of an observe
   statement.
+- `tval` is the [`TransformedValue`](@ref) produced by interpreting the value supplied by
+  the latent source in the selected parameter space.
 - `dist` is the distribution on the RHS of the tilde statement.
 - `logjac` is the forward log absolute determinant of the Jacobian for the transform from
-  the distribution's original space to the space supplied by the latent source.
+  the distribution's original space to the representation selected by the transform
+  strategy.
 - `vn` is the `VarName` that is on the left-hand side of the tilde-statement. If the
   tilde-statement is a literal observation like `0.0 ~ Normal()`, then `vn` is `nothing`.
 - `template` is a value that conveys the shape of the top-level symbol in `vn`, and is
@@ -41,9 +44,9 @@ abstract type AbstractAccumulator end
 
 Return a Symbol which can be used as a name for `acc`.
 
-The name has to be unique in the sense that a `VarInfo` can only have one accumulator for
-each name. The most typical case, and the default implementation, is that the name only
-depends on the type of `acc`, not on its value.
+The name has to be unique in the sense that an `AccumulatorTuple` can only have one
+accumulator for each name. The most typical case, and the default implementation, is that
+the name only depends on the type of `acc`, not on its value.
 """
 accumulator_name(acc::AbstractAccumulator) = accumulator_name(typeof(acc))
 
@@ -61,7 +64,7 @@ See also: [`accumulate_assume!!`](@ref)
 function accumulate_observe!! end
 
 """
-    accumulate_assume!!(acc::AbstractAccumulator, val, vn, dist, logjac, template)
+    accumulate_assume!!(acc::AbstractAccumulator, val, tval, vn, dist, logjac, template)
 
 Update `acc` in a `tilde_assume!!` call. Returns the updated `acc`.
 
@@ -288,12 +291,14 @@ function map_accumulator(
 end
 
 """
-    accumulate_assume!!(at::AccumulatorTuple, val, vn, dist, logjac, template)
+    accumulate_assume!!(at::AccumulatorTuple, val, tval, vn, dist, logjac, template)
 
 Update all the accumulators of `at` by calling `accumulate_assume!!` on them.
 """
-function accumulate_assume!!(at::AccumulatorTuple, val, vn, right, logjac, template)
-    return map(acc -> accumulate_assume!!(acc, val, vn, right, logjac, template), at)
+function accumulate_assume!!(at::AccumulatorTuple, val, tval, vn, right, logjac, template)
+    return map(
+        acc -> accumulate_assume!!(acc, val, tval, vn, right, logjac, template), at
+    )
 end
 
 """

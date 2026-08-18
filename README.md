@@ -37,7 +37,8 @@ There is a small change: what DynamicPPL calls 'initialisation strategies', Wren
 
 The reason for this is because this design is very flexible, and accommodates most of the things one would want to do with a probabilistic model.
 `VarName` and `VarNamedTuple` are, as far as I know, the best ways of representing variable addresses in a probabilistic programme, both in terms of generality as well as performance.
-The init strategy / accumulator design is also essentially optimal in terms of performance: for many models, the overhead introduced by this design is close to zero.
+Model evaluation has three explicit stages: a latent source supplies a value and its current representation, a parameter space selects the coordinate space and computes the forward log-Jacobian, and accumulators collect the resulting information.
+This design is also essentially optimal in terms of performance: for many models, its overhead is close to zero.
 All the improvements in Turing's performance in recent years have been due to these design choices.
 See, for example, these PRs: [DynamicPPL#1125](https://github.com/TuringLang/DynamicPPL.jl/pull/1125), [DynamicPPL#1132](https://github.com/TuringLang/DynamicPPL.jl/pull/1132), [DynamicPPL#1183](https://github.com/TuringLang/DynamicPPL.jl/pull/1183), [DynamicPPL#1211](https://github.com/TuringLang/DynamicPPL.jl/pull/1211).
 

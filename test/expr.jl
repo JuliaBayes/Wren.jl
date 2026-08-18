@@ -23,7 +23,9 @@ end
             end
             model = simple_normal()
             @test model.name === :simple_normal
-            retval, accs = evaluate(model, FromPrior(), Wren.default_accumulators())
+            retval, accs = evaluate(
+                model, FromPrior(), OriginalSpace(), Wren.default_accumulators()
+            )
             rawvals = get_raw_values(accs)
             @test retval === nothing
             @test rawvals isa VarNamedTuple
@@ -39,7 +41,9 @@ end
             end
             d = [100.0]
             model = sample_with_arg(d)
-            retval, accs = evaluate(model, FromPrior(), Wren.default_accumulators())
+            retval, accs = evaluate(
+                model, FromPrior(), OriginalSpace(), Wren.default_accumulators()
+            )
             @test retval === nothing
             @test get_raw_values(accs) isa VarNamedTuple
             @test getlogprior(accs) ≈ logdensityof(Normal(d[1]), get_raw_values(accs)[@vn(x)])
@@ -57,7 +61,9 @@ end
         @testset "before conditioning" begin
             model = x_and_y()
             @test model.name === :x_and_y
-            retval, accs = evaluate(model, FromPrior(), Wren.default_accumulators())
+            retval, accs = evaluate(
+                model, FromPrior(), OriginalSpace(), Wren.default_accumulators()
+            )
             rawvals = get_raw_values(accs)
             @test retval === nothing
             @test rawvals isa VarNamedTuple
@@ -69,7 +75,9 @@ end
         @testset "after conditioning" begin
             conditioned_model = x_and_y() | VarNamedTuple(y=1.0)
             @test conditioned_model.name === :x_and_y # shouldn't be changed.
-            retval, accs = evaluate(conditioned_model, FromPrior(), Wren.default_accumulators())
+            retval, accs = evaluate(
+                conditioned_model, FromPrior(), OriginalSpace(), Wren.default_accumulators()
+            )
             rawvals = get_raw_values(accs)
             @test retval === nothing
             @test rawvals isa VarNamedTuple
@@ -88,7 +96,9 @@ end
         end
         model = observe_macro()
         @test model.name === :observe_macro
-        retval, accs = evaluate(model, FromPrior(), Wren.default_accumulators())
+        retval, accs = evaluate(
+            model, FromPrior(), OriginalSpace(), Wren.default_accumulators()
+        )
         rawvals = get_raw_values(accs)
         @test retval === nothing
         @test rawvals isa VarNamedTuple
@@ -110,7 +120,9 @@ end
         end
         params = VarNamedTuple(; x=0.5, xs=[1.0, 2.0])
         source = FromParams(params)
-        _, accs = evaluate(with_macros(), source, Wren.default_accumulators())
+        _, accs = evaluate(
+            with_macros(), source, OriginalSpace(), Wren.default_accumulators()
+        )
         @test getlogprior(accs) ≈ sum(logdensityof.(Ref(Normal()), [0.5, 1.0, 2.0]))
         @test getloglikelihood(accs) ≈ logdensityof(Normal(), 0.25)
     end
@@ -130,11 +142,15 @@ end
         params = VarNamedTuple(; y=0.5, z=2.0)
         source = FromParams(params)
 
-        _, accs = evaluate(nested_if(true), source, Wren.default_accumulators())
+        _, accs = evaluate(
+            nested_if(true), source, OriginalSpace(), Wren.default_accumulators()
+        )
         @test getlogprior(accs) ≈ logdensityof(Normal(), 0.5)
         @test getloglikelihood(accs) ≈ logdensityof(Normal(), 0.5)
 
-        _, accs = evaluate(nested_if(false), source, Wren.default_accumulators())
+        _, accs = evaluate(
+            nested_if(false), source, OriginalSpace(), Wren.default_accumulators()
+        )
         @test getlogprior(accs) ≈ logdensityof(Normal(), 2.0)
         @test getloglikelihood(accs) ≈ logdensityof(Normal(), 2.0)
     end
@@ -172,13 +188,17 @@ end
 
         x = 0.5
         source = FromParams(VarNamedTuple(; x))
-        _, accs = evaluate(distribution_tilde_value(), source, Wren.default_accumulators())
+        _, accs = evaluate(
+            distribution_tilde_value(), source, OriginalSpace(), Wren.default_accumulators()
+        )
         @test get_raw_values(accs) == VarNamedTuple(; x)
         @test getlogprior(accs) ≈ logdensityof(Normal(), x)
         @test getloglikelihood(accs) ≈ logdensityof(Normal(), x)
 
         conditioned_model = distribution_tilde_value() | VarNamedTuple(; x)
-        _, accs = evaluate(conditioned_model, FromPrior(), Wren.default_accumulators())
+        _, accs = evaluate(
+            conditioned_model, FromPrior(), OriginalSpace(), Wren.default_accumulators()
+        )
         @test get_raw_values(accs) == VarNamedTuple()
         @test iszero(getlogprior(accs))
         @test getloglikelihood(accs) ≈ 2 * logdensityof(Normal(), x)
@@ -192,7 +212,9 @@ end
             return x ~ Normal()
         end
         model = explicit_return_sample()
-        retval, accs = evaluate(model, FromPrior(), Wren.default_accumulators())
+        retval, accs = evaluate(
+            model, FromPrior(), OriginalSpace(), Wren.default_accumulators()
+        )
         @test retval == get_raw_values(accs)[@vn(x)]
     end
 
@@ -204,7 +226,9 @@ end
             push!(events, :after)
         end
         events = Symbol[]
-        retval, _ = evaluate(bare_return(events), FromPrior(), Wren.default_accumulators())
+        retval, _ = evaluate(
+            bare_return(events), FromPrior(), OriginalSpace(), Wren.default_accumulators()
+        )
         @test retval === nothing
         @test events == [:before]
     end
@@ -214,7 +238,9 @@ end
             x ~ Normal()
         end
         model = fallthrough_sample()
-        retval, accs = evaluate(model, FromPrior(), Wren.default_accumulators())
+        retval, accs = evaluate(
+            model, FromPrior(), OriginalSpace(), Wren.default_accumulators()
+        )
         @test retval == get_raw_values(accs)[@vn(x)]
 
         @model function fallthrough_value()
@@ -222,7 +248,9 @@ end
             2
         end
         model = fallthrough_value()
-        retval, accs = evaluate(model, FromPrior(), Wren.default_accumulators())
+        retval, accs = evaluate(
+            model, FromPrior(), OriginalSpace(), Wren.default_accumulators()
+        )
         @test retval == 2
     end
 end
@@ -256,7 +284,9 @@ end
     values = [0.25, -0.5]
     source = FromParams(VarNamedTuple(; xs=values))
     events = Symbol[]
-    _, accs = evaluate(control_flow(2, events), source, Wren.default_accumulators())
+    _, accs = evaluate(
+        control_flow(2, events), source, OriginalSpace(), Wren.default_accumulators()
+    )
     expected_logp = sum(logdensityof(Normal(), value) for value in values)
 
     @test events == [:even, :finished]
@@ -266,7 +296,9 @@ end
     @test getloglikelihood(accs) ≈ expected_logp
 
     events = Symbol[]
-    _, accs = evaluate(control_flow(0, events), FromPrior(), Wren.default_accumulators())
+    _, accs = evaluate(
+        control_flow(0, events), FromPrior(), OriginalSpace(), Wren.default_accumulators()
+    )
     @test events == [:empty]
     @test get_raw_values(accs) == VarNamedTuple()
 end

@@ -1,11 +1,11 @@
 abstract type AbstractLatentSource end
 
 """
-    get_latent(source, vn, dist) -> (value, logjac)
+    get_latent(source, vn, dist) -> TransformedValue
 
-Get latent variable `vn` from `source` and return its value in the distribution's original
-space together with the forward log absolute determinant of the Jacobian for the transform
-from original space to the source's parameter space.
+Get latent variable `vn` from `source`, retaining information about the representation in
+which the source supplied it. The parameter space subsequently converts this to the raw
+value used in the model and computes the relevant log-Jacobian.
 """
 function get_latent end
 
@@ -16,7 +16,8 @@ struct FromPrior{R<:AbstractRNG} <: AbstractLatentSource
     rng::R
 end
 FromPrior() = FromPrior(default_rng())
-get_latent(source::FromPrior, ::VarName, right) = rand(source.rng, right), zero(LogProbType)
+get_latent(source::FromPrior, ::VarName, right) =
+    TransformedValue(rand(source.rng, right), AsOriginal())
 scope(source::FromPrior, ::VarName) = source
 
 struct FromParams{P<:VarNamedTuple,S<:Union{AbstractLatentSource,Nothing}} <:
@@ -27,7 +28,8 @@ end
 FromParams(params::VarNamedTuple) = FromParams(params, nothing)
 function get_latent(source::FromParams, vn::VarName, right)
     return if haskey(source.params, vn)
-        source.params[vn], zero(LogProbType)
+        value = source.params[vn]
+        value isa TransformedValue ? value : TransformedValue(value, AsOriginal())
     else
         source.fallback === nothing && error("No value was provided for variable $vn")
         get_latent(source.fallback, vn, right)
@@ -49,12 +51,6 @@ function scope(source::FromParams, vn::VarName)
     end
 end
 
-abstract type AbstractTransform end
-struct AsLinkedVec <: AbstractTransform end
-function from_linked_vec end
-struct AsVec <: AbstractTransform end
-function from_vec end
-
 struct RangeAndTransform{T<:AbstractTransform}
     range::Base.UnitRange
     transform::T
@@ -66,17 +62,10 @@ end
 function get_latent(source::FromVector, vn::VarName, right)
     rt = source.ranges_and_transforms[vn]
     range, tfm = rt.range, rt.transform
-    vecval = view(source.params, range)
-    transform_func = if tfm isa AsLinkedVec
-        from_linked_vec(right)
-    elseif tfm isa AsVec
-        from_vec(right)
-    else
-        error("todo")
-    end
-    val, inv_logjac = ChangesOfVariables.with_logabsdet_jacobian(transform_func, vecval)
-    return val, -inv_logjac
+    return TransformedValue(view(source.params, range), tfm)
 end
 function scope(source::FromVector, vn::VarName)
     return FromVector(source.params, source.ranges_and_transforms[vn])
 end
+
+scope(strategy::Union{UnconstrainedSpace,OriginalSpace}, ::VarName) = strategy

@@ -192,9 +192,8 @@ end
 
 An accumulator that tracks the cumulative log prior during model execution.
 
-Note that the log prior stored in here is always calculated based on unlinked
-parameters, i.e., the value of `logp` is independent of whether tha VarInfo is
-linked or not.
+The log prior is always calculated from the raw value in the distribution's original
+space, so it is independent of the parameter space.
 
 # Fields
 $(TYPEDFIELDS)
@@ -208,7 +207,15 @@ logp(acc::LogPriorAccumulator) = acc.logp
 
 accumulator_name(::Type{<:LogPriorAccumulator}) = :LogPrior
 
-function accumulate_assume!!(acc::LogPriorAccumulator, val, vn, right, logjac, template)
+function accumulate_assume!!(
+    acc::LogPriorAccumulator,
+    val,
+    tval,
+    vn,
+    right,
+    logjac,
+    template,
+)
     return acclogp(acc, logdensityof(right, val))
 end
 accumulate_observe!!(acc::LogPriorAccumulator, val, vn, right, template) = acc
@@ -216,16 +223,14 @@ accumulate_observe!!(acc::LogPriorAccumulator, val, vn, right, template) = acc
 """
     LogJacobianAccumulator{T<:Real} <: LogProbAccumulator{T}
 
-An accumulator that tracks the cumulative log Jacobian (technically,
-log(abs(det(J)))) during model execution. Specifically, J refers to the
-Jacobian of the _link transform_, i.e., from the space of the original
-distribution to unconstrained space.
+An accumulator that tracks the cumulative forward log absolute determinant of the
+Jacobian from the distribution's original space to the representation selected by the
+parameter space.
 
 !!! note
-    This accumulator is only incremented if the variable is transformed by a
-    link function, i.e., if the VarInfo is linked (for the particular
-    variable that is currently being accumulated). If the variable is not
-    linked, the log Jacobian term will be 0.
+    With [`OriginalSpace`](@ref), the log-Jacobian is zero. With
+    [`UnconstrainedSpace`](@ref), it is the forward log-Jacobian from original space to
+    unconstrained vector space.
 
     In general, for the forward Jacobian ``\\mathbf{J}`` corresponding to the
     function ``\\mathbf{y} = f(\\mathbf{x})``,
@@ -237,14 +242,14 @@ distribution to unconstrained space.
     and correspondingly:
 
     ```julia
-    getlogjoint_internal(vi) = getlogjoint(vi) - getlogjac(vi)
+    getlogjoint_transformed(accs) = getlogjoint(accs) - getlogjac(accs)
     ```
 
 # Fields
 $(TYPEDFIELDS)
 """
 struct LogJacobianAccumulator{T<:Real} <: LogProbAccumulator{T}
-    "the logabsdet of the link transform Jacobian"
+    "the forward log absolute determinant of the selected transform Jacobian"
     logjac::T
 end
 
@@ -255,6 +260,7 @@ accumulator_name(::Type{<:LogJacobianAccumulator}) = :LogJacobian
 function accumulate_assume!!(
     acc::LogJacobianAccumulator,
     val,
+    tval,
     vn,
     right,
     logjac,
@@ -284,6 +290,7 @@ accumulator_name(::Type{<:LogLikelihoodAccumulator}) = :LogLikelihood
 function accumulate_assume!!(
     acc::LogLikelihoodAccumulator,
     val,
+    tval,
     vn,
     right,
     logjac,
