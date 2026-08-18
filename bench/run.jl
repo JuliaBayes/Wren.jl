@@ -19,16 +19,8 @@ using .BenchmarkModels
 const BENCHMARK_SECONDS = parse(Float64, get(ENV, "WREN_BENCH_SECONDS", "1.0"))
 
 const BACKENDS = (
-    (
-        name="ForwardDiff",
-        wren=ADTypes.AutoForwardDiff(),
-        dppl=ADTypes.AutoForwardDiff(),
-    ),
-    (
-        name="ReverseDiff",
-        wren=ADTypes.AutoReverseDiff(),
-        dppl=ADTypes.AutoReverseDiff(),
-    ),
+    (name="ForwardDiff", wren=ADTypes.AutoForwardDiff(), dppl=ADTypes.AutoForwardDiff()),
+    (name="ReverseDiff", wren=ADTypes.AutoReverseDiff(), dppl=ADTypes.AutoReverseDiff()),
     (
         name="ReverseDiffCpl",
         wren=ADTypes.AutoReverseDiff(; compile=true),
@@ -39,41 +31,23 @@ const BACKENDS = (
         wren=ADTypes.AutoMooncakeForward(),
         dppl=ADTypes.AutoMooncakeForward(),
     ),
-    (
-        name="MooncakeRvs",
-        wren=ADTypes.AutoMooncake(),
-        dppl=ADTypes.AutoMooncake(),
-    ),
+    (name="MooncakeRvs", wren=ADTypes.AutoMooncake(), dppl=ADTypes.AutoMooncake()),
     (
         name="EnzymeFwd",
-        wren=ADTypes.AutoEnzyme(;
-            mode=Forward,
-            function_annotation=Enzyme.Duplicated,
-        ),
-        dppl=ADTypes.AutoEnzyme(;
-            mode=Enzyme.set_runtime_activity(Enzyme.Forward),
-        ),
+        wren=ADTypes.AutoEnzyme(; mode=Forward),
+        dppl=ADTypes.AutoEnzyme(; mode=Enzyme.set_runtime_activity(Enzyme.Forward)),
     ),
     (
         name="EnzymeRvs",
-        wren=ADTypes.AutoEnzyme(;
-            mode=Reverse,
-            function_annotation=Enzyme.Duplicated,
-        ),
-        dppl=ADTypes.AutoEnzyme(;
-            mode=Enzyme.set_runtime_activity(Enzyme.Reverse),
-        ),
+        wren=ADTypes.AutoEnzyme(; mode=Reverse),
+        dppl=ADTypes.AutoEnzyme(; mode=Enzyme.set_runtime_activity(Enzyme.Reverse)),
     ),
 )
 
 function vector_values(model, seed)
     accs = Wren.AccumulatorTuple(Wren.VectorValueAccumulator())
-    _, accs = Wren.evaluate(
-        model,
-        Wren.FromPrior(Xoshiro(seed)),
-        Wren.UnconstrainedSpace(),
-        accs,
-    )
+    _, accs =
+        Wren.evaluate(model, Wren.FromPrior(Xoshiro(seed)), Wren.UnconstrainedSpace(), accs)
     values = Wren.get_vector_values(accs)
     return values, Wren.internal_values_as_vector(values)
 end
@@ -105,24 +79,20 @@ function benchmark_pair(models, backend, seed)
     dppl_model = dppl_density(models.dppl, backend.dppl)
 
     wren_value, wren_grad = Wren.lp_and_grad(wren_model, params)
-    dppl_value, dppl_grad =
-        LogDensityProblems.logdensity_and_gradient(dppl_model, params)
+    dppl_value, dppl_grad = LogDensityProblems.logdensity_and_gradient(dppl_model, params)
     @assert isapprox(wren_value, dppl_value; rtol=1e-8, atol=1e-8)
     @assert isapprox(wren_grad, dppl_grad; rtol=1e-7, atol=1e-8)
 
     Wren.lp(wren_model, params)
-    wren_lp = median(
-        @be Wren.lp($wren_model, $params) seconds=BENCHMARK_SECONDS
-    )
+    wren_lp = median(@be Wren.lp($wren_model, $params) seconds=BENCHMARK_SECONDS)
     LogDensityProblems.logdensity(dppl_model, params)
     dppl_lp = median(
         @be LogDensityProblems.logdensity($dppl_model, $params) seconds=BENCHMARK_SECONDS
     )
 
     Wren.lp_and_grad(wren_model, params)
-    wren_grad_bench = median(
-        @be Wren.lp_and_grad($wren_model, $params) seconds=BENCHMARK_SECONDS
-    )
+    wren_grad_bench =
+        median(@be Wren.lp_and_grad($wren_model, $params) seconds=BENCHMARK_SECONDS)
     LogDensityProblems.logdensity_and_gradient(dppl_model, params)
     dppl_grad_bench = median(
         @be LogDensityProblems.logdensity_and_gradient($dppl_model, $params) seconds=BENCHMARK_SECONDS

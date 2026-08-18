@@ -17,13 +17,7 @@ end
 
 @testset "AD testing utilities" begin
     params = [0.2]
-    result = run_ad(
-        ad_model(),
-        AutoForwardDiff();
-        params,
-        rng=Xoshiro(473),
-        verbose=false,
-    )
+    result = run_ad(ad_model(), AutoForwardDiff(); params, rng=Xoshiro(473), verbose=false)
     @test result.value_actual ≈ result.value_expected
     @test result.grad_actual ≈ result.grad_expected
     @test occursin("correctness : passed", sprint(show, MIME"text/plain"(), result))

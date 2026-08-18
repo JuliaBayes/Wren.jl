@@ -15,13 +15,7 @@ function _get_vector_tval(
     return tval
 end
 
-function _get_vector_tval(
-    val,
-    ::TransformedValue{<:Any,AsOriginal},
-    vn,
-    dist,
-    logjac,
-)
+function _get_vector_tval(val, ::TransformedValue{<:Any,AsOriginal}, vn, dist, logjac)
     value = inverse(from_vec(dist))(val)
     return TransformedValue(value, AsVec())
 end

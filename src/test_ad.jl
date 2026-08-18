@@ -19,8 +19,7 @@ WithBackend() = WithBackend(DI.AutoForwardDiff())
 
 Check correctness against a known log density and gradient.
 """
-struct WithExpectedResult{V<:Real,G<:AbstractVector} <:
-       AbstractADCorrectnessTestSetting
+struct WithExpectedResult{V<:Real,G<:AbstractVector} <: AbstractADCorrectnessTestSetting
     value::V
     grad::G
 end
@@ -143,13 +142,7 @@ function run_ad(
 )
     setting = test isa Bool ? (test ? WithBackend() : NoTest()) : test
     atol, rtol = promote(atol, rtol)
-    vecmodel = VecModel(
-        model,
-        adtype;
-        params=FromPrior(rng),
-        getlogp,
-        parameter_space,
-    )
+    vecmodel = VecModel(model, adtype; params=FromPrior(rng), getlogp, parameter_space)
     params = params === nothing ? rand(rng, vecmodel) : collect(params)
 
     value_actual, grad_actual = lp_and_grad(vecmodel, params)

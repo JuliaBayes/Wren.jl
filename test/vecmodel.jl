@@ -18,11 +18,7 @@ end
 
 @testset "VecModel" begin
     model = vector_model(0.7)
-    vecmodel = VecModel(
-        model,
-        AutoForwardDiff();
-        params=FromPrior(Xoshiro(468)),
-    )
+    vecmodel = VecModel(model, AutoForwardDiff(); params=FromPrior(Xoshiro(468)))
     params = rand(Xoshiro(469), vecmodel)
 
     @test length(params) == vecmodel.dimension == 3

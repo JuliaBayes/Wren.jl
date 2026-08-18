@@ -18,28 +18,42 @@ By default the vector is in [`UnconstrainedSpace`](@ref) and `lp` returns
 [`getlogjoint_transformed`](@ref). Use the `parameter_space` and `getlogp` keywords to
 select different behaviour.
 """
-struct _VecModelLP{
-    M<:Model,
-    F,
-    S<:AbstractParameterSpace,
-    R<:VarNamedTuple,
-}
+struct _VecModelLP{M<:Model,F,S<:AbstractParameterSpace,R<:VarNamedTuple}
     model::M
     getlogp::F
     parameter_space::S
     ranges_and_transforms::R
 end
 
-function (f::_VecModelLP)(params::AbstractVector)
+function _vecmodel_lp(
+    params::AbstractVector,
+    model::Model,
+    getlogp,
+    parameter_space::AbstractParameterSpace,
+    ranges_and_transforms::VarNamedTuple,
+)
     accs = AccumulatorTuple(
         LogPriorAccumulator(),
         LogJacobianAccumulator(),
         LogLikelihoodAccumulator(),
     )
-    source = FromVector(params, f.ranges_and_transforms)
-    _, accs = evaluate(f.model, source, f.parameter_space, accs)
-    return f.getlogp(accs)
+    source = FromVector(params, ranges_and_transforms)
+    _, accs = evaluate(model, source, parameter_space, accs)
+    return getlogp(accs)
 end
+
+function (f::_VecModelLP)(params::AbstractVector)
+    return _vecmodel_lp(
+        params,
+        f.model,
+        f.getlogp,
+        f.parameter_space,
+        f.ranges_and_transforms,
+    )
+end
+
+_use_closure(::DI.AutoReverseDiff{compile}) where {compile} = compile
+_use_closure(::DI.AbstractADType) = false
 
 struct VecModel{
     M<:Model,
@@ -76,23 +90,14 @@ struct VecModel{
         R<:VarNamedTuple,
         X<:AbstractVector,
     }
-        lp_at = _VecModelLP(
-            model,
-            getlogp,
-            parameter_space,
-            ranges_and_transforms,
-        )
-        adprep = DI.prepare_gradient(lp_at, adtype, params)
-        return new{
-            M,
-            A,
-            F,
-            S,
-            R,
-            typeof(lp_at),
-            typeof(adprep),
-            X,
-        }(
+        lp_at = _VecModelLP(model, getlogp, parameter_space, ranges_and_transforms)
+        args = (model, getlogp, parameter_space, ranges_and_transforms)
+        adprep = if _use_closure(adtype)
+            DI.prepare_gradient(lp_at, adtype, params)
+        else
+            DI.prepare_gradient(_vecmodel_lp, adtype, params, map(DI.Constant, args)...)
+        end
+        return new{M,A,F,S,R,typeof(lp_at),typeof(adprep),X}(
             model,
             adtype,
             getlogp,
@@ -120,14 +125,7 @@ function VecModel(
     end
     _validate_vector_values(values, parameter_space)
     ranges_and_transforms, sample = _ranges_and_params(values)
-    return VecModel(
-        model,
-        adtype,
-        getlogp,
-        parameter_space,
-        ranges_and_transforms,
-        sample,
-    )
+    return VecModel(model, adtype, getlogp, parameter_space, ranges_and_transforms, sample)
 end
 
 function _validate_vector_values(
@@ -169,7 +167,7 @@ function _ranges_and_params(values::VarNamedTuple)
             ),
         )
 
-        range = offset:(offset + length(value) - 1)
+        range = offset:(offset+length(value)-1)
         template = get(values.data, VarNames.getsym(vn), VarNames.NoTemplate())
         ranges_and_transforms = VarNames.templated_setindex!!(
             ranges_and_transforms,
@@ -184,23 +182,12 @@ function _ranges_and_params(values::VarNamedTuple)
     return ranges_and_transforms, params
 end
 
-function _check_dimension(vecmodel::VecModel, params::AbstractVector)
-    length(params) == vecmodel.dimension || throw(
-        DimensionMismatch(
-            "VecModel expects $(vecmodel.dimension) parameters, but received " *
-            "$(length(params)).",
-        ),
-    )
-    return nothing
-end
-
 """
     lp(vecmodel::VecModel, params::AbstractVector)
 
 Evaluate `vecmodel.getlogp` in the vector model's parameter space.
 """
 function lp(vecmodel::VecModel, params::AbstractVector)
-    _check_dimension(vecmodel, params)
     return vecmodel._lp(params)
 end
 
@@ -210,14 +197,26 @@ end
 Return the log density and its gradient with respect to `params`.
 """
 function lp_and_grad(vecmodel::VecModel, params::AbstractVector)
-    _check_dimension(vecmodel, params)
     prepared_params = convert(typeof(vecmodel._sample), params)
-    return DI.value_and_gradient(
-        vecmodel._lp,
-        vecmodel._adprep,
-        vecmodel.adtype,
-        prepared_params,
-    )
+    return if _use_closure(vecmodel.adtype)
+        DI.value_and_gradient(
+            vecmodel._lp,
+            vecmodel._adprep,
+            vecmodel.adtype,
+            prepared_params,
+        )
+    else
+        DI.value_and_gradient(
+            _vecmodel_lp,
+            vecmodel._adprep,
+            vecmodel.adtype,
+            prepared_params,
+            DI.Constant(vecmodel.model),
+            DI.Constant(vecmodel.getlogp),
+            DI.Constant(vecmodel.parameter_space),
+            DI.Constant(vecmodel.ranges_and_transforms),
+        )
+    end
 end
 
 """
@@ -226,12 +225,7 @@ end
 Return the log density and its gradient with respect to `params`, writing the gradient into
 `grad`.
 """
-function lp_and_grad!(
-    grad::AbstractVector,
-    vecmodel::VecModel,
-    params::AbstractVector,
-)
-    _check_dimension(vecmodel, params)
+function lp_and_grad!(grad::AbstractVector, vecmodel::VecModel, params::AbstractVector)
     length(grad) == vecmodel.dimension || throw(
         DimensionMismatch(
             "VecModel expects a gradient buffer of length $(vecmodel.dimension), but " *
@@ -239,22 +233,32 @@ function lp_and_grad!(
         ),
     )
     prepared_params = convert(typeof(vecmodel._sample), params)
-    return DI.value_and_gradient!(
-        vecmodel._lp,
-        grad,
-        vecmodel._adprep,
-        vecmodel.adtype,
-        prepared_params,
-    )
+    return if _use_closure(vecmodel.adtype)
+        DI.value_and_gradient!(
+            vecmodel._lp,
+            grad,
+            vecmodel._adprep,
+            vecmodel.adtype,
+            prepared_params,
+        )
+    else
+        DI.value_and_gradient!(
+            _vecmodel_lp,
+            grad,
+            vecmodel._adprep,
+            vecmodel.adtype,
+            prepared_params,
+            DI.Constant(vecmodel.model),
+            DI.Constant(vecmodel.getlogp),
+            DI.Constant(vecmodel.parameter_space),
+            DI.Constant(vecmodel.ranges_and_transforms),
+        )
+    end
 end
 
 """Draw a parameter vector compatible with `vecmodel`."""
 function Base.rand(rng::AbstractRNG, vecmodel::VecModel)
-    values = _vector_values(
-        vecmodel.model,
-        FromPrior(rng),
-        vecmodel.parameter_space,
-    )
+    values = _vector_values(vecmodel.model, FromPrior(rng), vecmodel.parameter_space)
     ranges_and_transforms, params = _ranges_and_params(values)
     ranges_and_transforms == vecmodel.ranges_and_transforms || throw(
         ArgumentError(

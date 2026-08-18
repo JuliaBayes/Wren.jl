@@ -6,15 +6,16 @@ the local Wren checkout's `VecModel` and the registered DynamicPPL release's
 
 The benchmark matrix contains:
 
-- a single `x ~ Normal()` latent;
-- the eight-schools model from Wren's top-level README;
-- ForwardDiff;
-- ReverseDiff, both interpreted and compiled;
-- Mooncake;
-- Enzyme in reverse mode.
+  - a single `x ~ Normal()` latent;
+  - the eight-schools model from Wren's top-level README;
+  - ForwardDiff;
+  - ReverseDiff, both interpreted and compiled;
+  - Mooncake;
+  - Enzyme in reverse mode.
 
-Wren uses an Enzyme `Duplicated` function annotation without runtime activity. DynamicPPL
-receives Enzyme's runtime-activity configuration, as required by its current AD path.
+Wren passes model metadata to DifferentiationInterface as explicit constants and therefore
+needs neither an Enzyme function annotation nor runtime activity. DynamicPPL receives
+Enzyme's runtime-activity configuration, as required by its current AD path.
 Unsupported model/backend combinations are reported as concise error rows and do not stop
 the rest of the benchmark matrix.
 

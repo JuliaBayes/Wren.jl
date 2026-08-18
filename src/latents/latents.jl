@@ -64,8 +64,12 @@ struct FromVector{V<:AbstractVector,R<:VarNamedTuple} <: AbstractLatentSource
     params::V
     ranges_and_transforms::R
 end
+
+_get_range_and_transform(ranges_and_transforms::VarNamedTuple, vn::VarName) =
+    ranges_and_transforms[vn]
+
 function get_latent(source::FromVector, vn::VarName, right)
-    rt = source.ranges_and_transforms[vn]
+    rt = _get_range_and_transform(source.ranges_and_transforms, vn)
     range, tfm = rt.range, rt.transform
     return TransformedValue(view(source.params, range), tfm)
 end
