@@ -115,9 +115,8 @@ for acc_type in (:VNTAccumulator, :TSVNTAccumulator)
             template,
         ) where {AccName}
             isempty(acc2.values) && return acc1
-            nested_values = VarNames.templated_setindex!!(
-                VarNamedTuple(), acc2.values, vn, template
-            )
+            nested_values =
+                VarNames.templated_setindex!!(VarNamedTuple(), acc2.values, vn, template)
             return combine(acc1, update_values(acc2, nested_values))
         end
     end

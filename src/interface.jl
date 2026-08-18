@@ -27,13 +27,20 @@ method keeps the evaluation pipeline explicit.
     accs::AccumulatorTuple,
 )
     return model.evaluation_fn(
-        latent_source, parameter_space, accs, model.args, model.conditioned
+        latent_source,
+        parameter_space,
+        accs,
+        model.args,
+        model.conditioned,
     )
 end
 
 function Base.rand(rng::AbstractRNG, model::Model)
     _, accs = evaluate(
-        model, FromPrior(rng), OriginalSpace(), AccumulatorTuple(RawValueAccumulator())
+        model,
+        FromPrior(rng),
+        OriginalSpace(),
+        AccumulatorTuple(RawValueAccumulator()),
     )
     return get_raw_values(accs)
 end

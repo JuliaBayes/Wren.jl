@@ -160,9 +160,8 @@ function apply_parameter_space(
     elseif target isa FixedTransform
         target == tval.transform ||
             throw(ArgumentError("latent variable $vn has an incompatible fixed transform"))
-        raw_value, inverse_logjac = ChangesOfVariables.with_logabsdet_jacobian(
-            tval.transform.transform, tval.value
-        )
+        raw_value, inverse_logjac =
+            ChangesOfVariables.with_logabsdet_jacobian(tval.transform.transform, tval.value)
         raw_value, tval, -inverse_logjac
     else
         error("unknown target transform: $target")

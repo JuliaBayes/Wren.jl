@@ -62,8 +62,7 @@ function lower_wren_expr(expr::Expr, mod::Module, statement_position::Bool=false
         )
             error("@observe: expected an expression of the form `value ~ distribution`")
         end
-        length(observed_expr.args) == 3 ||
-            error("@observe: expected ~ to have 2 arguments")
+        length(observed_expr.args) == 3 || error("@observe: expected ~ to have 2 arguments")
         lhs, rhs = observed_expr.args[2:3]
         return Observe(lhs, lower_wren_expr(rhs, mod))
     end
@@ -89,10 +88,11 @@ function lower_wren_expr(expr::Expr, mod::Module, statement_position::Bool=false
     end
 
     args = map(enumerate(expr.args)) do (index, arg)
-        child_is_statement = expr.head in (:block, :toplevel) ||
-                             expr.head in (:if, :elseif) && index >= 2 ||
-                             expr.head in (:while, :for) && index == 2 ||
-                             expr.head == :let && index == length(expr.args)
+        child_is_statement =
+            expr.head in (:block, :toplevel) ||
+            expr.head in (:if, :elseif) && index >= 2 ||
+            expr.head in (:while, :for) && index == 2 ||
+            expr.head == :let && index == length(expr.args)
         lower_wren_expr(arg, mod, child_is_statement)
     end
     return WrenExpr(expr.head, args)

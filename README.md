@@ -114,6 +114,7 @@ Wren separates the return value of a submodel from the namespace within which it
 To illustrate this, in the following,
 
 ```julia
+julia> rand(f())
 @model function inner()
     x ~ Normal()
     return 42
@@ -123,12 +124,6 @@ end
     retval = a ~ inner()
     @show retval
 end
-
-julia> rand(f())
-retval = 42
-VarNamedTuple
-└─ a => VarNamedTuple
-        └─ x => 0.3384356594206488
 ```
 
 the result will have a single key `a.x` (`a` being the prefix), and `retval` will be assigned the value 42.

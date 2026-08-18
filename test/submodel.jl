@@ -134,7 +134,7 @@ using VarNames
         @test raw_values[@vn(x[1].a)] == first_a
         @test raw_values[@vn(x[2, 2].a)] == second_a
         @test getlogprior(accs) ≈
-            logdensityof(Normal(), first_a) + logdensityof(Normal(), second_a)
+              logdensityof(Normal(), first_a) + logdensityof(Normal(), second_a)
     end
 
     @testset "child assumptions and observations" begin
@@ -160,7 +160,7 @@ using VarNames
         end
         source = FromParams(params)
         retval, accs = evaluate(
-            likelihood_outer(likelihood_inner() | VarNamedTuple(; obs = obs)),
+            likelihood_outer(likelihood_inner() | VarNamedTuple(; obs=obs)),
             source,
             OriginalSpace(),
             Wren.default_accumulators(),
@@ -212,7 +212,10 @@ using VarNames
 
         # With FromPrior
         retval, accs = evaluate(
-            nested_model, FromPrior(), OriginalSpace(), Wren.default_accumulators()
+            nested_model,
+            FromPrior(),
+            OriginalSpace(),
+            Wren.default_accumulators(),
         )
         rawvals = get_raw_values(accs)
         @test only(keys(rawvals)) == @vn(x.y.a)
@@ -225,9 +228,8 @@ using VarNames
         end
         source = FromParams(params)
         nested_model = outer_model(middle_model(returning_inner()))
-        retval, accs = evaluate(
-            nested_model, source, OriginalSpace(), Wren.default_accumulators()
-        )
+        retval, accs =
+            evaluate(nested_model, source, OriginalSpace(), Wren.default_accumulators())
         @test retval ≈ 2a + 2
         @test get_raw_values(accs) == params
         @test getlogprior(accs) ≈ logdensityof(Normal(), a)

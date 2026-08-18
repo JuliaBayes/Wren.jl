@@ -53,17 +53,9 @@ function remove_escapes(expr::Expr)
 end
 
 emit_model_expr(expr, accs, conditioned, latent_source, parameter_space) = expr
-function emit_model_expr(
-    stmt::WrenExpr,
-    accs,
-    conditioned,
-    latent_source,
-    parameter_space,
-)
+function emit_model_expr(stmt::WrenExpr, accs, conditioned, latent_source, parameter_space)
     args = map(
-        arg -> emit_model_expr(
-            arg, accs, conditioned, latent_source, parameter_space
-        ),
+        arg -> emit_model_expr(arg, accs, conditioned, latent_source, parameter_space),
         stmt.args,
     )
     return Expr(stmt.head, args...)
@@ -80,9 +72,7 @@ end
 
 function emit_model_expr(stmt::Sample, accs, conditioned, latent_source, parameter_space)
     @gensym rhs val tval init_tval logjac vn child_source child_space child_accs
-    rhs_expr = emit_model_expr(
-        stmt.rhs, accs, conditioned, latent_source, parameter_space
-    )
+    rhs_expr = emit_model_expr(stmt.rhs, accs, conditioned, latent_source, parameter_space)
     vn_expr = remove_escapes(varname(stmt.lhs, false))
     template = get_top_level_symbol(stmt.lhs)
     return quote
@@ -92,11 +82,12 @@ function emit_model_expr(stmt::Sample, accs, conditioned, latent_source, paramet
             $child_source = $(scope)($latent_source, $vn)
             $child_space = $(scope)($parameter_space, $vn)
             $child_accs = $(map)($(split), $accs)
-            $val, $child_accs = $(evaluate)(
-                $rhs, $child_source, $child_space, $child_accs
-            )
+            $val, $child_accs = $(evaluate)($rhs, $child_source, $child_space, $child_accs)
             $accs = $(combine_with_namespace)(
-                $accs, $child_accs, $vn, $(stmt.lhs isa Symbol ? nothing : template)
+                $accs,
+                $child_accs,
+                $vn,
+                $(stmt.lhs isa Symbol ? nothing : template),
             )
         else
             if $(haskey)($conditioned, $vn)
@@ -105,12 +96,17 @@ function emit_model_expr(stmt::Sample, accs, conditioned, latent_source, paramet
                 $accs = $(accumulate_observe!!)($accs, $val, $vn, $rhs, $template)
             else
                 $init_tval = $(get_latent)($latent_source, $vn, $rhs)
-                $val, $tval, $logjac = $(apply_parameter_space)(
-                    $parameter_space, $init_tval, $vn, $rhs
-                )
+                $val, $tval, $logjac =
+                    $(apply_parameter_space)($parameter_space, $init_tval, $vn, $rhs)
                 $(stmt.lhs) = $val
                 $accs = $(accumulate_assume!!)(
-                    $accs, $val, $tval, $vn, $rhs, $logjac, $template
+                    $accs,
+                    $val,
+                    $tval,
+                    $vn,
+                    $rhs,
+                    $logjac,
+                    $template,
                 )
             end
         end
@@ -119,17 +115,9 @@ function emit_model_expr(stmt::Sample, accs, conditioned, latent_source, paramet
     end
 end
 
-function emit_model_expr(
-    stmt::Observe,
-    accs,
-    conditioned,
-    latent_source,
-    parameter_space,
-)
+function emit_model_expr(stmt::Observe, accs, conditioned, latent_source, parameter_space)
     @gensym rhs val vn
-    rhs_expr = emit_model_expr(
-        stmt.rhs, accs, conditioned, latent_source, parameter_space
-    )
+    rhs_expr = emit_model_expr(stmt.rhs, accs, conditioned, latent_source, parameter_space)
     vn_expr = remove_escapes(varname(stmt.lhs, false))
     template = get_top_level_symbol(stmt.lhs)
     return quote
@@ -150,9 +138,8 @@ function emit_model_expr(
     body = Expr(:block)
     @gensym retval
     if stmt.expr !== nothing
-        return_expr = emit_model_expr(
-            stmt.expr, accs, conditioned, latent_source, parameter_space
-        )
+        return_expr =
+            emit_model_expr(stmt.expr, accs, conditioned, latent_source, parameter_space)
         push!(body.args, :($retval = $return_expr))
     else
         push!(body.args, :($retval = nothing))
@@ -184,16 +171,15 @@ function make_evaluation_fn(
     end
 
     @gensym accs conditioned latent_source parameter_space retval
-    model_body = emit_statements(
-        stmts, accs, conditioned, latent_source, parameter_space
-    )
+    model_body = emit_statements(stmts, accs, conditioned, latent_source, parameter_space)
     push!(body.args, :($retval = $model_body))
     push!(body.args, :(return ($retval, $accs)))
-    return @RuntimeGeneratedFunction(mod, :(function (
-        $latent_source, $parameter_space, $accs, $model_args, $conditioned
+    return @RuntimeGeneratedFunction(
+        mod,
+        :(function ($latent_source, $parameter_space, $accs, $model_args, $conditioned)
+            $body
+        end)
     )
-        $body
-    end))
 end
 
 # for debugging

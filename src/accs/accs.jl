@@ -24,8 +24,8 @@ In these functions:
   the latent source in the selected parameter space.
 - `dist` is the distribution on the RHS of the tilde statement.
 - `logjac` is the forward log absolute determinant of the Jacobian for the transform from
-  the distribution's original space to the representation selected by the transform
-  strategy.
+  the distribution's original space to the representation selected by the parameter
+  space.
 - `vn` is the `VarName` that is on the left-hand side of the tilde-statement. If the
   tilde-statement is a literal observation like `0.0 ~ Normal()`, then `vn` is `nothing`.
 - `template` is a value that conveys the shape of the top-level symbol in `vn`, and is
@@ -296,9 +296,7 @@ end
 Update all the accumulators of `at` by calling `accumulate_assume!!` on them.
 """
 function accumulate_assume!!(at::AccumulatorTuple, val, tval, vn, right, logjac, template)
-    return map(
-        acc -> accumulate_assume!!(acc, val, tval, vn, right, logjac, template), at
-    )
+    return map(acc -> accumulate_assume!!(acc, val, tval, vn, right, logjac, template), at)
 end
 
 """

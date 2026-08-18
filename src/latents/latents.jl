@@ -68,4 +68,4 @@ function scope(source::FromVector, vn::VarName)
     return FromVector(source.params, source.ranges_and_transforms[vn])
 end
 
-scope(strategy::Union{UnconstrainedSpace,OriginalSpace}, ::VarName) = strategy
+scope(parameter_space::Union{UnconstrainedSpace,OriginalSpace}, ::VarName) = parameter_space
