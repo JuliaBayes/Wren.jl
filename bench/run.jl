@@ -1,6 +1,11 @@
+if VERSION < v"1.13-"
+    error("This script requires Julia 1.13 or later")
+end
+
 using ADTypes
 using Bijectors
 using Chairmarks: @be
+using Differ
 using Distributions
 using DynamicPPL
 using Enzyme
@@ -32,6 +37,16 @@ const BACKENDS = (
         dppl=ADTypes.AutoMooncakeForward(),
     ),
     (name="MooncakeRvs", wren=ADTypes.AutoMooncake(), dppl=ADTypes.AutoMooncake()),
+    (
+        name="DifferFwd",
+        wren=Differ.AutoDifferForwards(),
+        dppl=Differ.AutoDifferForwards(),
+    ),
+    (
+        name="DifferRvs",
+        wren=Differ.AutoDifferReverse(),
+        dppl=Differ.AutoDifferReverse(),
+    ),
     (
         name="EnzymeFwd",
         wren=ADTypes.AutoEnzyme(; mode=Forward),
@@ -113,22 +128,22 @@ end
 function print_header()
     println(
         rpad("model", 16),
-        rpad("backend", 16),
+        rpad("backend", 14),
         lpad("DPPL lp", 12),
         lpad("Wren lp", 12),
         lpad("speedup", 10),
-        lpad("lp allocs", 12),
+        lpad("lp alx", 8),
         lpad("DPPL grad", 12),
         lpad("Wren grad", 12),
         lpad("speedup", 10),
-        lpad("grad allocs", 14),
+        lpad("grad alx", 10),
     )
-    println(repeat('─', 126))
+    println(repeat('─', 116))
 end
 
 function print_result(model_name, backend_name, result)
     @printf(
-        "%-16s%-16s%12s%12s%9.2fx%12s%12s%12s%9.2fx%14s\n",
+        "%-16s%-14s%12s%12s%9.2fx%8s%12s%12s%9.2fx%10s\n",
         model_name,
         backend_name,
         pretty_time(result.dppl_lp),
