@@ -51,10 +51,15 @@ function scope(source::FromParams, vn::VarName)
     end
 end
 
-struct RangeAndTransform{T<:AbstractTransform}
-    range::Base.UnitRange
+struct RangeAndTransform{R<:Base.UnitRange,T<:AbstractTransform}
+    range::R
     transform::T
 end
+Base.:(==)(a::RangeAndTransform, b::RangeAndTransform) =
+    a.range == b.range && a.transform == b.transform
+Base.isequal(a::RangeAndTransform, b::RangeAndTransform) =
+    isequal(a.range, b.range) && isequal(a.transform, b.transform)
+
 struct FromVector{V<:AbstractVector,R<:VarNamedTuple} <: AbstractLatentSource
     params::V
     ranges_and_transforms::R

@@ -2,6 +2,7 @@ module Wren
 
 using ChangesOfVariables: ChangesOfVariables
 using DensityInterface: DensityInterface, logdensityof
+import DifferentiationInterface as DI
 using DocStringExtensions: TYPEDFIELDS
 using InverseFunctions: inverse
 using Random: AbstractRNG, default_rng
@@ -28,21 +29,31 @@ include("accs/accessors.jl")
 include("latents/latents.jl")
 include("model.jl")
 include("interface.jl")
+include("vecmodel.jl")
+include("test_ad.jl")
 
 export @model,
     @observe,
     AbstractLatentSource,
     AbstractTransform,
     AbstractParameterSpace,
+    AbstractADCorrectnessTestSetting,
     AsUnconstrainedVec,
     AsVec,
+    ADIncorrectException,
+    ADResult,
     FromParams,
     FromPrior,
+    FromVector,
     FixedTransform,
+    NoTest,
     UnconstrainedSpace,
     AsOriginal,
     TransformedValue,
+    VecModel,
     VectorValueAccumulator,
+    WithBackend,
+    WithExpectedResult,
     OriginalSpace,
     apply_parameter_space,
     condition,
@@ -57,6 +68,10 @@ export @model,
     getloglikelihood,
     getlogprior,
     internal_values_as_vector,
+    lp,
+    lp_and_grad,
+    lp_and_grad!,
+    run_ad,
     target_transform
 
 # Reexports

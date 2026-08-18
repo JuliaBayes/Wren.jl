@@ -1,0 +1,203 @@
+using ADTypes
+using Bijectors
+using Chairmarks: @be
+using Distributions
+using DynamicPPL
+using Enzyme
+using ForwardDiff
+using LogDensityProblems
+using Mooncake
+using Printf
+using Random: Xoshiro
+using ReverseDiff
+using Statistics: median
+using Wren
+
+include("models.jl")
+using .BenchmarkModels
+
+const BENCHMARK_SECONDS = parse(Float64, get(ENV, "WREN_BENCH_SECONDS", "1.0"))
+
+const BACKENDS = (
+    (
+        name="ForwardDiff",
+        wren=ADTypes.AutoForwardDiff(),
+        dppl=ADTypes.AutoForwardDiff(),
+    ),
+    (
+        name="ReverseDiff",
+        wren=ADTypes.AutoReverseDiff(),
+        dppl=ADTypes.AutoReverseDiff(),
+    ),
+    (
+        name="ReverseDiffCpl",
+        wren=ADTypes.AutoReverseDiff(; compile=true),
+        dppl=ADTypes.AutoReverseDiff(; compile=true),
+    ),
+    (
+        name="MooncakeFwd",
+        wren=ADTypes.AutoMooncakeForward(),
+        dppl=ADTypes.AutoMooncakeForward(),
+    ),
+    (
+        name="MooncakeRvs",
+        wren=ADTypes.AutoMooncake(),
+        dppl=ADTypes.AutoMooncake(),
+    ),
+    (
+        name="EnzymeFwd",
+        wren=ADTypes.AutoEnzyme(;
+            mode=Forward,
+            function_annotation=Enzyme.Duplicated,
+        ),
+        dppl=ADTypes.AutoEnzyme(;
+            mode=Enzyme.set_runtime_activity(Enzyme.Forward),
+        ),
+    ),
+    (
+        name="EnzymeRvs",
+        wren=ADTypes.AutoEnzyme(;
+            mode=Reverse,
+            function_annotation=Enzyme.Duplicated,
+        ),
+        dppl=ADTypes.AutoEnzyme(;
+            mode=Enzyme.set_runtime_activity(Enzyme.Reverse),
+        ),
+    ),
+)
+
+function vector_values(model, seed)
+    accs = Wren.AccumulatorTuple(Wren.VectorValueAccumulator())
+    _, accs = Wren.evaluate(
+        model,
+        Wren.FromPrior(Xoshiro(seed)),
+        Wren.UnconstrainedSpace(),
+        accs,
+    )
+    values = Wren.get_vector_values(accs)
+    return values, Wren.internal_values_as_vector(values)
+end
+
+function dppl_density(model, adtype)
+    return DynamicPPL.LogDensityFunction(
+        model,
+        DynamicPPL.getlogjoint_internal,
+        DynamicPPL.LinkAll();
+        adtype,
+    )
+end
+
+function pretty_time(seconds)
+    return if seconds < 1e-6
+        @sprintf("%.3f ns", seconds * 1e9)
+    elseif seconds < 1e-3
+        @sprintf("%.3f μs", seconds * 1e6)
+    elseif seconds < 1
+        @sprintf("%.3f ms", seconds * 1e3)
+    else
+        @sprintf("%.3f s", seconds)
+    end
+end
+
+function benchmark_pair(models, backend, seed)
+    values, params = vector_values(models.wren, seed)
+    wren_model = Wren.VecModel(models.wren, backend.wren; params=values)
+    dppl_model = dppl_density(models.dppl, backend.dppl)
+
+    wren_value, wren_grad = Wren.lp_and_grad(wren_model, params)
+    dppl_value, dppl_grad =
+        LogDensityProblems.logdensity_and_gradient(dppl_model, params)
+    @assert isapprox(wren_value, dppl_value; rtol=1e-8, atol=1e-8)
+    @assert isapprox(wren_grad, dppl_grad; rtol=1e-7, atol=1e-8)
+
+    Wren.lp(wren_model, params)
+    wren_lp = median(
+        @be Wren.lp($wren_model, $params) seconds=BENCHMARK_SECONDS
+    )
+    LogDensityProblems.logdensity(dppl_model, params)
+    dppl_lp = median(
+        @be LogDensityProblems.logdensity($dppl_model, $params) seconds=BENCHMARK_SECONDS
+    )
+
+    Wren.lp_and_grad(wren_model, params)
+    wren_grad_bench = median(
+        @be Wren.lp_and_grad($wren_model, $params) seconds=BENCHMARK_SECONDS
+    )
+    LogDensityProblems.logdensity_and_gradient(dppl_model, params)
+    dppl_grad_bench = median(
+        @be LogDensityProblems.logdensity_and_gradient($dppl_model, $params) seconds=BENCHMARK_SECONDS
+    )
+
+    return (
+        dppl_lp=dppl_lp.time,
+        wren_lp=wren_lp.time,
+        dppl_lp_allocs=dppl_lp.allocs,
+        wren_lp_allocs=wren_lp.allocs,
+        dppl_grad=dppl_grad_bench.time,
+        wren_grad=wren_grad_bench.time,
+        dppl_grad_allocs=dppl_grad_bench.allocs,
+        wren_grad_allocs=wren_grad_bench.allocs,
+    )
+end
+
+function print_header()
+    println(
+        rpad("model", 16),
+        rpad("backend", 16),
+        lpad("DPPL lp", 12),
+        lpad("Wren lp", 12),
+        lpad("speedup", 10),
+        lpad("lp allocs", 12),
+        lpad("DPPL grad", 12),
+        lpad("Wren grad", 12),
+        lpad("speedup", 10),
+        lpad("grad allocs", 14),
+    )
+    println(repeat('─', 133))
+end
+
+function print_result(model_name, backend_name, result)
+    @printf(
+        "%-16s%-16s%12s%12s%9.2fx%12s%12s%12s%9.2fx%14s\n",
+        model_name,
+        backend_name,
+        pretty_time(result.dppl_lp),
+        pretty_time(result.wren_lp),
+        result.dppl_lp / result.wren_lp,
+        "$(round(Int, result.dppl_lp_allocs))/$(round(Int, result.wren_lp_allocs))",
+        pretty_time(result.dppl_grad),
+        pretty_time(result.wren_grad),
+        result.dppl_grad / result.wren_grad,
+        "$(round(Int, result.dppl_grad_allocs))/$(round(Int, result.wren_grad_allocs))",
+    )
+end
+
+function error_summary(exception)
+    message = first(split(sprint(showerror, exception), '\n'))
+    return length(message) > 80 ? first(message, 77) * "..." : message
+end
+
+function main()
+    println("DPPL vs Wren — linked vector parameters")
+    println("Chairmarks sampling time per measurement: $(BENCHMARK_SECONDS) s\n")
+    print_header()
+    for (model_index, models) in enumerate(BenchmarkModels.models())
+        for (backend_index, backend) in enumerate(BACKENDS)
+            seed = 468 + 10 * model_index + backend_index
+            try
+                result = benchmark_pair(models, backend, seed)
+                print_result(models.name, backend.name, result)
+            catch exception
+                @printf(
+                    "%-16s%-16sERROR: %s\n",
+                    models.name,
+                    backend.name,
+                    error_summary(exception),
+                )
+            end
+        end
+    end
+    return nothing
+end
+
+main()
