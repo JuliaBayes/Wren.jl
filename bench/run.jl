@@ -41,16 +41,8 @@ const BACKENDS = (
         dppl=ADTypes.AutoMooncakeForward(),
     ),
     (name="MooncakeRvs", wren=ADTypes.AutoMooncake(), dppl=ADTypes.AutoMooncake()),
-    (
-        name="DifferFwd",
-        wren=Differ.AutoDifferForwards(),
-        dppl=Differ.AutoDifferForwards(),
-    ),
-    (
-        name="DifferRvs",
-        wren=Differ.AutoDifferReverse(),
-        dppl=Differ.AutoDifferReverse(),
-    ),
+    (name="DifferFwd", wren=Differ.AutoDifferForwards(), dppl=Differ.AutoDifferForwards()),
+    (name="DifferRvs", wren=Differ.AutoDifferReverse(), dppl=Differ.AutoDifferReverse()),
     (
         name="EnzymeFwd",
         wren=ADTypes.AutoEnzyme(; mode=Forward),
@@ -104,11 +96,7 @@ function benchmark_pair(models, backend, seed)
     wren_value, wren_grad = Wren.lp_and_grad(wren_model, params)
 
     if backend.dppl === nothing
-        reference = Wren.VecModel(
-            models.wren,
-            ADTypes.AutoForwardDiff();
-            params=values,
-        )
+        reference = Wren.VecModel(models.wren, ADTypes.AutoForwardDiff(); params=values)
         reference_value, reference_grad = Wren.lp_and_grad(reference, params)
         @assert isapprox(wren_value, reference_value; rtol=1e-8, atol=1e-8)
         @assert isapprox(wren_grad, reference_grad; rtol=1e-7, atol=1e-8)
@@ -224,10 +212,16 @@ function main()
         for (backend_index, backend) in enumerate(BACKENDS)
             seed = 468 + 10 * model_index + backend_index
             # eight-schools not yet compatible with Reactant
-            backend.wren isa ADTypes.AutoReactant && contains(models.name, "eight") && continue
+            backend.wren isa ADTypes.AutoReactant &&
+                contains(models.name, "eight") &&
+                continue
             # mnist causes Differ to stackoverflow
-            backend.wren isa Differ.AutoDifferForwards && contains(models.name, "mnist") && continue
-            backend.wren isa Differ.AutoDifferReverse && contains(models.name, "mnist") && continue
+            backend.wren isa Differ.AutoDifferForwards &&
+                contains(models.name, "mnist") &&
+                continue
+            backend.wren isa Differ.AutoDifferReverse &&
+                contains(models.name, "mnist") &&
+                continue
             try
                 result = benchmark_pair(models, backend, seed)
                 print_result(models.name, backend.name, result)

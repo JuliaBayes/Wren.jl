@@ -6,7 +6,8 @@ function Differ.frule!!(
     vn::Differ.Dual,
 )
     result = Wren._get_range_and_transform(
-        Differ.primal(ranges_and_transforms), Differ.primal(vn)
+        Differ.primal(ranges_and_transforms),
+        Differ.primal(vn),
     )
     return Differ.Dual(result, Differ.NoTangent())
 end
@@ -25,7 +26,8 @@ function Differ.rrule!!(
     vn::Differ.CoDual,
 )
     result = Wren._get_range_and_transform(
-        Differ.primal(ranges_and_transforms), Differ.primal(vn)
+        Differ.primal(ranges_and_transforms),
+        Differ.primal(vn),
     )
     pullback(_) = (Differ.NoRData(), Differ.NoRData(), Differ.NoRData())
     return Differ.CoDual(result, Differ.NoFData()), pullback
@@ -41,4 +43,3 @@ function Differ.rrule!!(
     pullback(_) = (Differ.NoRData(), Differ.NoRData(), Differ.NoRData())
     return Differ.CoDual(result, Differ.NoFData()), pullback
 end
-

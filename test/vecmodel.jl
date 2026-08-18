@@ -58,10 +58,15 @@ end
     @test LogDensityProblems.logdensity(noad_vecmodel, noad_params) ≈
           lp(noad_vecmodel, noad_params)
     @test_throws ArgumentError LogDensityProblems.logdensity_and_gradient(
-        noad_vecmodel, noad_params
+        noad_vecmodel,
+        noad_params,
     )
     @test_throws ArgumentError lp_and_grad(noad_vecmodel, noad_params)
-    @test_throws ArgumentError lp_and_grad!(similar(noad_params), noad_vecmodel, noad_params)
+    @test_throws ArgumentError lp_and_grad!(
+        similar(noad_params),
+        noad_vecmodel,
+        noad_params,
+    )
 
     _, value_accs = evaluate(
         model,

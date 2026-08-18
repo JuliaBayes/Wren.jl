@@ -67,6 +67,10 @@ const LogProbType = let
     end
 end
 
+const LOG_PRIOR_ACCNAME = :LogPrior
+const LOG_JACOBIAN_ACCNAME = :LogJacobian
+const LOG_LIKELIHOOD_ACCNAME = :LogLikelihood
+
 """
     set_logprob_type!(::Type{T}) where {T}
 
@@ -205,7 +209,7 @@ end
 
 logp(acc::LogPriorAccumulator) = acc.logp
 
-accumulator_name(::Type{<:LogPriorAccumulator}) = :LogPrior
+accumulator_name(::Type{<:LogPriorAccumulator}) = LOG_PRIOR_ACCNAME
 
 function accumulate_assume!!(
     acc::LogPriorAccumulator,
@@ -255,7 +259,7 @@ end
 
 logp(acc::LogJacobianAccumulator) = acc.logjac
 
-accumulator_name(::Type{<:LogJacobianAccumulator}) = :LogJacobian
+accumulator_name(::Type{<:LogJacobianAccumulator}) = LOG_JACOBIAN_ACCNAME
 
 function accumulate_assume!!(
     acc::LogJacobianAccumulator,
@@ -285,7 +289,7 @@ end
 
 logp(acc::LogLikelihoodAccumulator) = acc.logp
 
-accumulator_name(::Type{<:LogLikelihoodAccumulator}) = :LogLikelihood
+accumulator_name(::Type{<:LogLikelihoodAccumulator}) = LOG_LIKELIHOOD_ACCNAME
 
 function accumulate_assume!!(
     acc::LogLikelihoodAccumulator,

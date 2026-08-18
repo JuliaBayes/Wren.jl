@@ -72,9 +72,8 @@ function Wren.VecModel(
     reactant_sample = Reactant.to_rarray(sample)
     value_and_gradient_at = ValueAndGradientCallable(lp_func, adtype)
     compiled_lp = Reactant.@allowscalar Reactant.@compile lp_func(reactant_sample)
-    compiled_value_and_gradient = Reactant.@allowscalar Reactant.@compile value_and_gradient_at(
-        reactant_sample
-    )
+    compiled_value_and_gradient =
+        Reactant.@allowscalar Reactant.@compile value_and_gradient_at(reactant_sample)
     adprep = ReactantPrep(compiled_lp, compiled_value_and_gradient)
 
     return Wren.VecModel(
@@ -100,7 +99,11 @@ function Wren.lp_and_grad(vecmodel::ReactantWrenModel, params::AbstractVector)
     value, grad = vecmodel.adprep.value_and_gradient(Reactant.to_rarray(params))
     return _to_host(value), Array(grad)
 end
-function Wren.lp_and_grad!(grad::AbstractVector, vecmodel::ReactantWrenModel, params::AbstractVector)
+function Wren.lp_and_grad!(
+    grad::AbstractVector,
+    vecmodel::ReactantWrenModel,
+    params::AbstractVector,
+)
     length(grad) == vecmodel.dimension || throw(
         DimensionMismatch(
             "VecModel expects a gradient buffer of length $(vecmodel.dimension), but " *

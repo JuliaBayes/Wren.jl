@@ -266,9 +266,7 @@ function lp_and_grad(vecmodel::VecModel, params::AbstractVector)
     end
 end
 
-function lp_and_grad(
-    vecmodel::VecModel{M,Nothing}, params::AbstractVector
-) where {M<:Model}
+function lp_and_grad(vecmodel::VecModel{M,Nothing}, params::AbstractVector) where {M<:Model}
     throw(ArgumentError("This VecModel was constructed without an AD backend."))
 end
 
@@ -316,7 +314,9 @@ function lp_and_grad!(grad::AbstractVector, vecmodel::VecModel, params::Abstract
 end
 
 function lp_and_grad!(
-    grad::AbstractVector, vecmodel::VecModel{M,Nothing}, params::AbstractVector
+    grad::AbstractVector,
+    vecmodel::VecModel{M,Nothing},
+    params::AbstractVector,
 ) where {M<:Model}
     throw(ArgumentError("This VecModel was constructed without an AD backend."))
 end
@@ -331,14 +331,13 @@ end
 
 LogDensityProblems.dimension(vecmodel::VecModel) = vecmodel.dimension
 
-function LogDensityProblems.logdensity(
-    vecmodel::VecModel, params::AbstractVector{<:Real}
-)
+function LogDensityProblems.logdensity(vecmodel::VecModel, params::AbstractVector{<:Real})
     return lp(vecmodel, params)
 end
 
 function LogDensityProblems.logdensity_and_gradient(
-    vecmodel::VecModel, params::AbstractVector{<:Real}
+    vecmodel::VecModel,
+    params::AbstractVector{<:Real},
 )
     return lp_and_grad(vecmodel, params)
 end

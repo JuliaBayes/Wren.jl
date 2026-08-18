@@ -11,7 +11,8 @@ using Test
 
 struct Only end
 Only(x::AbstractVector{<:Number}) = x[]
-ChangesOfVariables.with_logabsdet_jacobian(::Only, x::AbstractVector{<:Number}) = (x[], zero(eltype(x)))
+ChangesOfVariables.with_logabsdet_jacobian(::Only, x::AbstractVector{<:Number}) =
+    (x[], zero(eltype(x)))
 InverseFunctions.inverse(::Only) = Vec()
 struct Vec end
 Vec(r) = [r]
@@ -40,7 +41,7 @@ Wren.from_vec(::PM.Normal) = Only()
             x ~ PM.Normal(0.0, 1.0)
         end
         model = f()
-        vm = VecModel(model, AutoReactant(AutoEnzyme(; mode=Reverse)));
+        vm = VecModel(model, AutoReactant(AutoEnzyme(; mode=Reverse)))
         params = [0.0]
         @test lp(vm, params) ≈ f(params)
         @be lp($vm, $params)

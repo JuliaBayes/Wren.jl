@@ -13,9 +13,7 @@ export Categorical, IsoNormal, MvCategorical
 
 struct Only end
 Only(x::AbstractVector{<:Number}) = x[]
-function ChangesOfVariables.with_logabsdet_jacobian(
-    ::Only, x::AbstractVector{<:Number}
-)
+function ChangesOfVariables.with_logabsdet_jacobian(::Only, x::AbstractVector{<:Number})
     return x[], zero(eltype(x))
 end
 InverseFunctions.inverse(::Only) = Vec()
@@ -51,12 +49,14 @@ end
 (::ToIsoNormalVec)(x::AbstractArray{<:Number}) = vec(x)
 
 function ChangesOfVariables.with_logabsdet_jacobian(
-    transform::FromIsoNormalVec, x::AbstractVector{<:Number}
+    transform::FromIsoNormalVec,
+    x::AbstractVector{<:Number},
 )
     return transform(x), zero(eltype(x))
 end
 function ChangesOfVariables.with_logabsdet_jacobian(
-    transform::ToIsoNormalVec, x::AbstractArray{<:Number}
+    transform::ToIsoNormalVec,
+    x::AbstractArray{<:Number},
 )
     return transform(x), zero(eltype(x))
 end
@@ -80,12 +80,9 @@ struct MvCategorical{P<:AbstractMatrix}
     probabilities::P
 end
 
-function DensityInterface.logdensityof(
-    d::MvCategorical, categories::AbstractVector
-)
+function DensityInterface.logdensityof(d::MvCategorical, categories::AbstractVector)
     probabilities = d.probabilities
-    linear_indices =
-        categories .+ (eachindex(categories) .- 1) .* size(probabilities, 1)
+    linear_indices = categories .+ (eachindex(categories) .- 1) .* size(probabilities, 1)
     return sum(log, probabilities[linear_indices])
 end
 

@@ -31,6 +31,7 @@ include("latents/latents.jl")
 include("model.jl")
 include("interface.jl")
 include("vecmodel.jl")
+include("params_with_stats.jl")
 include("test_ad.jl")
 
 export @model,
@@ -56,6 +57,7 @@ export @model,
     WithBackend,
     WithExpectedResult,
     OriginalSpace,
+    ParamsWithStats,
     apply_parameter_space,
     condition,
     conditioned,

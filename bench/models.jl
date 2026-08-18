@@ -44,7 +44,7 @@ DynamicPPL.@model function dppl_eight_schools(y, sigma, J)
 end
 
 path = "mnist.csv"
-data, _ = readdlm(path, ',', header = true)
+data, _ = readdlm(path, ',', header=true)
 labels = Int.(data[:, 1])
 image_vec = data[:, 2:end]
 C = 10 # Number of labels
@@ -75,8 +75,16 @@ end
 function models()
     return (
         (name="normal", wren=wren_normal(), dppl=dppl_normal()),
-        (name="eight schools", wren=wren_eight_schools(EIGHT_SCHOOLS_Y, EIGHT_SCHOOLS_SIGMA, EIGHT_SCHOOLS_J), dppl=dppl_eight_schools(EIGHT_SCHOOLS_Y, EIGHT_SCHOOLS_SIGMA, EIGHT_SCHOOLS_J)),
-        (name="mnist", wren=wren_mnist(image_vec, labels, C), dppl=dppl_mnist(image_vec, labels, C)),
+        (
+            name="eight schools",
+            wren=wren_eight_schools(EIGHT_SCHOOLS_Y, EIGHT_SCHOOLS_SIGMA, EIGHT_SCHOOLS_J),
+            dppl=dppl_eight_schools(EIGHT_SCHOOLS_Y, EIGHT_SCHOOLS_SIGMA, EIGHT_SCHOOLS_J),
+        ),
+        (
+            name="mnist",
+            wren=wren_mnist(image_vec, labels, C),
+            dppl=dppl_mnist(image_vec, labels, C),
+        ),
     )
 end
 
