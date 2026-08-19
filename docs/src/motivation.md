@@ -10,7 +10,10 @@ DynamicPPL has a fair amount of legacy code and concepts.
 `VarInfo` is a fine example of this.
 In fact, I put in a lot of work to refactor Turing to not need it, and in principle it can be removed quite easily now (see [DynamicPPL#1376](https://github.com/TuringLang/DynamicPPL.jl/issues/1376)).
 In some ways Wren is an opportunity to have a fresh start and not carry over any unnecessary baggage.
-The same can be said of DynamicPPL's `AbstractContext`.
+Another example is DynamicPPL's idea of 'raw values', which are actually just parameter values, i.e., `params`!
+The name came about because `VarInfo` used to always unconditionally store variables in vectorised form, and thus an adjective was required to distinguish the unvectorised values from the vectorised ones.
+(In fact it used to be called 'values as in model', which was even worse.)
+There are numerous other instances which I could go on about, but I won't bore you.
 
 ## Acceleration (1)
 
