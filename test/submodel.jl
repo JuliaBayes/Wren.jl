@@ -33,19 +33,19 @@ using VarNames
         @test iszero(loglikelihood(accs))
 
         # With FromParams
-        params = @vnt begin
+        vnt = @vnt begin
             x.a := 0.5
         end
         retval, accs = evaluate(
             returning_outer(returning_inner()),
-            FromParams(params),
+            FromParams(vnt),
             OriginalSpace(),
             Wren.default_accumulators(),
         )
         pars = params(accs)
-        @test retval == (nothing, 2 * params[@vn(x.a)] + 1)
+        @test retval == (nothing, 2 * vnt[@vn(x.a)] + 1)
         @test only(keys(pars)) == @vn(x.a)
-        @test logprior(accs) ≈ logdensityof(Normal(), params[@vn(x.a)])
+        @test logprior(accs) ≈ logdensityof(Normal(), vnt[@vn(x.a)])
         @test iszero(loglikelihood(accs))
     end
 
@@ -73,18 +73,18 @@ using VarNames
         @test retval == 2a
 
         # With FromParams
-        params = @vnt begin
+        vnt = @vnt begin
             x.a := 0.5
         end
         retval, accs = evaluate(
             undefined_namespace_outer(returning_inner()),
-            FromParams(params),
+            FromParams(vnt),
             OriginalSpace(),
             Wren.default_accumulators(),
         )
         pars = params(accs)
         @test only(keys(pars)) == @vn(x.a)
-        @test retval == 2 * params[@vn(x.a)]
+        @test retval == 2 * vnt[@vn(x.a)]
     end
 
     @testset "indexed namespace uses the outer template" begin
@@ -115,12 +115,12 @@ using VarNames
         # With FromParams
         first_a = 0.25
         second_a = -0.5
-        params = @vnt begin
+        vnt = @vnt begin
             @template x = zeros(2, 2)
             x[1].a := first_a
             x[2, 2].a := second_a
         end
-        source = FromParams(params)
+        source = FromParams(vnt)
         retval, accs = evaluate(
             indexed_outer(indexed_inner()),
             source,
@@ -154,11 +154,11 @@ using VarNames
         a = 0.4
         b = -0.2
         obs = 0.1
-        params = @vnt begin
+        vnt = @vnt begin
             x.a := a
             b := b
         end
-        source = FromParams(params)
+        source = FromParams(vnt)
         retval, accs = evaluate(
             likelihood_outer(likelihood_inner() | VarNamedTuple(; obs=obs)),
             source,
@@ -167,7 +167,7 @@ using VarNames
         )
 
         @test retval == b
-        @test params(accs) == params
+        @test params(accs) == vnt
         @test logprior(accs) ≈ logdensityof(Normal(), a) + logdensityof(Normal(a), b)
         @test loglikelihood(accs) ≈ logdensityof(Normal(a), obs)
     end
@@ -223,15 +223,15 @@ using VarNames
 
         # With FromParams
         a = 0.75
-        params = @vnt begin
+        vnt = @vnt begin
             x.y.a := a
         end
-        source = FromParams(params)
+        source = FromParams(vnt)
         nested_model = outer_model(middle_model(returning_inner()))
         retval, accs =
             evaluate(nested_model, source, OriginalSpace(), Wren.default_accumulators())
         @test retval ≈ 2a + 2
-        @test params(accs) == params
+        @test params(accs) == vnt
         @test logprior(accs) ≈ logdensityof(Normal(), a)
     end
 end

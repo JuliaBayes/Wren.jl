@@ -25,7 +25,7 @@ function _params_with_stats(
     stats::NamedTuple,
     include_log_probs::Bool,
 )
-    params = VarNames.densify!!(params(accs))
+    densified_params = VarNames.densify!!(params(accs))
     if include_log_probs
         has_prior = haskey(accs, Val(LOG_PRIOR_ACCNAME))
         has_likelihood = haskey(accs, Val(LOG_LIKELIHOOD_ACCNAME))
@@ -35,7 +35,7 @@ function _params_with_stats(
             stats = merge(stats, (logjoint=logjoint(accs),))
         end
     end
-    return ParamsWithStats(params, stats)
+    return ParamsWithStats(densified_params, stats)
 end
 
 """
