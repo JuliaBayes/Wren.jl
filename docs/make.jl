@@ -9,14 +9,7 @@ makedocs(;
     sitename="Wren.jl",
     format=Documenter.HTML(),
     modules=[Wren],
-    pages=[
-        "index.md",
-        "syntax.md",
-        "models.md",
-        "submodels.md",
-        "motivation.md",
-        "api.md",
-    ],
+    pages=["index.md", "syntax.md", "models.md", "submodels.md", "motivation.md", "api.md"],
     # TODO(penelopeysm): Reenable!
     # checkdocs=:exports,
     # warnonly=false,

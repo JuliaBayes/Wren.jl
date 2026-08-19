@@ -7,7 +7,8 @@ Wren is a library for probabilistic programming in Julia.
 As Wren is not yet registered in the Julia package registry, you can install it directly from GitHub using:
 
 ```julia
-import Pkg; Pkg.add(url="https://github.com/JuliaBayes/Wren.jl")
+import Pkg;
+Pkg.add(url="https://github.com/JuliaBayes/Wren.jl")
 ```
 
 ## Overview

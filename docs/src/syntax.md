@@ -3,8 +3,8 @@
 A Wren model is a Julia function marked with the `@model` macro.
 It mixes regular Julia code with two probabilistic primitives:
 
-- `sample`: represents latent parameters
-- `observe`: represents observations
+  - `sample`: represents latent parameters
+  - `observe`: represents observations
 
 Function arguments have no special meaning in Wren: they're just quantities that are passed into the model.
 
@@ -41,10 +41,10 @@ log-likelihood) was updated.
 
 The left-hand side of a tilde can be either
 
-- a top-level variable, e.g., `x ~ Normal()`,
-- a field, e.g., `m.x ~ Normal()`,
-- an array element, e.g., `a[1] ~ Normal()`,
-- or chains thereof, e.g., `m.a[1].x ~ Normal()`.
+  - a top-level variable, e.g., `x ~ Normal()`,
+  - a field, e.g., `m.x ~ Normal()`,
+  - an array element, e.g., `a[1] ~ Normal()`,
+  - or chains thereof, e.g., `m.a[1].x ~ Normal()`.
 
 These are all things which can be assigned to in Julia (sometimes called 'lvalues').
 Other expressions are not permitted, including literals.
@@ -113,7 +113,7 @@ To condition on some observed data, we can use the `|` operator on the model.
 For example, we can condition on the entire `y` array in one go:
 
 ```@example model
-yarg_model_cond = yarg_model | VarNamedTuple(y = [1.0, 2.0, 3.0])
+yarg_model_cond = yarg_model | VarNamedTuple(y=[1.0, 2.0, 3.0])
 
 accs = rand_with_logp(Xoshiro(468), yarg_model_cond)
 logprior(accs), loglikelihood(accs), params(accs)
@@ -128,7 +128,7 @@ When the model is evaluated, it will use the values passed to `|` instead of the
 We can do the exact same with `ydef`, and in exactly the same way, the definition of `y` inside the model body will be ignored:
 
 ```@example model
-ydef_model_cond = ydef_model | VarNamedTuple(y = [1.0, 2.0, 3.0])
+ydef_model_cond = ydef_model | VarNamedTuple(y=[1.0, 2.0, 3.0])
 
 accs = rand_with_logp(Xoshiro(468), ydef_model_cond)
 logprior(accs), loglikelihood(accs), params(accs)

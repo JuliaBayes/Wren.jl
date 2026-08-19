@@ -41,8 +41,7 @@ end
                 evaluate(model, FromPrior(), OriginalSpace(), Wren.default_accumulators())
             @test retval === nothing
             @test params(accs) isa VarNamedTuple
-            @test logprior(accs) ≈
-                  logdensityof(Normal(d[1]), params(accs)[@vn(x)])
+            @test logprior(accs) ≈ logdensityof(Normal(d[1]), params(accs)[@vn(x)])
             @test iszero(loglikelihood(accs))
         end
     end

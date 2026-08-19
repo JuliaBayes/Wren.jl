@@ -54,6 +54,7 @@ In order to allow users to access the return value, Wren stipulates that the `pr
 Thus, you can write `retval = (prefix ~ submodel)`:
 
 !!! note
+
     The parentheses are not strictly required because `~` has lower precedence than `=`, but it's clearer to include them.
 
 ```@example submodel

@@ -60,10 +60,11 @@ function rand_with_logp(rng::AbstractRNG, model::Model)
         model,
         FromPrior(rng),
         OriginalSpace(),
-        AccumulatorTuple(ParamsAccumulator(),
-                         LogPriorAccumulator(),
-                         LogLikelihoodAccumulator(),
-                         ),
+        AccumulatorTuple(
+            ParamsAccumulator(),
+            LogPriorAccumulator(),
+            LogLikelihoodAccumulator(),
+        ),
     )
     return accs
 end

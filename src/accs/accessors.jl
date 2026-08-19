@@ -6,7 +6,8 @@ Return the accumulated latent parameter values.
 StatsAPI.params(accs::AccumulatorTuple) = getacc(accs, Val(PARAMS_ACCNAME)).values
 
 """Return the vectorised parameter values."""
-vectorised_params(accs::AccumulatorTuple) = getacc(accs, Val(VECTORISED_PARAMS_ACCNAME)).values
+vectorised_params(accs::AccumulatorTuple) =
+    getacc(accs, Val(VECTORISED_PARAMS_ACCNAME)).values
 
 """
     logprior(accs::AccumulatorTuple)::Number
@@ -24,7 +25,8 @@ logprior(accs::AccumulatorTuple) = getacc(accs, Val(LOG_PRIOR_ACCNAME)).logp
 
 Return the accumulated log-likelihood.
 """
-StatsAPI.loglikelihood(accs::AccumulatorTuple) = getacc(accs, Val(LOG_LIKELIHOOD_ACCNAME)).logp
+StatsAPI.loglikelihood(accs::AccumulatorTuple) =
+    getacc(accs, Val(LOG_LIKELIHOOD_ACCNAME)).logp
 
 """
     logjac(accs::AccumulatorTuple)::Number

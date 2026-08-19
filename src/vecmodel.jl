@@ -344,7 +344,8 @@ end
 
 """Draw a parameter vector compatible with `vecmodel`."""
 function Base.rand(rng::AbstractRNG, vecmodel::VecModel)
-    values = _draw_vectorised_params(vecmodel.model, FromPrior(rng), vecmodel.parameter_space)
+    values =
+        _draw_vectorised_params(vecmodel.model, FromPrior(rng), vecmodel.parameter_space)
     ranges_and_transforms, params = _ranges_and_params(values)
     ranges_and_transforms == vecmodel.ranges_and_transforms || throw(
         ArgumentError(
@@ -356,4 +357,3 @@ function Base.rand(rng::AbstractRNG, vecmodel::VecModel)
 end
 
 Base.rand(vecmodel::VecModel) = rand(default_rng(), vecmodel)
-
