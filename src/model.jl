@@ -1,3 +1,4 @@
+using Accessors: Accessors
 using RuntimeGeneratedFunctions
 
 RuntimeGeneratedFunctions.init(@__MODULE__)
@@ -52,6 +53,18 @@ function remove_escapes(expr::Expr)
     return Expr(expr.head, map(remove_escapes, expr.args)...)
 end
 
+assign_or_set!!(lhs::Symbol, rhs, vn) = :($lhs = $rhs)
+function assign_or_set!!(lhs::Expr, rhs, vn)
+    left_top_sym = get_top_level_symbol(lhs)
+    return :(
+        $left_top_sym = $(Accessors.set)(
+            $left_top_sym,
+            $(VarNames.with_mutation)($(VarNames.getoptic)($vn)),
+            $rhs,
+        )
+    )
+end
+
 emit_model_expr(expr, accs, conditioned, latent_source, parameter_space) = expr
 function emit_model_expr(stmt::WrenExpr, accs, conditioned, latent_source, parameter_space)
     args = map(
@@ -92,13 +105,13 @@ function emit_model_expr(stmt::Sample, accs, conditioned, latent_source, paramet
         else
             if $(haskey)($conditioned, $vn)
                 $val = $(getindex)($conditioned, $vn)
-                $(stmt.lhs) = $val
+                $(assign_or_set!!(stmt.lhs, val, vn))
                 $accs = $(accumulate_observe!!)($accs, $val, $vn, $rhs, $template)
             else
                 $init_tval = $(get_latent)($latent_source, $vn, $rhs)
                 $val, $tval, $logjac =
                     $(apply_parameter_space)($parameter_space, $init_tval, $vn, $rhs)
-                $(stmt.lhs) = $val
+                $(assign_or_set!!(stmt.lhs, val, vn))
                 $accs = $(accumulate_assume!!)(
                     $accs,
                     $val,
