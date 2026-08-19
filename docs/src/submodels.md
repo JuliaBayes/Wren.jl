@@ -21,7 +21,7 @@ When we write `x ~ Normal()`, what happens is that the result of `rand(Normal())
 
 Likewise, when we write `a ~ inner()`, the result of `rand(inner())` (a VarNamedTuple) is stored in the parameter `a`.
 
-We could equivalently say that all the variables inside `inner` are *prefixed* with `a`, but the description in terms of `rand()` is clearer (in my opinion).
+We could equivalently say that all the variables inside `inner` are *prefixed* with `a`, but thinking of it in terms of `rand()` is more precise.
 
 ```@example submodel
 @model function outer()
@@ -55,7 +55,7 @@ Thus, you can write `retval = (prefix ~ submodel)`:
 
 !!! note
 
-    The parentheses are not strictly required because `~` has lower precedence than `=`, but it's clearer to include them.
+    The parentheses are not strictly required because `~` has higher precedence than `=`, but it's clearer to include them.
 
 ```@example submodel
 @model function inner_with_retval()

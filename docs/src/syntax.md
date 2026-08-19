@@ -134,7 +134,7 @@ accs = rand_with_logp(Xoshiro(468), ydef_model_cond)
 logprior(accs), loglikelihood(accs), params(accs)
 ```
 
-One can perform partial conditioning by only specifying part of the latent array (see the [VarNames.jl](https://juliabayes.org/VarNames.jl/stable/vnt/api/#VarNames.@vnt docs) for more details on the `@vnt` macro):
+One can perform partial conditioning by only specifying part of the latent array (see the [VarNames.jl](https://juliabayes.org/VarNames.jl/stable/vnt/api/#VarNames.@vnt) docs for more details on the `@vnt` macro):
 
 ```@example model
 cond = @vnt begin
@@ -180,7 +180,7 @@ end
 accs = rand_with_logp(y_obs())
 ```
 
-We can check that these values is consistent:
+We can check that these values are consistent:
 
 ```@example model
 loglikelihood(accs) ≈ logdensityof(Normal(), params(accs)[@vn(x)] + 1)
