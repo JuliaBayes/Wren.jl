@@ -1,4 +1,4 @@
-const VECTOR_VALUE_ACCNAME = :VectorValue
+const VECTORISED_PARAMS_ACCNAME = :VectorisedParams
 
 """
     _get_vector_tval(val, tval, vn, dist, logjac)
@@ -42,7 +42,7 @@ function _get_vector_tval(val, tval::TransformedValue, vn, dist, logjac)
 end
 
 """
-    VectorValueAccumulator()
+    VectorisedParamsAccumulator()
 
 An accumulator that collects parameter values as
 `TransformedValue{<:AbstractVector}` objects.
@@ -52,7 +52,7 @@ Values already represented as vectors are stored unchanged. Values represented b
 [`AsVec`](@ref). Thus, the stored transform agrees with the selected parameter space while
 every stored value has a uniform vector representation.
 """
-VectorValueAccumulator() = VNTAccumulator{VECTOR_VALUE_ACCNAME}(_get_vector_tval)
+VectorisedParamsAccumulator() = VNTAccumulator{VECTORISED_PARAMS_ACCNAME}(_get_vector_tval)
 
 """
     internal_values_as_vector(values::VarNamedTuple)

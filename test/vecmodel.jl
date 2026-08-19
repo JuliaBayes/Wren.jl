@@ -71,11 +71,11 @@ end
         model,
         FromPrior(Xoshiro(472)),
         UnconstrainedSpace(),
-        Wren.AccumulatorTuple(VectorValueAccumulator()),
+        Wren.AccumulatorTuple(VectorisedParamsAccumulator()),
     )
-    vector_values = get_vector_values(value_accs)
-    from_vnt = VecModel(model, AutoForwardDiff(); params=vector_values)
-    vector_params = internal_values_as_vector(vector_values)
+    vec_pars = vectorised_params(value_accs)
+    from_vnt = VecModel(model, AutoForwardDiff(); params=vec_pars)
+    vector_params = internal_values_as_vector(vec_pars)
     @test from_vnt.dimension == 3
     @test lp(from_vnt, vector_params) isa Real
 
@@ -83,7 +83,7 @@ end
         model,
         AutoForwardDiff();
         params=FromPrior(Xoshiro(473)),
-        getlogp=getlogprior,
+        get_logp=logprior,
         parameter_space=OriginalSpace(),
     )
     prior_params = rand(Xoshiro(474), prior_vecmodel)

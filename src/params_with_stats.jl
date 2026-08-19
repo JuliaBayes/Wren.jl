@@ -13,10 +13,10 @@ function _params_with_stats_accumulators(include_log_probs::Bool)
         AccumulatorTuple(
             LogPriorAccumulator(),
             LogLikelihoodAccumulator(),
-            RawValueAccumulator(),
+            ParamsAccumulator(),
         )
     else
-        AccumulatorTuple(RawValueAccumulator())
+        AccumulatorTuple(ParamsAccumulator())
     end
 end
 
@@ -25,14 +25,14 @@ function _params_with_stats(
     stats::NamedTuple,
     include_log_probs::Bool,
 )
-    params = VarNames.densify!!(get_raw_values(accs))
+    params = VarNames.densify!!(params(accs))
     if include_log_probs
         has_prior = haskey(accs, Val(LOG_PRIOR_ACCNAME))
         has_likelihood = haskey(accs, Val(LOG_LIKELIHOOD_ACCNAME))
-        has_prior && (stats = merge(stats, (logprior=getlogprior(accs),)))
-        has_likelihood && (stats = merge(stats, (loglikelihood=getloglikelihood(accs),)))
+        has_prior && (stats = merge(stats, (logprior=logprior(accs),)))
+        has_likelihood && (stats = merge(stats, (loglikelihood=loglikelihood(accs),)))
         if has_prior && has_likelihood
-            stats = merge(stats, (logjoint=getlogjoint(accs),))
+            stats = merge(stats, (logjoint=logjoint(accs),))
         end
     end
     return ParamsWithStats(params, stats)
@@ -68,7 +68,7 @@ end
     )
 
 Extract parameters and any available log-probability statistics from an accumulator tuple.
-The tuple must contain a [`RawValueAccumulator`](@ref).
+The tuple must contain a [`ParamsAccumulator`](@ref).
 """
 function ParamsWithStats(
     accs::AccumulatorTuple,
@@ -193,3 +193,8 @@ function FromParams(
 )
     return FromParams(pws.params, fallback)
 end
+
+StatsAPI.params(pws::ParamsWithStats) = pws.params
+logprior(pws::ParamsWithStats) = pws.stats.logprior
+StatsAPI.loglikelihood(pws::ParamsWithStats) = pws.stats.loglikelihood
+logjoint(pws::ParamsWithStats) = pws.stats.logjoint

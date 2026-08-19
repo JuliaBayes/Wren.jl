@@ -122,7 +122,7 @@ benchmarking is disabled. Pass `test=NoTest()` (or `false`) to skip correctness 
 `test=WithExpectedResult(value, grad)` to supply a known answer, or `benchmark=true` to
 benchmark prepared calls to [`lp`](@ref) and [`lp_and_grad`](@ref).
 
-The `getlogp` and `parameter_space` keywords are forwarded to [`VecModel`](@ref), and have
+The `get_logp` and `parameter_space` keywords are forwarded to [`VecModel`](@ref), and have
 the same defaults. The requested AD backend package, and any reference backend package,
 must already be loaded.
 """
@@ -134,7 +134,7 @@ function run_ad(
     benchmark_seconds::Real=1.0,
     atol::Real=100 * eps(),
     rtol::Real=sqrt(eps()),
-    getlogp=getlogjoint_transformed,
+    get_logp=logjoint_transformed,
     rng::AbstractRNG=default_rng(),
     parameter_space::AbstractParameterSpace=UnconstrainedSpace(),
     params::Union{Nothing,AbstractVector}=nothing,
@@ -142,7 +142,7 @@ function run_ad(
 )
     setting = test isa Bool ? (test ? WithBackend() : NoTest()) : test
     atol, rtol = promote(atol, rtol)
-    vecmodel = VecModel(model, adtype; params=FromPrior(rng), getlogp, parameter_space)
+    vecmodel = VecModel(model, adtype; params=FromPrior(rng), get_logp, parameter_space)
     params = params === nothing ? rand(rng, vecmodel) : collect(params)
 
     value_actual, grad_actual = lp_and_grad(vecmodel, params)
@@ -156,7 +156,7 @@ function run_ad(
         reference = VecModel(
             vecmodel.model,
             setting.adtype,
-            vecmodel.getlogp,
+            vecmodel.get_logp,
             vecmodel.parameter_space,
             vecmodel.ranges_and_transforms,
             vecmodel.sample,

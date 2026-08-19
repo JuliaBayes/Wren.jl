@@ -22,12 +22,12 @@ end
             @test model.name === :simple_normal
             retval, accs =
                 evaluate(model, FromPrior(), OriginalSpace(), Wren.default_accumulators())
-            rawvals = get_raw_values(accs)
+            pars = params(accs)
             @test retval === nothing
-            @test rawvals isa VarNamedTuple
-            @test only(keys(rawvals)) == @vn(x)
-            @test getlogprior(accs) ≈ logdensityof(Normal(), rawvals[@vn(x)])
-            @test iszero(getloglikelihood(accs))
+            @test pars isa VarNamedTuple
+            @test only(keys(pars)) == @vn(x)
+            @test logprior(accs) ≈ logdensityof(Normal(), pars[@vn(x)])
+            @test iszero(loglikelihood(accs))
         end
 
         @testset "1x sample with model argument" begin
@@ -40,10 +40,10 @@ end
             retval, accs =
                 evaluate(model, FromPrior(), OriginalSpace(), Wren.default_accumulators())
             @test retval === nothing
-            @test get_raw_values(accs) isa VarNamedTuple
-            @test getlogprior(accs) ≈
-                  logdensityof(Normal(d[1]), get_raw_values(accs)[@vn(x)])
-            @test iszero(getloglikelihood(accs))
+            @test params(accs) isa VarNamedTuple
+            @test logprior(accs) ≈
+                  logdensityof(Normal(d[1]), params(accs)[@vn(x)])
+            @test iszero(loglikelihood(accs))
         end
     end
 
@@ -59,14 +59,14 @@ end
             @test model.name === :x_and_y
             retval, accs =
                 evaluate(model, FromPrior(), OriginalSpace(), Wren.default_accumulators())
-            rawvals = get_raw_values(accs)
+            pars = params(accs)
             @test retval === nothing
-            @test rawvals isa VarNamedTuple
-            @test collect(keys(rawvals)) == [@vn(x), @vn(y)]
-            @test getlogprior(accs) ≈
-                  logdensityof(Normal(), rawvals[@vn(x)]) +
-                  logdensityof(Normal(rawvals[@vn(x)]), rawvals[@vn(y)])
-            @test iszero(getloglikelihood(accs))
+            @test pars isa VarNamedTuple
+            @test collect(keys(pars)) == [@vn(x), @vn(y)]
+            @test logprior(accs) ≈
+                  logdensityof(Normal(), pars[@vn(x)]) +
+                  logdensityof(Normal(pars[@vn(x)]), pars[@vn(y)])
+            @test iszero(loglikelihood(accs))
         end
 
         @testset "after conditioning" begin
@@ -78,12 +78,12 @@ end
                 OriginalSpace(),
                 Wren.default_accumulators(),
             )
-            rawvals = get_raw_values(accs)
+            pars = params(accs)
             @test retval === nothing
-            @test rawvals isa VarNamedTuple
-            @test collect(keys(rawvals)) == [@vn(x)]
-            @test getlogprior(accs) ≈ logdensityof(Normal(), rawvals[@vn(x)])
-            @test getloglikelihood(accs) ≈ logdensityof(Normal(rawvals[@vn(x)]), 1.0)
+            @test pars isa VarNamedTuple
+            @test collect(keys(pars)) == [@vn(x)]
+            @test logprior(accs) ≈ logdensityof(Normal(), pars[@vn(x)])
+            @test loglikelihood(accs) ≈ logdensityof(Normal(pars[@vn(x)]), 1.0)
         end
     end
 
@@ -98,12 +98,12 @@ end
         @test model.name === :observe_macro
         retval, accs =
             evaluate(model, FromPrior(), OriginalSpace(), Wren.default_accumulators())
-        rawvals = get_raw_values(accs)
+        pars = params(accs)
         @test retval === nothing
-        @test rawvals isa VarNamedTuple
-        @test collect(keys(rawvals)) == [@vn(x)]
-        @test getlogprior(accs) ≈ logdensityof(Normal(), rawvals[@vn(x)])
-        @test getloglikelihood(accs) ≈ logdensityof(Normal(), rawvals[@vn(x)] + 1)
+        @test pars isa VarNamedTuple
+        @test collect(keys(pars)) == [@vn(x)]
+        @test logprior(accs) ≈ logdensityof(Normal(), pars[@vn(x)])
+        @test loglikelihood(accs) ≈ logdensityof(Normal(), pars[@vn(x)] + 1)
     end
 
     @testset "macros inside models" begin
@@ -122,8 +122,8 @@ end
         source = FromParams(params)
         _, accs =
             evaluate(with_macros(), source, OriginalSpace(), Wren.default_accumulators())
-        @test getlogprior(accs) ≈ sum(logdensityof.(Ref(Normal()), [0.5, 1.0, 2.0]))
-        @test getloglikelihood(accs) ≈ logdensityof(Normal(), 0.25)
+        @test logprior(accs) ≈ sum(logdensityof.(Ref(Normal()), [0.5, 1.0, 2.0]))
+        @test loglikelihood(accs) ≈ logdensityof(Normal(), 0.25)
     end
 
     @testset "nested expressions" begin
@@ -143,13 +143,13 @@ end
 
         _, accs =
             evaluate(nested_if(true), source, OriginalSpace(), Wren.default_accumulators())
-        @test getlogprior(accs) ≈ logdensityof(Normal(), 0.5)
-        @test getloglikelihood(accs) ≈ logdensityof(Normal(), 0.5)
+        @test logprior(accs) ≈ logdensityof(Normal(), 0.5)
+        @test loglikelihood(accs) ≈ logdensityof(Normal(), 0.5)
 
         _, accs =
             evaluate(nested_if(false), source, OriginalSpace(), Wren.default_accumulators())
-        @test getlogprior(accs) ≈ logdensityof(Normal(), 2.0)
-        @test getloglikelihood(accs) ≈ logdensityof(Normal(), 2.0)
+        @test logprior(accs) ≈ logdensityof(Normal(), 2.0)
+        @test loglikelihood(accs) ≈ logdensityof(Normal(), 2.0)
     end
 end
 
@@ -189,9 +189,9 @@ end
             OriginalSpace(),
             Wren.default_accumulators(),
         )
-        @test get_raw_values(accs) == VarNamedTuple(; x)
-        @test getlogprior(accs) ≈ logdensityof(Normal(), x)
-        @test getloglikelihood(accs) ≈ logdensityof(Normal(), x)
+        @test params(accs) == VarNamedTuple(; x)
+        @test logprior(accs) ≈ logdensityof(Normal(), x)
+        @test loglikelihood(accs) ≈ logdensityof(Normal(), x)
 
         conditioned_model = distribution_tilde_value() | VarNamedTuple(; x)
         _, accs = evaluate(
@@ -200,9 +200,9 @@ end
             OriginalSpace(),
             Wren.default_accumulators(),
         )
-        @test get_raw_values(accs) == VarNamedTuple()
-        @test iszero(getlogprior(accs))
-        @test getloglikelihood(accs) ≈ 2 * logdensityof(Normal(), x)
+        @test params(accs) == VarNamedTuple()
+        @test iszero(logprior(accs))
+        @test loglikelihood(accs) ≈ 2 * logdensityof(Normal(), x)
     end
 end
 
@@ -215,7 +215,7 @@ end
         model = explicit_return_sample()
         retval, accs =
             evaluate(model, FromPrior(), OriginalSpace(), Wren.default_accumulators())
-        @test retval == get_raw_values(accs)[@vn(x)]
+        @test retval == params(accs)[@vn(x)]
     end
 
     @testset "bare return" begin
@@ -243,7 +243,7 @@ end
         model = fallthrough_sample()
         retval, accs =
             evaluate(model, FromPrior(), OriginalSpace(), Wren.default_accumulators())
-        @test retval == get_raw_values(accs)[@vn(x)]
+        @test retval == params(accs)[@vn(x)]
 
         @model function fallthrough_value()
             x ~ Normal()
@@ -294,10 +294,10 @@ end
     expected_logp = sum(logdensityof(Normal(), value) for value in values)
 
     @test events == [:even, :finished]
-    raw_xs = get_raw_values(accs).data.xs
-    @test VarNames.densify!!(raw_xs) == values
-    @test getlogprior(accs) ≈ expected_logp
-    @test getloglikelihood(accs) ≈ expected_logp
+    xs = params(accs).data.xs
+    @test VarNames.densify!!(xs) == values
+    @test logprior(accs) ≈ expected_logp
+    @test loglikelihood(accs) ≈ expected_logp
 
     events = Symbol[]
     _, accs = evaluate(
@@ -307,7 +307,7 @@ end
         Wren.default_accumulators(),
     )
     @test events == [:empty]
-    @test get_raw_values(accs) == VarNamedTuple()
+    @test params(accs) == VarNamedTuple()
 end
 
 end # module WrenExprTests

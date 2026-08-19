@@ -246,7 +246,7 @@ parameter space.
     and correspondingly:
 
     ```julia
-    getlogjoint_transformed(accs) = getlogjoint(accs) - getlogjac(accs)
+    logjoint_transformed(accs) = logjoint(accs) - logjac(accs)
     ```
 
 # Fields

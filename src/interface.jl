@@ -3,7 +3,7 @@ function default_accumulators(::Type{FloatT}=LogProbType) where {FloatT}
         LogPriorAccumulator{FloatT}(),
         LogJacobianAccumulator{FloatT}(),
         LogLikelihoodAccumulator{FloatT}(),
-        RawValueAccumulator(),
+        ParamsAccumulator(),
     )
 end
 
@@ -40,12 +40,34 @@ function Base.rand(rng::AbstractRNG, model::Model)
         model,
         FromPrior(rng),
         OriginalSpace(),
-        AccumulatorTuple(RawValueAccumulator()),
+        AccumulatorTuple(ParamsAccumulator()),
     )
-    return get_raw_values(accs)
+    return params(accs)
 end
-
 Base.rand(model::Model) = rand(default_rng(), model)
+
+"""
+    rand_with_logp([rng::Random.AbstractRNG,] model::Model)::AccumulatorTuple
+
+Draw a sample from the prior distribution of `model` and return the params, log-prior,
+and log-likelihood.
+
+To extract the contents of the `AccumulatorTuple`, you can use [`params`](@ref),
+[`logprior`](@ref), [`loglikelihood`](@ref), and [`logjoint`](@ref).
+"""
+function rand_with_logp(rng::AbstractRNG, model::Model)
+    _, accs = evaluate(
+        model,
+        FromPrior(rng),
+        OriginalSpace(),
+        AccumulatorTuple(ParamsAccumulator(),
+                         LogPriorAccumulator(),
+                         LogLikelihoodAccumulator(),
+                         ),
+    )
+    return accs
+end
+rand_with_logp(model::Model) = rand_with_logp(default_rng(), model)
 
 conditioned(model::Model) = model.conditioned
 

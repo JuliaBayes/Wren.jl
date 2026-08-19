@@ -31,7 +31,7 @@ function Wren.VecModel(
     model::Wren.Model,
     adtype::AutoReactant;
     params::Union{Wren.VarNamedTuple,Wren.AbstractLatentSource}=Wren.FromPrior(),
-    getlogp=Wren.getlogjoint_transformed,
+    get_logp=Wren.logjoint_transformed,
     parameter_space::Wren.AbstractParameterSpace=Wren.UnconstrainedSpace(),
 )
     values = if params isa Wren.VarNamedTuple
@@ -63,7 +63,7 @@ function Wren.VecModel(
         model.evaluation_fn,
         model_args,
         model.conditioned,
-        getlogp,
+        get_logp,
         parameter_space,
         ranges_and_transforms,
         accs,
@@ -79,7 +79,7 @@ function Wren.VecModel(
     return Wren.VecModel(
         model,
         adtype,
-        getlogp,
+        get_logp,
         parameter_space,
         ranges_and_transforms,
         accs,

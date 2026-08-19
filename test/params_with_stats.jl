@@ -47,7 +47,7 @@ end
     accs = Wren.AccumulatorTuple(
         Wren.LogPriorAccumulator(),
         Wren.LogLikelihoodAccumulator(),
-        Wren.RawValueAccumulator(),
+        Wren.ParamsAccumulator(),
     )
     _, accs = evaluate(model, FromParams(from_prior), OriginalSpace(), accs)
     from_accs = ParamsWithStats(accs, (chain=2,))

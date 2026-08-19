@@ -1,4 +1,4 @@
-const RAW_VALUE_ACCNAME = :RawValues
+const PARAMS_ACCNAME = :Params
 
 # TODO(mhauru) The deepcopy here is quite unfortunate. It is needed so that the model body
 # can go mutating the object without that in turn mutating the value stored in the
@@ -9,38 +9,38 @@ _safe_copy(val) = deepcopy(val)
 # See https://github.com/TuringLang/DynamicPPL.jl/pull/1350
 _safe_copy(val::SubArray) = collect(val)
 
-struct GetRawValues end
-Base.copy(g::GetRawValues) = g
-(g::GetRawValues)(val, tval, vn, right, logjac) = _safe_copy(val)
+struct GetParams end
+Base.copy(g::GetParams) = g
+(g::GetParams)(val, tval, vn, right, logjac) = _safe_copy(val)
 
 """
-    RawValueAccumulator() <: AbstractAccumulator
+    ParamsAccumulator() <: AbstractAccumulator
 
 An accumulator that keeps tracks of the model parameters exactly as they are seen in the
 model.
 """
-function RawValueAccumulator()
-    return VNTAccumulator{RAW_VALUE_ACCNAME}(GetRawValues())
+function ParamsAccumulator()
+    return VNTAccumulator{PARAMS_ACCNAME}(GetParams())
 end
 
 #################################################################
 
-# Debug version of RawValueAcc: it does the same thing as RawValueAcc, but additionally
+# Debug version of ParamsAccumulator: it does the same thing as ParamsAccumulator, but additionally
 # errors if a value is set twice. This is used in check_model.
-struct DebugGetRawValues
+struct DebugGetParams
     repeated_vns::Set{VarName}
 end
-Base.copy(d::DebugGetRawValues) = DebugGetRawValues(copy(d.repeated_vns))
-function DebugRawValueAccumulator()
-    return VNTAccumulator{RAW_VALUE_ACCNAME}(DebugGetRawValues(Set{VarName}()))
+Base.copy(d::DebugGetParams) = DebugGetParams(copy(d.repeated_vns))
+function DebugParamsAccumulator()
+    return VNTAccumulator{PARAMS_ACCNAME}(DebugGetParams(Set{VarName}()))
 end
 
 # Unfortunately we have to overload accumulate_assume!! since we need to use the
 # templated_setindex_no_overwrite!! function
 function accumulate_assume!!(
     acc::Union{
-        VNTAccumulator{RAW_VALUE_ACCNAME,DebugGetRawValues},
-        TSVNTAccumulator{RAW_VALUE_ACCNAME,DebugGetRawValues},
+        VNTAccumulator{PARAMS_ACCNAME,DebugGetParams},
+        TSVNTAccumulator{PARAMS_ACCNAME,DebugGetParams},
     },
     val,
     tval,
@@ -68,12 +68,12 @@ end
 
 function combine(
     acc1::Union{
-        VNTAccumulator{RAW_VALUE_ACCNAME,DebugGetRawValues},
-        TSVNTAccumulator{RAW_VALUE_ACCNAME,DebugGetRawValues},
+        VNTAccumulator{PARAMS_ACCNAME,DebugGetParams},
+        TSVNTAccumulator{PARAMS_ACCNAME,DebugGetParams},
     },
     acc2::Union{
-        VNTAccumulator{RAW_VALUE_ACCNAME,DebugGetRawValues},
-        TSVNTAccumulator{RAW_VALUE_ACCNAME,DebugGetRawValues},
+        VNTAccumulator{PARAMS_ACCNAME,DebugGetParams},
+        TSVNTAccumulator{PARAMS_ACCNAME,DebugGetParams},
     },
 )
     if acc1.f !== acc2.f

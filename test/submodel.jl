@@ -25,12 +25,12 @@ using VarNames
             OriginalSpace(),
             Wren.default_accumulators(),
         )
-        rawvals = get_raw_values(accs)
-        a = rawvals[@vn(x.a)]
+        pars = params(accs)
+        a = pars[@vn(x.a)]
         @test retval == (nothing, 2a + 1)
-        @test only(keys(rawvals)) == @vn(x.a)
-        @test getlogprior(accs) ≈ logdensityof(Normal(), a)
-        @test iszero(getloglikelihood(accs))
+        @test only(keys(pars)) == @vn(x.a)
+        @test logprior(accs) ≈ logdensityof(Normal(), a)
+        @test iszero(loglikelihood(accs))
 
         # With FromParams
         params = @vnt begin
@@ -42,11 +42,11 @@ using VarNames
             OriginalSpace(),
             Wren.default_accumulators(),
         )
-        rawvals = get_raw_values(accs)
+        pars = params(accs)
         @test retval == (nothing, 2 * params[@vn(x.a)] + 1)
-        @test only(keys(rawvals)) == @vn(x.a)
-        @test getlogprior(accs) ≈ logdensityof(Normal(), params[@vn(x.a)])
-        @test iszero(getloglikelihood(accs))
+        @test only(keys(pars)) == @vn(x.a)
+        @test logprior(accs) ≈ logdensityof(Normal(), params[@vn(x.a)])
+        @test iszero(loglikelihood(accs))
     end
 
     @testset "undefined namespace" begin
@@ -67,9 +67,9 @@ using VarNames
             OriginalSpace(),
             Wren.default_accumulators(),
         )
-        rawvals = get_raw_values(accs)
-        @test only(keys(rawvals)) == @vn(x.a)
-        a = rawvals[@vn(x.a)]
+        pars = params(accs)
+        @test only(keys(pars)) == @vn(x.a)
+        a = pars[@vn(x.a)]
         @test retval == 2a
 
         # With FromParams
@@ -82,8 +82,8 @@ using VarNames
             OriginalSpace(),
             Wren.default_accumulators(),
         )
-        rawvals = get_raw_values(accs)
-        @test only(keys(rawvals)) == @vn(x.a)
+        pars = params(accs)
+        @test only(keys(pars)) == @vn(x.a)
         @test retval == 2 * params[@vn(x.a)]
     end
 
@@ -106,10 +106,10 @@ using VarNames
             OriginalSpace(),
             Wren.default_accumulators(),
         )
-        raw_values = get_raw_values(accs)
-        @test size(raw_values.data.x) == (2, 2) # tests that templated_setindex worked
-        a1 = raw_values[@vn(x[1, 1].a)]
-        a2 = raw_values[@vn(x[2, 2].a)]
+        pars = params(accs)
+        @test size(pars.data.x) == (2, 2) # tests that templated_setindex worked
+        a1 = pars[@vn(x[1, 1].a)]
+        a2 = pars[@vn(x[2, 2].a)]
         @test retval == (a1, a2)
 
         # With FromParams
@@ -127,13 +127,13 @@ using VarNames
             OriginalSpace(),
             Wren.default_accumulators(),
         )
-        raw_values = get_raw_values(accs)
+        pars = params(accs)
 
         @test retval == (first_a, second_a)
-        @test Set(keys(raw_values)) == Set([@vn(x[1, 1].a), @vn(x[2, 2].a)])
-        @test raw_values[@vn(x[1].a)] == first_a
-        @test raw_values[@vn(x[2, 2].a)] == second_a
-        @test getlogprior(accs) ≈
+        @test Set(keys(pars)) == Set([@vn(x[1, 1].a), @vn(x[2, 2].a)])
+        @test pars[@vn(x[1].a)] == first_a
+        @test pars[@vn(x[2, 2].a)] == second_a
+        @test logprior(accs) ≈
               logdensityof(Normal(), first_a) + logdensityof(Normal(), second_a)
     end
 
@@ -167,9 +167,9 @@ using VarNames
         )
 
         @test retval == b
-        @test get_raw_values(accs) == params
-        @test getlogprior(accs) ≈ logdensityof(Normal(), a) + logdensityof(Normal(a), b)
-        @test getloglikelihood(accs) ≈ logdensityof(Normal(a), obs)
+        @test params(accs) == params
+        @test logprior(accs) ≈ logdensityof(Normal(), a) + logdensityof(Normal(a), b)
+        @test loglikelihood(accs) ≈ logdensityof(Normal(a), obs)
     end
 
     @testset "empty submodel" begin
@@ -191,8 +191,8 @@ using VarNames
             Wren.default_accumulators(),
         )
         @test retval == 42
-        @test get_raw_values(accs) == VarNamedTuple()
-        @test iszero(getlogjoint(accs))
+        @test params(accs) == VarNamedTuple()
+        @test iszero(logjoint(accs))
     end
 
     @testset "nested submodels" begin
@@ -217,9 +217,9 @@ using VarNames
             OriginalSpace(),
             Wren.default_accumulators(),
         )
-        rawvals = get_raw_values(accs)
-        @test only(keys(rawvals)) == @vn(x.y.a)
-        @test retval ≈ 2 * rawvals[@vn(x.y.a)] + 2
+        pars = params(accs)
+        @test only(keys(pars)) == @vn(x.y.a)
+        @test retval ≈ 2 * pars[@vn(x.y.a)] + 2
 
         # With FromParams
         a = 0.75
@@ -231,8 +231,8 @@ using VarNames
         retval, accs =
             evaluate(nested_model, source, OriginalSpace(), Wren.default_accumulators())
         @test retval ≈ 2a + 2
-        @test get_raw_values(accs) == params
-        @test getlogprior(accs) ≈ logdensityof(Normal(), a)
+        @test params(accs) == params
+        @test logprior(accs) ≈ logdensityof(Normal(), a)
     end
 end
 

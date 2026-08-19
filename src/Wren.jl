@@ -6,6 +6,7 @@ using DocStringExtensions: TYPEDFIELDS
 using LogDensityProblems: LogDensityProblems
 using Random: AbstractRNG, default_rng
 using VarNames: VarNames, varname, VarName, VarNamedTuple
+using StatsAPI: StatsAPI
 using VectorBijectors: VectorBijectors
 
 include("expr.jl")
@@ -19,12 +20,12 @@ using .Expressions:
     _show_wren_exprs,
     to_wren_exprs
 
+include("space.jl")
 include("accs/accs.jl")
 include("accs/logp.jl")
 include("accs/vnt.jl")
-include("accs/raw_values.jl")
-include("space.jl")
-include("accs/vector_values.jl")
+include("accs/params.jl")
+include("accs/vectorised_params.jl")
 include("accs/accessors.jl")
 include("latents/latents.jl")
 include("model.jl")
@@ -52,7 +53,7 @@ export @model,
     AsOriginal,
     TransformedValue,
     VecModel,
-    VectorValueAccumulator,
+    VectorisedParamsAccumulator,
     WithBackend,
     WithExpectedResult,
     OriginalSpace,
@@ -60,15 +61,14 @@ export @model,
     apply_parameter_space,
     condition,
     conditioned,
+    rand_with_logp,
     evaluate,
     get_latent,
-    get_raw_values,
-    get_vector_values,
-    getlogjac,
-    getlogjoint,
-    getlogjoint_transformed,
-    getloglikelihood,
-    getlogprior,
+    vectorised_params,
+    logjac,
+    logjoint,
+    logjoint_transformed,
+    logprior,
     internal_values_as_vector,
     lp,
     lp_and_grad,
@@ -82,5 +82,8 @@ export @vn, @vnt, VarNamedTuple, VarName
 
 using DensityInterface: logdensityof
 export logdensityof
+
+using StatsAPI: params, loglikelihood
+export params, loglikelihood
 
 end # module Wren

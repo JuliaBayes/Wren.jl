@@ -1,6 +1,6 @@
 """
     VecModel(model, adtype; params=FromPrior(),
-             getlogp=getlogjoint_transformed,
+             get_logp=logjoint_transformed,
              parameter_space=UnconstrainedSpace())
 
 A model represented by a single parameter vector.
@@ -10,13 +10,13 @@ A model represented by a single parameter vector.
 assumes that the model's latent variables, their dimensions, and their order remain fixed
 between evaluations.
 
-Use [`rand`](@ref) to draw a compatible parameter vector, [`lp`](@ref) to evaluate its
+Use [`rand`](@ref) to sample a compatible parameter vector, [`lp`](@ref) to evaluate its
 transformed-space log joint density, and [`lp_and_grad`](@ref) or [`lp_and_grad!`](@ref) to
 differentiate it with the supplied `adtype`. Pass `nothing` as the `adtype` to construct a
 log-density-only model without loading or preparing an AD backend.
 
 By default the vector is in [`UnconstrainedSpace`](@ref) and `lp` returns
-[`getlogjoint_transformed`](@ref). Use the `parameter_space` and `getlogp` keywords to
+[`logjoint_transformed`](@ref). Use the `parameter_space` and `get_logp` keywords to
 select different behaviour.
 """
 struct _VecModelLP{
@@ -31,7 +31,7 @@ struct _VecModelLP{
     evaluation_fn::E
     model_args::A
     conditioned::C
-    getlogp::F
+    get_logp::F
     parameter_space::S
     ranges_and_transforms::R
     accs::AC
@@ -42,14 +42,14 @@ function _vecmodel_lp(
     evaluation_fn,
     model_args::NamedTuple,
     conditioned::VarNamedTuple,
-    getlogp,
+    get_logp,
     parameter_space::AbstractParameterSpace,
     ranges_and_transforms::VarNamedTuple,
     accs::AccumulatorTuple,
 )
     source = FromVector(params, ranges_and_transforms)
     _, accs = evaluation_fn(source, parameter_space, accs, model_args, conditioned)
-    return getlogp(accs)
+    return get_logp(accs)
 end
 
 function (f::_VecModelLP)(params::AbstractVector)
@@ -58,7 +58,7 @@ function (f::_VecModelLP)(params::AbstractVector)
         f.evaluation_fn,
         f.model_args,
         f.conditioned,
-        f.getlogp,
+        f.get_logp,
         f.parameter_space,
         f.ranges_and_transforms,
         f.accs,
@@ -81,7 +81,7 @@ struct VecModel{
 }
     model::M
     adtype::A
-    getlogp::F
+    get_logp::F
     parameter_space::S
     ranges_and_transforms::R
     accs::AC
@@ -96,7 +96,7 @@ end
 function VecModel(
     model::M,
     adtype::A,
-    getlogp::F,
+    get_logp::F,
     parameter_space::S,
     ranges_and_transforms::R,
     params::X,
@@ -117,7 +117,7 @@ function VecModel(
         model.evaluation_fn,
         model.args,
         model.conditioned,
-        getlogp,
+        get_logp,
         parameter_space,
         ranges_and_transforms,
         accs,
@@ -126,7 +126,7 @@ function VecModel(
         model.evaluation_fn,
         model.args,
         model.conditioned,
-        getlogp,
+        get_logp,
         parameter_space,
         ranges_and_transforms,
         accs,
@@ -141,7 +141,7 @@ function VecModel(
     return VecModel(
         model,
         adtype,
-        getlogp,
+        get_logp,
         parameter_space,
         ranges_and_transforms,
         accs,
@@ -156,20 +156,20 @@ function VecModel(
     model::Model,
     adtype::Union{DI.AbstractADType,Nothing};
     params::Union{VarNamedTuple,AbstractLatentSource}=FromPrior(),
-    getlogp=getlogjoint_transformed,
+    get_logp=logjoint_transformed,
     parameter_space::AbstractParameterSpace=UnconstrainedSpace(),
 )
     values = if params isa VarNamedTuple
         params
     else
-        _draw_vector_values(model, params, parameter_space)
+        _draw_vectorised_params(model, params, parameter_space)
     end
-    _validate_vector_values(values, parameter_space)
+    _validate_vectorised_params(values, parameter_space)
     ranges_and_transforms, sample = _ranges_and_params(values)
-    return VecModel(model, adtype, getlogp, parameter_space, ranges_and_transforms, sample)
+    return VecModel(model, adtype, get_logp, parameter_space, ranges_and_transforms, sample)
 end
 
-function _validate_vector_values(
+function _validate_vectorised_params(
     values::VarNamedTuple,
     parameter_space::AbstractParameterSpace,
 )
@@ -185,14 +185,14 @@ function _validate_vector_values(
     return nothing
 end
 
-function _draw_vector_values(
+function _draw_vectorised_params(
     model::Model,
     source::AbstractLatentSource,
     parameter_space::AbstractParameterSpace,
 )
-    accs = AccumulatorTuple(VectorValueAccumulator())
+    accs = AccumulatorTuple(VectorisedParamsAccumulator())
     _, accs = evaluate(model, source, parameter_space, accs)
-    return get_vector_values(accs)
+    return vectorised_params(accs)
 end
 
 function _ranges_and_params(values::VarNamedTuple)
@@ -226,7 +226,7 @@ end
 """
     lp(vecmodel::VecModel, params::AbstractVector)
 
-Evaluate `vecmodel.getlogp` in the vector model's parameter space.
+Evaluate `vecmodel.get_logp` in the vector model's parameter space.
 """
 function lp(vecmodel::VecModel, params::AbstractVector)
     return vecmodel.lp_func(params)
@@ -258,7 +258,7 @@ function lp_and_grad(vecmodel::VecModel, params::AbstractVector)
             DI.Constant(vecmodel.model.evaluation_fn),
             DI.Constant(vecmodel.model.args),
             DI.Constant(vecmodel.model.conditioned),
-            DI.Constant(vecmodel.getlogp),
+            DI.Constant(vecmodel.get_logp),
             DI.Constant(vecmodel.parameter_space),
             DI.Constant(vecmodel.ranges_and_transforms),
             DI.Constant(vecmodel.accs),
@@ -305,7 +305,7 @@ function lp_and_grad!(grad::AbstractVector, vecmodel::VecModel, params::Abstract
             DI.Constant(vecmodel.model.evaluation_fn),
             DI.Constant(vecmodel.model.args),
             DI.Constant(vecmodel.model.conditioned),
-            DI.Constant(vecmodel.getlogp),
+            DI.Constant(vecmodel.get_logp),
             DI.Constant(vecmodel.parameter_space),
             DI.Constant(vecmodel.ranges_and_transforms),
             DI.Constant(vecmodel.accs),
@@ -344,7 +344,7 @@ end
 
 """Draw a parameter vector compatible with `vecmodel`."""
 function Base.rand(rng::AbstractRNG, vecmodel::VecModel)
-    values = _draw_vector_values(vecmodel.model, FromPrior(rng), vecmodel.parameter_space)
+    values = _draw_vectorised_params(vecmodel.model, FromPrior(rng), vecmodel.parameter_space)
     ranges_and_transforms, params = _ranges_and_params(values)
     ranges_and_transforms == vecmodel.ranges_and_transforms || throw(
         ArgumentError(
@@ -356,3 +356,4 @@ function Base.rand(rng::AbstractRNG, vecmodel::VecModel)
 end
 
 Base.rand(vecmodel::VecModel) = rand(default_rng(), vecmodel)
+
