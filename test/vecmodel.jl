@@ -1,6 +1,5 @@
 module WrenVecModelTests
 
-using Bijectors
 using DifferentiationInterface: AutoForwardDiff
 using Distributions
 using ForwardDiff

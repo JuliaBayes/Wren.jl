@@ -1,12 +1,12 @@
 module WrenParamsWithStatsTests
 
-using Bijectors
 using DifferentiationInterface: AutoForwardDiff
 using Distributions
 using ForwardDiff
 using LinearAlgebra
 using Random
 using Test
+using VectorBijectors
 using Wren
 
 @model function stats_model(observation)
@@ -39,11 +39,8 @@ end
     @test from_prior.stats.logjoint ≈
           from_prior.stats.logprior + from_prior.stats.loglikelihood
 
-    without_log_probs = ParamsWithStats(
-        FromParams(from_prior.params),
-        model;
-        include_log_probs=false,
-    )
+    without_log_probs =
+        ParamsWithStats(FromParams(from_prior.params), model; include_log_probs=false)
     @test without_log_probs.params == from_prior.params
     @test isempty(without_log_probs.stats)
 
@@ -58,27 +55,20 @@ end
     @test from_accs.stats.chain == 2
     @test from_accs.stats.logjoint ≈ from_prior.stats.logjoint
 
-    vecmodel = VecModel(
-        model,
-        AutoForwardDiff();
-        params=FromPrior(Xoshiro(602)),
-    )
+    vecmodel = VecModel(model, AutoForwardDiff(); params=FromPrior(Xoshiro(602)))
     vector_params = rand(Xoshiro(603), vecmodel)
     from_vecmodel = ParamsWithStats(vector_params, vecmodel)
     @test from_vecmodel.stats.logjoint ≈
           from_vecmodel.stats.logprior + from_vecmodel.stats.loglikelihood
-    @test ParamsWithStats(
-        vector_params,
-        vecmodel;
-        include_log_probs=false,
-    ).params == from_vecmodel.params
+    @test ParamsWithStats(vector_params, vecmodel; include_log_probs=false).params ==
+          from_vecmodel.params
 
     @test_throws ArgumentError ParamsWithStats(vector_params[1:(end-1)], vecmodel)
     @test_throws ArgumentError ParamsWithStats(vcat(vector_params, 0.0), vecmodel)
 
     should_error = Ref(false)
     fixed_transforms = @vnt begin
-        x := FixedTransform(Wren.from_vec(Normal()))
+        x := FixedTransform(VectorBijectors.from_vec(Normal()))
     end
     fixed_space = TestFixedSpace(fixed_transforms)
     fixed_vecmodel = VecModel(
@@ -89,11 +79,7 @@ end
     )
     fixed_params = copy(fixed_vecmodel.sample)
     should_error[] = true
-    fixed_pws = ParamsWithStats(
-        fixed_params,
-        fixed_vecmodel;
-        include_log_probs=false,
-    )
+    fixed_pws = ParamsWithStats(fixed_params, fixed_vecmodel; include_log_probs=false)
     @test fixed_pws.params[@vn(x)] ≈ only(fixed_params)
     @test_throws ErrorException ParamsWithStats(fixed_params, fixed_vecmodel)
 

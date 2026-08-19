@@ -103,18 +103,10 @@ function _raw_params_from_fixed_transforms(
 )
     raw_params = VarNamedTuple()
     for (vn, rt) in pairs(ranges_and_transforms)
-        template = get(
-            ranges_and_transforms.data,
-            VarNames.getsym(vn),
-            VarNames.NoTemplate(),
-        )
+        template =
+            get(ranges_and_transforms.data, VarNames.getsym(vn), VarNames.NoTemplate())
         raw_value = rt.transform.transform(params[rt.range])
-        raw_params = VarNames.templated_setindex!!(
-            raw_params,
-            raw_value,
-            vn,
-            template,
-        )
+        raw_params = VarNames.templated_setindex!!(raw_params, raw_value, vn, template)
     end
     return VarNames.densify!!(raw_params)
 end
@@ -139,10 +131,8 @@ function ParamsWithStats(
 )
     _check_vecmodel_dimension(params, vecmodel)
     if !include_log_probs && _all_fixed_transforms(vecmodel)
-        raw_params = _raw_params_from_fixed_transforms(
-            params,
-            vecmodel.ranges_and_transforms,
-        )
+        raw_params =
+            _raw_params_from_fixed_transforms(params, vecmodel.ranges_and_transforms)
         return ParamsWithStats(raw_params, stats)
     end
 

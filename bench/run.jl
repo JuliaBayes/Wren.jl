@@ -3,7 +3,6 @@ if VERSION < v"1.13-"
 end
 
 using ADTypes
-using Bijectors
 using Chairmarks: @be
 using Differ
 using Distributions

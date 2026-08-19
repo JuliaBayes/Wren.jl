@@ -16,7 +16,7 @@ function _get_vector_tval(
 end
 
 function _get_vector_tval(val, ::TransformedValue{<:Any,AsOriginal}, vn, dist, logjac)
-    value = inverse(from_vec(dist))(val)
+    value = VectorBijectors.inverse(VectorBijectors.from_vec(dist))(val)
     return TransformedValue(value, AsVec())
 end
 
@@ -30,7 +30,7 @@ function _get_vector_tval(
     dist,
     logjac,
 )
-    value = inverse(from_vec(dist))(val)
+    value = VectorBijectors.inverse(VectorBijectors.from_vec(dist))(val)
     return TransformedValue(value, AsVec())
 end
 
@@ -48,9 +48,9 @@ An accumulator that collects parameter values as
 `TransformedValue{<:AbstractVector}` objects.
 
 Values already represented as vectors are stored unchanged. Values represented by
-[`AsOriginal`](@ref) are vectorised using [`from_vec`](@ref) and stored as [`AsVec`](@ref).
-Thus, the stored transform agrees with the selected parameter space while every stored
-value has a uniform vector representation.
+[`AsOriginal`](@ref) are vectorised using [`VectorBijectors.from_vec`](@ref) and stored as
+[`AsVec`](@ref). Thus, the stored transform agrees with the selected parameter space while
+every stored value has a uniform vector representation.
 """
 VectorValueAccumulator() = VNTAccumulator{VECTOR_VALUE_ACCNAME}(_get_vector_tval)
 

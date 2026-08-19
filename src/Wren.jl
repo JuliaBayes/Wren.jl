@@ -1,13 +1,12 @@
 module Wren
 
-using ChangesOfVariables: ChangesOfVariables
 using DensityInterface: DensityInterface, logdensityof
 import DifferentiationInterface as DI
 using DocStringExtensions: TYPEDFIELDS
-using InverseFunctions: inverse
 using LogDensityProblems: LogDensityProblems
 using Random: AbstractRNG, default_rng
 using VarNames: VarNames, varname, VarName, VarNamedTuple
+using VectorBijectors: VectorBijectors
 
 include("expr.jl")
 using .Expressions:

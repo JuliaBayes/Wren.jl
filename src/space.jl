@@ -60,12 +60,6 @@ target_transform(::UnconstrainedSpace, ::VarName) = AsUnconstrainedVec()
 struct OriginalSpace <: AbstractParameterSpace end
 target_transform(::OriginalSpace, ::VarName) = AsVec()
 
-"""Return the inverse transform from an unconstrained vector to model space."""
-function from_unconstrained_vec end
-
-"""Return the inverse vectorisation transform from an original-space vector."""
-function from_vec end
-
 """
     apply_parameter_space(parameter_space, tval, vn, dist)
 
@@ -79,17 +73,17 @@ function apply_parameter_space(
     vn::VarName,
     dist,
 )
-    inverse_link = from_unconstrained_vec(dist)
+    inverse_link = VectorBijectors.from_linked_vec(dist)
     raw_value, inverse_logjac =
-        ChangesOfVariables.with_logabsdet_jacobian(inverse_link, tval.value)
+        VectorBijectors.with_logabsdet_jacobian(inverse_link, tval.value)
     target = target_transform(parameter_space, vn)
     return if target isa AsUnconstrainedVec
         raw_value, tval, -inverse_logjac
     elseif target isa AsVec || target isa AsOriginal
         raw_value, TransformedValue(raw_value, AsOriginal()), zero(LogProbType)
     elseif target isa FixedTransform
-        forward = inverse(target.transform)
-        value, logjac = ChangesOfVariables.with_logabsdet_jacobian(forward, raw_value)
+        forward = VectorBijectors.inverse(target.transform)
+        value, logjac = VectorBijectors.with_logabsdet_jacobian(forward, raw_value)
         raw_value, TransformedValue(value, target), logjac
     else
         error("unknown target transform: $target")
@@ -102,17 +96,17 @@ function apply_parameter_space(
     vn::VarName,
     dist,
 )
-    raw_value = from_vec(dist)(tval.value)
+    raw_value = VectorBijectors.from_vec(dist)(tval.value)
     target = target_transform(parameter_space, vn)
     return if target isa AsUnconstrainedVec
-        forward = inverse(from_unconstrained_vec(dist))
-        value, logjac = ChangesOfVariables.with_logabsdet_jacobian(forward, raw_value)
+        forward = VectorBijectors.inverse(VectorBijectors.from_linked_vec(dist))
+        value, logjac = VectorBijectors.with_logabsdet_jacobian(forward, raw_value)
         raw_value, TransformedValue(value, AsUnconstrainedVec()), logjac
     elseif target isa AsVec || target isa AsOriginal
         raw_value, tval, zero(LogProbType)
     elseif target isa FixedTransform
-        forward = inverse(target.transform)
-        value, logjac = ChangesOfVariables.with_logabsdet_jacobian(forward, raw_value)
+        forward = VectorBijectors.inverse(target.transform)
+        value, logjac = VectorBijectors.with_logabsdet_jacobian(forward, raw_value)
         raw_value, TransformedValue(value, target), logjac
     else
         error("unknown target transform: $target")
@@ -128,14 +122,14 @@ function apply_parameter_space(
     raw_value = tval.value
     target = target_transform(parameter_space, vn)
     return if target isa AsUnconstrainedVec
-        forward = inverse(from_unconstrained_vec(dist))
-        value, logjac = ChangesOfVariables.with_logabsdet_jacobian(forward, raw_value)
+        forward = VectorBijectors.inverse(VectorBijectors.from_linked_vec(dist))
+        value, logjac = VectorBijectors.with_logabsdet_jacobian(forward, raw_value)
         raw_value, TransformedValue(value, AsUnconstrainedVec()), logjac
     elseif target isa AsVec || target isa AsOriginal
         raw_value, tval, zero(LogProbType)
     elseif target isa FixedTransform
-        forward = inverse(target.transform)
-        value, logjac = ChangesOfVariables.with_logabsdet_jacobian(forward, raw_value)
+        forward = VectorBijectors.inverse(target.transform)
+        value, logjac = VectorBijectors.with_logabsdet_jacobian(forward, raw_value)
         raw_value, TransformedValue(value, target), logjac
     else
         error("unknown target transform: $target")
@@ -151,8 +145,8 @@ function apply_parameter_space(
     target = target_transform(parameter_space, vn)
     return if target isa AsUnconstrainedVec
         raw_value = tval.transform.transform(tval.value)
-        forward = inverse(from_unconstrained_vec(dist))
-        value, logjac = ChangesOfVariables.with_logabsdet_jacobian(forward, raw_value)
+        forward = VectorBijectors.inverse(VectorBijectors.from_linked_vec(dist))
+        value, logjac = VectorBijectors.with_logabsdet_jacobian(forward, raw_value)
         raw_value, TransformedValue(value, AsUnconstrainedVec()), logjac
     elseif target isa AsVec || target isa AsOriginal
         raw_value = tval.transform.transform(tval.value)
@@ -161,7 +155,7 @@ function apply_parameter_space(
         target == tval.transform ||
             throw(ArgumentError("latent variable $vn has an incompatible fixed transform"))
         raw_value, inverse_logjac =
-            ChangesOfVariables.with_logabsdet_jacobian(tval.transform.transform, tval.value)
+            VectorBijectors.with_logabsdet_jacobian(tval.transform.transform, tval.value)
         raw_value, tval, -inverse_logjac
     else
         error("unknown target transform: $target")
