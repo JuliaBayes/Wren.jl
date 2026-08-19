@@ -181,7 +181,8 @@ end
                 retval = x ~ parser_inner()
             end
 
-            stmt = only(filter(x -> x isa Wren.AbstractWrenExpr, tilde_value_position().stmts))
+            stmt =
+                only(filter(x -> x isa Wren.AbstractWrenExpr, tilde_value_position().stmts))
             @test stmt isa Wren.WrenExpr
             @test stmt.head == :(=)
             @test stmt.args[1] == :retval

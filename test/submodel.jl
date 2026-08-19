@@ -13,8 +13,8 @@ using VarNames
             return 2a
         end
         @model function returning_outer(inner)
-            x = nothing # This shouldn't be overwritten by the next statement.
             inner_retval = x ~ inner
+            # x is now the child params VarNamedTuple
             return (x, inner_retval + 1)
         end
 
@@ -25,27 +25,27 @@ using VarNames
             OriginalSpace(),
             Wren.default_accumulators(),
         )
-        pars = params(accs)
-        a = pars[@vn(x.a)]
-        @test retval == (nothing, 2a + 1)
-        @test only(keys(pars)) == @vn(x.a)
+        out_pars = params(accs)
+        a = out_pars[@vn(x.a)]
+        @test retval == (VarNamedTuple(; a=a), 2a + 1)
+        @test only(keys(out_pars)) == @vn(x.a)
         @test logprior(accs) ≈ logdensityof(Normal(), a)
         @test iszero(loglikelihood(accs))
 
         # With FromParams
-        vnt = @vnt begin
+        in_pars = @vnt begin
             x.a := 0.5
         end
         retval, accs = evaluate(
             returning_outer(returning_inner()),
-            FromParams(vnt),
+            FromParams(in_pars),
             OriginalSpace(),
             Wren.default_accumulators(),
         )
-        pars = params(accs)
-        @test retval == (nothing, 2 * vnt[@vn(x.a)] + 1)
-        @test only(keys(pars)) == @vn(x.a)
-        @test logprior(accs) ≈ logdensityof(Normal(), vnt[@vn(x.a)])
+        out_pars = params(accs)
+        @test retval == (VarNamedTuple(; a=in_pars[@vn(x.a)]), 2 * in_pars[@vn(x.a)] + 1)
+        @test only(keys(out_pars)) == @vn(x.a)
+        @test logprior(accs) ≈ logdensityof(Normal(), in_pars[@vn(x.a)])
         @test iszero(loglikelihood(accs))
     end
 
@@ -67,24 +67,24 @@ using VarNames
             OriginalSpace(),
             Wren.default_accumulators(),
         )
-        pars = params(accs)
-        @test only(keys(pars)) == @vn(x.a)
-        a = pars[@vn(x.a)]
+        out_pars = params(accs)
+        @test only(keys(out_pars)) == @vn(x.a)
+        a = out_pars[@vn(x.a)]
         @test retval == 2a
 
         # With FromParams
-        vnt = @vnt begin
+        in_pars = @vnt begin
             x.a := 0.5
         end
         retval, accs = evaluate(
             undefined_namespace_outer(returning_inner()),
-            FromParams(vnt),
+            FromParams(in_pars),
             OriginalSpace(),
             Wren.default_accumulators(),
         )
-        pars = params(accs)
-        @test only(keys(pars)) == @vn(x.a)
-        @test retval == 2 * vnt[@vn(x.a)]
+        out_pars = params(accs)
+        @test only(keys(out_pars)) == @vn(x.a)
+        @test retval == 2 * in_pars[@vn(x.a)]
     end
 
     @testset "indexed namespace uses the outer template" begin
@@ -106,33 +106,32 @@ using VarNames
             OriginalSpace(),
             Wren.default_accumulators(),
         )
-        pars = params(accs)
-        @test size(pars.data.x) == (2, 2) # tests that templated_setindex worked
-        a1 = pars[@vn(x[1, 1].a)]
-        a2 = pars[@vn(x[2, 2].a)]
+        out_pars = params(accs)
+        @test size(out_pars.data.x) == (2, 2) # tests that templated_setindex worked
+        a1 = out_pars[@vn(x[1, 1].a)]
+        a2 = out_pars[@vn(x[2, 2].a)]
         @test retval == (a1, a2)
 
         # With FromParams
         first_a = 0.25
         second_a = -0.5
-        vnt = @vnt begin
+        in_pars = @vnt begin
             @template x = zeros(2, 2)
             x[1].a := first_a
             x[2, 2].a := second_a
         end
-        source = FromParams(vnt)
         retval, accs = evaluate(
             indexed_outer(indexed_inner()),
-            source,
+            FromParams(in_pars),
             OriginalSpace(),
             Wren.default_accumulators(),
         )
-        pars = params(accs)
+        out_pars = params(accs)
 
         @test retval == (first_a, second_a)
-        @test Set(keys(pars)) == Set([@vn(x[1, 1].a), @vn(x[2, 2].a)])
-        @test pars[@vn(x[1].a)] == first_a
-        @test pars[@vn(x[2, 2].a)] == second_a
+        @test Set(keys(out_pars)) == Set([@vn(x[1, 1].a), @vn(x[2, 2].a)])
+        @test out_pars[@vn(x[1].a)] == first_a
+        @test out_pars[@vn(x[2, 2].a)] == second_a
         @test logprior(accs) ≈
               logdensityof(Normal(), first_a) + logdensityof(Normal(), second_a)
     end
@@ -154,20 +153,19 @@ using VarNames
         a = 0.4
         b = -0.2
         obs = 0.1
-        vnt = @vnt begin
+        in_pars = @vnt begin
             x.a := a
             b := b
         end
-        source = FromParams(vnt)
         retval, accs = evaluate(
             likelihood_outer(likelihood_inner() | VarNamedTuple(; obs=obs)),
-            source,
+            FromParams(in_pars),
             OriginalSpace(),
             Wren.default_accumulators(),
         )
 
         @test retval == b
-        @test params(accs) == vnt
+        @test params(accs) == in_pars
         @test logprior(accs) ≈ logdensityof(Normal(), a) + logdensityof(Normal(a), b)
         @test loglikelihood(accs) ≈ logdensityof(Normal(a), obs)
     end
@@ -217,21 +215,24 @@ using VarNames
             OriginalSpace(),
             Wren.default_accumulators(),
         )
-        pars = params(accs)
-        @test only(keys(pars)) == @vn(x.y.a)
-        @test retval ≈ 2 * pars[@vn(x.y.a)] + 2
+        out_pars = params(accs)
+        @test only(keys(out_pars)) == @vn(x.y.a)
+        @test retval ≈ 2 * out_pars[@vn(x.y.a)] + 2
 
         # With FromParams
         a = 0.75
-        vnt = @vnt begin
+        in_pars = @vnt begin
             x.y.a := a
         end
-        source = FromParams(vnt)
         nested_model = outer_model(middle_model(returning_inner()))
-        retval, accs =
-            evaluate(nested_model, source, OriginalSpace(), Wren.default_accumulators())
+        retval, accs = evaluate(
+            nested_model,
+            FromParams(in_pars),
+            OriginalSpace(),
+            Wren.default_accumulators(),
+        )
         @test retval ≈ 2a + 2
-        @test params(accs) == vnt
+        @test params(accs) == in_pars
         @test logprior(accs) ≈ logdensityof(Normal(), a)
     end
 end

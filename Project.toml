@@ -20,7 +20,6 @@ VectorBijectors = "55802ec2-189d-45e6-a786-b4d97e4775f1"
 
 [weakdeps]
 ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
-Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
 EnzymeCore = "f151be2c-9106-41f4-ab19-57ee4f262869"
 Mooncake = "da2b9cff-9c12-43a0-ae48-6db2b0edb7d6"
@@ -35,12 +34,11 @@ WrenMooncakeExt = ["Mooncake"]
 WrenReactantExt = ["ADTypes", "Enzyme", "Reactant"]
 
 [compat]
-Accessors = "0.1"
 ADTypes = "1"
+Accessors = "0.1"
 Chairmarks = "1"
 DensityInterface = "0.4"
 DifferentiationInterface = "0.7"
-Distributions = "0.25"
 DocStringExtensions = "0.9"
 Enzyme = "0.13"
 EnzymeCore = "0.6 - 0.8"

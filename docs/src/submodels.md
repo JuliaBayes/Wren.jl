@@ -43,7 +43,31 @@ TODO, see https://github.com/JuliaBayes/Wren.jl/issues/4.
 
 ## Accessing latent values
 
-TODO, see https://github.com/JuliaBayes/Wren.jl/issues/3.
+We claimed above that `a ~ inner()` should store the result of `rand(inner())` in the variable `a`.
+In the examples above, we demonstrated this by evaluating the entire parent model end-to-end.
+However, one might also want to access the latent variables of a submodel *inside* the parent model, during its execution.
+
+You can do this directly by indexing into `a` with the relevant `VarName`:
+
+```@example submodel
+@model function outer()
+    a ~ inner()
+    ax = a[@vn(x)]
+    # Make `y`'s support dependent on the value of `a.x`:
+    y ~ Uniform(ax, ax + 0.01)
+end
+
+rand(outer())
+```
+
+!!! note "Performance"
+
+    In general, this means that the submodel *must* be evaluated in a way where it also collects its parameter values (a 'trace').
+    This is not always the case when evaluating models: for example if you only care about log-probabilities, you can get away without collecting a trace.
+    The evaluation of submodels therefore comes with a performance cost: this is usually very small but can depend on the contents of the submodel.
+
+    This performance cost can in principle be elided if Wren can prove that the submodel's latents are never used again in the parent model.
+    Luckily, Wren models store their own AST so this is something that should be very possible to do!
 
 ## Accessing return values
 

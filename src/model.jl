@@ -53,6 +53,22 @@ function remove_escapes(expr::Expr)
     return Expr(expr.head, map(remove_escapes, expr.args)...)
 end
 
+function evaluate_submodel(rhs, latent_source, parameter_space, accs, vn)
+    child_source = scope(latent_source, vn)
+    child_space = scope(parameter_space, vn)
+    child_accs = map(split, accs)
+    had_params = haskey(child_accs, Val(PARAMS_ACCNAME))
+    if !had_params
+        child_accs = setacc!!(child_accs, ParamsAccumulator())
+    end
+    retval, child_accs = evaluate(rhs, child_source, child_space, child_accs)
+    child_params = StatsAPI.params(child_accs)
+    if !had_params
+        child_accs = deleteacc!!(child_accs, Val(PARAMS_ACCNAME))
+    end
+    return retval, child_params, child_accs
+end
+
 assign_or_set!!(lhs::Symbol, rhs, vn) = :($lhs = $rhs)
 function assign_or_set!!(lhs::Expr, rhs, vn)
     left_top_sym = get_top_level_symbol(lhs)
@@ -84,7 +100,7 @@ function emit_model_expr(
 end
 
 function emit_model_expr(stmt::Sample, accs, conditioned, latent_source, parameter_space)
-    @gensym rhs val tval init_tval logjac vn child_source child_space child_accs
+    @gensym rhs val tval init_tval logjac vn child_accs child_params
     rhs_expr = emit_model_expr(stmt.rhs, accs, conditioned, latent_source, parameter_space)
     vn_expr = remove_escapes(varname(stmt.lhs, false))
     template = get_top_level_symbol(stmt.lhs)
@@ -92,10 +108,9 @@ function emit_model_expr(stmt::Sample, accs, conditioned, latent_source, paramet
         $rhs = $rhs_expr
         $vn = $vn_expr
         if $rhs isa $(Model)
-            $child_source = $(scope)($latent_source, $vn)
-            $child_space = $(scope)($parameter_space, $vn)
-            $child_accs = $(map)($(split), $accs)
-            $val, $child_accs = $(evaluate)($rhs, $child_source, $child_space, $child_accs)
+            $val, $child_params, $child_accs =
+                $(evaluate_submodel)($rhs, $latent_source, $parameter_space, $accs, $vn)
+            $(assign_or_set!!(stmt.lhs, child_params, vn))
             $accs = $(combine_with_namespace)(
                 $accs,
                 $child_accs,
