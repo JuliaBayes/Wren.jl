@@ -17,21 +17,24 @@ end
 rand(inner())
 ```
 
-When we write `x ~ Normal()`, what happens is that the result of `rand(Normal())` (i.e., a float) is stored in the parameter `x`.
+When we write `x ~ Normal()` in the model above, what happens is that the result of `rand(Normal())` (i.e., a float) is stored in the parameter `x`.
 
-Likewise, when we write `a ~ inner()`, the result of `rand(inner())` (a VarNamedTuple) is stored in the parameter `a`.
-
-We could equivalently say that all the variables inside `inner` are *prefixed* with `a`, but thinking of it in terms of `rand()` is more precise.
+Now in the next model, we'll write `a ~ inner()`, with a model on the right-hand side of `~` instead of a distribution:
 
 ```@example submodel
 @model function outer()
     a ~ inner()
 end
+```
 
+In an exactly analogous fashion to before, the result of `rand(inner())` (i.e., a VarNamedTuple) is stored in the parameter `a`.
+We could equivalently say that all the variables inside `inner` are *prefixed* with `a`, but thinking of it in terms of `rand()` is more precise.
+
+```@example submodel
 vnt = rand(outer())
 ```
 
-We can access the inner model by indexing into this:
+We can access the inner variable by indexing into this:
 
 ```@example submodel
 vnt[@vn(a.x)]
