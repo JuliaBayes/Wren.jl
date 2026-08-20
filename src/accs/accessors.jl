@@ -1,9 +1,9 @@
 """
-    params(accs::AccumulatorTuple)::VarNamedTuple
+    parameters(accs::AccumulatorTuple)::VarNamedTuple
 
 Return the accumulated latent parameter values.
 """
-StatsAPI.params(accs::AccumulatorTuple) = getacc(accs, Val(PARAMS_ACCNAME)).values
+VarNames.parameters(accs::AccumulatorTuple) = getacc(accs, Val(PARAMS_ACCNAME)).values
 
 """Return the vectorised parameter values."""
 vectorised_params(accs::AccumulatorTuple) =

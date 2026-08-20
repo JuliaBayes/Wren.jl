@@ -4,10 +4,10 @@ using DensityInterface: DensityInterface, logdensityof
 import DifferentiationInterface as DI
 using DocStringExtensions: TYPEDFIELDS
 using LogDensityProblems: LogDensityProblems
+using Plaice: Plaice
 using Random: AbstractRNG, default_rng
 using VarNames: VarNames, varname, VarName, VarNamedTuple
 using StatsAPI: StatsAPI
-using VectorBijectors: VectorBijectors
 
 include("expr.jl")
 using .Expressions:
@@ -57,7 +57,6 @@ export @model,
     WithBackend,
     WithExpectedResult,
     OriginalSpace,
-    ParamsWithStats,
     apply_parameter_space,
     condition,
     conditioned,
@@ -77,8 +76,8 @@ export @model,
     target_transform
 
 # Reexports
-using VarNames: @vn, @vnt, VarNamedTuple, VarName
-export @vn, @vnt, VarNamedTuple, VarName
+using VarNames: @vn, @vnt, VarNamedTuple, VarName, Draw, parameters, extras
+export @vn, @vnt, VarNamedTuple, VarName, Draw, parameters, extras
 
 using DensityInterface: logdensityof
 export logdensityof

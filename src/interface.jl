@@ -42,7 +42,7 @@ function Base.rand(rng::AbstractRNG, model::Model)
         OriginalSpace(),
         AccumulatorTuple(ParamsAccumulator()),
     )
-    return params(accs)
+    return VarNames.parameters(accs)
 end
 Base.rand(model::Model) = rand(default_rng(), model)
 

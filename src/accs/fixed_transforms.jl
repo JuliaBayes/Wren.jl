@@ -7,7 +7,7 @@ function _get_fixed_transform(
     vn,
     dist,
 ) where {V}
-    return FixedTransform(Bijectors.VectorBijectors.from_linked_vec(dist))
+    return FixedTransform(Plaice.from_unconstrained_vec(dist))
 end
 function _get_fixed_transform(
     val,
@@ -16,7 +16,7 @@ function _get_fixed_transform(
     vn,
     dist,
 ) where {V}
-    return FixedTransform(Bijectors.VectorBijectors.from_vec(dist))
+    return FixedTransform(Plaice.from_vec(dist))
 end
 function _get_fixed_transform(
     val,

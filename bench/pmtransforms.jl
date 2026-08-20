@@ -3,7 +3,7 @@ module PMTransforms
 using DensityInterface: DensityInterface
 using ProbabilityMeasures: ProbabilityMeasures as PM
 using Random: AbstractRNG, randn
-using VectorBijectors: VectorBijectors
+using Plaice: Plaice
 using Wren: Wren
 
 export Categorical, IsoNormal, MvCategorical
@@ -12,15 +12,15 @@ export Categorical, IsoNormal, MvCategorical
 
 struct Only end
 Only(x::AbstractVector{<:Number}) = x[]
-function VectorBijectors.with_logabsdet_jacobian(::Only, x::AbstractVector{<:Number})
+function Plaice.with_logabsdet_jacobian(::Only, x::AbstractVector{<:Number})
     return x[], zero(eltype(x))
 end
-VectorBijectors.inverse(::Only) = Vec()
+Plaice.inverse(::Only) = Vec()
 
 struct Vec end
 Vec(r) = [r]
-VectorBijectors.with_logabsdet_jacobian(::Vec, v) = ([v], zero(typeof(v)))
-VectorBijectors.inverse(::Vec) = Only()
+Plaice.with_logabsdet_jacobian(::Vec, v) = ([v], zero(typeof(v)))
+Plaice.inverse(::Vec) = Only()
 
 "An array of independent standard-normal variates with statically known shape."
 struct IsoNormal{N}
@@ -44,23 +44,23 @@ struct ToIsoNormalVec{N}
 end
 (::ToIsoNormalVec)(x::AbstractArray{<:Number}) = vec(x)
 
-function VectorBijectors.with_logabsdet_jacobian(
+function Plaice.with_logabsdet_jacobian(
     transform::FromIsoNormalVec,
     x::AbstractVector{<:Number},
 )
     return transform(x), zero(eltype(x))
 end
-function VectorBijectors.with_logabsdet_jacobian(
+function Plaice.with_logabsdet_jacobian(
     transform::ToIsoNormalVec,
     x::AbstractArray{<:Number},
 )
     return transform(x), zero(eltype(x))
 end
 
-VectorBijectors.inverse(transform::FromIsoNormalVec) = ToIsoNormalVec(transform.dims)
-VectorBijectors.inverse(transform::ToIsoNormalVec) = FromIsoNormalVec(transform.dims)
-VectorBijectors.from_linked_vec(d::IsoNormal) = FromIsoNormalVec(d.dims)
-VectorBijectors.from_vec(d::IsoNormal) = FromIsoNormalVec(d.dims)
+Plaice.inverse(transform::FromIsoNormalVec) = ToIsoNormalVec(transform.dims)
+Plaice.inverse(transform::ToIsoNormalVec) = FromIsoNormalVec(transform.dims)
+Plaice.from_unconstrained_vec(d::IsoNormal) = FromIsoNormalVec(d.dims)
+Plaice.from_vec(d::IsoNormal) = FromIsoNormalVec(d.dims)
 
 "A categorical measure parameterized by a probability vector."
 struct Categorical{P<:AbstractVector}

@@ -25,7 +25,7 @@ using VarNames
             OriginalSpace(),
             Wren.default_accumulators(),
         )
-        out_pars = params(accs)
+        out_pars = parameters(accs)
         a = out_pars[@vn(x.a)]
         @test retval == (VarNamedTuple(; a=a), 2a + 1)
         @test only(keys(out_pars)) == @vn(x.a)
@@ -42,7 +42,7 @@ using VarNames
             OriginalSpace(),
             Wren.default_accumulators(),
         )
-        out_pars = params(accs)
+        out_pars = parameters(accs)
         @test retval == (VarNamedTuple(; a=in_pars[@vn(x.a)]), 2 * in_pars[@vn(x.a)] + 1)
         @test only(keys(out_pars)) == @vn(x.a)
         @test logprior(accs) ≈ logdensityof(Normal(), in_pars[@vn(x.a)])
@@ -67,7 +67,7 @@ using VarNames
             OriginalSpace(),
             Wren.default_accumulators(),
         )
-        out_pars = params(accs)
+        out_pars = parameters(accs)
         @test only(keys(out_pars)) == @vn(x.a)
         a = out_pars[@vn(x.a)]
         @test retval == 2a
@@ -82,7 +82,7 @@ using VarNames
             OriginalSpace(),
             Wren.default_accumulators(),
         )
-        out_pars = params(accs)
+        out_pars = parameters(accs)
         @test only(keys(out_pars)) == @vn(x.a)
         @test retval == 2 * in_pars[@vn(x.a)]
     end
@@ -106,7 +106,7 @@ using VarNames
             OriginalSpace(),
             Wren.default_accumulators(),
         )
-        out_pars = params(accs)
+        out_pars = parameters(accs)
         @test size(out_pars.data.x) == (2, 2) # tests that templated_setindex worked
         a1 = out_pars[@vn(x[1, 1].a)]
         a2 = out_pars[@vn(x[2, 2].a)]
@@ -126,7 +126,7 @@ using VarNames
             OriginalSpace(),
             Wren.default_accumulators(),
         )
-        out_pars = params(accs)
+        out_pars = parameters(accs)
 
         @test retval == (first_a, second_a)
         @test Set(keys(out_pars)) == Set([@vn(x[1, 1].a), @vn(x[2, 2].a)])
@@ -165,7 +165,7 @@ using VarNames
         )
 
         @test retval == b
-        @test params(accs) == in_pars
+        @test parameters(accs) == in_pars
         @test logprior(accs) ≈ logdensityof(Normal(), a) + logdensityof(Normal(a), b)
         @test loglikelihood(accs) ≈ logdensityof(Normal(a), obs)
     end
@@ -189,7 +189,7 @@ using VarNames
             Wren.default_accumulators(),
         )
         @test retval == 42
-        @test params(accs) == VarNamedTuple()
+        @test parameters(accs) == VarNamedTuple()
         @test iszero(logjoint(accs))
     end
 
@@ -215,7 +215,7 @@ using VarNames
             OriginalSpace(),
             Wren.default_accumulators(),
         )
-        out_pars = params(accs)
+        out_pars = parameters(accs)
         @test only(keys(out_pars)) == @vn(x.y.a)
         @test retval ≈ 2 * out_pars[@vn(x.y.a)] + 2
 
@@ -232,7 +232,7 @@ using VarNames
             Wren.default_accumulators(),
         )
         @test retval ≈ 2a + 2
-        @test params(accs) == in_pars
+        @test parameters(accs) == in_pars
         @test logprior(accs) ≈ logdensityof(Normal(), a)
     end
 end

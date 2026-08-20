@@ -1,14 +1,4 @@
-"""
-    ParamsWithStats
-
-Model-space parameter values together with optional sampling statistics.
-"""
-struct ParamsWithStats{P<:VarNamedTuple,S<:NamedTuple}
-    params::P
-    stats::S
-end
-
-function _params_with_stats_accumulators(include_log_probs::Bool)
+function _draw_accumulators(include_log_probs::Bool)
     return if include_log_probs
         AccumulatorTuple(
             LogPriorAccumulator(),
@@ -20,12 +10,8 @@ function _params_with_stats_accumulators(include_log_probs::Bool)
     end
 end
 
-function _params_with_stats(
-    accs::AccumulatorTuple,
-    stats::NamedTuple,
-    include_log_probs::Bool,
-)
-    densified_params = VarNames.densify!!(params(accs))
+function _draw(accs::AccumulatorTuple, stats::NamedTuple, include_log_probs::Bool)
+    densified_params = VarNames.densify!!(VarNames.parameters(accs))
     if include_log_probs
         has_prior = haskey(accs, Val(LOG_PRIOR_ACCNAME))
         has_likelihood = haskey(accs, Val(LOG_LIKELIHOOD_ACCNAME))
@@ -35,11 +21,11 @@ function _params_with_stats(
             stats = merge(stats, (logjoint=logjoint(accs),))
         end
     end
-    return ParamsWithStats(densified_params, stats)
+    return VarNames.Draw(densified_params, stats)
 end
 
 """
-    ParamsWithStats(
+    VarNames.Draw(
         source::AbstractLatentSource,
         model::Model,
         stats::NamedTuple=NamedTuple();
@@ -49,19 +35,19 @@ end
 Evaluate `model` using `source` and return its model-space parameters. By default the log
 prior, log likelihood, and log joint are added to `stats`.
 """
-function ParamsWithStats(
+function VarNames.Draw(
     source::AbstractLatentSource,
     model::Model,
     stats::NamedTuple=NamedTuple();
     include_log_probs::Bool=true,
 )
-    accs = _params_with_stats_accumulators(include_log_probs)
+    accs = _draw_accumulators(include_log_probs)
     _, accs = evaluate(model, source, OriginalSpace(), accs)
-    return _params_with_stats(accs, stats, include_log_probs)
+    return _draw(accs, stats, include_log_probs)
 end
 
 """
-    ParamsWithStats(
+    VarNames.Draw(
         accs::AccumulatorTuple,
         stats::NamedTuple=NamedTuple();
         include_log_probs::Bool=true,
@@ -70,12 +56,12 @@ end
 Extract parameters and any available log-probability statistics from an accumulator tuple.
 The tuple must contain a [`ParamsAccumulator`](@ref).
 """
-function ParamsWithStats(
+function VarNames.Draw(
     accs::AccumulatorTuple,
     stats::NamedTuple=NamedTuple();
     include_log_probs::Bool=true,
 )
-    return _params_with_stats(accs, stats, include_log_probs)
+    return _draw(accs, stats, include_log_probs)
 end
 
 function _check_vecmodel_dimension(params::AbstractVector, vecmodel::VecModel)
@@ -112,7 +98,7 @@ function _raw_params_from_fixed_transforms(
 end
 
 """
-    ParamsWithStats(
+    VarNames.Draw(
         params::AbstractVector,
         vecmodel::VecModel,
         stats::NamedTuple=NamedTuple();
@@ -123,7 +109,7 @@ Re-evaluate `vecmodel` at `params` and return model-space parameters together wi
 log-probability statistics. If log probabilities are not requested and every transform is
 fixed, the raw parameters are recovered without evaluating the model.
 """
-function ParamsWithStats(
+function VarNames.Draw(
     params::AbstractVector,
     vecmodel::VecModel,
     stats::NamedTuple=NamedTuple();
@@ -133,68 +119,31 @@ function ParamsWithStats(
     if !include_log_probs && _all_fixed_transforms(vecmodel)
         raw_params =
             _raw_params_from_fixed_transforms(params, vecmodel.ranges_and_transforms)
-        return ParamsWithStats(raw_params, stats)
+        return VarNames.Draw(raw_params, stats)
     end
 
     source = FromVector(params, vecmodel.ranges_and_transforms)
-    accs = _params_with_stats_accumulators(include_log_probs)
+    accs = _draw_accumulators(include_log_probs)
     _, accs = evaluate(vecmodel.model, source, vecmodel.parameter_space, accs)
-    return _params_with_stats(accs, stats, include_log_probs)
-end
-
-function Base.show(io::IO, ::MIME"text/plain", pws::ParamsWithStats)
-    printstyled(io, "ParamsWithStats"; bold=true)
-    print(io, "\n ├─ ")
-    if isempty(pws.params)
-        printstyled(io, "params"; bold=true)
-        println(io, " (empty)")
-    else
-        printstyled(io, "params"; bold=true)
-        print(io, "\n │  ")
-        VarNames.vnt_pretty_print(io, pws.params, " │  ", 0)
-        println(io)
-    end
-    print(io, " └─ ")
-    printstyled(io, "stats"; bold=true)
-    if isempty(pws.stats)
-        println(io, " (empty)")
-    else
-        nstats = length(pws.stats)
-        for (index, (name, value)) in enumerate(pairs(pws.stats))
-            print(io, index == nstats ? "\n    └─ " : "\n    ├─ ")
-            printstyled(io, name; color=:blue)
-            print(io, " = ")
-            show(io, value)
-        end
-    end
-    return nothing
-end
-
-function Base.:(==)(left::ParamsWithStats, right::ParamsWithStats)
-    return (left.params == right.params) & (left.stats == right.stats)
-end
-
-function Base.isequal(left::ParamsWithStats, right::ParamsWithStats)
-    return isequal(left.params, right.params) && isequal(left.stats, right.stats)
+    return _draw(accs, stats, include_log_probs)
 end
 
 """
     FromParams(
-        pws::ParamsWithStats,
-        fallback::Union{AbstractLatentSource,Nothing}=FromPrior(),
+        draw::VarNames.Draw,
+        fallback::Union{AbstractLatentSource,Nothing}=nothing,
     )
 
-Create a latent source from `pws.params`. The statistics are ignored, and `fallback` is
-used for parameters absent from `pws.params`.
+Create a latent source from the parameters in `draw`. The extras are ignored, and `fallback`
+is used for any absent parameters.
 """
 function FromParams(
-    pws::ParamsWithStats,
+    draw::VarNames.Draw,
     fallback::Union{AbstractLatentSource,Nothing}=FromPrior(),
 )
-    return FromParams(pws.params, fallback)
+    return FromParams(parameters(draw), fallback)
 end
 
-StatsAPI.params(pws::ParamsWithStats) = pws.params
-logprior(pws::ParamsWithStats) = pws.stats.logprior
-StatsAPI.loglikelihood(pws::ParamsWithStats) = pws.stats.loglikelihood
-logjoint(pws::ParamsWithStats) = pws.stats.logjoint
+logprior(draw::VarNames.Draw) = extras(draw).logprior
+StatsAPI.loglikelihood(draw::VarNames.Draw) = extras(draw).loglikelihood
+logjoint(draw::VarNames.Draw) = extras(draw).logjoint

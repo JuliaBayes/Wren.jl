@@ -101,7 +101,7 @@ accs = rand_with_logp(outer_with_retval())
 The value of `xsq` should be the latent `a.x` squared, so we can check that the likelihood matches:
 
 ```@example submodel
-xsq = params(accs)[@vn(a.x)]^2
+xsq = parameters(accs)[@vn(a.x)]^2
 logdensityof(Normal(), xsq) ≈ loglikelihood(accs)
 ```
 

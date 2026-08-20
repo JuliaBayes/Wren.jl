@@ -22,7 +22,7 @@ end
             @test model.name === :simple_normal
             retval, accs =
                 evaluate(model, FromPrior(), OriginalSpace(), Wren.default_accumulators())
-            pars = params(accs)
+            pars = parameters(accs)
             @test retval === nothing
             @test pars isa VarNamedTuple
             @test only(keys(pars)) == @vn(x)
@@ -40,8 +40,8 @@ end
             retval, accs =
                 evaluate(model, FromPrior(), OriginalSpace(), Wren.default_accumulators())
             @test retval === nothing
-            @test params(accs) isa VarNamedTuple
-            @test logprior(accs) ≈ logdensityof(Normal(d[1]), params(accs)[@vn(x)])
+            @test parameters(accs) isa VarNamedTuple
+            @test logprior(accs) ≈ logdensityof(Normal(d[1]), parameters(accs)[@vn(x)])
             @test iszero(loglikelihood(accs))
         end
     end
@@ -58,7 +58,7 @@ end
             @test model.name === :x_and_y
             retval, accs =
                 evaluate(model, FromPrior(), OriginalSpace(), Wren.default_accumulators())
-            pars = params(accs)
+            pars = parameters(accs)
             @test retval === nothing
             @test pars isa VarNamedTuple
             @test collect(keys(pars)) == [@vn(x), @vn(y)]
@@ -77,7 +77,7 @@ end
                 OriginalSpace(),
                 Wren.default_accumulators(),
             )
-            pars = params(accs)
+            pars = parameters(accs)
             @test retval === nothing
             @test pars isa VarNamedTuple
             @test collect(keys(pars)) == [@vn(x)]
@@ -97,7 +97,7 @@ end
         @test model.name === :observe_macro
         retval, accs =
             evaluate(model, FromPrior(), OriginalSpace(), Wren.default_accumulators())
-        pars = params(accs)
+        pars = parameters(accs)
         @test retval === nothing
         @test pars isa VarNamedTuple
         @test collect(keys(pars)) == [@vn(x)]
@@ -165,7 +165,7 @@ end
             OriginalSpace(),
             Wren.default_accumulators(),
         )
-        pars = params(accs)
+        pars = parameters(accs)
         @test only(keys(pars)) == @vn(x.a)
         @test logprior(accs) ≈ logdensityof(Normal(), pars[@vn(x.a)])
     end
@@ -207,7 +207,7 @@ end
                 OriginalSpace(),
                 Wren.default_accumulators(),
             )
-            @test params(accs) == VarNamedTuple(; x)
+            @test parameters(accs) == VarNamedTuple(; x)
             @test logprior(accs) ≈ logdensityof(Normal(), x)
             @test loglikelihood(accs) ≈ logdensityof(Normal(), x)
 
@@ -218,7 +218,7 @@ end
                 OriginalSpace(),
                 Wren.default_accumulators(),
             )
-            @test params(accs) == VarNamedTuple()
+            @test parameters(accs) == VarNamedTuple()
             @test iszero(logprior(accs))
             @test loglikelihood(accs) ≈ 2 * logdensityof(Normal(), x)
         end
@@ -233,7 +233,7 @@ end
             model = explicit_return_sample()
             retval, accs =
                 evaluate(model, FromPrior(), OriginalSpace(), Wren.default_accumulators())
-            @test retval == params(accs)[@vn(x)]
+            @test retval == parameters(accs)[@vn(x)]
         end
 
         @testset "bare return" begin
@@ -261,7 +261,7 @@ end
             model = fallthrough_sample()
             retval, accs =
                 evaluate(model, FromPrior(), OriginalSpace(), Wren.default_accumulators())
-            @test retval == params(accs)[@vn(x)]
+            @test retval == parameters(accs)[@vn(x)]
 
             @model function fallthrough_value()
                 x ~ Normal()
@@ -312,7 +312,7 @@ end
         expected_logp = sum(logdensityof(Normal(), value) for value in values)
 
         @test events == [:even, :finished]
-        xs = params(accs).data.xs
+        xs = parameters(accs).data.xs
         @test VarNames.densify!!(xs) == values
         @test logprior(accs) ≈ expected_logp
         @test loglikelihood(accs) ≈ expected_logp
@@ -325,7 +325,7 @@ end
             Wren.default_accumulators(),
         )
         @test events == [:empty]
-        @test params(accs) == VarNamedTuple()
+        @test parameters(accs) == VarNamedTuple()
     end
 
 end

@@ -6,7 +6,7 @@ using Test
     include("expr.jl")
     include("submodel.jl")
     include("vecmodel.jl")
-    include("params_with_stats.jl")
+    include("draw.jl")
     include("ad.jl")
 end
 

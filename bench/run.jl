@@ -204,7 +204,7 @@ function error_summary(exception)
 end
 
 function main()
-    println("DPPL vs Wren — linked vector parameters")
+    println("DPPL vs Wren — unconstrained vector parameters")
     println("Chairmarks sampling time per measurement: $(BENCHMARK_SECONDS) s\n")
     print_header()
     for (model_index, models) in enumerate(BenchmarkModels.models())

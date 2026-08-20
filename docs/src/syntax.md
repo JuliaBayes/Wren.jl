@@ -31,7 +31,7 @@ We'll use a few of Wren's functions to extract information from these; we won't 
 
 ```@example model
 accs = rand_with_logp(model)
-logprior(accs), loglikelihood(accs), params(accs)
+logprior(accs), loglikelihood(accs), parameters(accs)
 ```
 
 Here we can see that a value was sampled for `x`, and that the log-prior (and not
@@ -116,7 +116,7 @@ For example, we can condition on the entire `y` array in one go:
 yarg_model_cond = yarg_model | VarNamedTuple(y=[1.0, 2.0, 3.0])
 
 accs = rand_with_logp(Xoshiro(468), yarg_model_cond)
-logprior(accs), loglikelihood(accs), params(accs)
+logprior(accs), loglikelihood(accs), parameters(accs)
 ```
 
 Now the only latent variable is `x`, and the `y` array is observed.
@@ -131,7 +131,7 @@ We can do the exact same with `ydef`, and in exactly the same way, the definitio
 ydef_model_cond = ydef_model | VarNamedTuple(y=[1.0, 2.0, 3.0])
 
 accs = rand_with_logp(Xoshiro(468), ydef_model_cond)
-logprior(accs), loglikelihood(accs), params(accs)
+logprior(accs), loglikelihood(accs), parameters(accs)
 ```
 
 One can perform partial conditioning by only specifying part of the latent array (see the [VarNames.jl](https://juliabayes.org/VarNames.jl/stable/vnt/api/#VarNames.@vnt) docs for more details on the `@vnt` macro):
@@ -183,7 +183,7 @@ accs = rand_with_logp(y_obs())
 We can check that these values are consistent:
 
 ```@example model
-loglikelihood(accs) ≈ logdensityof(Normal(), params(accs)[@vn(x)] + 1)
+loglikelihood(accs) ≈ logdensityof(Normal(), parameters(accs)[@vn(x)] + 1)
 ```
 
 You can in principle use this to enforce that model arguments are observed:

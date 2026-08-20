@@ -1,6 +1,6 @@
 # Wren vs DynamicPPL AD benchmarks
 
-This environment compares linked-vector log-density and prepared-gradient evaluation for
+This environment compares unconstrained-vector log-density and prepared-gradient evaluation for
 the local Wren checkout's `VecModel` and the registered DynamicPPL release's
 `LogDensityFunction`.
 

@@ -62,7 +62,7 @@ function evaluate_submodel(rhs, latent_source, parameter_space, accs, vn)
         child_accs = setacc!!(child_accs, ParamsAccumulator())
     end
     retval, child_accs = evaluate(rhs, child_source, child_space, child_accs)
-    child_params = StatsAPI.params(child_accs)
+    child_params = VarNames.parameters(child_accs)
     if !had_params
         child_accs = deleteacc!!(child_accs, Val(PARAMS_ACCNAME))
     end
