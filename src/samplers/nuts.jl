@@ -21,7 +21,7 @@ end
 struct ErrorUpdate
     chain::Int
 end
-const ChannelMsg = Union{StatusUpdate, ProgressUpdate, ErrorUpdate}
+const ChannelMsg = Union{StatusUpdate,ProgressUpdate,ErrorUpdate}
 
 # Custom DynamicHMC reporter that sends progress updates through a channel.
 mutable struct ChannelReporter
@@ -148,9 +148,8 @@ function nuts(
             elseif msg isa StatusUpdate
                 j = msg.chain
                 if !haskey(status_jobs, j)
-                    status_jobs[j] = addjob!(
-                        pbar; N=1, description="Chain $j/$nchains: $(msg.text)"
-                    )
+                    status_jobs[j] =
+                        addjob!(pbar; N=1, description="Chain $j/$nchains: $(msg.text)")
                 else
                     status_jobs[j].description = "Chain $j/$nchains: $(msg.text)"
                 end
@@ -205,7 +204,7 @@ end
 function to_draws(results::NamedTuple, vecmodel::Wren.VecModel)
     ϵ = results.ϵ
     return [
-        Draw(col, vecmodel, _nuts_stats(ts, ϵ))
-        for (col, ts) in zip(eachcol(results.posterior_matrix), results.tree_statistics)
+        Draw(col, vecmodel, _nuts_stats(ts, ϵ)) for
+        (col, ts) in zip(eachcol(results.posterior_matrix), results.tree_statistics)
     ]
 end
