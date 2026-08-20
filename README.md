@@ -28,6 +28,32 @@ rand(model)
 # ├─ mu => -4.868066951440143
 # ├─ tau => 1.77728015115861
 # └─ theta => [-5.645093320047867, -3.2642262056243085, -1.4107903497807133, -6.381125278012095, -7.83320633960707, -5.479364446358099, -5.0377262033159305, -4.311316591708384]
+
+using Wren.Samplers, Enzyme
+nuts(model, 1000, 3)
+# ────────────────────────────────── progress ──────────────────────────────────
+# Chain 1/3: found initial stepsize ● ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ ● 1/1 100%
+# Sampling (chain 1/3) ● ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ ● 1000/1000 100%
+# Chain 2/3: found initial stepsize ● ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ ● 1/1 100%
+# Chain 3/3: found initial stepsize ● ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ ● 1/1 100%
+# Sampling (chain 2/3) ● ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ ● 1000/1000 100%
+# Sampling (chain 3/3) ● ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ ● 1000/1000 100%
+# Sampling done in 0.13 seconds.
+# Constructing chain... took 0.0 seconds
+# ╭─FlexiChain (1000 iterations, 3 chains) ─────────────────────────────────────────╮
+# │ ↓ iter  = 1:1000                                                                │
+# │ → chain = 1:3                                                                   │
+# │                                                                                 │
+# │ Parameters (3) ── VarName                                                       │
+# │  Float64          mu, tau                                                       │
+# │  Vector{Float64}  theta (8,)                                                    │
+# │                                                                                 │
+# │ Extras (9)                                                                      │
+# │  Float64  step_size, acceptance_rate, log_density, logprior, loglikelihood,     │
+# │           logjoint                                                              │
+# │  Int64    tree_depth                                                            │
+# │  Bool     is_divergent, is_max_depth                                            │
+# ╰─────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## Benchmarks
