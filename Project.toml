@@ -20,11 +20,11 @@ Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 RuntimeGeneratedFunctions = "7e49a35a-f44a-4d26-94aa-eba1b4ca6b47"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 StatsAPI = "82ae8749-77ed-4fe6-ae5f-f523153014b0"
+Term = "22787eb5-b846-44ae-b979-8e399b8463ab"
 VarNames = "09a315b2-63fc-4165-8d7f-d59368e770cc"
 
 [weakdeps]
 ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
-DynamicHMC = "bbc10e6e-7c05-544b-b16e-64fede858acb"
 Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
 Mooncake = "da2b9cff-9c12-43a0-ae48-6db2b0edb7d6"
 Reactant = "3c362404-f566-11ee-1572-e11a4b42c853"
@@ -34,7 +34,6 @@ FlexiChains = {rev = "v0.7", url = "https://github.com/JuliaBayes/FlexiChains.jl
 Plaice = {rev = "main", url = "https://github.com/JuliaBayes/Plaice.jl"}
 
 [extensions]
-WrenDynamicHMCExt = ["DynamicHMC"]
 WrenEnzymeCoreExt = ["EnzymeCore"]
 WrenMooncakeExt = ["Mooncake"]
 WrenReactantExt = ["ADTypes", "Enzyme", "Reactant"]
@@ -59,4 +58,5 @@ Reactant = "0.2"
 RuntimeGeneratedFunctions = "0.5"
 Statistics = "1"
 StatsAPI = "1"
+Term = "2.0.8"
 VarNames = "0.1.3"

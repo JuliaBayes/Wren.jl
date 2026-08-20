@@ -96,7 +96,8 @@ using FlexiChains: FlexiChains
 const CHAINTYPE = FlexiChains.VNChain
 
 include("samplers/prior.jl")
-export prior
+include("samplers/nuts.jl")
+export prior, nuts
 
 # FlexiChains reexports
 using FlexiChains:
