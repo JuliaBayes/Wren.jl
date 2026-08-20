@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Penelope Yong <penelopeysm@gmail.com>"]
 
 [deps]
+AbstractMCMC = "80f14c24-f653-4e6a-9b94-39d6b0f70001"
 Accessors = "7d9f7c33-5ae7-4f3b-8dc6-eff91059b697"
 Chairmarks = "0ca39b1e-fe0b-4e98-acfc-b1656634c4de"
 DensityInterface = "b429d917-457f-4dbc-8f4c-0cc954292b1d"
@@ -11,6 +12,7 @@ DifferentiationInterface = "a0c0ee7d-e4b9-4e03-894e-1c5f64a51d63"
 DocStringExtensions = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
 DynamicHMC = "bbc10e6e-7c05-544b-b16e-64fede858acb"
 EnzymeCore = "f151be2c-9106-41f4-ab19-57ee4f262869"
+FlexiChains = "4a37a8b9-6e57-4b92-8664-298d46e639f7"
 LogDensityProblems = "6fdf6af0-433a-55f7-b3ed-c6c6e0b8df7c"
 Plaice = "55802ec2-189d-45e6-a786-b4d97e4775f1"
 Preferences = "21216c6a-2e73-6563-6e65-726566657250"
@@ -22,20 +24,24 @@ VarNames = "09a315b2-63fc-4165-8d7f-d59368e770cc"
 
 [weakdeps]
 ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
+DynamicHMC = "bbc10e6e-7c05-544b-b16e-64fede858acb"
 Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
 Mooncake = "da2b9cff-9c12-43a0-ae48-6db2b0edb7d6"
 Reactant = "3c362404-f566-11ee-1572-e11a4b42c853"
 
 [sources]
+FlexiChains = {rev = "v0.7", url = "https://github.com/JuliaBayes/FlexiChains.jl"}
 Plaice = {rev = "main", url = "https://github.com/JuliaBayes/Plaice.jl"}
 
 [extensions]
+WrenDynamicHMCExt = ["DynamicHMC"]
 WrenEnzymeCoreExt = ["EnzymeCore"]
 WrenMooncakeExt = ["Mooncake"]
 WrenReactantExt = ["ADTypes", "Enzyme", "Reactant"]
 
 [compat]
 ADTypes = "1"
+AbstractMCMC = "5.16.0"
 Accessors = "0.1"
 Chairmarks = "1"
 DensityInterface = "0.4"
@@ -44,6 +50,7 @@ DocStringExtensions = "0.9"
 DynamicHMC = "3.6.1"
 Enzyme = "0.13"
 EnzymeCore = "0.6 - 0.8"
+FlexiChains = "0.7"
 LogDensityProblems = "2"
 Mooncake = "0.4, 0.5"
 Preferences = "1"

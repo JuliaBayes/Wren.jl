@@ -31,7 +31,7 @@ include("latents/latents.jl")
 include("model.jl")
 include("interface.jl")
 include("vecmodel.jl")
-include("params_with_stats.jl")
+include("draw.jl")
 include("test_ad.jl")
 
 export @model,
@@ -90,5 +90,68 @@ export AutoForwardDiff, AutoReverseDiff, AutoMooncake, AutoEnzyme
 
 using EnzymeCore: Forward, Reverse
 export Forward, Reverse
+
+module Samplers
+using FlexiChains: FlexiChains
+const CHAINTYPE = FlexiChains.VNChain
+
+include("samplers/prior.jl")
+export prior
+
+# FlexiChains reexports
+using FlexiChains:
+    Wide,
+    Long,
+    At,
+    Near,
+    Contains,
+    (..),
+    Touches,
+    Where,
+    Not,
+    DimArray,
+    Begin,
+    End,
+    mean,
+    median,
+    std,
+    var,
+    quantile,
+    summarystats,
+    mad,
+    ess,
+    rhat,
+    mcse,
+    gelmandiag,
+    gelmandiag_multivariate,
+    discretediag,
+    bfmi
+export Wide,
+    Long,
+    At,
+    Near,
+    Contains,
+    (..),
+    Touches,
+    Where,
+    Not,
+    DimArray,
+    Begin,
+    End,
+    mean,
+    median,
+    std,
+    var,
+    quantile,
+    summarystats,
+    mad,
+    ess,
+    rhat,
+    mcse,
+    gelmandiag,
+    gelmandiag_multivariate,
+    discretediag,
+    bfmi
+end
 
 end # module Wren
