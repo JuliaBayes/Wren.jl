@@ -44,11 +44,11 @@ end
 """
     VectorisedParamsAccumulator()
 
-An accumulator that collects parameter values as
-`TransformedValue{<:AbstractVector}` objects.
+An accumulator that collects parameter values as `TransformedValue{<:AbstractVector}`
+objects.
 
 Values already represented as vectors are stored unchanged. Values represented by
-[`AsOriginal`](@ref) are vectorised using [`Plaice.from_vec`](@ref) and stored as
+[`AsOriginal`](@ref) are vectorised using [`Plaice.from_vec`](@extref) and stored as
 [`AsVec`](@ref). Thus, the stored transform agrees with the selected parameter space while
 every stored value has a uniform vector representation.
 """

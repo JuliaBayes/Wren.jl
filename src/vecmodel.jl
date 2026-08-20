@@ -1,23 +1,8 @@
 """
-    VecModel(model, adtype; params=FromPrior(),
-             get_logp=logjoint_transformed,
-             parameter_space=UnconstrainedSpace())
+    _VecModelLP
 
-A model represented by a single parameter vector.
-
-`params` may be an existing `VarNamedTuple` of vector values, or an
-[`AbstractLatentSource`](@ref) used to evaluate the model and generate one. `VecModel`
-assumes that the model's latent variables, their dimensions, and their order remain fixed
-between evaluations.
-
-Use [`rand`](@ref) to sample a compatible parameter vector, [`lp`](@ref) to evaluate its
-transformed-space log joint density, and [`lp_and_grad`](@ref) or [`lp_and_grad!`](@ref) to
-differentiate it with the supplied `adtype`. Pass `nothing` as the `adtype` to construct a
-log-density-only model without loading or preparing an AD backend.
-
-By default the vector is in [`UnconstrainedSpace`](@ref) and `lp` returns
-[`logjoint_transformed`](@ref). Use the `parameter_space` and `get_logp` keywords to
-select different behaviour.
+Callable struct that is used for AD backends that require a closure (i.e. compiled ReverseDiff).
+This is equivalent to `_vecmodel_lp` but with the inactive arguments stored in the struct.
 """
 struct _VecModelLP{
     E,
@@ -31,43 +16,127 @@ struct _VecModelLP{
     evaluation_fn::E
     model_args::A
     conditioned::C
-    get_logp::F
+    lp_function::F
     parameter_space::S
     ranges_and_transforms::R
     accs::AC
 end
-
-function _vecmodel_lp(
-    params::AbstractVector,
-    evaluation_fn,
-    model_args::NamedTuple,
-    conditioned::VarNamedTuple,
-    get_logp,
-    parameter_space::AbstractParameterSpace,
-    ranges_and_transforms::VarNamedTuple,
-    accs::AccumulatorTuple,
-)
-    source = FromVector(params, ranges_and_transforms)
-    _, accs = evaluation_fn(source, parameter_space, accs, model_args, conditioned)
-    return get_logp(accs)
-end
-
 function (f::_VecModelLP)(params::AbstractVector)
     return _vecmodel_lp(
         params,
         f.evaluation_fn,
         f.model_args,
         f.conditioned,
-        f.get_logp,
+        f.lp_function,
         f.parameter_space,
         f.ranges_and_transforms,
         f.accs,
     )
 end
 
-_use_closure(::DI.AutoReverseDiff{compile}) where {compile} = compile
-_use_closure(::DI.AbstractADType) = false
+"""
+    _vecmodel_lp
 
+The function that calculates the log-density at `params`.
+"""
+function _vecmodel_lp(
+    params::AbstractVector,
+    evaluation_fn,
+    model_args::NamedTuple,
+    conditioned::VarNamedTuple,
+    lp_function,
+    parameter_space::AbstractParameterSpace,
+    ranges_and_transforms::VarNamedTuple,
+    accs::AccumulatorTuple,
+)
+    source = FromVector(params, ranges_and_transforms)
+    _, accs = evaluation_fn(source, parameter_space, accs, model_args, conditioned)
+    return lp_function(accs)
+end
+
+"""
+    VecModel(
+        model::Model,
+        adtype::Union{ADTypes.AbstractADType,Nothing};
+        lp_function=logjoint_transformed,
+        params=FromPrior(),
+        parameter_space=UnconstrainedSpace()
+    )
+
+A vectorised form of `model`, which is designed to take a single vector of parameters as
+input, and returns a scalar log-density.
+
+## Overview
+
+This is accomplished by storing the original model, together with a set of *ranges and
+transforms* which map segments of the parameter vector to the latent variables' values in
+original space. For example, consider
+
+```julia
+@model function my_model()
+    x ~ Normal()
+    y ~ Normal()
+end
+```
+
+The mapping from `params`, a vector of length 2 to the latent variables takes the form:
+
+```julia
+x_info = mapping[@vn(x)] # This is a `RangeAndTransform` object.
+x = x_info.transform(params[x_info.range])
+
+y_info = mapping[@vn(y)]
+y = y_info.transform(params[y_info.range])
+```
+
+where `x_info.range` might be `1:1` and `y_info.range` might be `2:2`.
+
+In order for this to work reliably, the model *must* have a fixed set of latent variables
+and fixed dimension. If these conditions are not adhered to, it is very likely that results
+obtained will be meaningless. Models with varying parameter *order* can be safely vectorised
+since the mapping is invariant to the order in which the latent variables are encountered.
+
+## Positional arguments
+
+- `model::Model`: The model to vectorise.
+
+- `adtype::Union{ADTypes.AbstractADType,Nothing}`: The automatic differentiation backend to
+  use for gradient calculations. You can pass `nothing` to construct a log-density-only
+  model that is not capable of computing gradients.
+
+  In Wren, we recommend using reverse-mode Enzyme as the default backend as that offers the
+  most performance. This can be specified with `AutoEnzyme(; mode=Reverse)` (these identifiers
+  are re-exported by Wren).
+
+  However, in some cases you may find that Enzyme errors. **In such a case, please do open
+  an issue: we want to help fix this!** In such cases you can use a different AD backend.
+  Wren is backed by
+  [DifferentiationInterface.jl](https://github.com/JuliaDiff/DifferentiationInterface.jl) so
+  you can plug in any `AbstractADType`.
+
+## Keyword arguments
+
+- `params::AbstractLatentSource`: when preparing a `VecModel`, Wren requires information
+  about the model's latent variables in order to construct the mapping from vector to latent
+  variables. This can most easily be obtained by running the model once with an
+  `AbstractLatentSource`, which you can pass here. If you want to control the RNG with which
+  these parameters are drawn, you can use [`FromPrior(rng)`](@ref FromPrior).
+
+  If you have already run the model once, you can avoid reevaluation by directly passing the
+  requisite information. This is mostly intended for advanced usage, please see the Wren
+  source code for examples of how to do this.
+
+- `lp_function`: When the model is evaluated, it will return a set of accumulators, which must
+  then be collapsed into a single scalar log-density. This function is responsible for that
+  (i.e., it must have the signature `f(accs::AccumulatorTuple) -> Number`). The default
+  is [`logjoint_transformed`](@ref), which evaluates the log joint density in transformed
+  space. This is virtually always what you want, but you can also use [`logprior`](@ref),
+  [`loglikelihood`](@ref), or [`logjoint`](@ref), or write your own.
+
+- `parameter_space::AbstractParameterSpace`: The parameter space in which the vectorised
+  model is defined. The default is [`UnconstrainedSpace`](@ref), which is almost always what
+  you want (again this is mostly for compatibility with gradient-based inference algorithms).
+"""
 struct VecModel{
     M<:Model,
     A<:Union{DI.AbstractADType,Nothing},
@@ -81,7 +150,7 @@ struct VecModel{
 }
     model::M
     adtype::A
-    get_logp::F
+    lp_function::F
     parameter_space::S
     ranges_and_transforms::R
     accs::AC
@@ -90,13 +159,12 @@ struct VecModel{
     adprep::P
     sample::X
 end
-
 # Unlike in DynamicPPL, this has to be an outer constructor because the ReactantExt requires
 # access to the direct (generated) constructor.
 function VecModel(
     model::M,
     adtype::A,
-    get_logp::F,
+    lp_function::F,
     parameter_space::S,
     ranges_and_transforms::R,
     params::X,
@@ -117,7 +185,7 @@ function VecModel(
         model.evaluation_fn,
         model.args,
         model.conditioned,
-        get_logp,
+        lp_function,
         parameter_space,
         ranges_and_transforms,
         accs,
@@ -126,7 +194,7 @@ function VecModel(
         model.evaluation_fn,
         model.args,
         model.conditioned,
-        get_logp,
+        lp_function,
         parameter_space,
         ranges_and_transforms,
         accs,
@@ -134,14 +202,18 @@ function VecModel(
     adprep = if adtype === nothing
         nothing
     elseif _use_closure(adtype)
+        # Compiled ReverseDiff mandates the closure, otherwise preparation is repeated on
+        # each evaluation.
         DI.prepare_gradient(lp_func, adtype, params)
     else
+        # Other AD backends can directly take multiple arguments, which can often be
+        # slightly better for performance.
         DI.prepare_gradient(_vecmodel_lp, adtype, params, map(DI.Constant, args)...)
     end
     return VecModel(
         model,
         adtype,
-        get_logp,
+        lp_function,
         parameter_space,
         ranges_and_transforms,
         accs,
@@ -151,23 +223,34 @@ function VecModel(
         params,
     )
 end
-
 function VecModel(
     model::Model,
     adtype::Union{DI.AbstractADType,Nothing};
     params::Union{VarNamedTuple,AbstractLatentSource}=FromPrior(),
-    get_logp=logjoint_transformed,
+    lp_function=logjoint_transformed,
     parameter_space::AbstractParameterSpace=UnconstrainedSpace(),
 )
+    # Get vectorised parameters.
     values = if params isa VarNamedTuple
         params
     else
         _draw_vectorised_params(model, params, parameter_space)
     end
+    # Check that they're sensible, and flatten them into a single vector.
     _validate_vectorised_params(values, parameter_space)
     ranges_and_transforms, sample = _ranges_and_params(values)
-    return VecModel(model, adtype, get_logp, parameter_space, ranges_and_transforms, sample)
+    return VecModel(
+        model,
+        adtype,
+        lp_function,
+        parameter_space,
+        ranges_and_transforms,
+        sample,
+    )
 end
+
+_use_closure(::DI.AutoReverseDiff{compile}) where {compile} = compile
+_use_closure(::DI.AbstractADType) = false
 
 function _validate_vectorised_params(
     values::VarNamedTuple,
@@ -189,17 +272,15 @@ function _draw_vectorised_params(
     model::Model,
     source::AbstractLatentSource,
     parameter_space::AbstractParameterSpace,
-)
+)::VarNamedTuple
     accs = AccumulatorTuple(VectorisedParamsAccumulator())
     _, accs = evaluate(model, source, parameter_space, accs)
     return vectorised_params(accs)
 end
-
 function _ranges_and_params(values::VarNamedTuple)
     ranges_and_transforms = VarNamedTuple()
     params = Union{}[]
     offset = 1
-
     for (vn, tval) in pairs(values)
         value = get_internal_value(tval)
         value isa AbstractVector || throw(
@@ -207,7 +288,6 @@ function _ranges_and_params(values::VarNamedTuple)
                 "Expected a vector value for variable `$vn`, but got $(typeof(value)).",
             ),
         )
-
         range = offset:(offset+length(value)-1)
         template = get(values.data, VarNames.getsym(vn), VarNames.NoTemplate())
         ranges_and_transforms = VarNames.templated_setindex!!(
@@ -219,26 +299,21 @@ function _ranges_and_params(values::VarNamedTuple)
         params = vcat(params, value)
         offset = last(range) + 1
     end
-
     return ranges_and_transforms, params
 end
 
 """
     lp(vecmodel::VecModel, params::AbstractVector)
 
-Evaluate `vecmodel.get_logp` in the vector model's parameter space.
+Calculate the log-density of `vecmodel` at `params`.
 """
-function lp(vecmodel::VecModel, params::AbstractVector)
-    return vecmodel.lp_func(params)
-end
+lp(vecmodel::VecModel, params::AbstractVector) = vecmodel.lp_func(params)
 
 """
     lp_and_grad(vecmodel::VecModel, params::AbstractVector)
 
-Return the log density and its gradient with respect to `params`.
-
-Throws an `ArgumentError` if `vecmodel` was constructed with `nothing` instead of an AD
-backend.
+Returns a tuple (log_density, grad) where `log_density` is the log-density of `vecmodel` and
+`grad` is its gradient at `params`.
 """
 function lp_and_grad(vecmodel::VecModel, params::AbstractVector)
     prepared_params = convert(typeof(vecmodel.sample), params)
@@ -258,34 +333,24 @@ function lp_and_grad(vecmodel::VecModel, params::AbstractVector)
             DI.Constant(vecmodel.model.evaluation_fn),
             DI.Constant(vecmodel.model.args),
             DI.Constant(vecmodel.model.conditioned),
-            DI.Constant(vecmodel.get_logp),
+            DI.Constant(vecmodel.lp_function),
             DI.Constant(vecmodel.parameter_space),
             DI.Constant(vecmodel.ranges_and_transforms),
             DI.Constant(vecmodel.accs),
         )
     end
 end
-
-function lp_and_grad(vecmodel::VecModel{M,Nothing}, params::AbstractVector) where {M<:Model}
+function lp_and_grad(::VecModel{M,Nothing}, ::AbstractVector) where {M<:Model}
     throw(ArgumentError("This VecModel was constructed without an AD backend."))
 end
 
 """
     lp_and_grad!(grad::AbstractVector, vecmodel::VecModel, params::AbstractVector)
 
-Return the log density and its gradient with respect to `params`, writing the gradient into
-`grad`.
-
-Throws an `ArgumentError` if `vecmodel` was constructed with `nothing` instead of an AD
-backend.
+Calculate the log-density and its gradient with respect to `params`, writing the gradient
+into `grad`. Returns a tuple (log_density, grad).
 """
 function lp_and_grad!(grad::AbstractVector, vecmodel::VecModel, params::AbstractVector)
-    length(grad) == vecmodel.dimension || throw(
-        DimensionMismatch(
-            "VecModel expects a gradient buffer of length $(vecmodel.dimension), but " *
-            "received one of length $(length(grad)).",
-        ),
-    )
     prepared_params = convert(typeof(vecmodel.sample), params)
     return if _use_closure(vecmodel.adtype)
         DI.value_and_gradient!(
@@ -305,45 +370,68 @@ function lp_and_grad!(grad::AbstractVector, vecmodel::VecModel, params::Abstract
             DI.Constant(vecmodel.model.evaluation_fn),
             DI.Constant(vecmodel.model.args),
             DI.Constant(vecmodel.model.conditioned),
-            DI.Constant(vecmodel.get_logp),
+            DI.Constant(vecmodel.lp_function),
             DI.Constant(vecmodel.parameter_space),
             DI.Constant(vecmodel.ranges_and_transforms),
             DI.Constant(vecmodel.accs),
         )
     end
 end
-
 function lp_and_grad!(
-    grad::AbstractVector,
-    vecmodel::VecModel{M,Nothing},
-    params::AbstractVector,
+    ::AbstractVector,
+    ::VecModel{M,Nothing},
+    ::AbstractVector,
 ) where {M<:Model}
     throw(ArgumentError("This VecModel was constructed without an AD backend."))
 end
 
+"""
+    LogDensityProblems.capabilities(::Type{<:VecModel})
+
+LogDensityProblems.LogDensityOrder{0} if the `VecModel` was constructed without an AD
+backend, and LogDensityProblems.LogDensityOrder{1} otherwise.
+"""
 function LogDensityProblems.capabilities(::Type{<:VecModel{M,Nothing}}) where {M<:Model}
     return LogDensityProblems.LogDensityOrder{0}()
 end
-
 function LogDensityProblems.capabilities(::Type{<:VecModel})
     return LogDensityProblems.LogDensityOrder{1}()
 end
+"""
+    LogDensityProblems.dimension(vecmodel::VecModel)
 
+The dimension of the parameter vector for `vecmodel`.
+"""
 LogDensityProblems.dimension(vecmodel::VecModel) = vecmodel.dimension
+"""
+    LogDensityProblems.logdensity(vecmodel::VecModel, params)
 
-function LogDensityProblems.logdensity(vecmodel::VecModel, params::AbstractVector{<:Real})
+Evaluate the log-density of `vecmodel` at the given parameter vector. Equivalent to
+[`lp`](@ref).
+"""
+function LogDensityProblems.logdensity(vecmodel::VecModel, params::AbstractVector{<:Number})
     return lp(vecmodel, params)
 end
+"""
+    LogDensityProblems.logdensity_and_gradient(vecmodel::VecModel, params)
 
+Evaluate the log-density of `vecmodel` at the given parameter vector and its gradient.
+Equivalent to [`lp_and_grad`](@ref).
+"""
 function LogDensityProblems.logdensity_and_gradient(
     vecmodel::VecModel,
-    params::AbstractVector{<:Real},
+    params::AbstractVector{<:Number},
 )
     return lp_and_grad(vecmodel, params)
 end
 
-"""Draw a parameter vector compatible with `vecmodel`."""
+"""
+    Base.rand([rng::AbstractRNG,] vecmodel::VecModel) -> AbstractVector
+
+Draw a parameter vector compatible with `vecmodel`.
+"""
 function Base.rand(rng::AbstractRNG, vecmodel::VecModel)
+    # TODO: this is inefficient -- should write directly into the vector
     values =
         _draw_vectorised_params(vecmodel.model, FromPrior(rng), vecmodel.parameter_space)
     ranges_and_transforms, params = _ranges_and_params(values)
@@ -355,5 +443,4 @@ function Base.rand(rng::AbstractRNG, vecmodel::VecModel)
     )
     return params
 end
-
 Base.rand(vecmodel::VecModel) = rand(default_rng(), vecmodel)

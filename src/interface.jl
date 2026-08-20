@@ -52,7 +52,7 @@ Base.rand(model::Model) = rand(default_rng(), model)
 Draw a sample from the prior distribution of `model` and return the params, log-prior,
 and log-likelihood.
 
-To extract the contents of the `AccumulatorTuple`, you can use [`params`](@ref),
+To extract the contents of the `AccumulatorTuple`, you can use [`parameters`](@ref),
 [`logprior`](@ref), [`loglikelihood`](@ref), and [`logjoint`](@ref).
 """
 function rand_with_logp(rng::AbstractRNG, model::Model)

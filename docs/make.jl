@@ -4,6 +4,9 @@ Pkg.develop(Pkg.PackageSpec(; path=dirname(@__DIR__)))
 using Wren
 using Documenter
 using DocumenterCodeBlocks
+using DocumenterInterLinks
+
+links = InterLinks("Plaice" => "https://juliabayes.org/Plaice.jl/dev/")
 
 makedocs(;
     sitename="Wren.jl",
@@ -15,6 +18,7 @@ makedocs(;
     # warnonly=false,
     warnonly=true,
     doctest=false,
+    plugins=[CodeBlocks(), links],
 )
 
 Documenter.deploydocs(;

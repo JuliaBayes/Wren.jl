@@ -83,7 +83,7 @@ end
         model,
         AutoForwardDiff();
         params=FromPrior(Xoshiro(473)),
-        get_logp=logprior,
+        lp_function=logprior,
         parameter_space=OriginalSpace(),
     )
     prior_params = rand(Xoshiro(474), prior_vecmodel)

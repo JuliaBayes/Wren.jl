@@ -1,19 +1,49 @@
-"""A description of the representation stored in a [`TransformedValue`](@ref)."""
+"""
+    AbstractTransform
+
+A specification of how to transform a variable's value back into its original space. Note
+that this might not necessarily contain the actual transformation function: in particular,
+[`AsUnconstrainedVec`](@ref) and [`AsVec`](@ref) are just markers that indicate that the
+transform function should be derived from the distribution.
+
+Wren provides a few built-in transform types; it is unlikely that you will need to define
+your own (if you do, please get in touch and let us know!)
+
+- [`AsUnconstrainedVec`](@ref)
+- [`AsVec`](@ref)
+- [`AsOriginal`](@ref)
+- [`FixedTransform`](@ref)
+"""
 abstract type AbstractTransform end
 
-"""Indicate that a value is an unconstrained, vectorised value."""
+"""
+    AsUnconstrainedVec <: AbstractTransform
+
+Indicate that a value is an unconstrained, vectorised value. The appropriate transformation
+function is `Plaice.from_unconstrained_vec(dist)`, where `dist` is the prior distribution of
+the variable.
+"""
 struct AsUnconstrainedVec <: AbstractTransform end
 
-"""Indicate that a value is an original-space, vectorised value."""
+"""
+    AsVec <: AbstractTransform
+
+Indicate that a value is a vectorised value. The appropriate transformation function is
+`Plaice.from_vec(dist)`, where `dist` is the prior distribution of the variable.
+"""
 struct AsVec <: AbstractTransform end
 
-"""Indicate that a value is in its original model-space representation."""
+"""
+    AsOriginal <: AbstractTransform
+
+Indicates a value that is already in its original space. No transformation is necessary.
+"""
 struct AsOriginal <: AbstractTransform end
 
 """
-    FixedTransform(transform)
+    FixedTransform(transform) <: AbstractTransform
 
-Store a fixed inverse transform that maps an internally stored value to model space.
+Stores a fixed inverse transform that maps an internally stored value to original space.
 """
 struct FixedTransform{F} <: AbstractTransform
     transform::F
@@ -22,10 +52,10 @@ Base.:(==)(a::FixedTransform, b::FixedTransform) = a.transform == b.transform
 Base.isequal(a::FixedTransform, b::FixedTransform) = isequal(a.transform, b.transform)
 
 """
-    TransformedValue(value, transform)
+    TransformedValue(value, transform::AbstractTransform)
 
-A value together with a description of its current representation. The stored `transform`
-describes how to recover the raw value used inside the model.
+A transformed value together with a description of its current representation. The stored
+`transform` describes how to recover the untransformed value (in its original space).
 """
 struct TransformedValue{V,T<:AbstractTransform}
     value::V
@@ -36,36 +66,99 @@ Base.:(==)(a::TransformedValue, b::TransformedValue) =
 Base.isequal(a::TransformedValue, b::TransformedValue) =
     isequal(a.value, b.value) && isequal(a.transform, b.transform)
 
-"""Return the internally stored value of `tval`."""
+"""
+    get_internal_value(tval::TransformedValue) 
+
+Return the transformed value inside `tval`.
+"""
 get_internal_value(tval::TransformedValue) = tval.value
 
-"""Return the representation descriptor stored in `tval`."""
+"""
+    get_transform(tval::TransformedValue) -> AbstractTransform
+
+Return the transform that describes how to recover the original value from `tval`.
+"""
 get_transform(tval::TransformedValue) = tval.transform
 
-"""The coordinate space in which latent parameters and their density are represented."""
+"""
+    AbstractParameterSpace
+
+The coordinate space in which latent parameters and their density are represented.
+
+An `AbstractParameterSpace` can be thought of as a collection of `AbstractTransform`s, one
+for each latent variable in a model. However, while `AbstractTransform`s represent
+information that has already been decided (i.e., it is irrevocably tied to the value stored
+in a `TransformedValue`), an `AbstractParameterSpace` more resembles an upfront
+specification of how one *wants* to evaluate a model.
+
+When evaluating a model with a given `AbstractParameterSpace`, the model's latent variables
+will be transformed into the representation that it specifies (using `target_transform`).
+The log-Jacobian that is accumulated, and hence the log-density, will be with respect to the
+coordinate space specified by the `AbstractParameterSpace`.
+
+There are two built-in `AbstractParameterSpace`s:
+
+- [`UnconstrainedSpace`](@ref): all latent variables are represented in unconstrained,
+  vectorised space. This is the default for Wren's vectorised models, particularly because
+  this is most suitable for gradient-based inference methods and automatic differentiation.
+
+- [`OriginalSpace`](@ref): all latent variables are represented in their original space.
+
+This can be extended in future to support [`FixedTransform`](@ref)s.
+"""
 abstract type AbstractParameterSpace end
 
 """
-    target_transform(parameter_space, vn) -> AbstractTransform
+    target_transform(
+        parameter_space::AbstractParameterSpace,
+        vn::VarName
+    ) -> AbstractTransform
 
-Return the target representation selected by `parameter_space` for latent variable `vn`.
+Return the transform that `parameter_space` demands for the latent variable `vn`.
 """
 function target_transform end
 
-"""Select an unconstrained vector representation for every latent variable."""
+"""
+    UnconstrainedSpace <: AbstractParameterSpace
+
+Evaluate the model in a space where all latent variables are represented as unconstrained
+vectors.
+"""
 struct UnconstrainedSpace <: AbstractParameterSpace end
 target_transform(::UnconstrainedSpace, ::VarName) = AsUnconstrainedVec()
 
-"""Keep every latent variable in original space."""
+"""
+    OriginalSpace <: AbstractParameterSpace
+
+Keep every latent variable in original space.
+"""
 struct OriginalSpace <: AbstractParameterSpace end
 target_transform(::OriginalSpace, ::VarName) = AsVec()
 
 """
-    apply_parameter_space(parameter_space, tval, vn, dist)
+    apply_parameter_space(
+        parameter_space::AbstractParameterSpace,
+        tval::TransformedValue,
+        vn::VarName,
+        dist
+    )
 
-Interpret the value supplied by a latent source in `parameter_space`. Return the raw
-model-space value, its target [`TransformedValue`](@ref), and the forward log absolute
-determinant of the Jacobian from model space to the target representation.
+Given a `parameter_space` which says how a latent variable should be represented, and a
+`TransformedValue` which contains a value and its current representation (provided from
+an [`AbstractLatentSource`](@ref)), return a tuple of:
+
+- the value in original model space,
+- the value in the target representation (a `TransformedValue`), and
+- the forward log absolute determinant of the Jacobian from original space to the target
+  representation.
+
+Note that when evaluating a model, even if the values are already supplied in unconstrained
+space and the target representation is also unconstrained, we still have to perform the
+inverse transform to original space for two reasons:
+
+- Calculation of the log-Jacobian.
+- The left-hand side of the tilde-statement contains a variable, and we must assign the
+  value in original space to that variable.
 """
 function apply_parameter_space(
     parameter_space::AbstractParameterSpace,
@@ -88,7 +181,6 @@ function apply_parameter_space(
         error("unknown target transform: $target")
     end
 end
-
 function apply_parameter_space(
     parameter_space::AbstractParameterSpace,
     tval::TransformedValue{<:AbstractVector{<:Number},AsVec},
@@ -111,7 +203,6 @@ function apply_parameter_space(
         error("unknown target transform: $target")
     end
 end
-
 function apply_parameter_space(
     parameter_space::AbstractParameterSpace,
     tval::TransformedValue{<:Any,AsOriginal},
@@ -134,7 +225,6 @@ function apply_parameter_space(
         error("unknown target transform: $target")
     end
 end
-
 function apply_parameter_space(
     parameter_space::AbstractParameterSpace,
     tval::TransformedValue{<:Any,<:FixedTransform},
@@ -160,3 +250,12 @@ function apply_parameter_space(
         error("unknown target transform: $target")
     end
 end
+
+"""
+    scope(parameter_space::AbstractParameterSpace, vn::VarName) -> AbstractParameterSpace
+
+Given a parameter space in which a model is being executed, return the parameter space in which
+a submodel prefixed by `vn` should be executed.
+"""
+scope(parameter_space::UnconstrainedSpace, ::VarName) = parameter_space
+scope(parameter_space::OriginalSpace, ::VarName) = parameter_space

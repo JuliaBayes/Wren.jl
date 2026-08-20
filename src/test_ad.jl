@@ -1,7 +1,11 @@
 using Chairmarks: @be
 using Statistics: median
 
-"""Different ways to check the correctness of an AD backend."""
+"""
+    AbstractADCorrectnessTestSetting
+
+Different ways to check the correctness of an AD backend.
+"""
 abstract type AbstractADCorrectnessTestSetting end
 
 """
@@ -24,10 +28,18 @@ struct WithExpectedResult{V<:Real,G<:AbstractVector} <: AbstractADCorrectnessTes
     grad::G
 end
 
-"""Disable AD correctness checking in [`run_ad`](@ref)."""
+"""
+    NoTest()
+
+Disable AD correctness checking in [`run_ad`](@ref).
+"""
 struct NoTest <: AbstractADCorrectnessTestSetting end
 
-"""Exception thrown when an AD backend returns an incorrect value or gradient."""
+"""
+    ADIncorrectException
+
+Exception thrown when an AD backend returns an incorrect value or gradient.
+"""
 struct ADIncorrectException{VE,VA,GE,GA,T<:Real} <: Exception
     value_expected::VE
     value_actual::VA
@@ -36,7 +48,6 @@ struct ADIncorrectException{VE,VA,GE,GA,T<:Real} <: Exception
     atol::T
     rtol::T
 end
-
 function Base.showerror(io::IO, exception::ADIncorrectException)
     value_passed = isapprox(
         exception.value_expected,
@@ -66,17 +77,33 @@ function Base.showerror(io::IO, exception::ADIncorrectException)
     return nothing
 end
 
-"""The correctness and benchmark results returned by [`run_ad`](@ref)."""
+"""
+    ADResul
+
+The correctness and benchmark results returned by [`run_ad`](@ref).
+
+$(TYPEDFIELDS)
+"""
 struct ADResult{VM<:VecModel,P<:AbstractVector,VE,GE,VA,GA,T<:Real}
+    "The vectorised model that was tested."
     vecmodel::VM
+    "The vector of parameters that was tested."
     params::P
+    "The expected log-density value, or `nothing` if correctness was not checked."
     value_expected::VE
+    "The expected gradient of the log-density, or `nothing` if correctness was not checked."
     grad_expected::GE
+    "The actual log-density value returned by the AD backend."
     value_actual::VA
+    "The actual gradient of the log-density returned by the AD backend."
     grad_actual::GA
+    "The absolute tolerance used for correctness checking."
     atol::T
+    "The relative tolerance used for correctness checking."
     rtol::T
+    "The median time taken to evaluate the log-density (in seconds), or `nothing` if benchmarking was not performed."
     primal_time::Union{Nothing,Float64}
+    "The median time taken to evaluate the log-density and its gradient (in seconds), or `nothing` if benchmarking was not performed."
     grad_time::Union{Nothing,Float64}
 end
 
@@ -122,7 +149,7 @@ benchmarking is disabled. Pass `test=NoTest()` (or `false`) to skip correctness 
 `test=WithExpectedResult(value, grad)` to supply a known answer, or `benchmark=true` to
 benchmark prepared calls to [`lp`](@ref) and [`lp_and_grad`](@ref).
 
-The `get_logp` and `parameter_space` keywords are forwarded to [`VecModel`](@ref), and have
+The `lp_function` and `parameter_space` keywords are forwarded to [`VecModel`](@ref), and have
 the same defaults. The requested AD backend package, and any reference backend package,
 must already be loaded.
 """
@@ -134,7 +161,7 @@ function run_ad(
     benchmark_seconds::Real=1.0,
     atol::Real=100 * eps(),
     rtol::Real=sqrt(eps()),
-    get_logp=logjoint_transformed,
+    lp_function=logjoint_transformed,
     rng::AbstractRNG=default_rng(),
     parameter_space::AbstractParameterSpace=UnconstrainedSpace(),
     params::Union{Nothing,AbstractVector}=nothing,
@@ -142,7 +169,7 @@ function run_ad(
 )
     setting = test isa Bool ? (test ? WithBackend() : NoTest()) : test
     atol, rtol = promote(atol, rtol)
-    vecmodel = VecModel(model, adtype; params=FromPrior(rng), get_logp, parameter_space)
+    vecmodel = VecModel(model, adtype; params=FromPrior(rng), lp_function, parameter_space)
     params = params === nothing ? rand(rng, vecmodel) : collect(params)
 
     value_actual, grad_actual = lp_and_grad(vecmodel, params)
@@ -156,7 +183,7 @@ function run_ad(
         reference = VecModel(
             vecmodel.model,
             setting.adtype,
-            vecmodel.get_logp,
+            vecmodel.lp_function,
             vecmodel.parameter_space,
             vecmodel.ranges_and_transforms,
             vecmodel.sample,

@@ -85,4 +85,10 @@ export logdensityof
 using StatsAPI: params, loglikelihood
 export params, loglikelihood
 
+using DifferentiationInterface: AutoForwardDiff, AutoReverseDiff, AutoMooncake, AutoEnzyme
+export AutoForwardDiff, AutoReverseDiff, AutoMooncake, AutoEnzyme
+
+using EnzymeCore: Forward, Reverse
+export Forward, Reverse
+
 end # module Wren
