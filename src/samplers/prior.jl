@@ -14,6 +14,8 @@ using Term.Progress: ProgressBar, addjob!, update!, start!, stop!, render
         nchains::Integer=1;
         progress::Bool=true,
     ) -> FlexiChains.VNChain
+
+Sample from the prior distribution of a Wren model.
 """
 function prior(model::Wren.Model, niters::Integer, nchains::Integer=1; progress::Bool=true)
     return prior(Random.default_rng(), model, niters, nchains; progress)

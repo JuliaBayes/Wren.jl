@@ -140,12 +140,14 @@ target_transform(::OriginalSpace, ::VarName) = AsVec()
         parameter_space::AbstractParameterSpace,
         tval::TransformedValue,
         vn::VarName,
-        dist
+        dist,
     )
 
+Convert a latent value into the representation specified by `parameter_space`.
+
 Given a `parameter_space` which says how a latent variable should be represented, and a
-`TransformedValue` which contains a value and its current representation (provided from
-an [`AbstractLatentSource`](@ref)), return a tuple of:
+[`TransformedValue`](@ref) which contains a value and its current representation (derived
+from the [`AbstractLatentSource`](@ref)), returns a tuple of:
 
 - the value in original model space,
 - the value in the target representation (a `TransformedValue`), and
