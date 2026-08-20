@@ -12,7 +12,7 @@ using LinearAlgebra: I
 y = [28, 8, -3, 7, -1, 1, 18, 12]
 sigma = [15, 10, 16, 11, 9, 11, 10, 18]
 J = 8
-@model function eight_schools(y, sigma, J)
+@wren function eight_schools(y, sigma, J)
     mu ~ Normal(0, 5)
     tau ~ truncated(Cauchy(0, 5); lower=0)
     theta ~ MvNormal(fill(mu, J), tau^2 * I)

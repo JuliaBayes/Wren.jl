@@ -13,13 +13,13 @@ Pkg.add(url="https://github.com/JuliaBayes/Wren.jl")
 
 ## Overview
 
-Wren models are defined using a `@model` macro, similar to other Julia PPLs:
+Wren models are defined using a `@wren` macro, similar to other Julia PPLs:
 
 ```@example intro
 using Wren, Distributions
 
 # Define a model
-@model function f()
+@wren function f()
     x ~ Normal()
 end
 ```

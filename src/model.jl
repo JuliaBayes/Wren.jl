@@ -4,7 +4,7 @@ using RuntimeGeneratedFunctions
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
 struct Model{A<:NamedTuple,C<:VarNamedTuple,F}
-    # Name of the function declared with @model
+    # Name of the function declared with @wren
     name::Symbol
     # Arguments passed to the model
     args::A
@@ -45,7 +45,7 @@ end
 # VarNames.varname(:(xs[i])) returns something like
 #     VarName{:xs}(Index((esc(i),), ...))
 # which gets `i` from the caller's scope. However, when we insert this expression into a
-# larger Expr (as in `@model` and its RGF), we want to take `i` from the scope of the larger
+# larger Expr (as in `@wren` and its RGF), we want to take `i` from the scope of the larger
 # Expr itself, rather than the caller's scope. That necessitates removing the `esc()` call.
 remove_escapes(x) = x
 function remove_escapes(expr::Expr)
@@ -223,7 +223,7 @@ function get_function_name_and_args(signature::Expr)
     elseif signature.head == :where
         return get_function_name_and_args(signature.args[1])
     else
-        error("@model: expected function signature")
+        error("@wren: expected function signature")
     end
 end
 
@@ -238,36 +238,36 @@ function Base.show(io::IO, ::MIME"text/plain", model::Model)
 end
 
 function to_namedtuple(args_expr::Expr)
-    args_expr.head == :tuple || error("@model: expected a tuple of arguments")
+    args_expr.head == :tuple || error("@wren: expected a tuple of arguments")
     if isempty(args_expr.args)
         :(NamedTuple())
     else
         new_expr = Expr(:tuple)
         for arg in args_expr.args
-            arg isa Symbol || error("@model: expected function argument to be a symbol")
+            arg isa Symbol || error("@wren: expected function argument to be a symbol")
             push!(new_expr.args, :($arg = $(esc(arg))))
         end
         new_expr
     end
 end
 
-macro model(expr)
-    _model(expr, __module__)
+macro wren(expr)
+    _wren(expr, __module__)
 end
 
 macro observe(expr)
-    error("@observe must be used inside @model")
+    error("@observe must be used inside @wren")
 end
 
-function _model(expr::Expr, mod::Module)
+function _wren(expr::Expr, mod::Module)
     # Sanity check
-    expr.head == :function || error("@model: expected a function definition")
-    length(expr.args) == 2 || error("@model: expected function expr with 2 expr-args")
+    expr.head == :function || error("@wren: expected a function definition")
+    length(expr.args) == 2 || error("@wren: expected function expr with 2 expr-args")
 
     # Generate a new symbol for the model's body, since we want the original
     # symbol to directly create the `Model`.
     fname, fargs = get_function_name_and_args(expr.args[1])
-    fname isa Symbol || error("@model: expected function name to be a symbol")
+    fname isa Symbol || error("@wren: expected function name to be a symbol")
     fargs_expr = Expr(:tuple, fargs...)
     signature, body = expr.args
 

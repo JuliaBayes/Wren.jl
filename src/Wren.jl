@@ -34,7 +34,7 @@ include("vecmodel.jl")
 include("draw.jl")
 include("test_ad.jl")
 
-export @model,
+export @wren,
     @observe,
     AbstractLatentSource,
     AbstractTransform,

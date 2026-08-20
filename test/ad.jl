@@ -7,7 +7,7 @@ using Random
 using Test
 using Wren
 
-@model function ad_model()
+@wren function ad_model()
     x ~ Normal()
     observation = 0.5
     @observe observation ~ Normal(x)

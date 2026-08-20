@@ -79,7 +79,7 @@ function lower_wren_expr(expr::Expr, mod::Module, statement_position::Bool=false
     end
 
     if expr.head == :call && expr.args[1] == :~
-        length(expr.args) == 3 || error("@model: expected ~ to have 2 arguments")
+        length(expr.args) == 3 || error("@wren: expected ~ to have 2 arguments")
         lhs, rhs = expr.args[2:3]
         return Sample(lhs, lower_wren_expr(rhs, mod))
     end

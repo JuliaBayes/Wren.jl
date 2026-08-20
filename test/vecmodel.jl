@@ -9,7 +9,7 @@ using Random
 using Test
 using Wren
 
-@model function vector_model(observation)
+@wren function vector_model(observation)
     x ~ Beta(2, 3)
     y ~ MvNormal(zeros(2), I)
     @observe observation ~ Normal(x + y[1])

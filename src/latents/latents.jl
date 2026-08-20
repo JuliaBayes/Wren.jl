@@ -43,10 +43,10 @@ when evaluating submodels with a prefix `vn`.
 This is best explained through an example. Suppose you have a model with
 
 ```julia
-@model function inner()
+@wren function inner()
     x ~ Normal(0, 1)
 end
-@model function outer()
+@wren function outer()
     a ~ inner()
 end
 ```

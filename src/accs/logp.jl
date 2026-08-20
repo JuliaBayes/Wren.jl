@@ -39,7 +39,7 @@ guard against user code inside models.
 For example, in:
 
 ```julia
-@model f() = x ~ Normal(0.0, 1.0)
+@wren f() = x ~ Normal(0.0, 1.0)
 ```
 
 the log-probability of the model will always be promoted to `Float64`, regardless of the
@@ -47,7 +47,7 @@ value of `LogProbType`, because the logpdf of `Normal(0.0, 1.0)` is a `Float64`.
 other hand, in:
 
 ```julia
-@model f() = x ~ Normal(0.0f0, 1.0f0)
+@wren f() = x ~ Normal(0.0f0, 1.0f0)
 ```
 
 the log-probability of the model will be `Float32` if `LogProbType` is `Float32` or lower.

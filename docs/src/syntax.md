@@ -1,6 +1,6 @@
 # [Syntax and semantics](@id syntax)
 
-A Wren model is a Julia function marked with the `@model` macro.
+A Wren model is a Julia function marked with the `@wren` macro.
 It mixes regular Julia code with two probabilistic primitives:
 
   - `sample`: represents latent parameters
@@ -17,7 +17,7 @@ The simplest case is where you have a random variable drawn from a distribution:
 ```@example model
 using Wren, Distributions
 
-@model function f()
+@wren function f()
     x ~ Normal()
 end
 
@@ -57,7 +57,7 @@ For example, this is permitted since `y` is an argument to the model function (a
 ```@example model
 using Random
 
-@model function yarg(y)
+@wren function yarg(y)
     x ~ Normal()
     for i in eachindex(y)
         y[i] ~ Normal(x)
@@ -72,7 +72,7 @@ rand(Xoshiro(468), yarg_model)
 And this is permitted because `y` is defined in the model body:
 
 ```@example model
-@model function ydef()
+@wren function ydef()
     x ~ Normal()
     y = zeros(3)
     for i in eachindex(y)
@@ -155,7 +155,7 @@ However, you might not be able to provide this information at the time of model 
 Take for example:
 
 ```@example model
-@model function y_not_obs()
+@wren function y_not_obs()
     x ~ Normal()
     y = x + 1
     y ~ Normal()
@@ -171,7 +171,7 @@ rand_with_logp(y_not_obs())
 To force `y` to be observed, Wren provides a macro `@observe`:
 
 ```@example model
-@model function y_obs()
+@wren function y_obs()
     x ~ Normal()
     y = x + 1
     @observe y ~ Normal()
@@ -189,7 +189,7 @@ loglikelihood(accs) ≈ logdensityof(Normal(), parameters(accs)[@vn(x)] + 1)
 You can in principle use this to enforce that model arguments are observed:
 
 ```@example model
-@model function yarg_obs(y)
+@wren function yarg_obs(y)
     x ~ Normal()
     for i in eachindex(y)
         @observe y[i] ~ Normal(x)

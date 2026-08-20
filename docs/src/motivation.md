@@ -41,8 +41,8 @@ It should also in principle allow vectorised / batched model evaluation, althoug
 ## Compilation
 
 Like [Tilde.jl](https://github.com/cscherrer/Tilde.jl) (and its precursor [Soss.jl](https://github.com/cscherrer/Soss.jl)), Wren performs compilation in two stages.
-Firstly, Wren's `@model` macro parses the model body into a probabilistic representation, and stores it inside the `Model` object.
-For example, `@model f() = x ~ Normal()` is represented as something like:
+Firstly, Wren's `@wren` macro parses the model body into a probabilistic representation, and stores it inside the `Model` object.
+For example, `@wren f() = x ~ Normal()` is represented as something like:
 
 ```julia
 Model(:f, [Sample(:x, :(Normal()))])

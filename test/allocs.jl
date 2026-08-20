@@ -17,7 +17,7 @@ end
 
 @testset "allocs.jl" begin
     @testset "scalar params only" begin
-        @model function f()
+        @wren function f()
             x ~ Normal()
             y ~ Normal(x)
         end
@@ -25,7 +25,7 @@ end
     end
 
     @testset "vector params passed as argument" begin
-        @model function f2(z)
+        @wren function f2(z)
             x ~ Normal()
             y ~ Normal(x)
             for i in 1:5
@@ -37,10 +37,10 @@ end
     end
 
     @testset "submodel doesn't introduce allocations" begin
-        @model function inner()
+        @wren function inner()
             x ~ Normal()
         end
-        @model function outer(sub)
+        @wren function outer(sub)
             a ~ sub
         end
         model = outer(inner())

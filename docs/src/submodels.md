@@ -10,7 +10,7 @@ Suppose that we have the following inner model, which we'll embed inside an oute
 ```@example submodel
 using Wren, Distributions
 
-@model function inner()
+@wren function inner()
     x ~ Normal()
 end
 
@@ -22,7 +22,7 @@ When we write `x ~ Normal()` in the model above, what happens is that the result
 Now in the next model, we'll write `a ~ inner()`, with a model on the right-hand side of `~` instead of a distribution:
 
 ```@example submodel
-@model function outer()
+@wren function outer()
     a ~ inner()
 end
 ```
@@ -53,7 +53,7 @@ However, one might also want to access the latent variables of a submodel *insid
 You can do this directly by indexing into `a` with the relevant `VarName`:
 
 ```@example submodel
-@model function outer()
+@wren function outer()
     a ~ inner()
     ax = a[@vn(x)]
     # Make `y`'s support dependent on the value of `a.x`:
@@ -85,12 +85,12 @@ Thus, you can write `retval = (prefix ~ submodel)`:
     The parentheses are not strictly required because `~` has higher precedence than `=`, but it's clearer to include them.
 
 ```@example submodel
-@model function inner_with_retval()
+@wren function inner_with_retval()
     x ~ Normal()
     return x^2
 end
 
-@model function outer_with_retval()
+@wren function outer_with_retval()
     xsq = (a ~ inner_with_retval())
     @observe xsq ~ Normal()
 end

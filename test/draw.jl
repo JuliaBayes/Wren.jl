@@ -9,7 +9,7 @@ using Test
 using Plaice
 using Wren
 
-@model function stats_model(observation)
+@wren function stats_model(observation)
     x ~ Beta(2, 3)
     y ~ MvNormal(zeros(2), I)
     @observe observation ~ Normal(x + y[1])
@@ -20,7 +20,7 @@ struct TestFixedSpace{T<:VarNamedTuple} <: AbstractParameterSpace
 end
 Wren.target_transform(space::TestFixedSpace, vn::VarName) = space.transforms[vn]
 
-@model function prickly_model(should_error)
+@wren function prickly_model(should_error)
     should_error[] && error("model was evaluated")
     x ~ Normal()
 end

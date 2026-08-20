@@ -8,11 +8,11 @@ using VarNames
 
 @testset "submodels" begin
     @testset "basic" begin
-        @model function returning_inner()
+        @wren function returning_inner()
             a ~ Normal()
             return 2a
         end
-        @model function returning_outer(inner)
+        @wren function returning_outer(inner)
             inner_retval = x ~ inner
             # x is now the child params VarNamedTuple
             return (x, inner_retval + 1)
@@ -50,11 +50,11 @@ using VarNames
     end
 
     @testset "undefined namespace" begin
-        @model function returning_inner()
+        @wren function returning_inner()
             a ~ Normal()
             return 2a
         end
-        @model function undefined_namespace_outer(inner)
+        @wren function undefined_namespace_outer(inner)
             # Should work even if `x` is not defined yet
             retval = x ~ inner
             return retval
@@ -88,11 +88,11 @@ using VarNames
     end
 
     @testset "indexed namespace uses the outer template" begin
-        @model function indexed_inner()
+        @wren function indexed_inner()
             a ~ Normal()
         end
 
-        @model function indexed_outer(inner)
+        @wren function indexed_outer(inner)
             x = zeros(2, 2)
             first_retval = x[1] ~ inner
             second_retval = x[2, 2] ~ inner
@@ -137,12 +137,12 @@ using VarNames
     end
 
     @testset "child assumptions and observations" begin
-        @model function likelihood_inner()
+        @wren function likelihood_inner()
             a ~ Normal()
             obs ~ Normal(a)
             return a
         end
-        @model function likelihood_outer(inner)
+        @wren function likelihood_outer(inner)
             # This model doesn't have likelihood per se, it's just the outer
             # model that wraps a likelihood one
             inner_retval = x ~ inner
@@ -171,11 +171,11 @@ using VarNames
     end
 
     @testset "empty submodel" begin
-        @model function empty_inner()
+        @wren function empty_inner()
             # no sampling statements
             return 42
         end
-        @model function empty_outer(inner)
+        @wren function empty_outer(inner)
             # This model should also be empty as a result of that
             return x ~ inner
             # But because `x ~ inner` evaluates to the retval of inner, we should
@@ -194,15 +194,15 @@ using VarNames
     end
 
     @testset "nested submodels" begin
-        @model function returning_inner()
+        @wren function returning_inner()
             a ~ Normal()
             return 2a
         end
-        @model function middle_model(inner)
+        @wren function middle_model(inner)
             retval = y ~ inner
             return retval + 1
         end
-        @model function outer_model(inner)
+        @wren function outer_model(inner)
             retval = x ~ inner
             return retval + 1
         end

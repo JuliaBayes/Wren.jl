@@ -46,7 +46,7 @@ julia> using Distributions, StableRNGs
 
 julia> rng = StableRNG(42);
 
-julia> @model function model_dynamic_parameters()
+julia> @wren function model_dynamic_parameters()
            x ~ Normal(0, 1)
            y ~ Normal(x, 1)
        end;
@@ -67,7 +67,7 @@ julia> using LinearAlgebra, Distributions, StableRNGs
 
 julia> rng = StableRNG(42);
 
-julia> @model function model_dynamic_support()
+julia> @wren function model_dynamic_support()
            n ~ Categorical(ones(10) ./ 10)
            x ~ MvNormal(zeros(n), I)
        end;

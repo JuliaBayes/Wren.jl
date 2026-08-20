@@ -14,7 +14,7 @@ end
 @testset "syntax.jl" begin
     @testset "basic models" begin
         @testset "1x sample" begin
-            @model function simple_normal()
+            @wren function simple_normal()
                 x ~ Normal()
                 return nothing
             end
@@ -31,7 +31,7 @@ end
         end
 
         @testset "1x sample with model argument" begin
-            @model function sample_with_arg(m)
+            @wren function sample_with_arg(m)
                 x ~ Normal(m[1])
                 return nothing
             end
@@ -47,7 +47,7 @@ end
     end
 
     @testset "conditioning" begin
-        @model function x_and_y()
+        @wren function x_and_y()
             x ~ Normal()
             y ~ Normal(x)
             return nothing
@@ -87,7 +87,7 @@ end
     end
 
     @testset "observe macro" begin
-        @model function observe_macro()
+        @wren function observe_macro()
             x ~ Normal()
             y = x + 1
             @observe y ~ Normal()
@@ -106,7 +106,7 @@ end
     end
 
     @testset "macros inside models" begin
-        @model function with_macros()
+        @wren function with_macros()
             @preserve begin
                 x ~ Normal()
                 y = 0.25
@@ -126,7 +126,7 @@ end
     end
 
     @testset "nested expressions" begin
-        @model function nested_if(flag)
+        @wren function nested_if(flag)
             x = if flag
                 y ~ Normal()
                 y
@@ -155,7 +155,7 @@ end
         struct Foo
             a::Float64
         end
-        @model function immutable_struct()
+        @wren function immutable_struct()
             x = Foo(0.5)
             x.a ~ Normal()
         end
@@ -173,11 +173,11 @@ end
     @testset "a = b ~ c syntax" begin
         @testset "macro parses it correctly" begin
             # Essentially we want `a = b ~ c` to be parsed as `a = Sample(b, c)`.
-            @model function parser_inner()
+            @wren function parser_inner()
                 return 1
             end
 
-            @model function tilde_value_position()
+            @wren function tilde_value_position()
                 retval = x ~ parser_inner()
             end
 
@@ -194,7 +194,7 @@ end
         end
 
         @testset "with distributions" begin
-            @model function distribution_tilde_value()
+            @wren function distribution_tilde_value()
                 retval = x ~ Normal()
                 @observe retval ~ Normal()
             end
@@ -227,7 +227,7 @@ end
 
     @testset "return values" begin
         @testset "returning a tilde statement" begin
-            @model function explicit_return_sample()
+            @wren function explicit_return_sample()
                 return x ~ Normal()
             end
             model = explicit_return_sample()
@@ -237,7 +237,7 @@ end
         end
 
         @testset "bare return" begin
-            @model function bare_return(events)
+            @wren function bare_return(events)
                 # Mutate `events` to test that the return statement does indeed exit early
                 push!(events, :before)
                 return
@@ -255,7 +255,7 @@ end
         end
 
         @testset "fallthrough / implicit return" begin
-            @model function fallthrough_sample()
+            @wren function fallthrough_sample()
                 x ~ Normal()
             end
             model = fallthrough_sample()
@@ -263,7 +263,7 @@ end
                 evaluate(model, FromPrior(), OriginalSpace(), Wren.default_accumulators())
             @test retval == parameters(accs)[@vn(x)]
 
-            @model function fallthrough_value()
+            @wren function fallthrough_value()
                 x ~ Normal()
                 2
             end
@@ -275,7 +275,7 @@ end
     end
 
     @testset "control flow" begin
-        @model function control_flow(n, events)
+        @wren function control_flow(n, events)
             if n == 0
                 return push!(events, :empty)
             elseif iseven(n)

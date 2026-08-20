@@ -23,7 +23,7 @@ using Test
         @be fbasic3($x)
 
         # equivalent Wren model
-        @model function f()
+        @wren function f()
             x ~ PM.Normal(0.0, 1.0)
         end
         model = f()

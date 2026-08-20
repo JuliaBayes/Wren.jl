@@ -73,7 +73,7 @@ transforms* which map segments of the parameter vector to the latent variables' 
 original space. For example, consider
 
 ```julia
-@model function my_model()
+@wren function my_model()
     x ~ Normal()
     y ~ Normal()
 end
