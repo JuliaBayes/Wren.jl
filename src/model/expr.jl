@@ -46,14 +46,16 @@ end
 Representation of
 
 ```julia
-@plate [size=SIZE] for LOOP_IDX in LOOP_ITERS
+@plate [name=NAME] [size=SIZE] for LOOP_IDX in LOOP_ITERS
     BODY
 end
 ```
 
+`name` must be a single Symbol. If not specified, a gensym'd name is used.
 If `size` is not specified, it will be `nothing`.
 """
 struct Plate{I,S,B} <: AbstractWrenExpr
+    name::Symbol
     loop_idx::Symbol
     loop_iters::I
     size::S
@@ -149,10 +151,16 @@ function lower_to_wren(expr::Expr, mod::Module, statement_position::Bool=false)
         statement_position || error("@plate must be used as a statement")
         plate_args = filter(a -> !(a isa LineNumberNode), expr.args[2:end])
         size_expr = nothing
+        name_expr = nothing
         for_expr = nothing
         for arg in plate_args
             if arg isa Expr && arg.head == :(=) && arg.args[1] == :size
                 size_expr = arg.args[2]
+            elseif arg isa Expr && arg.head == :(=) && arg.args[1] == :name
+                name_val = arg.args[2]
+                name_val isa QuoteNode && name_val.value isa Symbol ||
+                    error("@plate: `name` must be a single Symbol (e.g. `name=:obs`)")
+                name_expr = name_val.value
             elseif arg isa Expr && arg.head == :for
                 for_expr = arg
             else
@@ -167,7 +175,8 @@ function lower_to_wren(expr::Expr, mod::Module, statement_position::Bool=false)
         loop_idx isa Symbol || error("@plate: loop variable must be a single identifier")
         loop_iters = loop_spec.args[2]
         body = lower_to_wren(for_expr.args[2], mod, true)
-        return Plate(loop_idx, loop_iters, size_expr, body)
+        plate_name = name_expr === nothing ? gensym(:plate) : name_expr
+        return Plate(plate_name, loop_idx, loop_iters, size_expr, body)
     end
 
     # In order to keep the AST sensible, we preserve macros instead of expanding them -- but
@@ -227,6 +236,7 @@ function _wren_expr_to_model_expr(stmt::Plate)
     body = _wren_expr_to_model_expr(stmt.body)
     for_expr = Expr(:for, Expr(:(=), stmt.loop_idx, stmt.loop_iters), body)
     args = Any[Symbol("@plate"), nothing]
+    push!(args, Expr(:(=), :name, QuoteNode(stmt.name)))
     if stmt.size !== nothing
         push!(args, Expr(:(=), :size, stmt.size))
     end

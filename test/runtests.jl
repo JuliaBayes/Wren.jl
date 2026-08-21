@@ -2,7 +2,7 @@ module WrenTests
 
 using Test
 
-@testset "Wren.jl" begin
+@testset verbose=true "Wren.jl" begin
     include("expr.jl")
     include("syntax.jl")
     include("submodel.jl")
