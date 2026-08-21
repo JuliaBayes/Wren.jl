@@ -253,10 +253,10 @@ function Base.show(io::IO, ::MIME"text/plain", vm::VecModel)
     printstyled(io, "VecModel ", vm.model.name; bold=true)
     println(io)
     entries = Any[
-        "adtype" => vm.adtype,
-        "dimension" => vm.dimension,
-        "parameter space" => vm.parameter_space,
-        "model" => vm.model,
+        "adtype"=>vm.adtype,
+        "dimension"=>vm.dimension,
+        "parameter space"=>vm.parameter_space,
+        "model"=>vm.model,
     ]
     for (i, (label, value)) in enumerate(entries)
         last = i == length(entries)
