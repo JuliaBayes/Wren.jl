@@ -10,6 +10,28 @@ Wren._product(dists::AbstractArray{<:Distribution}) = product_distribution(dists
 
 Wren.batched(iters, dist::Distribution) = product_distribution(Fill(dist, length(iters)))
 
+struct DiagNormal{M<:AbstractArray,S<:AbstractArray}
+    mu::M
+    sigma::S
+end
+Plaice.from_unconstrained_vec(d::DiagNormal) = Plaice.Reshape(size(d.mu))
+Plaice.to_unconstrained_vec(d::DiagNormal) = Plaice.Vec(size(d.mu))
+Base.rand(rng::Random.AbstractRNG, d::DiagNormal) =
+    randn(rng, size(d.mu)) .* d.sigma .+ d.mu
+function Wren.logdensityof(d::DiagNormal, x)
+    dist = sum(abs2, (x .- d.mu) ./ d.sigma)
+    return -0.5 * dist - sum(log, d.sigma) - 0.5 * length(d.mu) * log(2π)
+end
+function Wren.batched(
+    iters,
+    ::Val{Normal},
+    indexed_mu::Wren.Indexed,
+    indexed_sigma::Wren.Indexed,
+)
+    # e.g. batched(1:10, Val(Normal), Indexed(x[1:10]), Indexed(y[1:10]))
+    return DiagNormal(indexed_mu.data, indexed_sigma.data)
+end
+
 struct IsoNormal{M<:AbstractArray}
     mu::M
 end
@@ -20,9 +42,9 @@ function Wren.logdensityof(d::IsoNormal, x)
     dist = sum(abs2, x .- d.mu)
     return -0.5 * dist - 0.5 * length(d.mu) * log(2π)
 end
-function Wren.batched(iters, ::Val{Normal}, tup::T) where {T<:Tuple{<:Wren.Indexed}}
-    # e.g. batched(1:10, Val(Normal), (Indexed(x[1:10]),)
-    return IsoNormal(tup[1].data)
+function Wren.batched(iters, ::Val{Normal}, indexed_mu::Wren.Indexed)
+    # e.g. batched(1:10, Val(Normal), Indexed(x[1:10]))
+    return IsoNormal(indexed_mu.data)
 end
 
 struct IIDNormal{T<:Tuple,M<:Number,S<:Number}

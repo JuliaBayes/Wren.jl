@@ -142,9 +142,11 @@ end
 # backend
 function _product end
 
-function batched(iters::I, f::F, args::T) where {I,F,T}
+# Q: unsure about type stability here because of the vararg specialisation thing. 
+# Might need the fallback on generated functions.
+function batched(iters::I, ::Val{F}, args...) where {I,F}
     # Default fallback for batching-unaware calls: use _product instead
-    return _product([f((a isa Indexed ? a.data[i] : a for a in args)...) for i in iters])
+    return _product([F((a isa Indexed ? a.data[i] : a for a in args)...) for i in iters])
 end
 
 function batch_expr(expr, loop_idx, loop_iters)
@@ -176,7 +178,7 @@ function batch_expr(expr, loop_idx, loop_iters)
                 end,
                 expr.args[2:end],
             )
-            Expr(:call, Wren.batched, loop_iters, fname, Expr(:tuple, fargs...))
+            Expr(:call, Wren.batched, loop_iters, fname, fargs...)
         else
             # a form we don't know how to handle -- just wrap in a product
             #  --> _product([$expr for i in 1:J])

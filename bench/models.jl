@@ -27,7 +27,7 @@ Wren.@wren function wren_eight_schools(y, sigma, J)
     mu ~ Normal(0, 5)
     tau ~ truncated(Cauchy(0, 5); lower=0)
     theta ~ MvNormal(fill(mu, J), tau^2 * I)
-    for i in 1:J
+    @plate for i in 1:J
         @observe y[i] ~ Normal(theta[i], sigma[i])
     end
     return (mu=mu, tau=tau)

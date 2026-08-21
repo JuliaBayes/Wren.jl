@@ -59,14 +59,6 @@ const BACKENDS = (
     ),
 )
 
-function vector_values(model, seed)
-    accs = Wren.AccumulatorTuple(Wren.VectorValueAccumulator())
-    _, accs =
-        Wren.evaluate(model, Wren.FromPrior(Xoshiro(seed)), Wren.UnconstrainedSpace(), accs)
-    values = Wren.get_vector_values(accs)
-    return values, Wren.internal_values_as_vector(values)
-end
-
 function dppl_density(model, adtype)
     return DynamicPPL.LogDensityFunction(
         model,
@@ -89,13 +81,20 @@ function pretty_time(seconds)
 end
 
 function benchmark_pair(models, backend, seed)
-    values, params = vector_values(models.wren, seed)
-    wren_model = Wren.VecModel(models.wren, backend.wren; params=values)
+    wren_model =
+        Wren.VecModel(models.wren, backend.wren; params=Wren.FromPrior(Xoshiro(seed)))
+    # A bit hacky to extract the internal field, but it is a vector already in the right
+    # shape...
+    params = wren_model.sample
 
     wren_value, wren_grad = Wren.lp_and_grad(wren_model, params)
 
     if backend.dppl === nothing
-        reference = Wren.VecModel(models.wren, ADTypes.AutoForwardDiff(); params=values)
+        reference = Wren.VecModel(
+            models.wren,
+            ADTypes.AutoForwardDiff();
+            params=FromPrior(Xoshiro(seed)),
+        )
         reference_value, reference_grad = Wren.lp_and_grad(reference, params)
         @assert isapprox(wren_value, reference_value; rtol=1e-8, atol=1e-8)
         @assert isapprox(wren_grad, reference_grad; rtol=1e-7, atol=1e-8)
