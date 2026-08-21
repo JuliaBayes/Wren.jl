@@ -11,8 +11,8 @@ seen so far.
 
 An accumulator type `T <: AbstractAccumulator` must implement the following methods:
 - `accumulator_name(acc::T)` or `accumulator_name(::Type{T})`
-- `accumulate_observe!!(acc::T, val, vn, dist, template)`
-- `accumulate_assume!!(acc::T, val, tval, vn, dist, logjac, template)`
+- `accumulate_observe!!(acc::T, val, vn, dist, template, sitename)`
+- `accumulate_assume!!(acc::T, val, tval, vn, dist, logjac, template, sitename)`
 - `reset(acc::T)`
 - `Base.copy(acc::T)`
 
@@ -30,6 +30,8 @@ In these functions:
   tilde-statement is a literal observation like `0.0 ~ Normal()`, then `vn` is `nothing`.
 - `template` is a value that conveys the shape of the top-level symbol in `vn`, and is
   used specifically for accumulators that carry VarNamedTuples.
+- `sitename` is a compile-time `Symbol` identifying the sampling site in the model source
+  code. Each distinct tilde statement has a unique `sitename`.
 
 To be able to work with multi-threading, it should also implement:
 - `split(acc::T)`
@@ -51,7 +53,7 @@ the name only depends on the type of `acc`, not on its value.
 accumulator_name(acc::AbstractAccumulator) = accumulator_name(typeof(acc))
 
 """
-    accumulate_observe!!(acc::AbstractAccumulator, right, left, vn, template)
+    accumulate_observe!!(acc::AbstractAccumulator, right, left, vn, template, sitename)
 
 Update `acc` in a `tilde_observe!!` call. Returns the updated `acc`.
 
@@ -64,7 +66,7 @@ See also: [`accumulate_assume!!`](@ref)
 function accumulate_observe!! end
 
 """
-    accumulate_assume!!(acc::AbstractAccumulator, val, tval, vn, dist, logjac, template)
+    accumulate_assume!!(acc::AbstractAccumulator, val, tval, vn, dist, logjac, template, sitename)
 
 Update `acc` in a `tilde_assume!!` call. Returns the updated `acc`.
 
@@ -291,19 +293,19 @@ function map_accumulator(
 end
 
 """
-    accumulate_assume!!(at::AccumulatorTuple, val, tval, vn, dist, logjac, template)
+    accumulate_assume!!(at::AccumulatorTuple, val, tval, vn, dist, logjac, template, sitename)
 
 Update all the accumulators of `at` by calling `accumulate_assume!!` on them.
 """
-function accumulate_assume!!(at::AccumulatorTuple, val, tval, vn, right, logjac, template)
-    return map(acc -> accumulate_assume!!(acc, val, tval, vn, right, logjac, template), at)
+function accumulate_assume!!(at::AccumulatorTuple, val, tval, vn, right, logjac, template, sitename)
+    return map(acc -> accumulate_assume!!(acc, val, tval, vn, right, logjac, template, sitename), at)
 end
 
 """
-    accumulate_observe!!(at::AccumulatorTuple, val, vn, right, template)
+    accumulate_observe!!(at::AccumulatorTuple, val, vn, right, template, sitename)
 
 Update all the accumulators of `at` by calling `accumulate_observe!!` on them.
 """
-function accumulate_observe!!(at::AccumulatorTuple, val, vn, right, template)
-    return map(acc -> accumulate_observe!!(acc, val, vn, right, template), at)
+function accumulate_observe!!(at::AccumulatorTuple, val, vn, right, template, sitename)
+    return map(acc -> accumulate_observe!!(acc, val, vn, right, template, sitename), at)
 end

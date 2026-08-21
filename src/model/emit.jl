@@ -72,7 +72,7 @@ function emit_model_expr(stmt::Sample, accs, conditioned, latent_source, paramet
             if $(haskey)($conditioned, $vn)
                 $val = $(getindex)($conditioned, $vn)
                 $(assign_or_set!!(stmt.lhs, val, vn))
-                $accs = $(accumulate_observe!!)($accs, $val, $vn, $rhs, $template)
+                $accs = $(accumulate_observe!!)($accs, $val, $vn, $rhs, $template, $(QuoteNode(stmt.name)))
             else
                 $init_tval = $(get_latent)($latent_source, $vn, $rhs)
                 $val, $tval, $logjac =
@@ -86,6 +86,7 @@ function emit_model_expr(stmt::Sample, accs, conditioned, latent_source, paramet
                     $rhs,
                     $logjac,
                     $template,
+                    $(QuoteNode(stmt.name)),
                 )
             end
         end
@@ -145,7 +146,12 @@ function batch_expr(expr, loop_idx, loop_iters)
     return if occurs_in_expr(expr, loop_idx)
         if expr isa Expr && expr.head == :call
             # batch the call e.g. f(x[i], y[i])
-            #  --> batched(1:J, Val{f}(), (Indexed(x[1:J]), Indexed(y[1:J])))
+            #   --> batched(1:J, Val{f}(), (Indexed(x[1:J]), Indexed(y[1:J])))
+            #
+            # Note that we have to use `Val` here because `f` is often a type constructor
+            # e.g. `Normal`, which prevents us from dispatching on `::typeof(f)` (since
+            # typeof(Normal) is UnionAll). We use `Val{f}()` rather than `Val(f)` to make
+            # sure it's type stable.
             fname = Expr(:call, Expr(:curly, Base.Val, expr.args[1]))
             fargs = map(
                 arg -> begin
@@ -232,7 +238,7 @@ function vectorise_plate_stmt(
     rhs_expr = _wren_expr_to_model_expr(stmt.rhs)
     new_rhs = batch_expr(rhs_expr, loop_idx, loop_iters)
     return emit_model_expr(
-        Sample(new_lhs, new_rhs),
+        Sample(stmt.name, new_lhs, new_rhs),
         accs,
         conditioned,
         latent_source,
@@ -259,7 +265,7 @@ function vectorise_plate_stmt(
     rhs_expr = _wren_expr_to_model_expr(stmt.rhs)
     new_rhs = batch_expr(rhs_expr, loop_idx, loop_iters)
     return emit_model_expr(
-        Observe(new_lhs, new_rhs),
+        Observe(stmt.name, new_lhs, new_rhs),
         accs,
         conditioned,
         latent_source,
@@ -289,7 +295,7 @@ function emit_model_expr(stmt::Observe, accs, conditioned, latent_source, parame
         $val = $(lhs_val)
         $rhs = $rhs_expr
         $vn = $vn_expr
-        $accs = $(accumulate_observe!!)($accs, $val, $vn, $rhs, $template)
+        $accs = $(accumulate_observe!!)($accs, $val, $vn, $rhs, $template, $(QuoteNode(stmt.name)))
     end
 end
 

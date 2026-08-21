@@ -48,6 +48,7 @@ function accumulate_assume!!(
     right,
     logjac,
     template,
+    sitename,
 )
     new_val = _safe_copy(val)
     # The exception catching is probably slow, but it's ok since it only happens inside

@@ -85,6 +85,7 @@ for acc_type in (:VNTAccumulator, :TSVNTAccumulator)
             right,
             logjac,
             template,
+            sitename,
         ) where {AccName}
             new_val = acc.f(val, tval, vn, right, logjac)
             return if new_val isa DoNotAccumulate
@@ -95,7 +96,7 @@ for acc_type in (:VNTAccumulator, :TSVNTAccumulator)
                 update_values(acc, new_values)
             end
         end
-        accumulate_observe!!(acc::$acc_type, val, vn, right, template) = acc
+        accumulate_observe!!(acc::$acc_type, val, vn, right, template, sitename) = acc
 
         function _zero(acc::$acc_type)
             return update_values(acc, empty(acc.values))

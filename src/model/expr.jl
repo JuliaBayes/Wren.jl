@@ -22,7 +22,7 @@ abstract type AbstractWrenExpr end
 Representation of `lhs ~ rhs`.
 """
 struct Sample{L,R} <: AbstractWrenExpr
-    # TODO type bounds?
+    name::Symbol
     lhs::L
     rhs::R
 end
@@ -36,6 +36,7 @@ conditioning status must be determined at runtime (consider e.g. `y[i] ~ Normal(
 partial conditioning array -- thus the status depends on the runtime value of `i`).
 """
 struct Observe{L,R} <: AbstractWrenExpr
+    name::Symbol
     lhs::L
     rhs::R
 end
@@ -144,7 +145,7 @@ function lower_to_wren(expr::Expr, mod::Module, statement_position::Bool=false)
         end
         length(observed_expr.args) == 3 || error("@observe: expected ~ to have 2 arguments")
         lhs, rhs = observed_expr.args[2:3]
-        return Observe(lhs, lower_to_wren(rhs, mod))
+        return Observe(Symbol(lhs), lhs, lower_to_wren(rhs, mod))
     end
 
     if expr.head == :macrocall && expr.args[1] == Symbol("@plate")
@@ -200,7 +201,7 @@ function lower_to_wren(expr::Expr, mod::Module, statement_position::Bool=false)
     if expr.head == :call && expr.args[1] == :~
         length(expr.args) == 3 || error("@wren: expected ~ to have 2 arguments")
         lhs, rhs = expr.args[2:3]
-        return Sample(lhs, lower_to_wren(rhs, mod))
+        return Sample(Symbol(lhs), lhs, lower_to_wren(rhs, mod))
     end
 
     if expr.head == :return
