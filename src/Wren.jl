@@ -33,10 +33,12 @@ using .Expressions:
     Sample,
     WrenExpr,
     _show_wren_exprs,
-    _wren_expr_to_print_expr,
+    _wren_expr_to_model_expr,
     to_wren_exprs
+
 include("model/model.jl")
 include("model/submodel.jl")
+include("model/emit.jl")
 include("interface.jl")
 include("vecmodel.jl")
 include("draw.jl")
