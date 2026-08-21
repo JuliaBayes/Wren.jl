@@ -74,6 +74,10 @@ end
     ) -> FlexiChains.VNChain
 
 No U-Turn Sampler (NUTS) for a Wren model.
+
+```julia
+nuts(model, 1000, 4)
+```
 """
 function nuts(
     model::Wren.Model,
