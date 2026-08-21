@@ -249,6 +249,36 @@ function VecModel(
     )
 end
 
+function Base.show(io::IO, ::MIME"text/plain", vm::VecModel)
+    printstyled(io, "VecModel ", vm.model.name; bold=true)
+    println(io)
+    entries = Any[
+        "adtype" => vm.adtype,
+        "dimension" => vm.dimension,
+        "parameter space" => vm.parameter_space,
+        "model" => vm.model,
+    ]
+    for (i, (label, value)) in enumerate(entries)
+        last = i == length(entries)
+        connector = last ? "└─ " : "├─ "
+        child_prefix = last ? "   " : "│  "
+        print(io, connector)
+        if label == "model"
+            show(
+                IOContext(io, :max_wren_exprs => 10, :tree_prefix => child_prefix),
+                MIME"text/plain"(),
+                value,
+            )
+        else
+            printstyled(io, label; bold=true)
+            print(io, " => ")
+            show(io, value)
+        end
+        last || println(io)
+    end
+    return nothing
+end
+
 _use_closure(::DI.AutoReverseDiff{compile}) where {compile} = compile
 _use_closure(::DI.AbstractADType) = false
 

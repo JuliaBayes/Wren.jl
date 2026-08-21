@@ -86,14 +86,53 @@ function get_function_name_and_args(signature::Expr)
     end
 end
 
+function _show_namedtuple_tree(io::IO, nt::NamedTuple, prefix::String)
+    nkeys = length(nt)
+    compact_io = IOContext(io, :compact => true, :limit => true)
+    for (i, (k, v)) in enumerate(pairs(nt))
+        last = i == nkeys
+        connector = last ? "└─ " : "├─ "
+        print(io, prefix, connector)
+        printstyled(io, k; color=:red)
+        print(io, " => ")
+        show(compact_io, v)
+        last || println(io)
+    end
+end
+
 function Base.show(io::IO, ::MIME"text/plain", model::Model)
-    println(io, "Model ", model.name)
-    print(io, "  arguments: ")
-    show(io, model.args)
-    print(io, "\n  conditioned: ")
-    show(io, model.conditioned)
-    println(io, "\n  expressions:")
-    return _show_wren_exprs(io, model.stmts, 4)
+    prefix = get(io, :tree_prefix, "")
+    printstyled(io, "Model ", model.name; bold=true)
+    println(io)
+
+    max_exprs = get(io, :max_wren_exprs, 20)
+    entries = (
+        "arguments" => model.args,
+        "conditioned" => model.conditioned,
+        "expressions" => model.stmts,
+    )
+    for (i, (label, value)) in enumerate(entries)
+        last = i == length(entries)
+        connector = last ? "└─ " : "├─ "
+        child_prefix = prefix * (last ? "   " : "│  ")
+        print(io, prefix, connector)
+        printstyled(label, ""; bold=true)
+        if label == "expressions"
+            println(io)
+            _show_wren_exprs(io, value, child_prefix * "  "; max_exprs)
+        elseif label == "arguments" && !isempty(value)
+            println(io)
+            _show_namedtuple_tree(io, value, child_prefix)
+        elseif label == "conditioned" && value isa VarNamedTuple && !isempty(value)
+            compact_io = IOContext(io, :compact => true, :limit => true)
+            println(io)
+            vnt_pretty_print(compact_io, value, child_prefix, 0; show_header=false)
+        else
+            show(io, value)
+        end
+        last || println(io)
+    end
+    return nothing
 end
 
 function to_namedtuple(args_expr::Expr)

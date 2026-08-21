@@ -6,7 +6,7 @@ using DocStringExtensions: TYPEDFIELDS
 using LogDensityProblems: LogDensityProblems
 using Plaice: Plaice
 using Random: AbstractRNG, default_rng
-using VarNames: VarNames, varname, VarName, VarNamedTuple
+using VarNames: VarNames, varname, VarName, VarNamedTuple, vnt_pretty_print
 using StatsAPI: StatsAPI
 
 function _issue_error(str)

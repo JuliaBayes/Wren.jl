@@ -257,14 +257,24 @@ function _wren_expr_to_model_expr(stmt::ReturnStatement)
 end
 _wren_expr_to_model_expr(stmt::OtherStatement) = stmt.expr
 
-function _show_wren_exprs(io::IO, stmts, indent::Int=0)
-    first = true
+function _show_wren_exprs(io::IO, stmts, indent::Int=0; max_exprs::Int=typemax(Int))
+    return _show_wren_exprs(io, stmts, ' '^indent; max_exprs)
+end
+function _show_wren_exprs(io::IO, stmts, prefix::String; max_exprs::Int=typemax(Int))
+    n_shown = 0
+    n_total = count(s -> s isa AbstractWrenExpr, stmts)
+    indent = length(prefix)
     for stmt in stmts
         stmt isa AbstractWrenExpr || continue
-        first || println(io)
-        print(io, ' '^indent)
+        if n_shown >= max_exprs
+            println(io)
+            print(io, prefix, "... ($(n_total - max_exprs) more)")
+            break
+        end
+        n_shown > 0 && println(io)
+        print(io, prefix)
         _show_wren_expr(io, stmt, indent)
-        first = false
+        n_shown += 1
     end
     return nothing
 end
