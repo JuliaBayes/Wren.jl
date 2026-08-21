@@ -58,7 +58,7 @@ function emit_model_expr(stmt::Sample, accs, conditioned, latent_source, paramet
     return quote
         $rhs = $rhs_expr
         $vn = $vn_expr
-        if $rhs isa $(Model)
+        if $(Wren.is_submodel)(typeof($rhs))
             $val, $child_params, $child_accs =
                 $(evaluate_submodel)($rhs, $latent_source, $parameter_space, $accs, $vn)
             $(assign_or_set!!(stmt.lhs, child_params, vn))
@@ -151,7 +151,12 @@ function batch_expr(expr, loop_idx, loop_iters)
                 arg -> begin
                     expanded = replace_loop_idx_with_iters(arg, loop_idx, loop_iters)
                     if occurs_in_expr(arg, loop_idx)
-                        Expr(:call, Indexed, expanded)
+                        viewed = if expanded isa Expr && expanded.head == :ref
+                            Expr(:macrocall, Symbol("@view"), nothing, expanded)
+                        else
+                            expanded
+                        end
+                        Expr(:call, Indexed, viewed)
                     else
                         expanded
                     end

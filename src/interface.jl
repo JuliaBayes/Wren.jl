@@ -100,3 +100,21 @@ end
 `model | values` is an alias for [`condition(model, values)`](@ref).
 """
 Base.:|(model::Model, values::VarNamedTuple) = condition(model, values)
+
+"""
+    logjoint(model::Model, params::VarNamedTuple)
+
+Return the log-joint probability of `model` evaluated at `params` in original space.
+"""
+function logjoint(model::Model, params::VarNamedTuple)
+    _, accs = evaluate(
+        model,
+        FromParams(params),
+        OriginalSpace(),
+        AccumulatorTuple(
+            LogPriorAccumulator(),
+            LogLikelihoodAccumulator(),
+        ),
+    )
+    return logjoint(accs)
+end
