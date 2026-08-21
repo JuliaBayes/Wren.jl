@@ -18,7 +18,7 @@ Plaice.from_unconstrained_vec(d::DiagNormal) = Plaice.Reshape(size(d.mu))
 Plaice.to_unconstrained_vec(d::DiagNormal) = Plaice.Vec(size(d.mu))
 Base.rand(rng::Random.AbstractRNG, d::DiagNormal) =
     randn(rng, size(d.mu)) .* d.sigma .+ d.mu
-function Wren.logdensityof(d::DiagNormal, x)
+@inline function Wren.logdensityof(d::DiagNormal, x)
     dist = sum(abs2, (x .- d.mu) ./ d.sigma)
     return -0.5 * dist - sum(log, d.sigma) - 0.5 * length(d.mu) * log(2π)
 end

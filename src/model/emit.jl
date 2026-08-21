@@ -166,12 +166,14 @@ function batch_expr(expr, loop_idx, loop_iters)
                 arg -> begin
                     expanded = replace_loop_idx_with_iters(arg, loop_idx, loop_iters)
                     if occurs_in_expr(arg, loop_idx)
-                        viewed = if expanded isa Expr && expanded.head == :ref
-                            Expr(:macrocall, Symbol("@view"), nothing, expanded)
-                        else
-                            expanded
-                        end
-                        Expr(:call, Indexed, viewed)
+                        # NOTE: Here, we might want to do something more clever, such as
+                        # calling `@view expanded` in order to avoid allocating a new slice.
+                        # Or alternatively, we could check if `size(expanded) ==
+                        # size(loop_iters)` and if so, avoid indexing into `expanded`.
+                        # However, although both of these solutions save on the allocation,
+                        # they cause Enzyme to require runtime activity, which kills AD
+                        # performance.
+                        Expr(:call, Indexed, expanded)
                     else
                         expanded
                     end

@@ -27,6 +27,7 @@ Wren = "bcabdda7-19af-429b-97ac-a6b557ca0f6c"
 Differ = {rev = "master", url = "https://github.com/MasonProtter/Differ.jl"}
 ProbabilityMeasures = {rev = "main", url = "https://github.com/rsenne/ProbabilityMeasures.jl"}
 Plaice = {rev = "main", url = "https://github.com/JuliaBayes/Plaice.jl"}
+RuntimeGeneratedFunctions = {rev = "master", url = "https://github.com/penelopeysm/RuntimeGeneratedFunctions.jl"}
 Wren = {path = ".."}
 
 [compat]
