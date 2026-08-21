@@ -19,6 +19,7 @@ using .Expressions:
     Sample,
     WrenExpr,
     _show_wren_exprs,
+    _wren_expr_to_expr,
     to_wren_exprs
 
 include("space.jl")

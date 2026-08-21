@@ -210,13 +210,13 @@ function vectorise_plate_stmt(
     parameter_space,
 )
     new_lhs = replace_loop_idx_with_iters(stmt.lhs, loop_idx, loop_iters)
-    new_rhs_single = replace_loop_idx_with_iters(stmt.rhs, loop_idx, loop_iters)
+    rhs_expr = _wren_expr_to_expr(stmt.rhs)
     new_rhs = Expr(
         :call,
         Wren._product,
         Expr(
             :comprehension,
-            Expr(:generator, new_rhs_single, Expr(:(=), loop_idx, loop_iters)),
+            Expr(:generator, rhs_expr, Expr(:(=), loop_idx, loop_iters)),
         ),
     )
     return emit_model_expr(
@@ -237,13 +237,13 @@ function vectorise_plate_stmt(
     parameter_space,
 )
     new_lhs = replace_loop_idx_with_iters(stmt.lhs, loop_idx, loop_iters)
-    new_rhs_single = replace_loop_idx_with_iters(stmt.rhs, loop_idx, loop_iters)
+    rhs_expr = _wren_expr_to_expr(stmt.rhs)
     new_rhs = Expr(
         :call,
         Wren._product,
         Expr(
             :comprehension,
-            Expr(:generator, new_rhs_single, Expr(:(=), loop_idx, loop_iters)),
+            Expr(:generator, rhs_expr, Expr(:(=), loop_idx, loop_iters)),
         ),
     )
     return emit_model_expr(
