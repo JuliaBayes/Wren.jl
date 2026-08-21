@@ -214,10 +214,7 @@ function vectorise_plate_stmt(
     new_rhs = Expr(
         :call,
         Wren._product,
-        Expr(
-            :comprehension,
-            Expr(:generator, rhs_expr, Expr(:(=), loop_idx, loop_iters)),
-        ),
+        Expr(:comprehension, Expr(:generator, rhs_expr, Expr(:(=), loop_idx, loop_iters))),
     )
     return emit_model_expr(
         Sample(new_lhs, new_rhs),
@@ -241,10 +238,7 @@ function vectorise_plate_stmt(
     new_rhs = Expr(
         :call,
         Wren._product,
-        Expr(
-            :comprehension,
-            Expr(:generator, rhs_expr, Expr(:(=), loop_idx, loop_iters)),
-        ),
+        Expr(:comprehension, Expr(:generator, rhs_expr, Expr(:(=), loop_idx, loop_iters))),
     )
     return emit_model_expr(
         Observe(new_lhs, new_rhs),

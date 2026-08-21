@@ -48,7 +48,7 @@ end
 
             # Broadcasting operations where needed...
             @test f(:(i + 1)) == _normalise_ast!(:(@__dot__ (1:J) + 1))
-            @test f(:(x[i + 1])) == _normalise_ast!(:(x[@__dot__ (1:J) + 1]))
+            @test f(:(x[i+1])) == _normalise_ast!(:(x[@__dot__ (1:J) + 1]))
             @test f(:(x[-i])) == _normalise_ast!(:(x[@__dot__ -(1:J)]))
 
             @test_broken false
