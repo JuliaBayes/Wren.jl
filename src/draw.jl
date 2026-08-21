@@ -79,18 +79,18 @@ end
 function _all_fixed_transforms(vecmodel::VecModel)
     return all(
         rt -> rt.transform isa FixedTransform,
-        values(vecmodel.ranges_and_transforms),
+        values(vecmodel.ranges_and_transforms.vnt),
     )
 end
 
 function _raw_params_from_fixed_transforms(
     params::AbstractVector,
-    ranges_and_transforms::VarNamedTuple,
+    ranges_and_transforms::RangesAndTransforms,
 )
+    vnt = ranges_and_transforms.vnt
     raw_params = VarNamedTuple()
-    for (vn, rt) in pairs(ranges_and_transforms)
-        template =
-            get(ranges_and_transforms.data, VarNames.getsym(vn), VarNames.NoTemplate())
+    for (vn, rt) in pairs(vnt)
+        template = get(vnt.data, VarNames.getsym(vn), VarNames.NoTemplate())
         raw_value = rt.transform.transform(params[rt.range])
         raw_params = VarNames.templated_setindex!!(raw_params, raw_value, vn, template)
     end

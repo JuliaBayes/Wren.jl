@@ -297,8 +297,20 @@ end
 
 Update all the accumulators of `at` by calling `accumulate_assume!!` on them.
 """
-function accumulate_assume!!(at::AccumulatorTuple, val, tval, vn, right, logjac, template, sitename)
-    return map(acc -> accumulate_assume!!(acc, val, tval, vn, right, logjac, template, sitename), at)
+function accumulate_assume!!(
+    at::AccumulatorTuple,
+    val,
+    tval,
+    vn,
+    right,
+    logjac,
+    template,
+    sitename,
+)
+    return map(
+        acc -> accumulate_assume!!(acc, val, tval, vn, right, logjac, template, sitename),
+        at,
+    )
 end
 
 """

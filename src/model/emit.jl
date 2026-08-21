@@ -72,9 +72,16 @@ function emit_model_expr(stmt::Sample, accs, conditioned, latent_source, paramet
             if $(haskey)($conditioned, $vn)
                 $val = $(getindex)($conditioned, $vn)
                 $(assign_or_set!!(stmt.lhs, val, vn))
-                $accs = $(accumulate_observe!!)($accs, $val, $vn, $rhs, $template, $(QuoteNode(stmt.name)))
+                $accs = $(accumulate_observe!!)(
+                    $accs,
+                    $val,
+                    $vn,
+                    $rhs,
+                    $template,
+                    $(QuoteNode(stmt.name)),
+                )
             else
-                $init_tval = $(get_latent)($latent_source, $vn, $rhs)
+                $init_tval = $(get_latent)($latent_source, $vn, $rhs, $(Val{stmt.name}()))
                 $val, $tval, $logjac =
                     $(apply_parameter_space)($parameter_space, $init_tval, $vn, $rhs)
                 $(assign_or_set!!(stmt.lhs, val, vn))
@@ -295,7 +302,14 @@ function emit_model_expr(stmt::Observe, accs, conditioned, latent_source, parame
         $val = $(lhs_val)
         $rhs = $rhs_expr
         $vn = $vn_expr
-        $accs = $(accumulate_observe!!)($accs, $val, $vn, $rhs, $template, $(QuoteNode(stmt.name)))
+        $accs = $(accumulate_observe!!)(
+            $accs,
+            $val,
+            $vn,
+            $rhs,
+            $template,
+            $(QuoteNode(stmt.name)),
+        )
     end
 end
 

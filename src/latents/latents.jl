@@ -22,10 +22,18 @@ Custom subtypes of this can be created to customise model execution. To be a val
 abstract type AbstractLatentSource end
 
 """
-    get_latent(source::AbstractLatentSource, vn::VarName, dist) -> TransformedValue
+    get_latent(
+        source::AbstractLatentSource,
+        vn::VarName,
+        dist,
+        ::Val{sitename}
+    ) where {sitename} -> TransformedValue
 
-Obtain a value for the latent variable `vn` from `source`. `dist` is the prior distribution
-of the variable, which occurs on the right-hand side of the model's tilde-statement.
+Obtain a value for the latent variable `vn` from `source`.
+
+`dist` is the prior distribution of the variable, which occurs on the right-hand side of the
+model's tilde-statement. `sitename` is a compile-time Symbol identifying the sampling site
+in the model source code.
 
 This function should return a `TransformedValue` which specifies both the value as well as
 the way to convert the value back to the model's original space. Note that this allows for
@@ -68,7 +76,7 @@ struct FromPrior{R<:AbstractRNG} <: AbstractLatentSource
     rng::R
 end
 FromPrior() = FromPrior(default_rng())
-get_latent(source::FromPrior, ::VarName, right) =
+get_latent(source::FromPrior, ::VarName, right, ::Val) =
     TransformedValue(rand(source.rng, right), AsOriginal())
 scope(source::FromPrior, ::VarName) = source
 
@@ -88,13 +96,13 @@ struct FromParams{P<:VarNamedTuple,S<:Union{AbstractLatentSource,Nothing}} <:
     fallback::S
 end
 FromParams(params::VarNamedTuple) = FromParams(params, nothing)
-function get_latent(source::FromParams, vn::VarName, right)
+function get_latent(source::FromParams, vn::VarName, right, sitename::Val)
     return if haskey(source.params, vn)
         value = source.params[vn]
         value isa TransformedValue ? value : TransformedValue(value, AsOriginal())
     else
         source.fallback === nothing && error("No value was provided for variable $vn")
-        get_latent(source.fallback, vn, right)
+        get_latent(source.fallback, vn, right, sitename)
     end
 end
 function scope(source::FromParams, vn::VarName)
@@ -123,31 +131,94 @@ Base.isequal(a::RangeAndTransform, b::RangeAndTransform) =
     isequal(a.range, b.range) && isequal(a.transform, b.transform)
 
 """
+    RangesAndTransforms
+
+Holds a `VarNamedTuple` mapping `VarName => RangeAndTransform`, together with a fast-path
+`NamedTuple` mapping `sitename => RangeAndTransform`.
+
+The inner constructor takes a `VarNamedTuple` and a mapping of `sitename => VarName` pairs.
+This guarantees that the actual information stored in both fields are consistent.
+
+When evaluating a model with `FromVector`, Wren first checks the `sitename_lookup` to see if
+the `RangeAndTransform` has been stored there. If it hasn't, then it will do the potentially
+slower `VarNamedTuple` lookup.
+
+The fast path is only hit for sampling sites that are encountered once and only once during
+model evaluation. This allows us to completely elide VarNamedTuple lookups for these sites.
+Usually that's not a problem, but VarNames like `x[1:100000]` can be very slow due to
+PartialArray and ArrayLikeBlock checks.
+
+The implicit assumption here is that if `sitename` was only encountered once during the
+construction of the `RangesAndTransforms`, then it will only be encountered once during
+every model evaluation. This is true of essentially any model that is amenable to
+vectorisation.
+
+An interesting case to ponder is a model like this. In the absence of this fast path (i.e.,
+if there was only VNT-based lookup like DynamicPPL), this is compatible with vectorisation
+as long as `dist1` and `dist2` have the same `Plaice.unconstrained_vec_size`, because the
+resulting `RangeAndTransform` will be a constant:
+
+```julia
+if something
+    x ~ dist1
+else
+    x ~ dist2
+end
+```
+
+With the fast path, it's quite possible that the sitename for the `if` branch will be
+stored, and the sitename for the `else` branch won't. This means that during model
+evaluation, the fast path will only work if we hit the same branch. However, even if we hit
+the other branch, the slow path will still work (because `x`'s `RangeAndTransform` will
+still be stored in the VNT!)
+"""
+struct RangesAndTransforms{N<:NamedTuple,V<:VarNamedTuple}
+    sitename_lookup::N
+    vnt::V
+    function RangesAndTransforms(
+        vnt::VarNamedTuple,
+        sitename_entries::NamedTuple=NamedTuple(),
+    )
+        sitename_lookup = NamedTuple()
+        for (sitename, vn) in pairs(sitename_entries)
+            sitename_lookup = merge(sitename_lookup, NamedTuple{(sitename,)}((vnt[vn],)))
+        end
+        return new{typeof(sitename_lookup),typeof(vnt)}(sitename_lookup, vnt)
+    end
+end
+Base.:(==)(a::RangesAndTransforms, b::RangesAndTransforms) = a.vnt == b.vnt
+
+"""
     FromVector(
         params::AbstractVector,
-        ranges_and_transforms::VarNamedTuple
+        ranges_and_transforms::RangesAndTransforms
     ) <: AbstractLatentSource
 
-Provide latent values from a vector of flattened parameters, together with a `VarNamedTuple`
-that provides information on how to recover the values in their original space.
-
-The `ranges_and_transforms` argument should be a `VarNamedTuple` where each value is a
-`RangeAndTransform` object. This object specifies:
-
-- a `range`, which indicates the section of the `params` vector where the variable lives;
-- a `transform`, which indicates how to convert the value back to the original space.
+Provide latent values from a vector of flattened parameters, together with a
+`RangesAndTransforms` that provides information on how to recover the values in their
+original space.
 """
-struct FromVector{V<:AbstractVector,R<:VarNamedTuple} <: AbstractLatentSource
+struct FromVector{V<:AbstractVector,R<:RangesAndTransforms} <: AbstractLatentSource
     params::V
     ranges_and_transforms::R
 end
-_get_range_and_transform(ranges_and_transforms::VarNamedTuple, vn::VarName) =
-    ranges_and_transforms[vn]
-function get_latent(source::FromVector, vn::VarName, right)
-    rt = _get_range_and_transform(source.ranges_and_transforms, vn)
+@generated function _get_range_and_transform(
+    rat::RangesAndTransforms{<:NamedTuple{names}},
+    vn::VarName,
+    ::Val{sitename},
+) where {names,sitename}
+    return if sitename in names
+        :(rat.sitename_lookup.$sitename)
+    else
+        :(rat.vnt[vn])
+    end
+end
+function get_latent(source::FromVector, vn::VarName, right, sitename::Val)
+    rt = _get_range_and_transform(source.ranges_and_transforms, vn, sitename)
     range, tfm = rt.range, rt.transform
     return TransformedValue(view(source.params, range), tfm)
 end
 function scope(source::FromVector, vn::VarName)
-    return FromVector(source.params, source.ranges_and_transforms[vn])
+    child_vnt = source.ranges_and_transforms.vnt[vn]
+    return FromVector(source.params, RangesAndTransforms(child_vnt))
 end

@@ -305,6 +305,13 @@ function accumulate_assume!!(
 )
     return acc
 end
-function accumulate_observe!!(acc::LogLikelihoodAccumulator, val, vn, right, template, sitename)
+function accumulate_observe!!(
+    acc::LogLikelihoodAccumulator,
+    val,
+    vn,
+    right,
+    template,
+    sitename,
+)
     return acclogp(acc, logdensityof(right, val))
 end

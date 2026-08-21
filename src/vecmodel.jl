@@ -10,7 +10,7 @@ struct _VecModelLP{
     C<:VarNamedTuple,
     F,
     S<:AbstractParameterSpace,
-    R<:VarNamedTuple,
+    R<:RangesAndTransforms,
     AC<:AccumulatorTuple,
 }
     evaluation_fn::E
@@ -46,7 +46,7 @@ function _vecmodel_lp(
     conditioned::VarNamedTuple,
     lp_function,
     parameter_space::AbstractParameterSpace,
-    ranges_and_transforms::VarNamedTuple,
+    ranges_and_transforms::RangesAndTransforms,
     accs::AccumulatorTuple,
 )
     source = FromVector(params, ranges_and_transforms)
@@ -142,7 +142,7 @@ struct VecModel{
     A<:Union{DI.AbstractADType,Nothing},
     F,
     S<:AbstractParameterSpace,
-    R<:VarNamedTuple,
+    R<:RangesAndTransforms,
     AC<:AccumulatorTuple,
     L<:_VecModelLP,
     P,
@@ -173,7 +173,7 @@ function VecModel(
     A<:Union{DI.AbstractADType,Nothing},
     F,
     S<:AbstractParameterSpace,
-    R<:VarNamedTuple,
+    R<:RangesAndTransforms,
     X<:AbstractVector,
 }
     accs = AccumulatorTuple(
@@ -231,14 +231,14 @@ function VecModel(
     parameter_space::AbstractParameterSpace=UnconstrainedSpace(),
 )
     # Get vectorised parameters.
-    values = if params isa VarNamedTuple
-        params
+    values, sitename_entries = if params isa VarNamedTuple
+        params, NamedTuple()
     else
         _draw_vectorised_params(model, params, parameter_space)
     end
     # Check that they're sensible, and flatten them into a single vector.
     _validate_vectorised_params(values, parameter_space)
-    ranges_and_transforms, sample = _ranges_and_params(values)
+    ranges_and_transforms, sample = _ranges_and_params(values, sitename_entries)
     return VecModel(
         model,
         adtype,
@@ -272,13 +272,16 @@ function _draw_vectorised_params(
     model::Model,
     source::AbstractLatentSource,
     parameter_space::AbstractParameterSpace,
-)::VarNamedTuple
-    accs = AccumulatorTuple(VectorisedParamsAccumulator())
+)
+    accs = AccumulatorTuple(VectorisedParamsAccumulator(), SiteNameTracker())
     _, accs = evaluate(model, source, parameter_space, accs)
-    return vectorised_params(accs)
+    return vectorised_params(accs), accs[SITENAME_TRACKER_ACCNAME].entries
 end
-function _ranges_and_params(values::VarNamedTuple)
-    ranges_and_transforms = VarNamedTuple()
+function _ranges_and_params(
+    values::VarNamedTuple,
+    sitename_entries::NamedTuple=NamedTuple(),
+)
+    vnt = VarNamedTuple()
     params = Union{}[]
     offset = 1
     for (vn, tval) in pairs(values)
@@ -290,8 +293,8 @@ function _ranges_and_params(values::VarNamedTuple)
         )
         range = offset:(offset+length(value)-1)
         template = get(values.data, VarNames.getsym(vn), VarNames.NoTemplate())
-        ranges_and_transforms = VarNames.templated_setindex!!(
-            ranges_and_transforms,
+        vnt = VarNames.templated_setindex!!(
+            vnt,
             RangeAndTransform(range, get_transform(tval)),
             vn,
             template,
@@ -299,7 +302,7 @@ function _ranges_and_params(values::VarNamedTuple)
         params = vcat(params, value)
         offset = last(range) + 1
     end
-    return ranges_and_transforms, params
+    return RangesAndTransforms(vnt, sitename_entries), params
 end
 
 """
@@ -432,7 +435,7 @@ Draw a parameter vector compatible with `vecmodel`.
 """
 function Base.rand(rng::AbstractRNG, vecmodel::VecModel)
     # TODO: this is inefficient -- should write directly into the vector
-    values =
+    values, _ =
         _draw_vectorised_params(vecmodel.model, FromPrior(rng), vecmodel.parameter_space)
     ranges_and_transforms, params = _ranges_and_params(values)
     ranges_and_transforms == vecmodel.ranges_and_transforms || throw(
