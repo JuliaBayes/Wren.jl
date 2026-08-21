@@ -6,7 +6,10 @@ using Documenter
 using DocumenterCodeBlocks
 using DocumenterInterLinks
 
-links = InterLinks("Plaice" => "https://juliabayes.org/Plaice.jl/dev/")
+links = InterLinks(
+    "DynamicHMC" => "https://www.tamaspapp.eu/DynamicHMC.jl/dev/",
+    "Plaice" => "https://juliabayes.org/Plaice.jl/dev/",
+)
 
 makedocs(;
     sitename="Wren.jl",

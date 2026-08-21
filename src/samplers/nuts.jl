@@ -71,13 +71,12 @@ end
         nchains::Integer=1;
         adtype::DI.AbstractADType=DI.AutoEnzyme(; mode=Enzyme.Reverse),
         progress::Bool=true,
+        dynamichmc_kwargs...
     ) -> FlexiChains.VNChain
 
-No U-Turn Sampler (NUTS) for a Wren model.
-
-```julia
-nuts(model, 1000, 4)
-```
+No U-Turn Sampler (NUTS) for a Wren model. All `dynamichmc_kwargs` are passed to
+[`DynamicHMC.mcmc_with_warmup`](@extref), allowing you to customise the warmup and sampling
+behaviour.
 """
 function nuts(
     model::Wren.Model,
@@ -85,8 +84,9 @@ function nuts(
     nchains::Integer=1;
     adtype::DI.AbstractADType=DI.AutoEnzyme(; mode=Reverse),
     progress::Bool=true,
+    dynamichmc_kwargs...
 )
-    return nuts(Random.default_rng(), model, niters, nchains; adtype, progress)
+    return nuts(Random.default_rng(), model, niters, nchains; adtype, progress, dynamichmc_kwargs...)
 end
 function nuts(
     rng::Random.AbstractRNG,
@@ -95,6 +95,7 @@ function nuts(
     nchains::Integer=1;
     adtype::DI.AbstractADType=DI.AutoEnzyme(; mode=Reverse),
     progress::Bool=true,
+    dynamichmc_kwargs...
 )
     # AD preparation
     if progress
@@ -127,6 +128,7 @@ function nuts(
                     vecmodel,
                     niters;
                     reporter,
+                    dynamichmc_kwargs...
                 )
                 to_draws(results, vecmodel)
             catch e

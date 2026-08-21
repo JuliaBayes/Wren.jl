@@ -116,7 +116,7 @@ function Base.show(io::IO, ::MIME"text/plain", model::Model)
         connector = last ? "└─ " : "├─ "
         child_prefix = prefix * (last ? "   " : "│  ")
         print(io, prefix, connector)
-        printstyled(label, ""; bold=true)
+        printstyled(io, label, ""; bold=true)
         if label == "expressions"
             println(io)
             _show_wren_exprs(io, value, child_prefix * "  "; max_exprs)
