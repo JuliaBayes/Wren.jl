@@ -1,6 +1,6 @@
 # Wren.jl
 
-[![Stable docs](https://img.shields.io/badge/docs-stable-blue.svg)](https://juliabayes.org/Wren.jl/)
+[![Stable docs](https://img.shields.io/badge/docs-stable-blue.svg)](https://pysm.dev/Wren.jl/)
 
 Probabilistic programming with runtime generated functions.
 
