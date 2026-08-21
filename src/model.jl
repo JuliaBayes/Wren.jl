@@ -143,6 +143,118 @@ function emit_model_expr(stmt::Sample, accs, conditioned, latent_source, paramet
     end
 end
 
+# Overloaded per distribution backend
+function _product end
+# @plate for i in 1:N
+#    y[i] ~ Normal(x[i])
+# end
+#
+# CURRENTLY gets lowered to something like:
+#
+# y[1:N] ~ _product([Normal(x[i]) for i in 1:N])
+#
+# This can be improved! https://github.com/JuliaBayes/ProbabilityMeasures.jl/issues/15
+function emit_model_expr(stmt::Plate, accs, conditioned, latent_source, parameter_space)
+    # stmt.body isa block expr
+    body_exprs = [
+        vectorise_plate_stmt(
+            s,
+            stmt.loop_idx,
+            stmt.loop_iters,
+            accs,
+            conditioned,
+            latent_source,
+            parameter_space,
+        ) for s in stmt.body.args
+    ]
+    return Expr(:block, body_exprs...)
+end
+function replace_loop_idx_with_iters(expr, loop_idx::Symbol, loop_iters)
+    # replace all occurrences of `i` with `1:N` (for example)
+    return if expr isa Symbol
+        expr == loop_idx ? loop_iters : expr
+    elseif expr isa QuoteNode
+        QuoteNode(replace_loop_idx_with_iters(expr.value, loop_idx, loop_iters))
+    elseif expr isa Expr
+        if expr.head in (:ref, :., :call)
+            new_args = map(
+                arg -> replace_loop_idx_with_iters(arg, loop_idx, loop_iters),
+                expr.args,
+            )
+            new_expr = Expr(expr.head, new_args...)
+            if expr.head == :call && any(arg -> arg == loop_idx, expr.args)
+                # e.g. i + 1 --> apart from just replacing i, we also need to broadcast the
+                # operation `@. (1:J) + 1`. Note that we need the `nothing` because
+                # `:macrocall` expects a LineNumberNode, but we can't provide it.
+                Expr(:macrocall, Symbol("@__dot__"), nothing, new_expr)
+            else
+                # ok to just replace.
+                new_expr
+            end
+        else
+            error("@plate: unsupported expression $(expr) with head $(expr.head)")
+        end
+    else
+        # e.g. literals
+        expr
+    end
+end
+vectorise_plate_stmt(lnn::LineNumberNode, idx, iters, ax, cond, ls, ps) = lnn
+function vectorise_plate_stmt(
+    stmt::Sample,
+    loop_idx,
+    loop_iters,
+    accs,
+    conditioned,
+    latent_source,
+    parameter_space,
+)
+    new_lhs = replace_loop_idx_with_iters(stmt.lhs, loop_idx, loop_iters)
+    new_rhs_single = replace_loop_idx_with_iters(stmt.rhs, loop_idx, loop_iters)
+    new_rhs = Expr(
+        :call,
+        Wren._product,
+        Expr(
+            :comprehension,
+            Expr(:generator, new_rhs_single, Expr(:(=), loop_idx, loop_iters)),
+        ),
+    )
+    return emit_model_expr(
+        Sample(new_lhs, new_rhs),
+        accs,
+        conditioned,
+        latent_source,
+        parameter_space,
+    )
+end
+function vectorise_plate_stmt(
+    stmt::Observe,
+    loop_idx,
+    loop_iters,
+    accs,
+    conditioned,
+    latent_source,
+    parameter_space,
+)
+    new_lhs = replace_loop_idx_with_iters(stmt.lhs, loop_idx, loop_iters)
+    new_rhs_single = replace_loop_idx_with_iters(stmt.rhs, loop_idx, loop_iters)
+    new_rhs = Expr(
+        :call,
+        Wren._product,
+        Expr(
+            :comprehension,
+            Expr(:generator, new_rhs_single, Expr(:(=), loop_idx, loop_iters)),
+        ),
+    )
+    return emit_model_expr(
+        Observe(new_lhs, new_rhs),
+        accs,
+        conditioned,
+        latent_source,
+        parameter_space,
+    )
+end
+
 function emit_model_expr(stmt::Observe, accs, conditioned, latent_source, parameter_space)
     @gensym rhs val vn
     rhs_expr = emit_model_expr(stmt.rhs, accs, conditioned, latent_source, parameter_space)
@@ -257,6 +369,10 @@ end
 
 macro observe(expr)
     error("@observe must be used inside @wren")
+end
+
+macro plate(args...)
+    error("@plate must be used inside @wren")
 end
 
 function _wren(expr::Expr, mod::Module)

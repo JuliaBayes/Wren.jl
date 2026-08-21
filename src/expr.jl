@@ -21,6 +21,13 @@ struct OtherStatement{E} <: AbstractWrenExpr
     expr::E
 end
 
+struct Plate{I,S,B} <: AbstractWrenExpr
+    loop_idx::Symbol
+    loop_iters::I
+    size::S
+    body::B
+end
+
 struct WrenExpr{A} <: AbstractWrenExpr
     head::Symbol
     args::A
@@ -67,6 +74,31 @@ function lower_wren_expr(expr::Expr, mod::Module, statement_position::Bool=false
         return Observe(lhs, lower_wren_expr(rhs, mod))
     end
 
+    if expr.head == :macrocall && expr.args[1] == Symbol("@plate")
+        statement_position || error("@plate must be used as a statement")
+        plate_args = filter(a -> !(a isa LineNumberNode), expr.args[2:end])
+        size_expr = nothing
+        for_expr = nothing
+        for arg in plate_args
+            if arg isa Expr && arg.head == :(=) && arg.args[1] == :size
+                size_expr = arg.args[2]
+            elseif arg isa Expr && arg.head == :for
+                for_expr = arg
+            else
+                error("@plate: unexpected argument `$arg`")
+            end
+        end
+        for_expr !== nothing || error("@plate: expected a for loop")
+        loop_spec = for_expr.args[1]
+        loop_spec isa Expr && loop_spec.head == :(=) ||
+            error("@plate: expected `for VAR in ITER`")
+        loop_idx = loop_spec.args[1]
+        loop_idx isa Symbol || error("@plate: loop variable must be a single identifier")
+        loop_iters = loop_spec.args[2]
+        body = lower_wren_expr(for_expr.args[2], mod, true)
+        return Plate(loop_idx, loop_iters, size_expr, body)
+    end
+
     # Preserve external macros for Julia to expand after Wren has lowered any
     # probabilistic statements that are visible in their arguments. In particular,
     # expanding a control-flow macro here may hide its body inside generated closures.
@@ -107,6 +139,16 @@ end
 _wren_expr_to_expr(expr) = expr
 function _wren_expr_to_expr(stmt::WrenExpr)
     return Expr(stmt.head, map(_wren_expr_to_expr, stmt.args)...)
+end
+function _wren_expr_to_expr(stmt::Plate)
+    body = _wren_expr_to_expr(stmt.body)
+    for_expr = Expr(:for, Expr(:(=), stmt.loop_idx, stmt.loop_iters), body)
+    args = Any[Symbol("@plate"), nothing]
+    if stmt.size !== nothing
+        push!(args, Expr(:(=), :size, stmt.size))
+    end
+    push!(args, for_expr)
+    return Expr(:macrocall, args...)
 end
 function _wren_expr_to_expr(stmt::Sample)
     return Expr(:call, :~, stmt.lhs, _wren_expr_to_expr(stmt.rhs))

@@ -14,6 +14,7 @@ using .Expressions:
     AbstractWrenExpr,
     Observe,
     OtherStatement,
+    Plate,
     ReturnStatement,
     Sample,
     WrenExpr,
@@ -36,6 +37,7 @@ include("test_ad.jl")
 
 export @wren,
     @observe,
+    @plate,
     AbstractLatentSource,
     AbstractTransform,
     AbstractParameterSpace,

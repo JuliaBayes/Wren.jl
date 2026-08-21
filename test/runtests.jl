@@ -4,6 +4,7 @@ using Test
 
 @testset "Wren.jl" begin
     include("expr.jl")
+    include("syntax.jl")
     include("submodel.jl")
     include("vecmodel.jl")
     include("draw.jl")

@@ -25,6 +25,7 @@ VarNames = "09a315b2-63fc-4165-8d7f-d59368e770cc"
 
 [weakdeps]
 ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
+Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
 Mooncake = "da2b9cff-9c12-43a0-ae48-6db2b0edb7d6"
 Reactant = "3c362404-f566-11ee-1572-e11a4b42c853"
@@ -34,6 +35,7 @@ FlexiChains = {rev = "v0.7", url = "https://github.com/JuliaBayes/FlexiChains.jl
 Plaice = {rev = "main", url = "https://github.com/JuliaBayes/Plaice.jl"}
 
 [extensions]
+WrenDistributionsExt = ["Distributions"]
 WrenEnzymeCoreExt = ["EnzymeCore"]
 WrenMooncakeExt = ["Mooncake"]
 WrenReactantExt = ["ADTypes", "Enzyme", "Reactant"]
