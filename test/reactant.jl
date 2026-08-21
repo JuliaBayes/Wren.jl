@@ -3,7 +3,6 @@ module WrenReactantTests
 using Wren
 using ProbabilityMeasures: ProbabilityMeasures as PM
 using Enzyme: Reverse
-using Reactant
 using ADTypes: AutoReactant, AutoEnzyme
 using Test
 

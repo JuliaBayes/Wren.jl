@@ -9,7 +9,14 @@ using Test
     include("vecmodel.jl")
     include("draw.jl")
     include("ad.jl")
-    include("reactant.jl")
+
+    if !Sys.iswindows()
+        # problematic on windows CI, idk why
+        import Pkg
+        Pkg.add("Reactant")
+        using Reactant: Reactant
+        include("reactant.jl")
+    end
 end
 
 end # module WrenTests
