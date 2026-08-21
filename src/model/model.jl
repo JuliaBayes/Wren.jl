@@ -120,15 +120,21 @@ function Base.show(io::IO, ::MIME"text/plain", model::Model)
         if label == "expressions"
             println(io)
             _show_wren_exprs(io, value, child_prefix * "  "; max_exprs)
-        elseif label == "arguments" && !isempty(value)
-            println(io)
-            _show_namedtuple_tree(io, value, child_prefix)
-        elseif label == "conditioned" && value isa VarNamedTuple && !isempty(value)
-            compact_io = IOContext(io, :compact => true, :limit => true)
-            println(io)
-            vnt_pretty_print(compact_io, value, child_prefix, 0; show_header=false)
-        else
-            show(io, value)
+        elseif label == "arguments"
+            if isempty(value)
+                printstyled(io, " (none)"; color=:white)
+            else
+                println(io)
+                _show_namedtuple_tree(io, value, child_prefix)
+            end
+        elseif label == "conditioned" && value isa VarNamedTuple
+            if isempty(value)
+                printstyled(io, " (none)"; color=:white)
+            else
+                compact_io = IOContext(io, :compact => true, :limit => true)
+                println(io)
+                vnt_pretty_print(compact_io, value, child_prefix, 0; show_header=false)
+            end
         end
         last || println(io)
     end

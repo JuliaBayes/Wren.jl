@@ -34,6 +34,7 @@ Reactant = "3c362404-f566-11ee-1572-e11a4b42c853"
 [sources]
 FlexiChains = {rev = "v0.7", url = "https://github.com/JuliaBayes/FlexiChains.jl"}
 Plaice = {rev = "main", url = "https://github.com/JuliaBayes/Plaice.jl"}
+RuntimeGeneratedFunctions = {rev = "master", url = "https://github.com/penelopeysm/RuntimeGeneratedFunctions.jl"}
 
 [extensions]
 WrenDistributionsExt = ["Distributions", "FillArrays", "Plaice"]
@@ -59,7 +60,7 @@ Mooncake = "0.4, 0.5"
 Preferences = "1"
 Random = "1"
 Reactant = "0.2"
-RuntimeGeneratedFunctions = "0.5"
+RuntimeGeneratedFunctions = "0.5.25"
 Statistics = "1"
 StatsAPI = "1"
 Term = "2.0.8"
