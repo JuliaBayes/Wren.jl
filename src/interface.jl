@@ -111,10 +111,7 @@ function logjoint(model::Model, params::VarNamedTuple)
         model,
         FromParams(params),
         OriginalSpace(),
-        AccumulatorTuple(
-            LogPriorAccumulator(),
-            LogLikelihoodAccumulator(),
-        ),
+        AccumulatorTuple(LogPriorAccumulator(), LogLikelihoodAccumulator()),
     )
     return logjoint(accs)
 end

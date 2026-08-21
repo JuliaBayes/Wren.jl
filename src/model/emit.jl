@@ -124,10 +124,10 @@ end
 """
     Indexed
 
-Marker struct to indicate that the argument is an iterator over a plate index.
+Marker struct to indicate that the argument is an object indexed by the plate loop index.
 """
 struct Indexed{T}
-    iters::T
+    data::T
 end
 
 # Semantically equivalent to product_distribution, but we can overload per distribution
@@ -136,7 +136,7 @@ function _product end
 
 function batched(iters::I, f::F, args::T) where {I,F,T}
     # Default fallback for batching-unaware calls: use _product instead
-    return _product([f((a isa Indexed ? a.iters[i] : a for a in args)...) for i in iters])
+    return _product([f((a isa Indexed ? a.data[i] : a for a in args)...) for i in iters])
 end
 
 function batch_expr(expr, loop_idx, loop_iters)
@@ -145,8 +145,8 @@ function batch_expr(expr, loop_idx, loop_iters)
     return if occurs_in_expr(expr, loop_idx)
         if expr isa Expr && expr.head == :call
             # batch the call e.g. f(x[i], y[i])
-            #  --> batched(1:J, f, (Indexed(x[1:J]), Indexed(y[1:J])))
-            fname = expr.args[1]
+            #  --> batched(1:J, Val{f}(), (Indexed(x[1:J]), Indexed(y[1:J])))
+            fname = Expr(:call, Expr(:curly, Base.Val, expr.args[1]))
             fargs = map(
                 arg -> begin
                     expanded = replace_loop_idx_with_iters(arg, loop_idx, loop_iters)
