@@ -2,6 +2,7 @@ module WrenDistributionsExt
 
 using Wren: Wren
 using Random: Random
+using Plaice: Plaice
 using FillArrays: Fill
 using Distributions: Distribution, product_distribution, Normal
 
@@ -12,9 +13,11 @@ Wren.batched(iters, dist::Distribution) = product_distribution(Fill(dist, length
 struct IsoNormal{M<:AbstractArray}
     mu::M
 end
+Plaice.from_unconstrained_vec(d::IsoNormal) = Plaice.Reshape(size(d.mu))
+Plaice.to_unconstrained_vec(d::IsoNormal) = Plaice.Vec(size(d.mu))
 Base.rand(rng::Random.AbstractRNG, d::IsoNormal) = randn(rng, size(d.mu)) .+ d.mu
 function Wren.logdensityof(d::IsoNormal, x)
-    dist = sum(abs2, d.mu .- x)
+    dist = mapreduce((a, b) -> abs2(a - b), +, d.mu, x)
     return -0.5 * dist - 0.5 * length(d.mu) * log(2π)
 end
 function Wren.batched(iters, ::Val{Normal}, tup::T) where {T<:Tuple{<:Wren.Indexed}}
@@ -28,8 +31,11 @@ struct IIDNormal{T<:Tuple,M<:Number,S<:Number}
     sigma::S
 end
 Base.rand(rng::Random.AbstractRNG, d::IIDNormal) = randn(rng, d.size) .* d.sigma .+ d.mu
+Plaice.from_unconstrained_vec(d::IIDNormal) = Plaice.Reshape(d.size)
+Plaice.to_unconstrained_vec(d::IIDNormal) = Plaice.Vec(d.size)
 function Wren.logdensityof(d::IIDNormal, x)
-    dist = sum(abs2, (x .- d.mu) ./ d.sigma)
+    inv_sigma = inv(d.sigma)
+    dist = sum(xi -> abs2((xi - d.mu) * inv_sigma), x)
     N = length(x)
     return -0.5 * dist - N * log(d.sigma) - 0.5 * N * log(2π)
 end

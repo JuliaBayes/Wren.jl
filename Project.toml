@@ -36,7 +36,7 @@ FlexiChains = {rev = "v0.7", url = "https://github.com/JuliaBayes/FlexiChains.jl
 Plaice = {rev = "main", url = "https://github.com/JuliaBayes/Plaice.jl"}
 
 [extensions]
-WrenDistributionsExt = ["Distributions", "FillArrays"]
+WrenDistributionsExt = ["Distributions", "FillArrays", "Plaice"]
 WrenEnzymeCoreExt = ["EnzymeCore"]
 WrenMooncakeExt = ["Mooncake"]
 WrenReactantExt = ["ADTypes", "Enzyme", "Reactant"]

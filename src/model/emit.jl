@@ -267,13 +267,26 @@ function vectorise_plate_stmt(
     )
 end
 
+function _maybe_view(v::AbstractArray, idxs...)
+    return if ndims(view(v, idxs...)) == 0
+        v[idxs...]
+    else
+        view(v, idxs...)
+    end
+end
+
 function emit_model_expr(stmt::Observe, accs, conditioned, latent_source, parameter_space)
     @gensym rhs val vn
     rhs_expr = emit_model_expr(stmt.rhs, accs, conditioned, latent_source, parameter_space)
     vn_expr = remove_escapes(varname(stmt.lhs, false))
     template = get_top_level_symbol(stmt.lhs)
+    lhs_val = if stmt.lhs isa Expr && stmt.lhs.head == :ref
+        Expr(:call, _maybe_view, stmt.lhs.args...)
+    else
+        stmt.lhs
+    end
     return quote
-        $val = $(stmt.lhs)
+        $val = $(lhs_val)
         $rhs = $rhs_expr
         $vn = $vn_expr
         $accs = $(accumulate_observe!!)($accs, $val, $vn, $rhs, $template)
