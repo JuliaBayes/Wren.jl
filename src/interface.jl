@@ -70,18 +70,33 @@ function rand_with_logp(rng::AbstractRNG, model::Model)
 end
 rand_with_logp(model::Model) = rand_with_logp(default_rng(), model)
 
+"""
+    conditioned(model::Model)::VarNamedTuple
+
+Return the current set of values that `model` is conditioned on.
+"""
 conditioned(model::Model) = model.conditioned
 
+"""
+    condition(model::Model, values::VarNamedTuple)::Model
+
+Condition `model` on the values in `values`, returning a new model. The original model is
+not modified.
+"""
 function condition(model::Model, values::VarNamedTuple)
-    new_conditioned = merge(model.conditioned, values)
+    new_conditioned = merge(conditioned(model), values)
     return Model(
         model.name,
         model.args,
         model.stmts,
-        model.mod,
-        new_conditioned,
-        model.evaluation_fn,
+        model.mod;
+        conditioned=new_conditioned,
     )
 end
 
+"""
+    Base.:|(model::Model, values::VarNamedTuple)::Model
+
+`model | values` is an alias for [`condition(model, values)`](@ref).
+"""
 Base.:|(model::Model, values::VarNamedTuple) = condition(model, values)

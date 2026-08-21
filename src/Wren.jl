@@ -9,18 +9,11 @@ using Random: AbstractRNG, default_rng
 using VarNames: VarNames, varname, VarName, VarNamedTuple
 using StatsAPI: StatsAPI
 
-include("expr.jl")
-using .Expressions:
-    AbstractWrenExpr,
-    Observe,
-    OtherStatement,
-    Plate,
-    ReturnStatement,
-    Sample,
-    WrenExpr,
-    _show_wren_exprs,
-    _wren_expr_to_expr,
-    to_wren_exprs
+function _issue_error(str)
+    error(
+        "$str. Please report this issue at https://github.com/JuliaBayes/Wren.jl/issues. Thank you!",
+    )
+end
 
 include("space.jl")
 include("accs/accs.jl")
@@ -30,7 +23,20 @@ include("accs/params.jl")
 include("accs/vectorised_params.jl")
 include("accs/accessors.jl")
 include("latents/latents.jl")
-include("model.jl")
+include("model/expr.jl")
+using .Expressions:
+    AbstractWrenExpr,
+    Observe,
+    OtherStatement,
+    Plate,
+    ReturnStatement,
+    Sample,
+    WrenExpr,
+    _show_wren_exprs,
+    _wren_expr_to_print_expr,
+    to_wren_exprs
+include("model/model.jl")
+include("model/submodel.jl")
 include("interface.jl")
 include("vecmodel.jl")
 include("draw.jl")

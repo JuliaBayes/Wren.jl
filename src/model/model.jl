@@ -1,34 +1,50 @@
+# module Wren
+
 using Accessors: Accessors
 using RuntimeGeneratedFunctions
 
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
+"""
+    Wren.Model
+
+A Wren model.
+
+$(TYPEDFIELDS)
+"""
 struct Model{A<:NamedTuple,C<:VarNamedTuple,F}
-    # Name of the function declared with @wren
+    "Name of the function declared with @wren"
     name::Symbol
-    # Arguments passed to the model
+    "Arguments passed to the model. TODO(penelopeysm): kwargs"
     args::A
-    # todo: kwargs
+    "The model's AST, stored as Wren's probabilistic IR"
     stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}}
-    # Module that the model was defined in. Required to make RGF resolve globals / functions
-    # defined in that module.
+    "Module that the model was defined in. Required to make RGF resolve globals / functions
+    defined in that module."
     mod::Module
+    "The set of variables that the model is conditioned on."
     conditioned::C
-    # The cached evaluation function
+    "The cached evaluation function."
     evaluation_fn::F
-end
 
-function Model(
-    name::Symbol,
-    args::NamedTuple,
-    stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}},
-    mod::Module,
-)
-    evaluation_fn = make_evaluation_fn(args, stmts, mod)
-    return Model(name, args, stmts, mod, VarNamedTuple(), evaluation_fn)
+    function Model(
+        name::Symbol,
+        args::NamedTuple,
+        stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}},
+        mod::Module;
+        conditioned::VarNamedTuple = VarNamedTuple(),
+    )
+        evaluation_fn = make_evaluation_fn(args, stmts, mod)
+        return new{typeof(args), typeof(conditioned), typeof(evaluation_fn)}(
+            name,
+            args,
+            stmts,
+            mod,
+            conditioned,
+            evaluation_fn,
+        )
+    end
 end
-
-## output
 
 get_top_level_symbol(expr::Symbol) = expr
 function get_top_level_symbol(expr::Expr)
@@ -37,8 +53,7 @@ function get_top_level_symbol(expr::Expr)
     elseif Meta.isexpr(expr, :.)
         get_top_level_symbol(expr.args[1])
     else
-        # TODO(penelopeysm): not sure if Meta.isexpr(expr, :$) needs to be handled
-        error("unreachable")
+        _issue_error("get_top_level_symbol: unhandled expression $(expr)")
     end
 end
 
@@ -51,22 +66,6 @@ remove_escapes(x) = x
 function remove_escapes(expr::Expr)
     expr.head == :escape && return remove_escapes(only(expr.args))
     return Expr(expr.head, map(remove_escapes, expr.args)...)
-end
-
-function evaluate_submodel(rhs, latent_source, parameter_space, accs, vn)
-    child_source = scope(latent_source, vn)
-    child_space = scope(parameter_space, vn)
-    child_accs = map(split, accs)
-    had_params = haskey(child_accs, Val(PARAMS_ACCNAME))
-    if !had_params
-        child_accs = setacc!!(child_accs, ParamsAccumulator())
-    end
-    retval, child_accs = evaluate(rhs, child_source, child_space, child_accs)
-    child_params = VarNames.parameters(child_accs)
-    if !had_params
-        child_accs = deleteacc!!(child_accs, Val(PARAMS_ACCNAME))
-    end
-    return retval, child_params, child_accs
 end
 
 assign_or_set!!(lhs::Symbol, rhs, vn) = :($lhs = $rhs)
