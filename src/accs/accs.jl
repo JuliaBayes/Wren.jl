@@ -251,7 +251,7 @@ function deleteacc!!(
     return AccumulatorTuple(NamedTuple{filter(x -> x != T, names)}(accs.nt))
 end
 
-function Base.map(func::Function, at::AccumulatorTuple)
+@inline function Base.map(func::Function, at::AccumulatorTuple)
     return AccumulatorTuple(map(func, at.nt))
 end
 
@@ -297,8 +297,8 @@ end
 
 Update all the accumulators of `at` by calling `accumulate_assume!!` on them.
 """
-function accumulate_assume!!(
-    at::AccumulatorTuple,
+@generated function accumulate_assume!!(
+    at::AccumulatorTuple{N,T},
     val,
     tval,
     vn,
@@ -306,11 +306,16 @@ function accumulate_assume!!(
     logjac,
     template,
     sitename,
-)
-    return map(
-        acc -> accumulate_assume!!(acc, val, tval, vn, right, logjac, template, sitename),
-        at,
-    )
+) where {N,T}
+    names = fieldnames(T)
+    calls = [
+        :(accumulate_assume!!(at.nt.$(names[i]), val, tval, vn, right, logjac, template, sitename))
+        for i in 1:N
+    ]
+    return quote
+        $(Expr(:meta, :inline))
+        AccumulatorTuple(NamedTuple{$names}(($(calls...),)))
+    end
 end
 
 """
@@ -318,6 +323,21 @@ end
 
 Update all the accumulators of `at` by calling `accumulate_observe!!` on them.
 """
-function accumulate_observe!!(at::AccumulatorTuple, val, vn, right, template, sitename)
-    return map(acc -> accumulate_observe!!(acc, val, vn, right, template, sitename), at)
+@generated function accumulate_observe!!(
+    at::AccumulatorTuple{N,T},
+    val,
+    vn,
+    right,
+    template,
+    sitename,
+) where {N,T}
+    names = fieldnames(T)
+    calls = [
+        :(accumulate_observe!!(at.nt.$(names[i]), val, vn, right, template, sitename))
+        for i in 1:N
+    ]
+    return quote
+        $(Expr(:meta, :inline))
+        AccumulatorTuple(NamedTuple{$names}(($(calls...),)))
+    end
 end
