@@ -9,19 +9,6 @@ using Test
 
 @testset "reactant.jl" begin
     @testset "basic" begin
-        # equivalent non-Wren function
-        function fbasic(x)
-            return logdensityof(PM.Normal(0.0, 1.0), x[])
-        end
-        x = [0.0]
-        rx = Reactant.to_rarray(x)
-        fbasic2 = @allowscalar @compile sync=true fbasic(rx)
-        from_rarray(x::Reactant.ConcreteRNumber{T}) where {T} = T(x)
-        function fbasic3(x)
-            return from_rarray(fbasic2(Reactant.to_rarray(x)))
-        end
-        @be fbasic3($x)
-
         # equivalent Wren model
         @wren function f()
             x ~ PM.Normal(0.0, 1.0)
@@ -29,9 +16,7 @@ using Test
         model = f()
         vm = VecModel(model, AutoReactant(AutoEnzyme(; mode=Reverse)))
         params = [0.0]
-        @test lp(vm, params) ≈ f(params)
-        @be lp($vm, $params)
-        @be lp_and_grad($vm, $params)
+        @test lp(vm, params) ≈ logdensityof(PM.Normal(0.0, 1.0), 0.0)
     end
 end
 

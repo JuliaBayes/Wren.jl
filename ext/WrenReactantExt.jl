@@ -37,9 +37,9 @@ function Wren.VecModel(
     values = if params isa Wren.VarNamedTuple
         params
     else
-        Wren._draw_vector_values(model, params, parameter_space)
+        Wren._draw_vectorised_params(model, params, parameter_space)
     end
-    Wren._validate_vector_values(values, parameter_space)
+    Wren._validate_vectorised_params(values, parameter_space)
     ranges_and_transforms, sample = Wren._ranges_and_params(values)
 
     accs = Wren.AccumulatorTuple(

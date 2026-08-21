@@ -9,6 +9,7 @@ using Test
     include("vecmodel.jl")
     include("draw.jl")
     include("ad.jl")
+    include("reactant.jl")
 end
 
 end # module WrenTests
