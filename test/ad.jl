@@ -37,7 +37,7 @@ end
 
     @testset "warns if testing AD backend against itself" begin
         @test_logs (:warn, r"against itself") test_ad(
-            ad_model,
+            ad_model(),
             AutoForwardDiff();
             test_correctness=WithBackend(AutoForwardDiff()),
             verbose=false
