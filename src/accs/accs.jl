@@ -79,6 +79,18 @@ See also: [`accumulate_observe!!`](@ref)
 function accumulate_assume!! end
 
 """
+    accumulate_addloglikelihood!!(acc::AbstractAccumulator, value, sitename)
+
+Update `acc` when an `@addloglikelihood` statement is encountered. `value` is the scalar
+log-likelihood increment. `sitename` is a compile-time `Symbol` identifying the statement.
+
+Returns the updated `acc`. The default implementation is a no-op.
+
+See also: [`accumulate_observe!!`](@ref), [`accumulate_assume!!`](@ref)
+"""
+accumulate_addloglikelihood!!(acc::AbstractAccumulator, value, sitename) = acc
+
+"""
     reset(acc::AbstractAccumulator)
 
 Return a new accumulator like `acc`, but with its contents reset to the state that they
@@ -343,6 +355,26 @@ Update all the accumulators of `at` by calling `accumulate_observe!!` on them.
     calls = [
         :(accumulate_observe!!(at.nt.$(names[i]), val, vn, right, template, sitename))
         for i in 1:N
+    ]
+    return quote
+        $(Expr(:meta, :inline))
+        AccumulatorTuple(NamedTuple{$names}(($(calls...),)))
+    end
+end
+
+"""
+    accumulate_addloglikelihood!!(at::AccumulatorTuple, value, sitename)
+
+Update all the accumulators of `at` by calling `accumulate_addloglikelihood!!` on them.
+"""
+@generated function accumulate_addloglikelihood!!(
+    at::AccumulatorTuple{N,T},
+    value,
+    sitename,
+) where {N,T}
+    names = fieldnames(T)
+    calls = [
+        :(accumulate_addloglikelihood!!(at.nt.$(names[i]), value, sitename)) for i in 1:N
     ]
     return quote
         $(Expr(:meta, :inline))

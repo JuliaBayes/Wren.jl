@@ -225,6 +225,77 @@ end
     end
 
 
+    @testset "@addloglikelihood" begin
+        @testset "anonymous" begin
+            @wren function addloglik_anon()
+                x ~ Normal()
+                @addloglikelihood -0.5 * x^2
+            end
+            model = addloglik_anon()
+            _, accs =
+                evaluate(model, FromPrior(), OriginalSpace(), Wren.default_accumulators())
+            pars = parameters(accs)
+            x_val = pars[@vn(x)]
+            @test logprior(accs) ≈ logdensityof(Normal(), x_val)
+            @test loglikelihood(accs) ≈ -0.5 * x_val^2
+        end
+
+        @testset "named" begin
+            @wren function addloglik_named()
+                x ~ Normal()
+                @addloglikelihood name=:penalty -x^2
+            end
+            model = addloglik_named()
+            _, accs =
+                evaluate(model, FromPrior(), OriginalSpace(), Wren.default_accumulators())
+            pars = parameters(accs)
+            x_val = pars[@vn(x)]
+            @test logprior(accs) ≈ logdensityof(Normal(), x_val)
+            @test loglikelihood(accs) ≈ -x_val^2
+        end
+
+        @testset "multiple addloglikelihood statements" begin
+            @wren function addloglik_multiple()
+                x ~ Normal()
+                @addloglikelihood -x^2
+                @addloglikelihood -0.5 * x
+            end
+            model = addloglik_multiple()
+            _, accs =
+                evaluate(model, FromPrior(), OriginalSpace(), Wren.default_accumulators())
+            pars = parameters(accs)
+            x_val = pars[@vn(x)]
+            @test logprior(accs) ≈ logdensityof(Normal(), x_val)
+            @test loglikelihood(accs) ≈ -x_val^2 + -0.5 * x_val
+        end
+
+        @testset "combined with conditioning" begin
+            @wren function addloglik_with_cond()
+                x ~ Normal()
+                y ~ Normal(x)
+                @addloglikelihood -0.5 * x^2
+            end
+            model = addloglik_with_cond() | VarNamedTuple(; y=1.0)
+            _, accs =
+                evaluate(model, FromPrior(), OriginalSpace(), Wren.default_accumulators())
+            pars = parameters(accs)
+            x_val = pars[@vn(x)]
+            @test logprior(accs) ≈ logdensityof(Normal(), x_val)
+            @test loglikelihood(accs) ≈ logdensityof(Normal(x_val), 1.0) + -0.5 * x_val^2
+        end
+
+        @testset "AST node" begin
+            @wren function addloglik_ast()
+                x ~ Normal()
+                @addloglikelihood name=:penalty -x^2
+            end
+            stmts = filter(x -> x isa Wren.AbstractWrenExpr, addloglik_ast().stmts)
+            addloglik_stmt = stmts[2]
+            @test addloglik_stmt isa Wren.AddLogLikelihood
+            @test addloglik_stmt.name === :penalty
+        end
+    end
+
     @testset "return values" begin
         @testset "returning a tilde statement" begin
             @wren function explicit_return_sample()

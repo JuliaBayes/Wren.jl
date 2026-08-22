@@ -27,6 +27,7 @@ include("latents/latents.jl")
 include("model/expr.jl")
 using .Expressions:
     AbstractWrenExpr,
+    AddLogLikelihood,
     Observe,
     OtherStatement,
     Plate,
@@ -46,6 +47,7 @@ include("draw.jl")
 include("test_ad.jl")
 
 export @wren,
+    @addloglikelihood,
     @observe,
     @plate,
     AbstractLatentSource,

@@ -200,3 +200,18 @@ rand(yarg_obs([1.0, 2.0, 3.0]))
 ```
 
 However, note that once a statement has been marked with `@observe`, you cannot 'uncondition' it without modifying the model's stored AST itself.
+
+## Manual log-likelihood addition
+
+Wren provides a macro, `@addloglikelihood [name=:name] expr`, which allows you to manually add `expr` to the model's log-likelihood.
+
+```@example model
+@wren function manual_likelihood()
+    x ~ Normal()
+    @addloglikelihood name=:xsq x^2
+end
+
+rand_with_logp(manual_likelihood())
+```
+
+The `name` argument is optional and Wren currently does not use it, but hopefully will be wired up to pointwise logdensity calculations in the future.

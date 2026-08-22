@@ -290,6 +290,22 @@ function _maybe_view(v::AbstractArray, idxs...)
     end
 end
 
+function emit_model_expr(
+    stmt::AddLogLikelihood,
+    accs,
+    conditioned,
+    latent_source,
+    parameter_space,
+)
+    @gensym value
+    value_expr =
+        emit_model_expr(stmt.expr, accs, conditioned, latent_source, parameter_space)
+    return quote
+        $value = $value_expr
+        $accs = $(accumulate_addloglikelihood!!)($accs, $value, $(QuoteNode(stmt.name)))
+    end
+end
+
 function emit_model_expr(stmt::Observe, accs, conditioned, latent_source, parameter_space)
     @gensym rhs val vn
     rhs_expr = emit_model_expr(stmt.rhs, accs, conditioned, latent_source, parameter_space)

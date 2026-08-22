@@ -323,3 +323,7 @@ end
 )
     return acclogp(acc, logdensityof(right, val))
 end
+
+function accumulate_addloglikelihood!!(acc::LogLikelihoodAccumulator, value, sitename)
+    return acclogp(acc, value)
+end

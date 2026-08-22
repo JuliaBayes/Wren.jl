@@ -64,6 +64,20 @@ struct Plate{I,S,B} <: AbstractWrenExpr
 end
 
 """
+    AddLogLikelihood
+
+Representation of `@addloglikelihood [name=NAME] EXPR`. Manually adds the value of `EXPR`
+to the log-likelihood accumulator.
+
+`name` must be a single Symbol. If not specified, a gensym'd name is used. The name is
+intended for use with pointwise log-likelihoods.
+"""
+struct AddLogLikelihood{E} <: AbstractWrenExpr
+    name::Symbol
+    expr::E
+end
+
+"""
     ReturnStatement
 
 Wrapper around `Expr(:return, ...)` to allow for dispatch.
@@ -180,6 +194,28 @@ function lower_to_wren(expr::Expr, mod::Module, statement_position::Bool=false)
         return Plate(plate_name, loop_idx, loop_iters, size_expr, body)
     end
 
+    if expr.head == :macrocall && expr.args[1] == Symbol("@addloglikelihood")
+        statement_position || error("@addloglikelihood must be used as a statement")
+        addloglik_args = filter(a -> !(a isa LineNumberNode), expr.args[2:end])
+        name_expr = nothing
+        value_expr = nothing
+        for arg in addloglik_args
+            if arg isa Expr && arg.head == :(=) && arg.args[1] == :name
+                name_val = arg.args[2]
+                name_val isa QuoteNode && name_val.value isa Symbol ||
+                    error("@addloglikelihood: `name` must be a single Symbol (e.g. `name=:penalty`)")
+                name_expr = name_val.value
+            else
+                value_expr !== nothing &&
+                    error("@addloglikelihood: expected a single expression")
+                value_expr = arg
+            end
+        end
+        value_expr !== nothing || error("@addloglikelihood: expected an expression")
+        addloglik_name = name_expr === nothing ? gensym(:addloglikelihood) : name_expr
+        return AddLogLikelihood(addloglik_name, lower_to_wren(value_expr, mod))
+    end
+
     # In order to keep the AST sensible, we preserve macros instead of expanding them -- but
     # we will lower their arguments. This means that something like
     #
@@ -250,6 +286,14 @@ end
 function _wren_expr_to_model_expr(stmt::Observe)
     tilde = Expr(:call, :~, stmt.lhs, _wren_expr_to_model_expr(stmt.rhs))
     return Expr(:macrocall, Symbol("@observe"), nothing, tilde)
+end
+function _wren_expr_to_model_expr(stmt::AddLogLikelihood)
+    args = Any[Symbol("@addloglikelihood"), nothing]
+    if !startswith(string(stmt.name), "##addloglikelihood#")
+        push!(args, Expr(:(=), :name, QuoteNode(stmt.name)))
+    end
+    push!(args, _wren_expr_to_model_expr(stmt.expr))
+    return Expr(:macrocall, args...)
 end
 function _wren_expr_to_model_expr(stmt::ReturnStatement)
     value = stmt.expr === nothing ? nothing : _wren_expr_to_model_expr(stmt.expr)
