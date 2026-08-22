@@ -26,10 +26,8 @@ WithBackend() = WithBackend(DI.AutoForwardDiff())
 Check correctness against a known log density and gradient. Either can be left as `nothing`
 to skip testing.
 """
-struct WithExpectedResult{
-    V<:Union{Number,Nothing},
-    G<:Union{AbstractVector,Nothing}
-} <: AbstractADCorrectnessTestSetting
+struct WithExpectedResult{V<:Union{Number,Nothing},G<:Union{AbstractVector,Nothing}} <:
+       AbstractADCorrectnessTestSetting
     lp::V
     grad::G
 end
@@ -85,8 +83,7 @@ function Base.showerror(io::IO, exception::ADIncorrectException)
     print(io, msg)
     if !lp_passed
         min_atol = abs(exception.lp_expected - exception.lp_actual)
-        min_rtol =
-            min_atol / max(abs(exception.lp_expected), abs(exception.lp_actual))
+        min_rtol = min_atol / max(abs(exception.lp_expected), abs(exception.lp_actual))
         s = """
           lp check would have passed with:
                atol ≥ $min_atol"
@@ -242,18 +239,19 @@ function benchmark_and_test(
     lp_function=logjoint_transformed,
     latent_source::AbstractLatentSource=FromPrior(),
     parameter_space::AbstractParameterSpace=UnconstrainedSpace(),
-    verbose::Bool=!isinteractive(),
+    verbose::Bool=(!isinteractive()),
 )
     # Promote boolean test_ad to an AbstractADCorrectnessTestSetting
-    test_correctness = test_correctness isa Bool ? (test_correctness ? WithBackend() : NoTest()) : test_correctness
+    test_correctness =
+        test_correctness isa Bool ? (test_correctness ? WithBackend() : NoTest()) :
+        test_correctness
     if test_correctness isa WithBackend && adtype == test_correctness.adtype
         @warn "Testing correctness of $adtype against itself — results will always pass. " *
               "Use a different reference backend or WithExpectedResult."
     end
     atol, rtol = promote(atol, rtol)
 
-    _, accs =
-        evaluate(model, latent_source, OriginalSpace(), Wren.default_accumulators())
+    _, accs = evaluate(model, latent_source, OriginalSpace(), Wren.default_accumulators())
     vnt_params = parameters(accs)
 
     # Model-level benchmarking: sample and logjoint
@@ -344,8 +342,7 @@ function benchmark_and_test(
     end
 
     if !(test_correctness isa NoTest)
-        lp_passed =
-            lp_expected !== nothing && isapprox(lp_expected, lp_actual; atol, rtol)
+        lp_passed = lp_expected !== nothing && isapprox(lp_expected, lp_actual; atol, rtol)
         grad_passed =
             grad_expected !== nothing && isapprox(grad_expected, grad_actual; atol, rtol)
         if !lp_passed || !grad_passed
@@ -410,7 +407,15 @@ function test_ad(
     benchmark_ad=false,
     kwargs...,
 )
-    return benchmark_and_test(model, adtype; test_correctness, benchmark_model, benchmark_primal, benchmark_ad, kwargs...)
+    return benchmark_and_test(
+        model,
+        adtype;
+        test_correctness,
+        benchmark_model,
+        benchmark_primal,
+        benchmark_ad,
+        kwargs...,
+    )
 end
 
 """
@@ -421,7 +426,10 @@ Benchmark `adtype` on `model` without checking correctness.
 Equivalent to `benchmark_and_test(model, adtype; test_ad=NoTest(), kwargs...)`.
 """
 function benchmark_ad(
-    model::Model, adtype::DI.AbstractADType; test_correctness=NoTest(), kwargs...
+    model::Model,
+    adtype::DI.AbstractADType;
+    test_correctness=NoTest(),
+    kwargs...,
 )
     return benchmark_and_test(model, adtype; test_correctness, kwargs...)
 end

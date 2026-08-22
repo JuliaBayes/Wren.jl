@@ -20,6 +20,7 @@ A `VarNamedTuple` is a mapping of `VarName`s to values, which has a Dict-like in
 However, it is designed to be much more general and performant than a simple `Dict` or `NamedTuple`.
 
 !!! note
+
     For the full story behind the design of `VarNamedTuple`, please see [the VarNames.jl docs](https://juliabayes.org/VarNames.jl/stable/vnt/motivation/).
 
 ## Drawing samples
@@ -83,12 +84,13 @@ This is a good point to talk about the general evaluation framework that Wren us
 The entry point for _all_ Wren model evaluation is the [`evaluate`](@ref) function.
 It takes exactly four arguments:
 
-- a *model* (of course!);
-- a *latent source* (a specification of how to obtain the values of latent variables);
-- a *parameter space* (a specification of how variables should be transformed); and
-- a set of *accumulators* (the outputs of the model which we are interested in).
+  - a *model* (of course!);
+  - a *latent source* (a specification of how to obtain the values of latent variables);
+  - a *parameter space* (a specification of how variables should be transformed); and
+  - a set of *accumulators* (the outputs of the model which we are interested in).
 
 !!! note
+
     The latter three arguments *directly* map to DynamicPPL's initialisation strategies, transform strategies, and accumulators. If you want to read more about that, please see [the DynamicPPL docs](https://turinglang.org/DynamicPPL.jl/stable/evaluation/). (All of that is written by me as well!)
 
 The parameter space argument is slightly more advanced, and we'll leave it for later.
@@ -173,10 +175,10 @@ Better docs on this will hopefully come at some point in time but here are some 
 
 ```@example models
 # NamedTuple-like syntax.
-VarNamedTuple(y=1.0, z=zeros(3))                        
+VarNamedTuple(y=1.0, z=zeros(3))
 
 # From an AbstractDict{VarName}.
-VarNamedTuple(Dict(@vn(y) => 1.0, @vn(z.a) => zeros(3)))  
+VarNamedTuple(Dict(@vn(y) => 1.0, @vn(z.a) => zeros(3)))
 
 # With a macro.
 @vnt begin
@@ -237,6 +239,7 @@ The log-density calculation will then include the log-Jacobian term correspondin
 If this is not desired, you can specify a different parameter space, or a different log-density calculation function as a keyword argument to the [`VecModel`](@ref) constructor: please see its docstring for more info.
 
 !!! warning
+
     Vectorisation places certain restrictions on the structure of the model.
     In particular, it is not valid for a model to have a varying dimension.
     This can be caused either by parameters which have varying sizes, or models which simply have a varying number of parameters:
@@ -244,7 +247,7 @@ If this is not desired, you can specify a different parameter space, or a differ
     ```julia
     x ~ Poisson(3.0)
     y ~ MvNormal(zeros(x), I)  # dimension of `y` is not constant
-
+    
     if x > 4
         z ~ Normal()  # existence of `z` is not constant
     end

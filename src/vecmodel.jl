@@ -467,7 +467,9 @@ end
 LogDensityProblems.LogDensityOrder{0} if the `VecModel` was constructed without an AD
 backend, and LogDensityProblems.LogDensityOrder{1} otherwise.
 """
-function LogDensityProblems.capabilities(::Type{<:VecModel{M,A}}) where {M<:Model,A<:Union{Nothing,NoAutoDiff}}
+function LogDensityProblems.capabilities(
+    ::Type{<:VecModel{M,A}},
+) where {M<:Model,A<:Union{Nothing,NoAutoDiff}}
     return LogDensityProblems.LogDensityOrder{0}()
 end
 function LogDensityProblems.capabilities(::Type{<:VecModel})

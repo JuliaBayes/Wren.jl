@@ -18,8 +18,12 @@ end
     params = [0.2]
 
     @testset "test_ad" begin
-        result =
-            test_ad(ad_model(), AutoForwardDiff(); latent_source=FromPrior(Xoshiro(473)), verbose=false)
+        result = test_ad(
+            ad_model(),
+            AutoForwardDiff();
+            latent_source=FromPrior(Xoshiro(473)),
+            verbose=false,
+        )
         @test result isa ModelRunResult
         @test result.value_actual ≈ result.value_expected
         @test result.grad_actual ≈ result.grad_expected
