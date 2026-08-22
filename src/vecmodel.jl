@@ -1,3 +1,5 @@
+using ADTypes: NoAutoDiff # DI doesn't export
+
 const AUTO_RUNTIME_ACTIVITY = Ref(true)
 
 """
@@ -223,7 +225,7 @@ function VecModel(
         ranges_and_transforms,
         accs,
     )
-    adprep = if adtype === nothing
+    adprep = if adtype === nothing || adtype isa NoAutoDiff
         nothing
     elseif _use_closure(adtype)
         # Compiled ReverseDiff mandates the closure, otherwise preparation is repeated on
@@ -465,7 +467,7 @@ end
 LogDensityProblems.LogDensityOrder{0} if the `VecModel` was constructed without an AD
 backend, and LogDensityProblems.LogDensityOrder{1} otherwise.
 """
-function LogDensityProblems.capabilities(::Type{<:VecModel{M,Nothing}}) where {M<:Model}
+function LogDensityProblems.capabilities(::Type{<:VecModel{M,A}}) where {M<:Model,A<:Union{Nothing,NoAutoDiff}}
     return LogDensityProblems.LogDensityOrder{0}()
 end
 function LogDensityProblems.capabilities(::Type{<:VecModel})

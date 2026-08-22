@@ -1,96 +1,123 @@
 module WrenVecModelTests
 
-using DifferentiationInterface: AutoForwardDiff
+import DifferentiationInterface as DI
 using Distributions
-using ForwardDiff
+import FiniteDiff
+import ForwardDiff
+import ReverseDiff
+import Mooncake
+import Enzyme
 using LinearAlgebra
-using LogDensityProblems
+import LogDensityProblems as LDP
+using Plaice
 using Random
 using Test
 using Wren
 
-@wren function vector_model(observation)
-    x ~ Beta(2, 3)
-    y ~ MvNormal(zeros(2), I)
-    @observe observation ~ Normal(x + y[1])
-    return x + sum(y)
+const TESTED_ADTYPES = (
+    "ForwardDiff" => DI.AutoForwardDiff(),
+    "ReverseDiff" => DI.AutoReverseDiff(),
+    "ReverseDiffCpl" => DI.AutoReverseDiff(; compile=true),
+    "MooncakeFwd" => DI.AutoMooncakeForward(),
+    "MooncakeRvs" => DI.AutoMooncake(),
+    "EnzymeFwd" => DI.AutoEnzyme(; mode=Enzyme.Forward),
+    "EnzymeRvs" => DI.AutoEnzyme(; mode=Enzyme.Reverse),
+)
+
+function unconstrained_lp(dist, y::AbstractVector)
+    tfm = Plaice.from_unconstrained_vec(dist)
+    x, inv_logjac = Plaice.with_logabsdet_jacobian(tfm, y)
+    logp = logdensityof(dist, x)
+    return logp + inv_logjac
+end
+function unconstrained_grad(dist, y::AbstractVector)
+    DI.gradient(Base.Fix1(unconstrained_lp, dist), DI.AutoForwardDiff(), y)
 end
 
-@testset "VecModel" begin
-    model = vector_model(0.7)
-    vecmodel = VecModel(model, AutoForwardDiff(); params=FromPrior(Xoshiro(468)))
-    params = rand(Xoshiro(469), vecmodel)
-
-    @test length(params) == vecmodel.dimension == 3
-    @test lp(vecmodel, params) isa Real
-
-    value, grad = lp_and_grad(vecmodel, params)
-    @test value ≈ lp(vecmodel, params)
-
-    step = 1e-6
-    finite_diff_grad = map(eachindex(params)) do i
-        delta = zeros(length(params))
-        delta[i] = step
-        (lp(vecmodel, params + delta) - lp(vecmodel, params - delta)) / (2 * step)
+@testset "vecmodel.jl" begin
+    @testset "VecModel constructors" begin
+        @testset "defaults + fields" begin
+            @wren function f()
+                x ~ Beta(2, 2)
+            end
+            vm = VecModel(f(), nothing)
+            @test vm.parameter_space isa UnconstrainedSpace
+            @test vm.lp_function == logjoint_transformed
+            @test vm.sample isa AbstractVector{<:Real}
+            @test length(vm.sample) == Plaice.unconstrained_vec_length(Beta(2, 2))
+            @test vm.dimension == Plaice.unconstrained_vec_length(Beta(2, 2))
+        end
     end
-    @test grad ≈ finite_diff_grad rtol = 1e-5
 
-    grad_buffer = similar(params)
-    inplace_value, inplace_grad = lp_and_grad!(grad_buffer, vecmodel, params)
-    @test inplace_value ≈ value
-    @test inplace_grad === grad_buffer
-    @test grad_buffer ≈ grad
+    @testset "correctness on a few distributions" begin
+        @testset "$(nameof(typeof(d)))" for d in (
+            Normal(),
+            Beta(2, 2),
+            MvNormal(zeros(3), I),
+            Dirichlet(ones(4)),
+            LKJCholesky(3, 0.5),
+        )
+            @wren function f(d)
+                x ~ d
+            end
+            grad_rtol = sqrt(eps())
 
-    @test LogDensityProblems.capabilities(typeof(vecmodel)) ==
-          LogDensityProblems.LogDensityOrder{1}()
-    @test LogDensityProblems.dimension(vecmodel) == vecmodel.dimension
-    @test LogDensityProblems.logdensity(vecmodel, params) ≈ value
-    ldp_value, ldp_grad = LogDensityProblems.logdensity_and_gradient(vecmodel, params)
-    @test ldp_value ≈ value
-    @test ldp_grad ≈ grad
+            @testset "$name" for (name, adtype) in TESTED_ADTYPES
+                vm = VecModel(f(d), adtype)
+                x = rand(vm)
+                N = length(x)
+                @test N == Plaice.unconstrained_vec_length(d)
 
-    noad_vecmodel = VecModel(model, nothing; params=FromPrior(Xoshiro(470)))
-    noad_params = rand(Xoshiro(471), noad_vecmodel)
-    @test LogDensityProblems.capabilities(typeof(noad_vecmodel)) ==
-          LogDensityProblems.LogDensityOrder{0}()
-    @test LogDensityProblems.dimension(noad_vecmodel) == noad_vecmodel.dimension
-    @test LogDensityProblems.logdensity(noad_vecmodel, noad_params) ≈
-          lp(noad_vecmodel, noad_params)
-    @test_throws ArgumentError LogDensityProblems.logdensity_and_gradient(
-        noad_vecmodel,
-        noad_params,
-    )
-    @test_throws ArgumentError lp_and_grad(noad_vecmodel, noad_params)
-    @test_throws ArgumentError lp_and_grad!(
-        similar(noad_params),
-        noad_vecmodel,
-        noad_params,
-    )
+                @test LDP.capabilities(typeof(vm)) == LDP.LogDensityOrder{1}()
+                @test LDP.dimension(vm) == N
 
-    _, value_accs = evaluate(
-        model,
-        FromPrior(Xoshiro(472)),
-        UnconstrainedSpace(),
-        Wren.AccumulatorTuple(VectorisedParamsAccumulator()),
-    )
-    vec_pars = vectorised_params(value_accs)
-    from_vnt = VecModel(model, AutoForwardDiff(); params=vec_pars)
-    vector_params = internal_values_as_vector(vec_pars)
-    @test from_vnt.dimension == 3
-    @test lp(from_vnt, vector_params) isa Real
+                for _ in 1:10
+                    # check with a few random vectors to make sure it's unconstrained
+                    y = randn(N) .* 10
+                    lp_expected = unconstrained_lp(d, y)
+                    grad_expected = unconstrained_grad(d, y)
 
-    prior_vecmodel = VecModel(
-        model,
-        AutoForwardDiff();
-        params=FromPrior(Xoshiro(473)),
-        lp_function=logprior,
-        parameter_space=OriginalSpace(),
-    )
-    prior_params = rand(Xoshiro(474), prior_vecmodel)
-    @test 0 < prior_params[1] < 1
-    @test lp(prior_vecmodel, prior_params) ≈
-          logpdf(Beta(2, 3), prior_params[1]) +
-          logpdf(MvNormal(zeros(2), I), prior_params[2:3])
+                    @test lp(vm, y) ≈ lp_expected
+
+                    lp2, grad = lp_and_grad(vm, y)
+                    @test lp2 ≈ lp_expected
+                    @test grad ≈ grad_expected rtol=grad_rtol
+
+                    similar_grad = similar(y)
+                    lp3, grad2 = lp_and_grad!(similar_grad, vm, y)
+                    @test lp3 ≈ lp_expected
+                    @test grad2 ≈ grad_expected rtol=grad_rtol
+                    @test similar_grad ≈ grad_expected rtol=grad_rtol
+
+                    @test LDP.logdensity(vm, y) ≈ lp_expected
+                    lp4, grad3 = LDP.logdensity_and_gradient(vm, y)
+                    @test lp4 ≈ lp_expected
+                    @test grad3 ≈ grad_expected rtol=grad_rtol
+                end
+            end
+        end
+    end
+
+    @testset "construction without ad" begin
+        @wren function f()
+            x ~ Beta(2, 2)
+        end
+        model = f()
+
+        for noad in (nothing, DI.ADTypes.NoAutoDiff())
+            vm = VecModel(model, noad)
+            yvec = rand(vm)
+            # Should still be able to calculate logp
+            @test LDP.capabilities(typeof(vm)) == LDP.LogDensityOrder{0}()
+            @test LDP.dimension(vm) == vm.dimension
+            @test LDP.logdensity(vm, yvec) ≈ unconstrained_lp(Beta(2, 2), yvec)
+
+            # but not gradients
+            @test_throws Exception LDP.logdensity_and_gradient(vm, yvec)
+            @test_throws Exception lp_and_grad(vm, yvec)
+            @test_throws Exception lp_and_grad!(similar(yvec), vm, yvec)
+        end
+    end
 end
 
 end # module WrenVecModelTests

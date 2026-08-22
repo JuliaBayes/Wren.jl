@@ -35,7 +35,7 @@ function Wren._handle_enzyme(vm::Wren.VecModel{M,<:DI.AutoEnzyme}) where {M<:Wre
                     vm.lp_function,
                     vm.parameter_space,
                     vm.ranges_and_transforms,
-                    vm.params,
+                    vm.sample,
                 )
             else
                 rethrow(e)
