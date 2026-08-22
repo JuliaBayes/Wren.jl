@@ -1,3 +1,32 @@
+const AUTO_RUNTIME_ACTIVITY = Ref(true)
+
+"""
+    Wren.set_auto_runtime_activity!(val::Bool)
+
+Set Wren's automatic runtime activity behaviour.
+
+When using Enzyme as the AD backend, depending on how the model is constructed, it may be
+necessary to enable runtime activity. (Wren-specific docs will follow soon, but for more
+information please see the [Enzyme
+docs](https://enzyme.mit.edu/julia/stable/faq/#faq-runtime-activity).) This can often allow
+more expressive models to be differentiated, but comes at a performance cost.
+
+Wren recommends using reverse-mode Enzyme, i.e., `AutoEnzyme(; mode=Reverse)` as the AD
+backend, which does not enable runtime activity. **By default, Wren will automatically
+enable runtime activity if Enzyme requires it.**
+
+This behaviour can be disabled by calling
+
+```julia
+Wren.set_auto_runtime_activity!(false)`
+
+This will cause Wren to throw an error instead if runtime activity is required.
+"""
+function set_auto_runtime_activity!(val::Bool)
+    AUTO_RUNTIME_ACTIVITY[] = val
+    return nothing
+end
+
 """
     _VecModelLP
 
@@ -159,6 +188,9 @@ struct VecModel{
     adprep::P
     sample::X
 end
+
+# This is the main constructor. All callers of VecModel should go through this constructor!
+#
 # Unlike in DynamicPPL, this has to be an outer constructor because the ReactantExt requires
 # access to the direct (generated) constructor.
 function VecModel(
@@ -176,6 +208,7 @@ function VecModel(
     R<:RangesAndTransforms,
     X<:AbstractVector,
 }
+    # TODO: make accs customisable
     accs = AccumulatorTuple(
         LogPriorAccumulator(),
         LogJacobianAccumulator(),
@@ -212,7 +245,7 @@ function VecModel(
             DI.Constant(accs),
         )
     end
-    return VecModel(
+    vm = VecModel(
         model,
         adtype,
         lp_function,
@@ -224,7 +257,10 @@ function VecModel(
         adprep,
         params,
     )
+    return _handle_enzyme(vm)
 end
+
+# Convenience constructor that calls the main one.
 function VecModel(
     model::Model,
     adtype::Union{DI.AbstractADType,Nothing};
@@ -283,6 +319,9 @@ end
 
 _use_closure(::DI.AutoReverseDiff{compile}) where {compile} = compile
 _use_closure(::DI.AbstractADType) = false
+
+# overloaded in EnzymeExt as it depends on runtime activity error which isn't in Core
+_handle_enzyme(@nospecialize(vm::VecModel)) = vm
 
 function _validate_vectorised_params(
     values::VarNamedTuple,
