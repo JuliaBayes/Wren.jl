@@ -294,6 +294,27 @@ end
             @test addloglik_stmt isa Wren.AddLogLikelihood
             @test addloglik_stmt.name === :penalty
         end
+
+        @testset "elided without LogLikelihood accumulator" begin
+            _allocating_fn(x) = sum(collect(range(-x, x; length=1000)))
+            @wren function addloglik_elided()
+                x ~ Normal()
+                @addloglikelihood _allocating_fn(x)
+            end
+            source = FromParams(VarNamedTuple(; x=0.5))
+            model = addloglik_elided()
+
+            # Sanity check: the expression does allocate when LogLikelihood is present
+            result_with = @b evaluate($model, $source, OriginalSpace(), $(Wren.default_accumulators()))
+            @test !iszero(result_with.allocs)
+
+            # But is elided when LogLikelihood is absent
+            accs_no_ll = Wren.deleteacc!!(
+                Wren.default_accumulators(), Val(Wren.LOG_LIKELIHOOD_ACCNAME)
+            )
+            result_without = @b evaluate($model, $source, OriginalSpace(), $accs_no_ll)
+            @test iszero(result_without.allocs)
+        end
     end
 
     @testset "return values" begin
