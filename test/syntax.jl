@@ -305,12 +305,18 @@ end
             model = addloglik_elided()
 
             # Sanity check: the expression does allocate when LogLikelihood is present
-            result_with = @b evaluate($model, $source, OriginalSpace(), $(Wren.default_accumulators()))
+            result_with = @b evaluate(
+                $model,
+                $source,
+                OriginalSpace(),
+                $(Wren.default_accumulators()),
+            )
             @test !iszero(result_with.allocs)
 
             # But is elided when LogLikelihood is absent
             accs_no_ll = Wren.deleteacc!!(
-                Wren.default_accumulators(), Val(Wren.LOG_LIKELIHOOD_ACCNAME)
+                Wren.default_accumulators(),
+                Val(Wren.LOG_LIKELIHOOD_ACCNAME),
             )
             result_without = @b evaluate($model, $source, OriginalSpace(), $accs_no_ll)
             @test iszero(result_without.allocs)

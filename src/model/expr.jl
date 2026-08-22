@@ -202,8 +202,9 @@ function lower_to_wren(expr::Expr, mod::Module, statement_position::Bool=false)
         for arg in addloglik_args
             if arg isa Expr && arg.head == :(=) && arg.args[1] == :name
                 name_val = arg.args[2]
-                name_val isa QuoteNode && name_val.value isa Symbol ||
-                    error("@addloglikelihood: `name` must be a single Symbol (e.g. `name=:penalty`)")
+                name_val isa QuoteNode && name_val.value isa Symbol || error(
+                    "@addloglikelihood: `name` must be a single Symbol (e.g. `name=:penalty`)",
+                )
                 name_expr = name_val.value
             else
                 value_expr !== nothing &&

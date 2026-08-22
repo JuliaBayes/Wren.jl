@@ -303,8 +303,7 @@ function emit_model_expr(
     return quote
         if $(hasacc)($accs, $(Val{LOG_LIKELIHOOD_ACCNAME}()))
             $value = $value_expr
-            $accs =
-                $(accumulate_addloglikelihood!!)($accs, $value, $(QuoteNode(stmt.name)))
+            $accs = $(accumulate_addloglikelihood!!)($accs, $value, $(QuoteNode(stmt.name)))
         end
     end
 end

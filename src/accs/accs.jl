@@ -382,9 +382,8 @@ Update all the accumulators of `at` by calling `accumulate_addloglikelihood!!` o
     sitename,
 ) where {N,T}
     names = fieldnames(T)
-    calls = [
-        :(accumulate_addloglikelihood!!(at.nt.$(names[i]), value, sitename)) for i in 1:N
-    ]
+    calls =
+        [:(accumulate_addloglikelihood!!(at.nt.$(names[i]), value, sitename)) for i in 1:N]
     return quote
         $(Expr(:meta, :inline))
         AccumulatorTuple(NamedTuple{$names}(($(calls...),)))

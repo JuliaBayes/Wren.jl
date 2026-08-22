@@ -16,32 +16,63 @@ end
 
 @testset "AD testing utilities" begin
     params = [0.2]
-    result = run_ad(ad_model(), AutoForwardDiff(); params, rng=Xoshiro(473), verbose=false)
-    @test result.value_actual ≈ result.value_expected
-    @test result.grad_actual ≈ result.grad_expected
-    @test occursin("correctness : passed", sprint(show, MIME"text/plain"(), result))
 
-    benchmark_result = run_ad(
-        ad_model(),
-        AutoForwardDiff();
-        test=false,
-        benchmark=true,
-        benchmark_seconds=0.01,
-        params,
-        rng=Xoshiro(474),
-        verbose=false,
-    )
-    @test benchmark_result.primal_time > 0
-    @test benchmark_result.grad_time > 0
+    @testset "test_ad" begin
+        result =
+            test_ad(ad_model(), AutoForwardDiff(); params, rng=Xoshiro(473), verbose=false)
+        @test result isa ModelRunResult
+        @test result.value_actual ≈ result.value_expected
+        @test result.grad_actual ≈ result.grad_expected
+        @test result.rand_bench === nothing
+        @test result.logjoint_bench === nothing
+        @test result.primal_bench === nothing
+        @test result.grad_bench === nothing
+        @test occursin("correctness : passed", sprint(show, MIME"text/plain"(), result))
+    end
 
-    @test_throws ADIncorrectException run_ad(
-        ad_model(),
-        AutoForwardDiff();
-        test=WithExpectedResult(0.0, [0.0]),
-        params,
-        rng=Xoshiro(475),
-        verbose=false,
-    )
+    @testset "benchmark_ad" begin
+        result = benchmark_ad(
+            ad_model(),
+            AutoForwardDiff();
+            benchmark_seconds=0.01,
+            params,
+            rng=Xoshiro(474),
+            verbose=false,
+        )
+        @test result.value_expected === nothing
+        @test result.rand_bench.time > 0
+        @test result.logjoint_bench.time > 0
+        @test result.primal_bench.time > 0
+        @test result.grad_bench.time > 0
+    end
+
+    @testset "benchmark_and_test" begin
+        result = benchmark_and_test(
+            ad_model(),
+            AutoForwardDiff();
+            benchmark_seconds=0.01,
+            params,
+            rng=Xoshiro(476),
+            verbose=false,
+        )
+        @test result.value_actual ≈ result.value_expected
+        @test result.grad_actual ≈ result.grad_expected
+        @test result.rand_bench.time > 0
+        @test result.logjoint_bench.time > 0
+        @test result.primal_bench.time > 0
+        @test result.grad_bench.time > 0
+    end
+
+    @testset "ADIncorrectException" begin
+        @test_throws ADIncorrectException test_ad(
+            ad_model(),
+            AutoForwardDiff();
+            test_ad=WithExpectedResult(0.0, [0.0]),
+            params,
+            rng=Xoshiro(475),
+            verbose=false,
+        )
+    end
 end
 
 end # module WrenADTests
