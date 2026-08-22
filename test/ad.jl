@@ -21,18 +21,27 @@ end
     @testset "test_ad" begin
         result = test_ad(
             ad_model(),
-            AutoForwardDiff();
+            AutoReverseDiff();
             latent_source=FromPrior(Xoshiro(473)),
             verbose=false,
         )
         @test result isa ModelRunResult
-        @test result.value_actual ≈ result.value_expected
+        @test result.lp_actual ≈ result.lp_expected
         @test result.grad_actual ≈ result.grad_expected
         @test result.rand_bench === nothing
         @test result.logjoint_bench === nothing
         @test result.primal_bench === nothing
         @test result.grad_bench === nothing
         @test occursin("correctness : passed", sprint(show, MIME"text/plain"(), result))
+    end
+
+    @testset "warns if testing AD backend against itself" begin
+        @test_logs (:warn, r"against itself") test_ad(
+            ad_model,
+            AutoForwardDiff();
+            test_correctness=WithBackend(AutoForwardDiff()),
+            verbose=false
+        )
     end
 
     @testset "benchmark_ad" begin
@@ -43,7 +52,7 @@ end
             latent_source=FromPrior(Xoshiro(474)),
             verbose=false,
         )
-        @test result.value_expected === nothing
+        @test result.lp_expected === nothing
         @test result.rand_bench.time > 0
         @test result.logjoint_bench.time > 0
         @test result.primal_bench.time > 0
@@ -59,7 +68,7 @@ end
             latent_source=FromPrior(Xoshiro(476)),
             verbose=false,
         )
-        @test result.value_actual ≈ result.value_expected
+        @test result.lp_actual ≈ result.lp_expected
         @test result.grad_actual ≈ result.grad_expected
         @test result.rand_bench.time > 0
         @test result.logjoint_bench.time > 0
