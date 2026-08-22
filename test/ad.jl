@@ -1,8 +1,9 @@
 module WrenADTests
 
-using DifferentiationInterface: AutoForwardDiff
+using DifferentiationInterface: AutoForwardDiff, AutoReverseDiff
 using Distributions
 using ForwardDiff
+using ReverseDiff
 using Random
 using Test
 using Wren
@@ -53,6 +54,7 @@ end
         result = benchmark_and_test(
             ad_model(),
             AutoForwardDiff();
+            test_correctness=WithBackend(AutoReverseDiff()),
             benchmark_seconds=0.01,
             latent_source=FromPrior(Xoshiro(476)),
             verbose=false,
@@ -69,7 +71,7 @@ end
         @test_throws ADIncorrectException test_ad(
             ad_model(),
             AutoForwardDiff();
-            test_ad=WithExpectedResult(0.0, [0.0]),
+            test_correctness=WithExpectedResult(0.0, [0.0]),
             latent_source=FromPrior(Xoshiro(475)),
             verbose=false,
         )
