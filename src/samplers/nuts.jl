@@ -84,9 +84,17 @@ function nuts(
     nchains::Integer=1;
     adtype::DI.AbstractADType=DI.AutoEnzyme(; mode=Reverse),
     progress::Bool=true,
-    dynamichmc_kwargs...
+    dynamichmc_kwargs...,
 )
-    return nuts(Random.default_rng(), model, niters, nchains; adtype, progress, dynamichmc_kwargs...)
+    return nuts(
+        Random.default_rng(),
+        model,
+        niters,
+        nchains;
+        adtype,
+        progress,
+        dynamichmc_kwargs...,
+    )
 end
 function nuts(
     rng::Random.AbstractRNG,
@@ -95,7 +103,7 @@ function nuts(
     nchains::Integer=1;
     adtype::DI.AbstractADType=DI.AutoEnzyme(; mode=Reverse),
     progress::Bool=true,
-    dynamichmc_kwargs...
+    dynamichmc_kwargs...,
 )
     # AD preparation
     if progress
@@ -128,7 +136,7 @@ function nuts(
                     vecmodel,
                     niters;
                     reporter,
-                    dynamichmc_kwargs...
+                    dynamichmc_kwargs...,
                 )
                 to_draws(results, vecmodel)
             catch e

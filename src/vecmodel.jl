@@ -190,15 +190,6 @@ function VecModel(
         ranges_and_transforms,
         accs,
     )
-    args = (
-        model.evaluation_fn,
-        model.args,
-        model.conditioned,
-        lp_function,
-        parameter_space,
-        ranges_and_transforms,
-        accs,
-    )
     adprep = if adtype === nothing
         nothing
     elseif _use_closure(adtype)
@@ -208,7 +199,18 @@ function VecModel(
     else
         # Other AD backends can directly take multiple arguments, which can often be
         # slightly better for performance.
-        DI.prepare_gradient(_vecmodel_lp, adtype, params, map(DI.Constant, args)...)
+        DI.prepare_gradient(
+            _vecmodel_lp,
+            adtype,
+            params,
+            DI.Constant(model.evaluation_fn),
+            DI.Constant(model.args),
+            DI.Constant(model.conditioned),
+            DI.Constant(lp_function),
+            DI.Constant(parameter_space),
+            DI.Constant(ranges_and_transforms),
+            DI.Constant(accs),
+        )
     end
     return VecModel(
         model,

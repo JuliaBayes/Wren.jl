@@ -19,8 +19,12 @@ Plaice.to_unconstrained_vec(d::DiagNormal) = Plaice.Vec(size(d.mu))
 Base.rand(rng::Random.AbstractRNG, d::DiagNormal) =
     randn(rng, size(d.mu)) .* d.sigma .+ d.mu
 @inline function Wren.logdensityof(d::DiagNormal, x)
-    dist = sum(abs2, (x .- d.mu) ./ d.sigma)
-    return -0.5 * dist - sum(log, d.sigma) - 0.5 * length(d.mu) * log(2π)
+    s = zero(eltype(x))
+    @inbounds for i in eachindex(x, d.mu, d.sigma)
+        z = (x[i] - d.mu[i]) / d.sigma[i]
+        s += z * z + 2 * log(d.sigma[i])
+    end
+    return -0.5 * s - 0.5 * length(d.mu) * log(2π)
 end
 function Wren.batched(
     iters,

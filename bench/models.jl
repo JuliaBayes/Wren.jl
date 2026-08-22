@@ -2,7 +2,7 @@ module BenchmarkModels
 
 using DelimitedFiles
 using Distributions
-using LinearAlgebra: I
+using LinearAlgebra: I, Diagonal
 using LogExpFunctions: softmax
 using ProbabilityMeasures: ProbabilityMeasures as PM
 using Wren: Wren, VarNamedTuple
@@ -24,18 +24,18 @@ const EIGHT_SCHOOLS_SIGMA = [15.0, 10.0, 16.0, 11.0, 9.0, 11.0, 10.0, 18.0]
 const EIGHT_SCHOOLS_J = 8
 
 Wren.@wren function wren_eight_schools(y, sigma, J)
-    mu ~ Normal(0, 5)
-    tau ~ truncated(Cauchy(0, 5); lower=0)
-    theta ~ MvNormal(fill(mu, J), tau^2 * I)
+    mu ~ PM.Normal(0, 5)
+    tau ~ PM.Exponential() # no cauchy yet
+    theta ~ PM.MvNormal(fill(mu, J), tau * I)
     @plate for i in 1:J
-        @observe y[i] ~ Normal(theta[i], sigma[i])
+        @observe y[i] ~ PM.Normal(theta[i], sigma[i])
     end
     return (mu=mu, tau=tau)
 end
 
 DynamicPPL.@model function dppl_eight_schools(y, sigma, J)
     mu ~ Normal(0, 5)
-    tau ~ truncated(Cauchy(0, 5); lower=0)
+    tau ~ Exponential()
     theta ~ MvNormal(fill(mu, J), tau^2 * I)
     for i in 1:J
         y[i] ~ Normal(theta[i], sigma[i])

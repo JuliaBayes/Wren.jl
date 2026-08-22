@@ -223,7 +223,8 @@ function accumulate_assume!!(
 )
     return acclogp(acc, logdensityof(right, val))
 end
-@inline accumulate_observe!!(acc::LogPriorAccumulator, val, vn, right, template, sitename) = acc
+@inline accumulate_observe!!(acc::LogPriorAccumulator, val, vn, right, template, sitename) =
+    acc
 
 """
     LogJacobianAccumulator{T<:Number} <: LogProbAccumulator{T}
@@ -274,7 +275,14 @@ function accumulate_assume!!(
 )
     return acclogp(acc, logjac)
 end
-@inline accumulate_observe!!(acc::LogJacobianAccumulator, val, vn, right, template, sitename) = acc
+@inline accumulate_observe!!(
+    acc::LogJacobianAccumulator,
+    val,
+    vn,
+    right,
+    template,
+    sitename,
+) = acc
 
 """
     LogLikelihoodAccumulator{T<:Number} <: LogProbAccumulator{T}

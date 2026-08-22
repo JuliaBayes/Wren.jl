@@ -309,8 +309,16 @@ Update all the accumulators of `at` by calling `accumulate_assume!!` on them.
 ) where {N,T}
     names = fieldnames(T)
     calls = [
-        :(accumulate_assume!!(at.nt.$(names[i]), val, tval, vn, right, logjac, template, sitename))
-        for i in 1:N
+        :(accumulate_assume!!(
+            at.nt.$(names[i]),
+            val,
+            tval,
+            vn,
+            right,
+            logjac,
+            template,
+            sitename,
+        )) for i in 1:N
     ]
     return quote
         $(Expr(:meta, :inline))
