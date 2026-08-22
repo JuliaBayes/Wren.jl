@@ -177,6 +177,15 @@ struct AccumulatorTuple{N,T<:NamedTuple}
     end
 end
 
+@generated function hasacc(::AccumulatorTuple{N,T}, ::Val{accname}) where {N,T,accname}
+    names = fieldnames(T)
+    if accname in names
+        return :(true)
+    else
+        return :(false)
+    end
+end
+
 AccumulatorTuple(accs::Vararg{AbstractAccumulator}) = AccumulatorTuple(accs)
 AccumulatorTuple(nt::NamedTuple) = AccumulatorTuple(tuple(nt...))
 AccumulatorTuple(at::AccumulatorTuple) = at
