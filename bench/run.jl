@@ -209,10 +209,6 @@ function main()
     for (model_index, models) in enumerate(BenchmarkModels.models())
         for (backend_index, backend) in enumerate(BACKENDS)
             seed = 468 + 10 * model_index + backend_index
-            # eight-schools not yet compatible with Reactant
-            backend.wren isa ADTypes.AutoReactant &&
-                contains(models.name, "eight") &&
-                continue
             # mnist causes Differ to stackoverflow
             backend.wren isa Differ.AutoDifferForwards &&
                 contains(models.name, "mnist") &&
