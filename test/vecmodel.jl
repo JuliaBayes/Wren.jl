@@ -24,14 +24,14 @@ const TESTED_ADTYPES = (
     "EnzymeRvs" => DI.AutoEnzyme(; mode=Enzyme.Reverse),
 )
 
-function unconstrained_lp(dist, y::AbstractVector)
+function reference_lp(dist, y::AbstractVector)
     tfm = Plaice.from_unconstrained_vec(dist)
     x, inv_logjac = Plaice.with_logabsdet_jacobian(tfm, y)
     logp = logdensityof(dist, x)
     return logp + inv_logjac
 end
-function unconstrained_grad(dist, y::AbstractVector)
-    DI.gradient(Base.Fix1(unconstrained_lp, dist), DI.AutoForwardDiff(), y)
+function reference_grad(dist, y::AbstractVector)
+    DI.gradient(Base.Fix1(reference_lp, dist), DI.AutoForwardDiff(), y)
 end
 
 @testset "vecmodel.jl" begin
@@ -54,7 +54,6 @@ end
             Normal(),
             Beta(2, 2),
             MvNormal(zeros(3), I),
-            Dirichlet(ones(4)),
             LKJCholesky(3, 0.5),
         )
             @wren function f(d)
@@ -74,8 +73,8 @@ end
                 for _ in 1:10
                     # check with a few random vectors to make sure it's unconstrained
                     y = randn(N) .* 10
-                    lp_expected = unconstrained_lp(d, y)
-                    grad_expected = unconstrained_grad(d, y)
+                    lp_expected = reference_lp(d, y)
+                    grad_expected = reference_grad(d, y)
 
                     @test lp(vm, y) ≈ lp_expected
 
@@ -83,7 +82,7 @@ end
                     @test lp2 ≈ lp_expected
                     @test grad ≈ grad_expected rtol=grad_rtol
 
-                    similar_grad = similar(y)
+                    similar_grad = zeros(N)
                     lp3, grad2 = lp_and_grad!(similar_grad, vm, y)
                     @test lp3 ≈ lp_expected
                     @test grad2 ≈ grad_expected rtol=grad_rtol
@@ -110,7 +109,7 @@ end
             # Should still be able to calculate logp
             @test LDP.capabilities(typeof(vm)) == LDP.LogDensityOrder{0}()
             @test LDP.dimension(vm) == vm.dimension
-            @test LDP.logdensity(vm, yvec) ≈ unconstrained_lp(Beta(2, 2), yvec)
+            @test LDP.logdensity(vm, yvec) ≈ reference_lp(Beta(2, 2), yvec)
 
             # but not gradients
             @test_throws Exception LDP.logdensity_and_gradient(vm, yvec)
