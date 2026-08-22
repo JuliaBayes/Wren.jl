@@ -19,7 +19,7 @@ end
 
     @testset "test_ad" begin
         result =
-            test_ad(ad_model(), AutoForwardDiff(); params, rng=Xoshiro(473), verbose=false)
+            test_ad(ad_model(), AutoForwardDiff(); latent_source=FromPrior(Xoshiro(473)), verbose=false)
         @test result isa ModelRunResult
         @test result.value_actual ≈ result.value_expected
         @test result.grad_actual ≈ result.grad_expected
@@ -35,8 +35,7 @@ end
             ad_model(),
             AutoForwardDiff();
             benchmark_seconds=0.01,
-            params,
-            rng=Xoshiro(474),
+            latent_source=FromPrior(Xoshiro(474)),
             verbose=false,
         )
         @test result.value_expected === nothing
@@ -51,8 +50,7 @@ end
             ad_model(),
             AutoForwardDiff();
             benchmark_seconds=0.01,
-            params,
-            rng=Xoshiro(476),
+            latent_source=FromPrior(Xoshiro(476)),
             verbose=false,
         )
         @test result.value_actual ≈ result.value_expected
@@ -68,8 +66,7 @@ end
             ad_model(),
             AutoForwardDiff();
             test_ad=WithExpectedResult(0.0, [0.0]),
-            params,
-            rng=Xoshiro(475),
+            latent_source=FromPrior(Xoshiro(475)),
             verbose=false,
         )
     end

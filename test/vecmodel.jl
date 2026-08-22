@@ -2,7 +2,6 @@ module WrenVecModelTests
 
 import DifferentiationInterface as DI
 using Distributions
-import FiniteDiff
 import ForwardDiff
 import ReverseDiff
 import Mooncake
@@ -31,6 +30,7 @@ function reference_lp(dist, y::AbstractVector)
     return logp + inv_logjac
 end
 function reference_grad(dist, y::AbstractVector)
+    # Would be nice to use finite differences but it's too inaccurate
     DI.gradient(Base.Fix1(reference_lp, dist), DI.AutoForwardDiff(), y)
 end
 

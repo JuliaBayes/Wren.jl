@@ -296,10 +296,9 @@ end
         end
 
         @testset "elided without LogLikelihood accumulator" begin
-            _allocating_fn(x) = sum(collect(range(-x, x; length=1000)))
             @wren function addloglik_elided()
                 x ~ Normal()
-                @addloglikelihood _allocating_fn(x)
+                @addloglikelihood sum(collect(range(-x, x; length=1000)))
             end
             source = FromParams(VarNamedTuple(; x=0.5))
             model = addloglik_elided()
