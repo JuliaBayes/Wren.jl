@@ -18,14 +18,14 @@ This number is always in original coordinates, even if the model was evaluated i
 transformed coordinates. If you want the log-prior density in transformed coordinates, you
 can compute it as `logprior(accs) - logjac(accs)`.
 """
-logprior(accs::AccumulatorTuple) = getacc(accs, Val(LOG_PRIOR_ACCNAME)).logp
+@inline logprior(accs::AccumulatorTuple) = getacc(accs, Val(LOG_PRIOR_ACCNAME)).logp
 
 """
     StatsAPI.loglikelihood(accs::AccumulatorTuple)::Number
 
 Return the accumulated log-likelihood.
 """
-StatsAPI.loglikelihood(accs::AccumulatorTuple) =
+@inline StatsAPI.loglikelihood(accs::AccumulatorTuple) =
     getacc(accs, Val(LOG_LIKELIHOOD_ACCNAME)).logp
 
 """
@@ -42,7 +42,7 @@ Consequently, the log-joint density in transformed space is given by
 
 (note the minus sign).
 """
-logjac(accs::AccumulatorTuple) = getacc(accs, Val(LOG_JACOBIAN_ACCNAME)).logjac
+@inline logjac(accs::AccumulatorTuple) = getacc(accs, Val(LOG_JACOBIAN_ACCNAME)).logjac
 
 """
     logjoint(accs::AccumulatorTuple)::Number
@@ -50,7 +50,7 @@ logjac(accs::AccumulatorTuple) = getacc(accs, Val(LOG_JACOBIAN_ACCNAME)).logjac
 Return the log joint density in original coordinates, i.e. the sum of the log-prior and
 log-likelihood.
 """
-logjoint(accs::AccumulatorTuple) = logprior(accs) + loglikelihood(accs)
+@inline logjoint(accs::AccumulatorTuple) = logprior(accs) + loglikelihood(accs)
 
 """
     logjoint_transformed(accs::AccumulatorTuple)::Number
@@ -59,4 +59,4 @@ Return the log joint density in transformed coordinates, i.e.
 
     logjoint_transformed(accs) = logjoint(accs) - logjac(accs).
 """
-logjoint_transformed(accs::AccumulatorTuple) = logjoint(accs) - logjac(accs)
+@inline logjoint_transformed(accs::AccumulatorTuple) = logjoint(accs) - logjac(accs)

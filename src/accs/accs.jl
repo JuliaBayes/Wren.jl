@@ -297,7 +297,7 @@ end
 
 Update all the accumulators of `at` by calling `accumulate_assume!!` on them.
 """
-@generated function accumulate_assume!!(
+@inline @generated function accumulate_assume!!(
     at::AccumulatorTuple{N,T},
     val,
     tval,
@@ -321,7 +321,6 @@ Update all the accumulators of `at` by calling `accumulate_assume!!` on them.
         )) for i in 1:N
     ]
     return quote
-        $(Expr(:meta, :inline))
         AccumulatorTuple(NamedTuple{$names}(($(calls...),)))
     end
 end
@@ -331,7 +330,7 @@ end
 
 Update all the accumulators of `at` by calling `accumulate_observe!!` on them.
 """
-@generated function accumulate_observe!!(
+@inline @generated function accumulate_observe!!(
     at::AccumulatorTuple{N,T},
     val,
     vn,
@@ -345,7 +344,6 @@ Update all the accumulators of `at` by calling `accumulate_observe!!` on them.
         for i in 1:N
     ]
     return quote
-        $(Expr(:meta, :inline))
         AccumulatorTuple(NamedTuple{$names}(($(calls...),)))
     end
 end

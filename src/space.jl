@@ -162,7 +162,7 @@ inverse transform to original space for two reasons:
 - The left-hand side of the tilde-statement contains a variable, and we must assign the
   value in original space to that variable.
 """
-function apply_parameter_space(
+@inline function apply_parameter_space(
     parameter_space::AbstractParameterSpace,
     tval::TransformedValue{<:AbstractVector{<:Number},AsUnconstrainedVec},
     vn::VarName,
@@ -183,7 +183,7 @@ function apply_parameter_space(
         error("unknown target transform: $target")
     end
 end
-function apply_parameter_space(
+@inline function apply_parameter_space(
     parameter_space::AbstractParameterSpace,
     tval::TransformedValue{<:AbstractVector{<:Number},AsVec},
     vn::VarName,
@@ -205,7 +205,7 @@ function apply_parameter_space(
         error("unknown target transform: $target")
     end
 end
-function apply_parameter_space(
+@inline function apply_parameter_space(
     parameter_space::AbstractParameterSpace,
     tval::TransformedValue{<:Any,AsOriginal},
     vn::VarName,
@@ -227,7 +227,7 @@ function apply_parameter_space(
         error("unknown target transform: $target")
     end
 end
-function apply_parameter_space(
+@inline function apply_parameter_space(
     parameter_space::AbstractParameterSpace,
     tval::TransformedValue{<:Any,<:FixedTransform},
     vn::VarName,

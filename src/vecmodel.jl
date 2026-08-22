@@ -39,7 +39,7 @@ end
 
 The function that calculates the log-density at `params`.
 """
-function _vecmodel_lp(
+@inline function _vecmodel_lp(
     params::AbstractVector,
     evaluation_fn,
     model_args::NamedTuple,

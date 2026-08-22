@@ -323,6 +323,9 @@ function emit_model_expr(
     parameter_space,
 )
     body = Expr(:block)
+    # This makes Enzyme crash?
+    # https://github.com/JuliaBayes/Wren.jl/issues/21#issuecomment-5379808749
+    # push!(body.args, :(Expr(:meta, :inline)))
     @gensym retval
     if stmt.expr !== nothing
         return_expr =

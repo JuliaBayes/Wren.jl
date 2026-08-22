@@ -174,8 +174,8 @@ function combine_with_namespace(
     return combine(acc, acc2)
 end
 
-acclogp(acc::LogProbAccumulator, val) = basetypeof(acc)(logp(acc) + val)
-acclogp(acc::LogProbAccumulator{NoLogProb}, val) = basetypeof(acc)(val)
+@inline acclogp(acc::LogProbAccumulator, val) = basetypeof(acc)(logp(acc) + val)
+@inline acclogp(acc::LogProbAccumulator{NoLogProb}, val) = basetypeof(acc)(val)
 
 function Base.convert(
     ::Type{AccType},
@@ -211,7 +211,7 @@ logp(acc::LogPriorAccumulator) = acc.logp
 
 accumulator_name(::Type{<:LogPriorAccumulator}) = LOG_PRIOR_ACCNAME
 
-function accumulate_assume!!(
+@inline function accumulate_assume!!(
     acc::LogPriorAccumulator,
     val,
     tval,
@@ -263,7 +263,7 @@ logp(acc::LogJacobianAccumulator) = acc.logjac
 
 accumulator_name(::Type{<:LogJacobianAccumulator}) = LOG_JACOBIAN_ACCNAME
 
-function accumulate_assume!!(
+@inline function accumulate_assume!!(
     acc::LogJacobianAccumulator,
     val,
     tval,
@@ -301,7 +301,7 @@ logp(acc::LogLikelihoodAccumulator) = acc.logp
 
 accumulator_name(::Type{<:LogLikelihoodAccumulator}) = LOG_LIKELIHOOD_ACCNAME
 
-function accumulate_assume!!(
+@inline function accumulate_assume!!(
     acc::LogLikelihoodAccumulator,
     val,
     tval,
