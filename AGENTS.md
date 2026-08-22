@@ -36,13 +36,9 @@ v = rand(vecmodel) # draws a vector
 
 # Benchmarking models
 
-Basic, direct usage:
+Wren provides nice macros for this:
 
 ```
-using Chairmarks
-
-@b rand($model)
-@b lp($vecmodel, $v)
+@bmodel model         # no AD
+@bmodel model adtype  # with AD
 ```
-
-Always make sure to interpolate the arguments to avoid spurious allocations.
