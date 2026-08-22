@@ -167,6 +167,10 @@ macro plate(args...)
     error("@plate must be used inside @wren")
 end
 
+macro addloglikelihood(args...)
+    error("@addloglikelihood must be used inside @wren")
+end
+
 function _wren(expr::Expr, mod::Module)
     # Sanity check
     expr.head == :function || error("@wren: expected a function definition")
