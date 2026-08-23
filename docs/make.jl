@@ -25,10 +25,8 @@ makedocs(;
         "motivation.md",
         "api.md",
     ],
-    # TODO(penelopeysm): Reenable!
-    # checkdocs=:exports,
-    # warnonly=false,
-    warnonly=true,
+    checkdocs=:exports,
+    warnonly=false,
     doctest=false,
     plugins=[CodeBlocks(), links],
 )
