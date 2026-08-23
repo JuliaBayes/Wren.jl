@@ -212,11 +212,11 @@ function _wren(expr::Expr, mod::Module)
     evaluation_fn_ref = GlobalRef(mod, evaluation_fn_name)
     # These must be separate top-level evaluations so that the RGF module tag created by
     # `init` is visible when `make_evaluation_fn` runs in the subsequent world.
-    Core.eval(mod, :($(GlobalRef(RuntimeGeneratedFunctions, :init))($(QuoteNode(mod)))))
+    Core.eval(mod, :($(RuntimeGeneratedFunctions.init)($(QuoteNode(mod)))))
     Core.eval(
         mod,
         quote
-            const $evaluation_fn_name = $(GlobalRef(@__MODULE__, :make_evaluation_fn))(
+            const $evaluation_fn_name = $make_evaluation_fn(
                 ($(QuoteNode.(fargs)...),),
                 $model_exprs,
                 $(QuoteNode(mod)),
