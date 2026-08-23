@@ -78,6 +78,9 @@ function combine_with_namespace(
     vn::VarName,
     template,
 )
+    # If there are no fast paths in the submodel, just pretend that the submodel doesn't
+    # exist at all. This lets the later check (see `scope(::FromVector, ...)`) avoid trying
+    # to check the submodel's fast paths when there are none.
     isempty(acc2.entries) && return acc1
     # Both halves of each entry have to be prefixed: the key, because the sitename now
     # belongs to a submodel, and the value, because it is a submodel-local VarName which

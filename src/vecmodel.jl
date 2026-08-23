@@ -90,7 +90,7 @@ end
         model::Model,
         adtype::Union{ADTypes.AbstractADType,Nothing};
         lp_function=logjoint_transformed,
-        params=FromPrior(),
+        latent_source=FromPrior(),
         parameter_space=UnconstrainedSpace()
     )
 
@@ -147,15 +147,17 @@ since the mapping is invariant to the order in which the latent variables are en
 
 ## Keyword arguments
 
-- `params::AbstractLatentSource`: when preparing a `VecModel`, Wren requires information
-  about the model's latent variables in order to construct the mapping from vector to latent
-  variables. This can most easily be obtained by running the model once with an
+- `latent_source::AbstractLatentSource`: when preparing a `VecModel`, Wren requires
+  information about the model's latent variables in order to construct the mapping from
+  vector to latent variables. This is obtained by running the model once with an
   `AbstractLatentSource`, which you can pass here. If you want to control the RNG with which
-  these parameters are drawn, you can use [`FromPrior(rng)`](@ref FromPrior).
+  these parameters are drawn, you can use [`FromPrior(rng)`](@ref FromPrior). If you have a
+  `VarNamedTuple` of values, wrap it in [`FromParams`](@ref).
 
-  If you have already run the model once, you can avoid reevaluation by directly passing the
-  requisite information. This is mostly intended for advanced usage, please see the Wren
-  source code for examples of how to do this.
+  If you have already run the model once, you can avoid reevaluation entirely by calling the
+  positional constructor with a `RangesAndTransforms` and a parameter vector. This is mostly
+  intended for advanced usage, please see the Wren source code for examples of how to do
+  this.
 
 - `lp_function`: When the model is evaluated, it will return a set of accumulators, which must
   then be collapsed into a single scalar log-density. This function is responsible for that
@@ -266,16 +268,13 @@ end
 function VecModel(
     model::Model,
     adtype::Union{DI.AbstractADType,Nothing};
-    params::Union{VarNamedTuple,AbstractLatentSource}=FromPrior(),
+    latent_source::AbstractLatentSource=FromPrior(),
     lp_function=logjoint_transformed,
     parameter_space::AbstractParameterSpace=UnconstrainedSpace(),
 )
     # Get vectorised parameters.
-    values, sitename_tracker = if params isa VarNamedTuple
-        params, SiteNameTracker()
-    else
-        _draw_vectorised_params(model, params, parameter_space)
-    end
+    values, sitename_tracker =
+        _prepare_vecmodel_info(model, latent_source, parameter_space)
     # Check that they're sensible, and flatten them into a single vector.
     _validate_vectorised_params(values, parameter_space)
     ranges_and_transforms, sample = _ranges_and_params(values, sitename_tracker)
@@ -341,7 +340,9 @@ function _validate_vectorised_params(
     return nothing
 end
 
-function _draw_vectorised_params(
+# Run the model once to collect everything needed to vectorise it: the latent values, plus
+# the sampling sites that were hit exactly once (which provide the fast-path lookup).
+function _prepare_vecmodel_info(
     model::Model,
     source::AbstractLatentSource,
     parameter_space::AbstractParameterSpace,
@@ -511,7 +512,7 @@ Draw a parameter vector compatible with `vecmodel`.
 function Base.rand(rng::AbstractRNG, vecmodel::VecModel)
     # TODO: this is inefficient -- should write directly into the vector
     values, _ =
-        _draw_vectorised_params(vecmodel.model, FromPrior(rng), vecmodel.parameter_space)
+        _prepare_vecmodel_info(vecmodel.model, FromPrior(rng), vecmodel.parameter_space)
     ranges_and_transforms, params = _ranges_and_params(values)
     ranges_and_transforms == vecmodel.ranges_and_transforms || throw(
         ArgumentError(

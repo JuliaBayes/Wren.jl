@@ -136,61 +136,73 @@ Base.isequal(a::RangeAndTransform, b::RangeAndTransform) =
 Holds a `VarNamedTuple` mapping `VarName => RangeAndTransform`, together with a fast-path
 `VarNamedTuple` mapping `sitename => RangeAndTransform`.
 
-Sites inside a submodel are keyed by their prefixed path, so `a ~ inner()` where `inner`
-contains `x ~ Normal()` gives a fast-path entry at `@vn(a.x)`. `scope` descends into that
-using the same `VarName` it already receives, so a submodel's sites keep their fast path.
+The fast path is only hit for sampling sites that are encountered once and only once during
+model evaluation. This allows us to completely elide VarNamedTuple lookups for these sites.
+Usually the VNT lookup is not a problem, but VarNames like `x[1:100000]` can be very slow
+due to PartialArray and ArrayLikeBlock checks.
+
+## Submodel handling
+
+The first VNT handles `VarName`s exactly as they appear in the lhs of tilde-statements. Note
+that sitenames of submodels are prefixed by the **`VarName`** of the submodel site, rather
+than the **sitename** of the submodel site. For example, if we have
+
+```julia
+@wren function inner()
+    @sample name=:norm x ~ Normal()
+end
+@wren function outer()
+    @sample name=:myinner a ~ inner()
+end
+```
+
+then the first VNT stores `@vn(a.x) => RangeAndTransform(...)`, and the second VNT stores
+`@vn(a.norm) => RangeAndTransform(...)`, **not** `@vn(a.myinner.norm)`. This design allows
+us to:
+
+- avoid passing the submodel site name into functions such as `scope`, which would pollute
+  the signature with something that is only relevant for Wren (i.e., making it harder to
+  use submodels from other sources), and
+
+- handle cases where a submodel contains a slow variable (e.g. `x[1:10000]`) but is sampled
+  in a loop. For example
+
+  ```julia
+  @wren function inner()
+      x = zeros(N)
+      x[1:N] ~ dist
+  end
+  @wren function outer()
+      a = Vector{Any}(undef, M)
+      for i in 1:M
+          a[i] ~ inner()
+      end
+  end
+  ```
+
+  Prefixing with the submodel site would cause all the submodels' `x` variables to have the
+  same prefixed sampling site, whereas prefixing with the VarName allows each submodel's `x`
+  to have a different entry.
 
 The main inner constructor takes a `VarNamedTuple` and a [`SiteNameTracker`](@ref). This
 guarantees that the actual information stored in both fields are consistent.
 
-When evaluating a model with `FromVector`, Wren first checks the `sitename_lookup` to see if
-the `RangeAndTransform` has been stored there. If it hasn't, then it will do the potentially
-slower `VarNamedTuple` lookup.
-
-The fast path is only hit for sampling sites that are encountered once and only once during
-model evaluation. This allows us to completely elide VarNamedTuple lookups for these sites.
-Usually that's not a problem, but VarNames like `x[1:100000]` can be very slow due to
-PartialArray and ArrayLikeBlock checks.
-
-The implicit assumption here is that if `sitename` was only encountered once during the
-construction of the `RangesAndTransforms`, then it will only be encountered once during
-every model evaluation. This is true of essentially any model that is amenable to
-vectorisation.
-
-An interesting case to ponder is a model like this. In the absence of this fast path (i.e.,
-if there was only VNT-based lookup like DynamicPPL), this is compatible with vectorisation
-as long as `dist1` and `dist2` have the same `Plaice.unconstrained_vec_size`, because the
-resulting `RangeAndTransform` will be a constant:
-
-```julia
-if something
-    x ~ dist1
-else
-    x ~ dist2
-end
-```
-
-With the fast path, it's quite possible that the sitename for the `if` branch will be
-stored, and the sitename for the `else` branch won't. This means that during model
-evaluation, the fast path will only work if we hit the same branch. However, even if we hit
-the other branch, the slow path will still work (because `x`'s `RangeAndTransform` will
-still be stored in the VNT!)
 """
 struct RangesAndTransforms{N<:VarNamedTuple,V<:VarNamedTuple}
     sitename_lookup::N
-    vnt::V
+    slow_vnt::V
     # Derives the fast-path lookup from the sites tracked during model evaluation.
-    function RangesAndTransforms(tracker::SiteNameTracker, vnt::VarNamedTuple)
-        lookup = sitename_lookup(tracker, vnt)
-        return new{typeof(lookup),typeof(vnt)}(lookup, vnt)
+    function RangesAndTransforms(tracker::SiteNameTracker, slow_vnt::VarNamedTuple)
+        lookup = sitename_lookup(tracker, slow_vnt)
+        return new{typeof(lookup),typeof(slow_vnt)}(lookup, slow_vnt)
     end
     # Used by `scope`, where both fields have already been extracted from a parent
     # RangesAndTransforms and are therefore already consistent with one another.
-    function RangesAndTransforms(lookup::VarNamedTuple, vnt::VarNamedTuple)
-        return new{typeof(lookup),typeof(vnt)}(lookup, vnt)
+    function RangesAndTransforms(lookup::VarNamedTuple, slow_vnt::VarNamedTuple)
+        return new{typeof(lookup),typeof(slow_vnt)}(lookup, slow_vnt)
     end
 end
-Base.:(==)(a::RangesAndTransforms, b::RangesAndTransforms) = a.vnt == b.vnt
+Base.:(==)(a::RangesAndTransforms, b::RangesAndTransforms) = a.slow_vnt == b.slow_vnt
 
 """
     FromVector(
@@ -218,25 +230,51 @@ end
     return if idx !== nothing && fieldtype(types, idx) <: RangeAndTransform
         :(rat.sitename_lookup.data.$sitename)
     else
-        :(rat.vnt[vn])
+        :(rat.slow_vnt[vn])
     end
 end
+
+"""
+    get_latent(source::FromVector, ...)
+
+When evaluating a model with `FromVector`, Wren first checks the `sitename_lookup` to see if
+the `RangeAndTransform` has been stored there. If it hasn't, then it will do the potentially
+slower `VarNamedTuple` lookup.
+
+The implicit assumption here is that if `sitename` was only encountered once during the
+construction of the `RangesAndTransforms`, then it will only be encountered once during
+every model evaluation. This is true of essentially any model that is amenable to
+vectorisation.
+
+An interesting case to ponder is a model like this. In the absence of this fast path (i.e.,
+if there was only VNT-based lookup like DynamicPPL), this is compatible with vectorisation
+as long as `dist1` and `dist2` have the same `Plaice.unconstrained_vec_size`, because the
+resulting `RangeAndTransform` will be a constant:
+
+```julia
+if something
+    x ~ dist1
+else
+    x ~ dist2
+end
+```
+
+With the fast path, it's quite possible that the sitename for the `if` branch will be
+stored, and the sitename for the `else` branch won't. This means that during model
+evaluation, the fast path will only work if we hit the same branch. However, even if we hit
+the other branch, the slow path will still work (because `x`'s `RangeAndTransform` will
+still be stored in the VNT!)
+"""
 function get_latent(source::FromVector, vn::VarName, right, sitename::Val)
     rt = _get_range_and_transform(source.ranges_and_transforms, vn, sitename)
     range, tfm = rt.range, rt.transform
     return TransformedValue(view(source.params, range), tfm)
 end
-# Extract the part of a sitename lookup that belongs to the submodel prefixed by `vn`.
-# Anything other than a nested VarNamedTuple means there is no fast-path information for that
-# submodel, which is always safe: lookups then fall back to the VarNamedTuple.
-function _child_sitename_lookup(lookup::VarNamedTuple, vn::VarName)
-    return haskey(lookup, vn) ? _as_vnt(lookup[vn]) : VarNamedTuple()
-end
-_as_vnt(x::VarNamedTuple) = x
-_as_vnt(::Any) = VarNamedTuple()
 
+_maybe_get_vnt(source::VarNamedTuple, vn::VarName) = haskey(source, vn) ? source[vn] : VarNamedTuple()
 function scope(source::FromVector, vn::VarName)
     rat = source.ranges_and_transforms
-    child_lookup = _child_sitename_lookup(rat.sitename_lookup, vn)
-    return FromVector(source.params, RangesAndTransforms(child_lookup, rat.vnt[vn]))
+    # As explained in the constructor docstring for RangesAndTransforms, both VNTs are
+    # prefixed using `vn` rather than the sitename, so we can directly index into it.
+    return FromVector(source.params, RangesAndTransforms(rat.sitename_lookup[vn], rat.slow_vnt[vn]))
 end

@@ -30,15 +30,12 @@ end
 function Wren.VecModel(
     model::Wren.Model,
     adtype::AutoReactant;
-    params::Union{Wren.VarNamedTuple,Wren.AbstractLatentSource}=Wren.FromPrior(),
+    latent_source::Wren.AbstractLatentSource=Wren.FromPrior(),
     lp_function=Wren.logjoint_transformed,
     parameter_space::Wren.AbstractParameterSpace=Wren.UnconstrainedSpace(),
 )
-    values, sitename_tracker = if params isa Wren.VarNamedTuple
-        params, Wren.SiteNameTracker()
-    else
-        Wren._draw_vectorised_params(model, params, parameter_space)
-    end
+    values, sitename_tracker =
+        Wren._prepare_vecmodel_info(model, latent_source, parameter_space)
     Wren._validate_vectorised_params(values, parameter_space)
     ranges_and_transforms, sample = Wren._ranges_and_params(values, sitename_tracker)
 

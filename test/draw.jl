@@ -53,7 +53,7 @@ end
     @test extras(from_accs).chain == 2
     @test logjoint(from_accs) ≈ logjoint(from_prior)
 
-    vecmodel = VecModel(model, AutoForwardDiff(); params=FromPrior(Xoshiro(602)))
+    vecmodel = VecModel(model, AutoForwardDiff(); latent_source=FromPrior(Xoshiro(602)))
     vector_params = rand(Xoshiro(603), vecmodel)
     from_vecmodel = Draw(vector_params, vecmodel)
     @test logjoint(from_vecmodel) ≈ logprior(from_vecmodel) + loglikelihood(from_vecmodel)
@@ -71,7 +71,7 @@ end
     fixed_vecmodel = VecModel(
         prickly_model(should_error),
         nothing;
-        params=FromPrior(Xoshiro(604)),
+        latent_source=FromPrior(Xoshiro(604)),
         parameter_space=fixed_space,
     )
     fixed_params = copy(fixed_vecmodel.sample)
