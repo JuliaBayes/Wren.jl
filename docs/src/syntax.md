@@ -97,12 +97,9 @@ using Chairmarks
 @b rand($ydef_model)
 ```
 
-Be aware though that the argument to the model will be mutated!
+Be aware that when running the model, the argument to the model will be mutated.
 Thus, one can really think of the function argument as **a 'scratch' buffer that declares the shape of the latent array**, whose contents are not used in any way.
-
-```@example model
-my_y
-```
+To avoid accidental aliasing footguns, Wren will make a copy of the argument at model construction time (not model evaluation time).
 
 Immutable structs largely behave the same way as top-level variables, and mutable structs follow the same principles as arrays.
 

@@ -6,6 +6,25 @@ using RuntimeGeneratedFunctions
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
 """
+    _dealias
+
+Create a copy of a model argument that has the same contents, but avoids aliasing the user's
+data.
+
+This avoids 'surprise' mutations of the user's data when the model is evaluated. However,
+because it's called at model _construction_ time rather than _evaluation_, it avoids the
+performance implications of creating a copy of the data every time the model is evaluated.
+"""
+function _dealias(v::SubArray{T}) where {T}
+    v = collect(v)  # Avoid copying the entire parent array.
+    return isbitstype(T) ? v : deepcopy(v)
+end
+function _dealias(v::AbstractArray{T}) where {T}
+    return isbitstype(T) ? copy(v) : deepcopy(v)
+end
+_dealias(v) = deepcopy(v)
+
+"""
     Wren.Model
 
 A Wren model.
@@ -34,10 +53,11 @@ struct Model{A<:NamedTuple,C<:VarNamedTuple,F}
         mod::Module;
         conditioned::VarNamedTuple=VarNamedTuple(),
     )
-        evaluation_fn = make_evaluation_fn(args, stmts, mod)
-        return new{typeof(args),typeof(conditioned),typeof(evaluation_fn)}(
+        dealiased_args = map(_dealias, args)
+        evaluation_fn = make_evaluation_fn(dealiased_args, stmts, mod)
+        return new{typeof(dealiased_args),typeof(conditioned),typeof(evaluation_fn)}(
             name,
-            args,
+            dealiased_args,
             stmts,
             mod,
             conditioned,
