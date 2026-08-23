@@ -245,6 +245,20 @@ x[(@. (1:N-1) + 1)] ~ MvNormal(x[1:N-1], I)
 
 which has a different meaning: `x[i]` is now read before it is written to.
 
+Note that the batching is contingent on Wren knowing what to do with the right-hand side of the expression.
+Firstly, the right-hand side must be a function call.
+Secondly, there must be a custom method defined for `Wren.batched` which dispatches on the function on the right-hand side (in this case, `Normal`).
+Unfortunately, this means that it is more or less impossible to batch user functions.
+
+In the case where Wren doesn't know how to batch the right-hand side, it will fall back to a regular product distribution, i.e.,
+
+```julia
+x[1:N] ~ product_distribution([Normal() for i in 1:N])
+y[1:N] ~ product_distribution([Normal(x[i]) for i in 1:N])
+```
+
+which guarantees correctness, but might not be as efficient as the vectorised form.
+
 !!! danger
 
     Plates are a highly experimental feature and might not work in all cases.
