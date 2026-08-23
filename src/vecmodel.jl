@@ -273,8 +273,7 @@ function VecModel(
     parameter_space::AbstractParameterSpace=UnconstrainedSpace(),
 )
     # Get vectorised parameters.
-    values, sitename_tracker =
-        _prepare_vecmodel_info(model, latent_source, parameter_space)
+    values, sitename_tracker = _prepare_vecmodel_info(model, latent_source, parameter_space)
     # Check that they're sensible, and flatten them into a single vector.
     _validate_vectorised_params(values, parameter_space)
     ranges_and_transforms, sample = _ranges_and_params(values, sitename_tracker)

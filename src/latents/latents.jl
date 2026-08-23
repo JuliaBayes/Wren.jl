@@ -271,10 +271,14 @@ function get_latent(source::FromVector, vn::VarName, right, sitename::Val)
     return TransformedValue(view(source.params, range), tfm)
 end
 
-_maybe_get_vnt(source::VarNamedTuple, vn::VarName) = haskey(source, vn) ? source[vn] : VarNamedTuple()
+_maybe_get_vnt(source::VarNamedTuple, vn::VarName) =
+    haskey(source, vn) ? source[vn] : VarNamedTuple()
 function scope(source::FromVector, vn::VarName)
     rat = source.ranges_and_transforms
     # As explained in the constructor docstring for RangesAndTransforms, both VNTs are
     # prefixed using `vn` rather than the sitename, so we can directly index into it.
-    return FromVector(source.params, RangesAndTransforms(rat.sitename_lookup[vn], rat.slow_vnt[vn]))
+    return FromVector(
+        source.params,
+        RangesAndTransforms(rat.sitename_lookup[vn], rat.slow_vnt[vn]),
+    )
 end
