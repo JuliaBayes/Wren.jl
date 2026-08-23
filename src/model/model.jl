@@ -207,6 +207,20 @@ function _wren(expr::Expr, mod::Module)
     model_exprs = to_wren_exprs(body, mod)
     evaluation_fn_name = gensym(Symbol(fname, :_evaluation_fn))
     evaluation_fn_ref = GlobalRef(mod, evaluation_fn_name)
+    Core.eval(
+        mod,
+        :($(GlobalRef(RuntimeGeneratedFunctions, :init))($(QuoteNode(mod)))),
+    )
+    Core.eval(
+        mod,
+        quote
+            const $evaluation_fn_name = $(GlobalRef(@__MODULE__, :make_evaluation_fn))(
+                ($(QuoteNode.(fargs)...),),
+                $model_exprs,
+                $(QuoteNode(mod)),
+            )
+        end,
+    )
     function_body = :(
         $(Model)(
             $(QuoteNode(fname)),
@@ -218,10 +232,5 @@ function _wren(expr::Expr, mod::Module)
     )
     function_expr = Expr(:function, esc(signature), function_body)
 
-    return quote
-        RuntimeGeneratedFunctions.init(@__MODULE__)
-        const $(esc(evaluation_fn_name)) =
-            $(make_evaluation_fn)(($(QuoteNode.(fargs)...),), $model_exprs, @__MODULE__)
-        $function_expr
-    end
+    return function_expr
 end
