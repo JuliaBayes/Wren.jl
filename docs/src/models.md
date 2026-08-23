@@ -235,7 +235,7 @@ Additionally, Wren provides an in-place gradient [`lp_and_grad!`](@ref) function
 LogDensityProblems.jl does not provide this (but if you have a good usecase for it, please consider [adding a comment on this issue](https://github.com/tpapp/LogDensityProblems.jl/issues/115)!).
 
 By default, `VecModel`s are always run in [`UnconstrainedSpace()`](@ref): that is, all parameters are transformed into a form where they can take any value in ℝ^n.
-The log-density calculation will then include the log-Jacobian term corresponding to this transfomration.
+The log-density calculation will then include the log-Jacobian term corresponding to this transformation.
 If this is not desired, you can specify a different parameter space, or a different log-density calculation function as a keyword argument to the [`VecModel`](@ref) constructor: please see its docstring for more info.
 
 !!! warning
