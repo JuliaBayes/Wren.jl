@@ -6,25 +6,6 @@ using RuntimeGeneratedFunctions
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
 """
-    _dealias
-
-Create a copy of a model argument that has the same contents, but avoids aliasing the user's
-data.
-
-This avoids 'surprise' mutations of the user's data when the model is evaluated. However,
-because it's called at model _construction_ time rather than _evaluation_, it avoids the
-performance implications of creating a copy of the data every time the model is evaluated.
-"""
-function _dealias(v::SubArray{T}) where {T}
-    v = collect(v)  # Avoid copying the entire parent array.
-    return isbitstype(T) ? v : deepcopy(v)
-end
-function _dealias(v::AbstractArray{T}) where {T}
-    return isbitstype(T) ? copy(v) : deepcopy(v)
-end
-_dealias(v) = deepcopy(v)
-
-"""
     Wren.Model
 
 A Wren model.
@@ -52,9 +33,9 @@ struct Model{A<:NamedTuple,C<:VarNamedTuple,F}
         stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}},
         mod::Module;
         conditioned::VarNamedTuple=VarNamedTuple(),
+        evaluation_fn=make_evaluation_fn(keys(args), stmts, mod),
     )
         dealiased_args = map(_dealias, args)
-        evaluation_fn = make_evaluation_fn(dealiased_args, stmts, mod)
         return new{typeof(dealiased_args),typeof(conditioned),typeof(evaluation_fn)}(
             name,
             dealiased_args,
@@ -66,11 +47,34 @@ struct Model{A<:NamedTuple,C<:VarNamedTuple,F}
     end
 end
 
+"""
+    _dealias
+
+Create a copy of a model argument that has the same contents, but avoids aliasing the user's
+data.
+
+This avoids 'surprise' mutations of the user's data when the model is evaluated. However,
+because it's called at model _construction_ time rather than _evaluation_, it avoids the
+performance implications of creating a copy of the data every time the model is evaluated.
+"""
+function _dealias(v::SubArray{T}) where {T}
+    v = collect(v)  # Avoid copying the entire parent array.
+    return isbitstype(T) ? v : deepcopy(v)
+end
+function _dealias(v::AbstractArray{T}) where {T}
+    return isbitstype(T) ? copy(v) : deepcopy(v)
+end
+_dealias(v) = deepcopy(v)
+# Models contain `Module`s, which can't be deepcopied. It is currently my belief that models
+# should be immutable (or at least pretend to be), and thus we should not need to deepcopy
+# models that are passed as arguments to models. However, this may need to be revisited.
+_dealias(model::Model) = model
+
 function make_evaluation_fn(
-    ::NamedTuple{argnames},
+    argnames::Tuple{Vararg{Symbol}},
     stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}},
     mod::Module,
-) where {argnames}
+)
     body = Expr(:block)
     @gensym model_args
     for k in argnames
@@ -81,11 +85,12 @@ function make_evaluation_fn(
     model_body = emit_statements(stmts, accs, conditioned, latent_source, parameter_space)
     push!(body.args, :($retval = $model_body))
     push!(body.args, :(return ($retval, $accs)))
-    return @RuntimeGeneratedFunction(
+    return RuntimeGeneratedFunctions.RuntimeGeneratedFunction(
+        mod,
         mod,
         :(function ($latent_source, $parameter_space, $accs, $model_args, $conditioned)
             $body
-        end)
+        end),
     )
 end
 
@@ -205,11 +210,54 @@ function _wren(expr::Expr, mod::Module)
 
     model_args = to_namedtuple(fargs_expr)
     model_exprs = to_wren_exprs(body, mod)
-    function_body = :($(Model)($(QuoteNode(fname)), $model_args, $model_exprs, @__MODULE__))
+
+    # At macro definition time, we generate a new symbol to store the evaluation function
+    # corresponding to the AST *as defined in the macro*. It's possible that users can
+    # instantiate a Model and modify it, thus necessitating a new evaluation function.
+    # That's handled separately. However, we don't want *every* call to `model()` to
+    # generate a new RGF because it should always use the RGF that corresponds to the
+    # macro's contents.
+    #
+    # The cached RGF is stored as a module-level constant in order to ensure type stability.
+    # We could also store it in an IdDict or something like that. That avoids the cost of
+    # constructing the RGF, but is type unstable.
+    #
+    # TODO(penelopeysm): I wonder if it would be possible to store the RGF in an IdDict, and
+    # make the model constructor, i.e., `model()`, a generated function, so that the type
+    # instability is limited to compile time. This would be kind of similar to the way
+    # autodiff works: already-derived rules are stored in a cache and looked up at compile
+    # time, which can be type unstable, but the resulting rule is type stable.
+    evaluation_fn_name = gensym(Symbol(fname, :_evaluation_fn))
+    # These two `eval`s need to be separate because RGF.init() itself does the same
+    # trick that we do here by installing a new module-level const. See
+    #
+    # https://github.com/SciML/RuntimeGeneratedFunctions.jl/blob/73411b2dad5e37815e678b7f6733fb9303600170/src/RuntimeGeneratedFunctions.jl#L387
+    #
+    # That causes the world age to be incremented...
+    mod.eval(:($(RuntimeGeneratedFunctions.init)($(QuoteNode(mod)))))
+    # ...and because `make_evaluation_fn` generates an RGF, which uses that const that RGF
+    # installed, we have to make sure to eval it in a newer world age so that we have access
+    # to the binding.
+    mod.eval(
+        quote
+            const $evaluation_fn_name = $make_evaluation_fn(
+                ($(QuoteNode.(fargs)...),),
+                $model_exprs,
+                $(QuoteNode(mod)),
+            )
+        end,
+    )
+
+    # This is the model constructor: it just looks up the cached RGF.
+    evaluation_fn_ref = GlobalRef(mod, evaluation_fn_name)
+    function_body = :($(Model)(
+        $(QuoteNode(fname)),
+        $model_args,
+        $model_exprs,
+        @__MODULE__;
+        evaluation_fn=($evaluation_fn_ref),
+    ))
     function_expr = Expr(:function, esc(signature), function_body)
 
-    return quote
-        RuntimeGeneratedFunctions.init(@__MODULE__)
-        $function_expr
-    end
+    return function_expr
 end

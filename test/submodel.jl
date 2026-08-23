@@ -3,8 +3,14 @@ module WrenSubmodelTests
 using Wren
 using Test
 using Distributions
-using DensityInterface: logdensityof
 using VarNames
+
+@wren function cached_inner()
+    a ~ Normal()
+end
+@wren function cached_outer()
+    x ~ cached_inner()
+end
 
 @testset "submodels" begin
     @testset "basic" begin
@@ -47,6 +53,17 @@ using VarNames
         @test only(keys(out_pars)) == @vn(x.a)
         @test logprior(accs) ≈ logdensityof(Normal(), in_pars[@vn(x.a)])
         @test iszero(loglikelihood(accs))
+    end
+
+    @testset "reuse evaluation function" begin
+        inner1 = cached_inner()
+        inner2 = cached_inner()
+        @test typeof(inner1.evaluation_fn) === typeof(inner2.evaluation_fn)
+        @test typeof(inner1) === typeof(inner2)
+
+        outer = cached_outer()
+        rand(outer)
+        @test typeof(cached_inner()) === typeof(inner1)
     end
 
     @testset "undefined namespace" begin
