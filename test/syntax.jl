@@ -394,12 +394,8 @@ end
 
         values = [0.25, -0.5]
         source = FromParams(VarNamedTuple(; xs=values))
-        retval, accs = evaluate(
-            control_flow(2),
-            source,
-            OriginalSpace(),
-            Wren.default_accumulators(),
-        )
+        retval, accs =
+            evaluate(control_flow(2), source, OriginalSpace(), Wren.default_accumulators())
         expected_logp = sum(logdensityof(Normal(), value) for value in values)
 
         @test retval == (:even, :finished)
