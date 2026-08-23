@@ -91,6 +91,7 @@ function condition(model::Model, values::VarNamedTuple)
         model.stmts,
         model.mod;
         conditioned=new_conditioned,
+        evaluation_fn=model.evaluation_fn,
     )
 end
 

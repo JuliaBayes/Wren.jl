@@ -6,6 +6,13 @@ using Distributions
 using DensityInterface: logdensityof
 using VarNames
 
+@wren function cached_inner()
+    a ~ Normal()
+end
+@wren function cached_outer()
+    x ~ cached_inner()
+end
+
 @testset "submodels" begin
     @testset "basic" begin
         @wren function returning_inner()
@@ -50,13 +57,6 @@ using VarNames
     end
 
     @testset "reuse evaluation function" begin
-        @wren function cached_inner()
-            a ~ Normal()
-        end
-        @wren function cached_outer()
-            x ~ cached_inner()
-        end
-
         inner1 = cached_inner()
         inner2 = cached_inner()
         @test typeof(inner1.evaluation_fn) === typeof(inner2.evaluation_fn)

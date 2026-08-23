@@ -66,6 +66,8 @@ struct Model{A<:NamedTuple,C<:VarNamedTuple,F}
     end
 end
 
+_dealias(model::Model) = model
+
 function make_evaluation_fn(
     argnames::Tuple{Vararg{Symbol}},
     stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}},
@@ -81,11 +83,12 @@ function make_evaluation_fn(
     model_body = emit_statements(stmts, accs, conditioned, latent_source, parameter_space)
     push!(body.args, :($retval = $model_body))
     push!(body.args, :(return ($retval, $accs)))
-    return @RuntimeGeneratedFunction(
+    return RuntimeGeneratedFunctions.RuntimeGeneratedFunction(
+        mod,
         mod,
         :(function ($latent_source, $parameter_space, $accs, $model_args, $conditioned)
             $body
-        end)
+        end),
     )
 end
 
@@ -207,6 +210,8 @@ function _wren(expr::Expr, mod::Module)
     model_exprs = to_wren_exprs(body, mod)
     evaluation_fn_name = gensym(Symbol(fname, :_evaluation_fn))
     evaluation_fn_ref = GlobalRef(mod, evaluation_fn_name)
+    # These must be separate top-level evaluations so that the RGF module tag created by
+    # `init` is visible when `make_evaluation_fn` runs in the subsequent world.
     Core.eval(
         mod,
         :($(GlobalRef(RuntimeGeneratedFunctions, :init))($(QuoteNode(mod)))),
