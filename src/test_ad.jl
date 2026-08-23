@@ -35,7 +35,7 @@ end
 """
     NoTest()
 
-Disable AD correctness checking in [`run_ad`](@ref).
+Disable AD correctness checking in [`benchmark_and_test`](@ref).
 """
 struct NoTest <: AbstractADCorrectnessTestSetting end
 
@@ -110,7 +110,7 @@ end
 """
     ModelRunResult
 
-The correctness and benchmark results returned by [`run_ad`](@ref).
+The correctness and benchmark results returned by [`benchmark_and_test`](@ref).
 
 $(TYPEDFIELDS)
 """
