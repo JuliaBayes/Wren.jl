@@ -198,6 +198,69 @@ rand(yarg_obs([1.0, 2.0, 3.0]))
 
 However, note that once a statement has been marked with `@observe`, you cannot 'uncondition' it without modifying the model's stored AST itself.
 
+## Batched tilde-statements
+
+One of Wren's unique features is syntax-level batching of tilde-statements.
+This is done using the `@plate` macro:
+
+```@example model
+@wren function batched(x, y)
+    N = length(x)
+    @plate for i in 1:N
+        x[i] ~ Normal()
+        y[i] ~ Normal(x[i])
+    end
+end
+x, y = randn(1000), randn(1000)
+model = batched(x, y) | VarNamedTuple(y=y)
+```
+
+Plated for-loops have the same semantics as regular for-loops.
+However, they are automatically lowered into a vectorised form, which is more or less analogous to
+
+```julia
+x[1:N] ~ MvNormal(Zeros(N), I)
+y[1:N] ~ MvNormal(x[1:N], I)
+```
+
+When `N` is large this can lead to significant speedups.
+
+**Note that this batching is only valid if each iteration of the loop is independent of the others.**
+By marking a loop with `@plate`, you are effectively asserting that this is the case.
+Wren does *not* verify this for you!
+
+As an example of an invalid use of `@plate`, consider the following:
+
+```julia
+@plate for i in 1:N-1
+    x[i + 1] ~ Normal(x[i])
+end
+```
+
+This will be lowered into the equivalent of
+
+```julia
+x[(@. (1:N-1) + 1)] ~ MvNormal(x[1:N-1], I)
+```
+
+which has a different meaning: `x[i]` is now read before it is written to.
+
+!!! danger
+
+    Plates are a highly experimental feature and might not work in all cases.
+    In particular, please note that:
+
+    - The loop must contain only tilde-statements (`@observe` tilde-statements are fine).
+      This can in theory be relaxed but is not yet implemented.
+
+    - The loop must be `for SYMBOL in EXPR`, where `SYMBOL` is a single variable.
+
+    - The only form of indexing allowed is `x[i]` (`i` being the loop variable; `x` can be any identifier).
+      This can in theory be relaxed to admit more forms, such as `x[i, j]`, `x[f(i)]`, `x[y[i]]`, etc., but this is not yet implemented.
+
+    - Plates will increase allocations and will almost certainly cause slowdowns on small loops.
+
+
 ## Manual log-likelihood addition
 
 Wren provides a macro, `@addloglikelihood [name=:name] expr`, which allows you to manually add `expr` to the model's log-likelihood.
