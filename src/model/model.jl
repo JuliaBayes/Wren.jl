@@ -52,9 +52,9 @@ struct Model{A<:NamedTuple,C<:VarNamedTuple,F}
         stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}},
         mod::Module;
         conditioned::VarNamedTuple=VarNamedTuple(),
+        evaluation_fn=make_evaluation_fn(keys(args), stmts, mod),
     )
         dealiased_args = map(_dealias, args)
-        evaluation_fn = make_evaluation_fn(dealiased_args, stmts, mod)
         return new{typeof(dealiased_args),typeof(conditioned),typeof(evaluation_fn)}(
             name,
             dealiased_args,
@@ -67,10 +67,10 @@ struct Model{A<:NamedTuple,C<:VarNamedTuple,F}
 end
 
 function make_evaluation_fn(
-    ::NamedTuple{argnames},
+    argnames::Tuple{Vararg{Symbol}},
     stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}},
     mod::Module,
-) where {argnames}
+)
     body = Expr(:block)
     @gensym model_args
     for k in argnames
@@ -205,11 +205,23 @@ function _wren(expr::Expr, mod::Module)
 
     model_args = to_namedtuple(fargs_expr)
     model_exprs = to_wren_exprs(body, mod)
-    function_body = :($(Model)($(QuoteNode(fname)), $model_args, $model_exprs, @__MODULE__))
+    evaluation_fn_name = gensym(Symbol(fname, :_evaluation_fn))
+    evaluation_fn_ref = GlobalRef(mod, evaluation_fn_name)
+    function_body = :(
+        $(Model)(
+            $(QuoteNode(fname)),
+            $model_args,
+            $model_exprs,
+            @__MODULE__;
+            evaluation_fn=$evaluation_fn_ref,
+        )
+    )
     function_expr = Expr(:function, esc(signature), function_body)
 
     return quote
         RuntimeGeneratedFunctions.init(@__MODULE__)
+        const $(esc(evaluation_fn_name)) =
+            $(make_evaluation_fn)(($(QuoteNode.(fargs)...),), $model_exprs, @__MODULE__)
         $function_expr
     end
 end

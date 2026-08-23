@@ -49,6 +49,24 @@ using VarNames
         @test iszero(loglikelihood(accs))
     end
 
+    @testset "reuse evaluation function" begin
+        @wren function cached_inner()
+            a ~ Normal()
+        end
+        @wren function cached_outer()
+            x ~ cached_inner()
+        end
+
+        inner1 = cached_inner()
+        inner2 = cached_inner()
+        @test typeof(inner1.evaluation_fn) === typeof(inner2.evaluation_fn)
+        @test typeof(inner1) === typeof(inner2)
+
+        outer = cached_outer()
+        rand(outer)
+        @test typeof(cached_inner()) === typeof(inner1)
+    end
+
     @testset "undefined namespace" begin
         @wren function returning_inner()
             a ~ Normal()
