@@ -40,7 +40,7 @@ end
             ad_model(),
             AutoForwardDiff();
             test_correctness=WithBackend(AutoForwardDiff()),
-            verbose=false
+            verbose=false,
         )
     end
 
