@@ -5,6 +5,15 @@ using Distributions
 using Test
 
 @testset "aliasing.jl" begin
+    @testset "type stability of _dealias" begin
+        @inferred Wren._dealias(1)
+        @inferred Wren._dealias(:hello)
+        @inferred Wren._dealias("hello")
+        @inferred Wren._dealias(randn(10))
+        @inferred Wren._dealias(view(randn(10), 1:5))
+        @inferred Wren._dealias(view(fill("hi", 10), 1:5))
+    end
+
     @testset "model construction copies args" begin
         @wren function fassume(x)
             a ~ Normal()
