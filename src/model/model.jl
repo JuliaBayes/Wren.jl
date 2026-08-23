@@ -6,25 +6,6 @@ using RuntimeGeneratedFunctions
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
 """
-    _dealias
-
-Create a copy of a model argument that has the same contents, but avoids aliasing the user's
-data.
-
-This avoids 'surprise' mutations of the user's data when the model is evaluated. However,
-because it's called at model _construction_ time rather than _evaluation_, it avoids the
-performance implications of creating a copy of the data every time the model is evaluated.
-"""
-function _dealias(v::SubArray{T}) where {T}
-    v = collect(v)  # Avoid copying the entire parent array.
-    return isbitstype(T) ? v : deepcopy(v)
-end
-function _dealias(v::AbstractArray{T}) where {T}
-    return isbitstype(T) ? copy(v) : deepcopy(v)
-end
-_dealias(v) = deepcopy(v)
-
-"""
     Wren.Model
 
 A Wren model.
@@ -66,6 +47,27 @@ struct Model{A<:NamedTuple,C<:VarNamedTuple,F}
     end
 end
 
+"""
+    _dealias
+
+Create a copy of a model argument that has the same contents, but avoids aliasing the user's
+data.
+
+This avoids 'surprise' mutations of the user's data when the model is evaluated. However,
+because it's called at model _construction_ time rather than _evaluation_, it avoids the
+performance implications of creating a copy of the data every time the model is evaluated.
+"""
+function _dealias(v::SubArray{T}) where {T}
+    v = collect(v)  # Avoid copying the entire parent array.
+    return isbitstype(T) ? v : deepcopy(v)
+end
+function _dealias(v::AbstractArray{T}) where {T}
+    return isbitstype(T) ? copy(v) : deepcopy(v)
+end
+_dealias(v) = deepcopy(v)
+# Models contain `Module`s, which can't be deepcopied. It is currently my belief that models
+# should be immutable (or at least pretend to be), and thus we should not need to deepcopy
+# models that are passed as arguments to models. However, this may need to be revisited.
 _dealias(model::Model) = model
 
 function make_evaluation_fn(

@@ -414,6 +414,20 @@ end
         @test parameters(accs) == VarNamedTuple()
     end
 
+    @testset "model redefinition" begin
+        # Check that redefining a model with the same name uses the updated binding.
+        @wren function redefined_model()
+            x ~ Normal()
+        end
+        out1 = rand(redefined_model())
+        @test only(keys(out1)) == @vn(x)
+
+        @wren function redefined_model()
+            y ~ Normal()
+        end
+        out2 = rand(redefined_model())
+        @test only(keys(out2)) == @vn(y)
+    end
 end
 
 end # module WrenSyntaxTests

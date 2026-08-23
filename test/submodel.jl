@@ -3,7 +3,6 @@ module WrenSubmodelTests
 using Wren
 using Test
 using Distributions
-using DensityInterface: logdensityof
 using VarNames
 
 @wren function cached_inner()
