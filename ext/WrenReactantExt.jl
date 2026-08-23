@@ -34,13 +34,13 @@ function Wren.VecModel(
     lp_function=Wren.logjoint_transformed,
     parameter_space::Wren.AbstractParameterSpace=Wren.UnconstrainedSpace(),
 )
-    values, sitename_entries = if params isa Wren.VarNamedTuple
-        params, NamedTuple()
+    values, sitename_tracker = if params isa Wren.VarNamedTuple
+        params, Wren.SiteNameTracker()
     else
         Wren._draw_vectorised_params(model, params, parameter_space)
     end
     Wren._validate_vectorised_params(values, parameter_space)
-    ranges_and_transforms, sample = Wren._ranges_and_params(values, sitename_entries)
+    ranges_and_transforms, sample = Wren._ranges_and_params(values, sitename_tracker)
 
     accs = Wren.AccumulatorTuple(
         Wren.LogPriorAccumulator(),

@@ -271,14 +271,14 @@ function VecModel(
     parameter_space::AbstractParameterSpace=UnconstrainedSpace(),
 )
     # Get vectorised parameters.
-    values, sitename_entries = if params isa VarNamedTuple
-        params, NamedTuple()
+    values, sitename_tracker = if params isa VarNamedTuple
+        params, SiteNameTracker()
     else
         _draw_vectorised_params(model, params, parameter_space)
     end
     # Check that they're sensible, and flatten them into a single vector.
     _validate_vectorised_params(values, parameter_space)
-    ranges_and_transforms, sample = _ranges_and_params(values, sitename_entries)
+    ranges_and_transforms, sample = _ranges_and_params(values, sitename_tracker)
     return VecModel(
         model,
         adtype,
@@ -348,11 +348,11 @@ function _draw_vectorised_params(
 )
     accs = AccumulatorTuple(VectorisedParamsAccumulator(), SiteNameTracker())
     _, accs = evaluate(model, source, parameter_space, accs)
-    return vectorised_params(accs), accs[SITENAME_TRACKER_ACCNAME].entries
+    return vectorised_params(accs), accs[SITENAME_TRACKER_ACCNAME]
 end
 function _ranges_and_params(
     values::VarNamedTuple,
-    sitename_entries::NamedTuple=NamedTuple(),
+    sitename_tracker::SiteNameTracker=SiteNameTracker(),
 )
     vnt = VarNamedTuple()
     params = Union{}[]
@@ -375,7 +375,7 @@ function _ranges_and_params(
         params = vcat(params, value)
         offset = last(range) + 1
     end
-    return RangesAndTransforms(vnt, sitename_entries), params
+    return RangesAndTransforms(sitename_tracker, vnt), params
 end
 
 """

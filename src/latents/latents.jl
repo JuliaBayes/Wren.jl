@@ -134,10 +134,14 @@ Base.isequal(a::RangeAndTransform, b::RangeAndTransform) =
     RangesAndTransforms
 
 Holds a `VarNamedTuple` mapping `VarName => RangeAndTransform`, together with a fast-path
-`NamedTuple` mapping `sitename => RangeAndTransform`.
+`VarNamedTuple` mapping `sitename => RangeAndTransform`.
 
-The inner constructor takes a `VarNamedTuple` and a mapping of `sitename => VarName` pairs.
-This guarantees that the actual information stored in both fields are consistent.
+Sites inside a submodel are keyed by their prefixed path, so `a ~ inner()` where `inner`
+contains `x ~ Normal()` gives a fast-path entry at `@vn(a.x)`. `scope` descends into that
+using the same `VarName` it already receives, so a submodel's sites keep their fast path.
+
+The main inner constructor takes a `VarNamedTuple` and a [`SiteNameTracker`](@ref). This
+guarantees that the actual information stored in both fields are consistent.
 
 When evaluating a model with `FromVector`, Wren first checks the `sitename_lookup` to see if
 the `RangeAndTransform` has been stored there. If it hasn't, then it will do the potentially
@@ -172,18 +176,18 @@ evaluation, the fast path will only work if we hit the same branch. However, eve
 the other branch, the slow path will still work (because `x`'s `RangeAndTransform` will
 still be stored in the VNT!)
 """
-struct RangesAndTransforms{N<:NamedTuple,V<:VarNamedTuple}
+struct RangesAndTransforms{N<:VarNamedTuple,V<:VarNamedTuple}
     sitename_lookup::N
     vnt::V
-    function RangesAndTransforms(
-        vnt::VarNamedTuple,
-        sitename_entries::NamedTuple=NamedTuple(),
-    )
-        sitename_lookup = NamedTuple()
-        for (sitename, vn) in pairs(sitename_entries)
-            sitename_lookup = merge(sitename_lookup, NamedTuple{(sitename,)}((vnt[vn],)))
-        end
-        return new{typeof(sitename_lookup),typeof(vnt)}(sitename_lookup, vnt)
+    # Derives the fast-path lookup from the sites tracked during model evaluation.
+    function RangesAndTransforms(tracker::SiteNameTracker, vnt::VarNamedTuple)
+        lookup = sitename_lookup(tracker, vnt)
+        return new{typeof(lookup),typeof(vnt)}(lookup, vnt)
+    end
+    # Used by `scope`, where both fields have already been extracted from a parent
+    # RangesAndTransforms and are therefore already consistent with one another.
+    function RangesAndTransforms(lookup::VarNamedTuple, vnt::VarNamedTuple)
+        return new{typeof(lookup),typeof(vnt)}(lookup, vnt)
     end
 end
 Base.:(==)(a::RangesAndTransforms, b::RangesAndTransforms) = a.vnt == b.vnt
@@ -203,12 +207,16 @@ struct FromVector{V<:AbstractVector,R<:RangesAndTransforms} <: AbstractLatentSou
     ranges_and_transforms::R
 end
 @generated function _get_range_and_transform(
-    rat::RangesAndTransforms{<:NamedTuple{names}},
+    rat::RangesAndTransforms{<:VarNamedTuple{names,types}},
     vn::VarName,
     ::Val{sitename},
-) where {names,sitename}
-    return if sitename in names
-        :(rat.sitename_lookup.$sitename)
+) where {names,types,sitename}
+    idx = findfirst(==(sitename), names)
+    # The fieldtype check keeps us on the slow path for sitenames whose entry is not
+    # actually a RangeAndTransform, i.e. blacklisted sites, plus the pathological case where
+    # a plain sampling site shares its name with a submodel prefix.
+    return if idx !== nothing && fieldtype(types, idx) <: RangeAndTransform
+        :(rat.sitename_lookup.data.$sitename)
     else
         :(rat.vnt[vn])
     end
@@ -218,7 +226,17 @@ function get_latent(source::FromVector, vn::VarName, right, sitename::Val)
     range, tfm = rt.range, rt.transform
     return TransformedValue(view(source.params, range), tfm)
 end
+# Extract the part of a sitename lookup that belongs to the submodel prefixed by `vn`.
+# Anything other than a nested VarNamedTuple means there is no fast-path information for that
+# submodel, which is always safe: lookups then fall back to the VarNamedTuple.
+function _child_sitename_lookup(lookup::VarNamedTuple, vn::VarName)
+    return haskey(lookup, vn) ? _as_vnt(lookup[vn]) : VarNamedTuple()
+end
+_as_vnt(x::VarNamedTuple) = x
+_as_vnt(::Any) = VarNamedTuple()
+
 function scope(source::FromVector, vn::VarName)
-    child_vnt = source.ranges_and_transforms.vnt[vn]
-    return FromVector(source.params, RangesAndTransforms(child_vnt))
+    rat = source.ranges_and_transforms
+    child_lookup = _child_sitename_lookup(rat.sitename_lookup, vn)
+    return FromVector(source.params, RangesAndTransforms(child_lookup, rat.vnt[vn]))
 end
