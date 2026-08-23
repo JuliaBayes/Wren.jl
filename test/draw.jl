@@ -75,7 +75,7 @@ end
         parameter_space=fixed_space,
     )
     fixed_params = copy(fixed_vecmodel.sample)
-    should_error[] = true
+    fixed_vecmodel.model.args.should_error[] = true
     fixed_draw = Draw(fixed_params, fixed_vecmodel; include_log_probs=false)
     @test parameters(fixed_draw)[@vn(x)] ≈ only(fixed_params)
     @test_throws ErrorException Draw(fixed_params, fixed_vecmodel)

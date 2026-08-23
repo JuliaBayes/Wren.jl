@@ -334,21 +334,17 @@ end
         end
 
         @testset "bare return" begin
-            @wren function bare_return(events)
-                # Mutate `events` to test that the return statement does indeed exit early
-                push!(events, :before)
+            @wren function bare_return()
                 return
-                push!(events, :after)
+                error("unreachable")
             end
-            events = Symbol[]
             retval, _ = evaluate(
-                bare_return(events),
+                bare_return(),
                 FromPrior(),
                 OriginalSpace(),
                 Wren.default_accumulators(),
             )
             @test retval === nothing
-            @test events == [:before]
         end
 
         @testset "fallthrough / implicit return" begin
@@ -372,13 +368,13 @@ end
     end
 
     @testset "control flow" begin
-        @wren function control_flow(n, events)
+        @wren function control_flow(n)
             if n == 0
-                return push!(events, :empty)
+                return :empty
             elseif iseven(n)
-                push!(events, :even)
+                branch = :even
             else
-                push!(events, :odd)
+                branch = :odd
             end
 
             xs = Vector{Float64}(undef, n)
@@ -392,36 +388,33 @@ end
                 i += 1
             end
 
-            push!(events, :finished)
-            return
-            push!(events, :unreachable)
+            return (branch, :finished)
+            error("unreachable")
         end
 
         values = [0.25, -0.5]
         source = FromParams(VarNamedTuple(; xs=values))
-        events = Symbol[]
-        _, accs = evaluate(
-            control_flow(2, events),
+        retval, accs = evaluate(
+            control_flow(2),
             source,
             OriginalSpace(),
             Wren.default_accumulators(),
         )
         expected_logp = sum(logdensityof(Normal(), value) for value in values)
 
-        @test events == [:even, :finished]
+        @test retval == (:even, :finished)
         xs = parameters(accs).data.xs
         @test VarNames.densify!!(xs) == values
         @test logprior(accs) ≈ expected_logp
         @test loglikelihood(accs) ≈ expected_logp
 
-        events = Symbol[]
-        _, accs = evaluate(
-            control_flow(0, events),
+        retval, accs = evaluate(
+            control_flow(0),
             FromPrior(),
             OriginalSpace(),
             Wren.default_accumulators(),
         )
-        @test events == [:empty]
+        @test retval == :empty
         @test parameters(accs) == VarNamedTuple()
     end
 
