@@ -52,7 +52,8 @@ Values already represented as vectors are stored unchanged. Values represented b
 [`AsVec`](@ref). Thus, the stored transform agrees with the selected parameter space while
 every stored value has a uniform vector representation.
 """
-VectorisedParamsAccumulator() = VNTAccumulator{VECTORISED_PARAMS_ACCNAME}(_get_vector_tval)
+VectorisedParamsAccumulator() =
+    VNTAccumulator{VECTORISED_PARAMS_ACCNAME,true}(_get_vector_tval)
 
 """
     internal_values_as_vector(values::VarNamedTuple)

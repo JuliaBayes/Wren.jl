@@ -38,10 +38,7 @@ end
 # Unfortunately we have to overload accumulate_assume!! since we need to use the
 # templated_setindex_no_overwrite!! function
 function accumulate_assume!!(
-    acc::Union{
-        VNTAccumulator{PARAMS_ACCNAME,DebugGetParams},
-        TSVNTAccumulator{PARAMS_ACCNAME,DebugGetParams},
-    },
+    acc::VNTAccumulator{PARAMS_ACCNAME,<:Any,DebugGetParams},
     val,
     tval,
     vn,
@@ -68,14 +65,8 @@ function accumulate_assume!!(
 end
 
 function combine(
-    acc1::Union{
-        VNTAccumulator{PARAMS_ACCNAME,DebugGetParams},
-        TSVNTAccumulator{PARAMS_ACCNAME,DebugGetParams},
-    },
-    acc2::Union{
-        VNTAccumulator{PARAMS_ACCNAME,DebugGetParams},
-        TSVNTAccumulator{PARAMS_ACCNAME,DebugGetParams},
-    },
+    acc1::VNTAccumulator{PARAMS_ACCNAME,<:Any,DebugGetParams},
+    acc2::VNTAccumulator{PARAMS_ACCNAME,<:Any,DebugGetParams},
 )
     if acc1.f !== acc2.f
         throw(ArgumentError("Cannot combine accumulators with different functions"))

@@ -355,10 +355,15 @@ function _ranges_and_params(
     values::VarNamedTuple,
     sitename_tracker::SiteNameTracker=SiteNameTracker(),
 )
-    vnt = VarNamedTuple()
     params = Union{}[]
     offset = 1
-    for (vn, tval) in pairs(values)
+    # `map_pairs!!` rewrites the leaves in place of `values`, which keeps the structure of
+    # the VarNamedTuple intact. Rebuilding it leaf-by-leaf instead would silently drop any
+    # submodel that sampled nothing, since those are empty sub-VarNamedTuples with no leaves
+    # to iterate over -- and `scope(::FromVector, vn)` needs every submodel prefix to be
+    # present. It also means the ranges we hand out and the order in which we concatenate
+    # the values come from a single traversal, so they cannot disagree.
+    slow_vnt = VarNames.map_pairs!!(values) do (vn, tval)
         value = get_internal_value(tval)
         value isa AbstractVector || throw(
             ArgumentError(
@@ -366,17 +371,11 @@ function _ranges_and_params(
             ),
         )
         range = offset:(offset+length(value)-1)
-        template = get(values.data, VarNames.getsym(vn), VarNames.NoTemplate())
-        vnt = VarNames.templated_setindex!!(
-            vnt,
-            RangeAndTransform(range, get_transform(tval)),
-            vn,
-            template,
-        )
         params = vcat(params, value)
         offset = last(range) + 1
+        return RangeAndTransform(range, get_transform(tval))
     end
-    return RangesAndTransforms(sitename_tracker, vnt), params
+    return RangesAndTransforms(sitename_tracker, slow_vnt), params
 end
 
 """

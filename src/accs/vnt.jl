@@ -1,5 +1,6 @@
 """
     VNTAccumulator{AccName}(f::F, values::VarNamedTuple=VarNamedTuple()) where {AccName,F}
+    VNTAccumulator{AccName,KeepEmptyNamespaces}(f::F, values::VarNamedTuple=VarNamedTuple())
 
 A generic accumulator that applies a function `f` to values seen during model execution
 and stores the results in a `VarNamedTuple`.
@@ -8,6 +9,19 @@ and stores the results in a `VarNamedTuple`.
 multiple forms of `VNTAccumulator` within the same set of accumulators. In theory, each
 `VNTAccumulator` with the same function `f` should use the same accumulator name. This is
 not enforced.
+
+`KeepEmptyNamespaces` controls what [`combine_with_namespace`](@ref) does with a submodel
+that accumulated nothing. When `false` (the default), the parent is left untouched, which is
+what user-facing accumulators want: `parameters(accs)` shouldn't sprout empty entries for
+submodels that sampled nothing. When `true`, an empty `VarNamedTuple` is stored under the
+submodel's `VarName` anyway, so that every submodel prefix is guaranteed to be present.
+
+The latter matters for the accumulator that builds a [`RangesAndTransforms`](@ref), because
+`scope(::FromVector, vn)` indexes the resulting `VarNamedTuple` with `vn` on every model
+evaluation. Guarding that lookup with a `haskey` would make it type-unstable for indexed
+submodels (`x[i] ~ inner()`), since the `PartialArray` mask check is runtime data that the
+compiler cannot fold, and that costs roughly 46x in evaluation time. Paying for the empty
+`VarNamedTuple` once during construction is much cheaper.
 
 The function `f` should have the signature:
 
@@ -19,15 +33,22 @@ from `f`.
 
 If `f` is a struct (and not a function), you also need to define `Base.copy` on `f`.
 """
-struct VNTAccumulator{AccName,F,VNT<:VarNamedTuple} <: AbstractAccumulator
+struct VNTAccumulator{AccName,KeepEmptyNamespaces,F,VNT<:VarNamedTuple} <:
+       AbstractAccumulator
     f::F
     values::VNT
+end
+function VNTAccumulator{AccName,KeepEmptyNamespaces}(
+    f::F,
+    values::VarNamedTuple=VarNamedTuple(),
+) where {AccName,KeepEmptyNamespaces,F}
+    return VNTAccumulator{AccName,KeepEmptyNamespaces,F,typeof(values)}(f, values)
 end
 function VNTAccumulator{AccName}(
     f::F,
     values::VarNamedTuple=VarNamedTuple(),
 ) where {AccName,F}
-    return VNTAccumulator{AccName,F,typeof(values)}(f, values)
+    return VNTAccumulator{AccName,false}(f, values)
 end
 
 """
@@ -37,88 +58,63 @@ Sentinel value indicating that no accumulation should be performed for a given v
 """
 struct DoNotAccumulate end
 
-"""
-    TSVNTAccumulator{AccName}(f::F, values::VarNamedTuple)
-
-The same as `VNTAccumulator`, but with an abstractly typed field for the values. This is
-required for threadsafe evaluation with VNT-based accumulators, since if it were a type
-parameter, the different threads could have different types for the accumulators, leading to
-type instability.
-"""
-struct TSVNTAccumulator{AccName,F} <: AbstractAccumulator
-    f::F
-    values::VarNamedTuple
-
-    function TSVNTAccumulator{AccName}(f::F, values::VarNamedTuple) where {AccName,F}
-        return new{AccName,F}(f, values)
-    end
+function Base.copy(acc::VNTAccumulator{AccName,KE}) where {AccName,KE}
+    return VNTAccumulator{AccName,KE}(copy(acc.f), copy(acc.values))
 end
-function promote_for_threadsafe_eval(
-    acc::VNTAccumulator{AccName,F},
-    ::Type,
-) where {AccName,F}
-    return TSVNTAccumulator{AccName}(acc.f, acc.values)
+function Base.copy(acc::VNTAccumulator{AccName,KE,F}) where {AccName,KE,F<:Function}
+    return VNTAccumulator{AccName,KE}(acc.f, copy(acc.values))
+end
+accumulator_name(::VNTAccumulator{AccName}) where {AccName} = AccName
+
+function update_values(
+    acc::VNTAccumulator{AccName,KE},
+    new_values::VarNamedTuple,
+) where {AccName,KE}
+    return VNTAccumulator{AccName,KE}(acc.f, new_values)
 end
 
-for acc_type in (:VNTAccumulator, :TSVNTAccumulator)
-    @eval begin
-        function Base.copy(acc::$acc_type{AccName}) where {AccName}
-            return $acc_type{AccName}(copy(acc.f), copy(acc.values))
-        end
-        function Base.copy(acc::$acc_type{AccName,F}) where {AccName,F<:Function}
-            return $acc_type{AccName}(acc.f, copy(acc.values))
-        end
-        accumulator_name(::$acc_type{AccName}) where {AccName} = AccName
-
-        function update_values(
-            acc::$acc_type{AccName},
-            new_values::VarNamedTuple,
-        ) where {AccName}
-            return $acc_type{AccName}(acc.f, new_values)
-        end
-
-        function accumulate_assume!!(
-            acc::$acc_type{AccName},
-            val,
-            tval,
-            vn,
-            right,
-            logjac,
-            template,
-            sitename,
-        ) where {AccName}
-            new_val = acc.f(val, tval, vn, right, logjac)
-            return if new_val isa DoNotAccumulate
-                acc
-            else
-                new_values =
-                    VarNames.templated_setindex!!(acc.values, new_val, vn, template)
-                update_values(acc, new_values)
-            end
-        end
-        accumulate_observe!!(acc::$acc_type, val, vn, right, template, sitename) = acc
-
-        function _zero(acc::$acc_type)
-            return update_values(acc, empty(acc.values))
-        end
-        reset(acc::$acc_type) = _zero(acc)
-        split(acc::$acc_type) = _zero(acc)
-        function combine(acc1::$acc_type{AccName}, acc2::$acc_type{AccName}) where {AccName}
-            if acc1.f != acc2.f
-                throw(ArgumentError("Cannot combine $acc_type with different functions"))
-            end
-            return update_values(acc1, merge(acc1.values, acc2.values))
-        end
-        function combine_with_namespace(
-            acc1::$acc_type{AccName},
-            acc2::$acc_type{AccName},
-            vn::VarName,
-            template,
-        ) where {AccName}
-            isempty(acc2.values) && return acc1
-            nested_values =
-                VarNames.templated_setindex!!(VarNamedTuple(), acc2.values, vn, template)
-            return combine(acc1, update_values(acc2, nested_values))
-        end
+function accumulate_assume!!(
+    acc::VNTAccumulator,
+    val,
+    tval,
+    vn,
+    right,
+    logjac,
+    template,
+    sitename,
+)
+    new_val = acc.f(val, tval, vn, right, logjac)
+    return if new_val isa DoNotAccumulate
+        acc
+    else
+        new_values = VarNames.templated_setindex!!(acc.values, new_val, vn, template)
+        update_values(acc, new_values)
     end
+end
+accumulate_observe!!(acc::VNTAccumulator, val, vn, right, template, sitename) = acc
+
+_zero(acc::VNTAccumulator) = update_values(acc, empty(acc.values))
+reset(acc::VNTAccumulator) = _zero(acc)
+split(acc::VNTAccumulator) = _zero(acc)
+function combine(
+    acc1::VNTAccumulator{AccName},
+    acc2::VNTAccumulator{AccName},
+) where {AccName}
+    if acc1.f != acc2.f
+        throw(ArgumentError("Cannot combine VNTAccumulator with different functions"))
+    end
+    return update_values(acc1, merge(acc1.values, acc2.values))
+end
+function combine_with_namespace(
+    acc1::VNTAccumulator{AccName,KE},
+    acc2::VNTAccumulator{AccName,KE},
+    vn::VarName,
+    template,
+) where {AccName,KE}
+    if !KE && isempty(acc2.values)
+        return acc1
+    end
+    nested_values =
+        VarNames.templated_setindex!!(VarNamedTuple(), acc2.values, vn, template)
+    return combine(acc1, update_values(acc2, nested_values))
 end

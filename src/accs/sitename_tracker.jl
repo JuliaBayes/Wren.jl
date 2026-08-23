@@ -61,15 +61,15 @@ split(acc::SiteNameTracker) = SiteNameTracker()
 Base.copy(acc::SiteNameTracker) = acc
 
 function combine(acc1::SiteNameTracker, acc2::SiteNameTracker)
-    entries = acc1.entries
-    for (key, value) in pairs(acc2.entries)
-        # Note that we can't use `merge` here: it is recursive and would let acc2 silently
-        # win on a duplicate key, instead of blacklisting the site.
-        new_entry = haskey(entries, key) ? Blacklisted() : value
-        template = get(acc2.entries.data, VarNames.getsym(key), VarNames.NoTemplate())
-        entries = VarNames.templated_setindex!!(entries, new_entry, key, template)
+    # Resolve collisions first, then merge. We can't merge straight away, because `merge`
+    # settles a duplicate leaf in favour of its second argument, which would silently pick
+    # one of two colliding sites instead of blacklisting them both. But we do have to use
+    # `merge` for the combining itself: rebuilding leaf-by-leaf would drop the empty
+    # sub-VarNamedTuples that mark submodels which sampled nothing, and `scope` needs those.
+    deduped = VarNames.map_pairs!!(acc2.entries) do (key, value)
+        haskey(acc1.entries, key) ? Blacklisted() : value
     end
-    return SiteNameTracker(entries)
+    return SiteNameTracker(merge(acc1.entries, deduped))
 end
 
 function combine_with_namespace(
@@ -78,10 +78,10 @@ function combine_with_namespace(
     vn::VarName,
     template,
 )
-    # If there are no fast paths in the submodel, just pretend that the submodel doesn't
-    # exist at all. This lets the later check (see `scope(::FromVector, ...)`) avoid trying
-    # to check the submodel's fast paths when there are none.
-    isempty(acc2.entries) && return acc1
+    # Note the absence of an `isempty(acc2.entries)` early-return here: `scope` indexes
+    # both VNTs with `vn` unconditionally, so a submodel that sampled nothing still needs an
+    # (empty) entry under its prefix. This mirrors `KeepEmptyNamespaces` on VNTAccumulator.
+    #
     # Both halves of each entry have to be prefixed: the key, because the sitename now
     # belongs to a submodel, and the value, because it is a submodel-local VarName which
     # has to be resolved against the parent's VarNamedTuple.
