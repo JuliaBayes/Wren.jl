@@ -208,13 +208,35 @@ function _wren(expr::Expr, mod::Module)
 
     model_args = to_namedtuple(fargs_expr)
     model_exprs = to_wren_exprs(body, mod)
+
+    # At macro definition time, we generate a new symbol to store the evaluation function
+    # corresponding to the AST *as defined in the macro*. It's possible that users can
+    # instantiate a Model and modify it, thus necessitating a new evaluation function.
+    # That's handled separately. However, we don't want *every* call to `model()` to
+    # generate a new RGF because it should always use the RGF that corresponds to the
+    # macro's contents.
+    #
+    # The cached RGF is stored as a module-level constant in order to ensure type stability.
+    # We could also store it in an IdDict or something like that. That avoids the cost of
+    # constructing the RGF, but is type unstable.
+    #
+    # TODO(penelopeysm): I wonder if it would be possible to store the RGF in an IdDict, and
+    # make the model constructor, i.e., `model()`, a generated function, so that the type
+    # instability is limited to compile time. This would be kind of similar to the way
+    # autodiff works: already-derived rules are stored in a cache and looked up at compile
+    # time, which can be type unstable, but the resulting rule is type stable.
     evaluation_fn_name = gensym(Symbol(fname, :_evaluation_fn))
-    evaluation_fn_ref = GlobalRef(mod, evaluation_fn_name)
-    # These must be separate top-level evaluations so that the RGF module tag created by
-    # `init` is visible when `make_evaluation_fn` runs in the subsequent world.
-    Core.eval(mod, :($(RuntimeGeneratedFunctions.init)($(QuoteNode(mod)))))
-    Core.eval(
-        mod,
+    # These two `eval`s need to be separate because RGF.init() itself does the same
+    # trick that we do here by installing a new module-level const. See
+    #
+    # https://github.com/SciML/RuntimeGeneratedFunctions.jl/blob/73411b2dad5e37815e678b7f6733fb9303600170/src/RuntimeGeneratedFunctions.jl#L387
+    #
+    # That causes the world age to be incremented...
+    mod.eval(:($(RuntimeGeneratedFunctions.init)($(QuoteNode(mod)))))
+    # ...and because `make_evaluation_fn` generates an RGF, which uses that const that RGF
+    # installed, we have to make sure to eval it in a newer world age so that we have access
+    # to the binding.
+    mod.eval(
         quote
             const $evaluation_fn_name = $make_evaluation_fn(
                 ($(QuoteNode.(fargs)...),),
@@ -223,6 +245,9 @@ function _wren(expr::Expr, mod::Module)
             )
         end,
     )
+
+    # This is the model constructor: it just looks up the cached RGF.
+    evaluation_fn_ref = GlobalRef(mod, evaluation_fn_name)
     function_body = :($(Model)(
         $(QuoteNode(fname)),
         $model_args,
