@@ -1,12 +1,23 @@
 [deps]
+AbstractMCMC = "80f14c24-f653-4e6a-9b94-39d6b0f70001"
+CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
+CensoredDistributions = "b2eeebe4-5992-4301-9193-7ebc9f62c855"
+Chairmarks = "0ca39b1e-fe0b-4e98-acfc-b1656634c4de"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 DocumenterCodeBlocks = "b6400b83-267f-4b55-9fd8-bffc853bdfd8"
 DocumenterInterLinks = "d12716ef-a0f6-4df4-a9f1-a5a34e75c656"
 Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
+FlexiChains = "4a37a8b9-6e57-4b92-8664-298d46e639f7"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 LogDensityProblems = "6fdf6af0-433a-55f7-b3ed-c6c6e0b8df7c"
+PairPlots = "43a3c2be-4208-490b-832a-a21dcd55d7da"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 Wren = "bcabdda7-19af-429b-97ac-a6b557ca0f6c"
 
 [sources]
+CensoredDistributions = {rev = "flexichains-0.7-compat", url = "https://github.com/EpiAware/CensoredDistributions.jl"}
+VarNames = {rev = "main", url = "https://github.com/JuliaBayes/VarNames.jl"}
+FlexiChains = {rev = "v0.7", url = "https://github.com/JuliaBayes/FlexiChains.jl"}
 Wren = {path = "../"}

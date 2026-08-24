@@ -22,6 +22,7 @@ makedocs(;
         "models.md",
         "submodels.md",
         "mcmc.md",
+        "Examples" => ["examples/multi-patch-renewal.md"],
         "motivation.md",
         "api.md",
     ],

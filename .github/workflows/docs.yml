@@ -40,6 +40,8 @@ jobs:
         run: julia --color=yes --project=. -e 'include("make.jl")'
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          JULIA_NUM_THREADS: 4
+          JULIA_NUM_GC_THREADS: 1
 
       - name: Post docs preview comment
         if: ${{ env.IS_PR_BUT_NOT_FORK == 'true' }}
