@@ -254,17 +254,24 @@ end
 The same holds for a family collapsed into a single vectorised statement:
 
 ```@example rewriting
-@wren function hand_vec()
+@wren function hand_vec(N)
     mu ~ Normal()
-    y ~ product_distribution(fill(Exponential(2.0), 3))
+    y ~ product_distribution(fill(Exponential(2.0), N))
 end
 
-@bmodel hand_vec() AutoEnzyme(; mode=Reverse)
+@bmodel hand_vec(3) AutoEnzyme(; mode=Reverse)
 ```
 
 ```@example rewriting
-@bmodel pm AutoEnzyme(; mode=Reverse)
+pmx = @rewrite plated(3) begin
+    y ~ product_distribution(fill(Exponential(2.0), N))
+end
+
+@bmodel pmx AutoEnzyme(; mode=Reverse)
 ```
+
+The function form differs in one respect.
+Its value is stored as a hidden model argument, so the value is built once at rewrite time rather than on every evaluation, which can shift where work happens relative to the literal statement.
 
 And for a rewrite reaching inside a submodel:
 
