@@ -131,7 +131,7 @@ m2 = rewrite(base(), @vn(x) => Normal(0, 2))
 m2[@vn(x)]
 ```
 
-Prefixed names target sites inside submodels, so the same property paths work across conditioning, `@rewrite` blocks, the function form, and the reader:
+Prefixed names reach sites inside submodels:
 
 ```@example rewriting
 rewrite(m, @vn(x.b) => Exponential(1.0))[@vn(x.b)]
