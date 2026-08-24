@@ -1,7 +1,6 @@
 # [Rewriting models](@id rewriting)
 
 The right-hand side of any tilde-statement in a completed model can be replaced with a different distribution, a submodel, or a fixed value.
-Because Wren models store their own AST, the result is statement-for-statement identical to a model that had been written that way from the start, and the evaluation function is regenerated automatically (and cached, so repeated rewrites do not recompile).
 
 ## The `@rewrite` macro
 
