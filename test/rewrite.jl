@@ -1005,6 +1005,16 @@ end
         end
 
         @testset "as-written display of interpolated values" begin
+            let d = Normal(0.5, 1.0)
+                @wren function obs_model(y)
+                    x ~ Normal()
+                    y ~ Normal(x)
+                end
+                o = @rewrite obs_model(0.3) begin
+                    @observe y ~ $d
+                end
+                @test occursin("y ~ Normal(0.5, 1.0)", _stmt_str(o))
+            end
             let d = LogNormal(), mu0 = 4.0
                 m = @rewrite rw_base() begin
                     x ~ $d
@@ -1096,6 +1106,23 @@ end
                 @test Set(keys(rand(f))) == Set([@vn(x.a), @vn(y)])
                 @test f[@vn(x.b)] == 0.5
             end
+        end
+
+        @testset "dotted @observe targets" begin
+            @wren function latent_inner(y)
+                x ~ Normal()
+                y ~ Normal(x)
+            end
+            @wren function obs_outer(sub)
+                s ~ sub
+            end
+            m = obs_outer(latent_inner(0.3))
+            n = @rewrite m begin
+                @observe s.y ~ Normal(x)
+            end
+            accs = rand_with_logp(n)
+            x = parameters(accs)[@vn(s.x)]
+            @test loglikelihood(accs) ≈ logdensityof(Normal(x), 0.3)
         end
 
         @testset "interpolation composes with dotted targets" begin
