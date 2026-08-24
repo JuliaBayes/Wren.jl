@@ -237,6 +237,33 @@ ind = rewrite(indexed(inner()), @vn(x[1]) => Normal())
 rand(ind)
 ```
 
+## Sites sharing a name
+
+A name can label both an assignment and a tilde statement, and then it does not identify a single site:
+
+```@repl rewriting
+@wren function scaled(v)
+    x = v
+    @observe x ~ Normal(0.0, 3.0)
+end;
+rewrite(scaled(2.0), @vn(x) => Cauchy())
+```
+
+The same applies to a prior placed on a value constructed from other variables:
+
+```@repl rewriting
+@wren function soft_prior()
+    y ~ Normal()
+    x = 2 * y
+    @observe x ~ Normal(0.0, 3.0)
+end;
+@rewrite soft_prior() begin
+    x ~ Cauchy()
+end
+```
+
+Site-name disambiguation is tracked in [issue #15](https://github.com/JuliaBayes/Wren.jl/issues/15).
+
 ## Benchmarking
 
 Rewritten models benchmark against their hand-written equivalents:
