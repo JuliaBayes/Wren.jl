@@ -1102,7 +1102,9 @@ function Base.show(io::IO, v::_InlineValue)
     mod = parentmodule(typeof(v.value))
     ctx = IOContext(io, :module => mod, :compact => true, :limit => true)
     s = sprint(show, v.value; context=ctx)
-    return print(io, chopprefix(s, join(fullname(mod), '.') * "."))
+    # Also strips the module path from nested type parameters (e.g. the
+    # element types of a product distribution).
+    return print(io, replace(s, join(fullname(mod), '.') * "." => ""))
 end
 Base.deepcopy_internal(v::_InlineValue, ::IdDict) = v
 
