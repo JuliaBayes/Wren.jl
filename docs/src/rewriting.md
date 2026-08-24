@@ -68,7 +68,7 @@ The fixed site contributes no log density, so the log-joint is the density of `y
 (logjoint(fixed, VarNamedTuple(; y=2.0)), logdensityof(Normal(1.5), 2.0))
 ```
 
-In reverse, a tilde statement makes a fixed site random again, whether the assignment came from an earlier rewrite or was written in the model body.
+In reverse, a tilde statement makes a fixed site random again.
 
 ```@example rewriting
 unfixed = @rewrite fixed begin
@@ -82,7 +82,7 @@ rand(unfixed)
 
 ## Interpolating runtime values
 
-An interpolation `$value` evaluates in the caller's scope at rewrite time and splices the resulting value into any expression position, whether as a whole right-hand side, embedded inside a larger expression, or as the value a site is fixed to:
+An interpolation `$value` evaluates in the caller's scope at rewrite time and splices the resulting value into any expression position:
 
 ```@example rewriting
 fitted = Gamma(2.0, 3.0)
@@ -108,7 +108,7 @@ end
 
 ## Rewriting inside a submodel
 
-A dotted target names a site inside the submodel at its head, so rewriting reaches through the tree without touching the submodel's definition:
+A dotted target names a site inside the submodel at its head:
 
 ```@example rewriting
 deeper = @rewrite m begin
@@ -120,7 +120,7 @@ end
 rand(deeper)
 ```
 
-The outer site holds the rewritten inner model, whose own statements read as-written:
+The outer site holds the rewritten inner model:
 
 ```@example rewriting
 deeper[@vn(x)]
@@ -130,7 +130,7 @@ Deeper paths (`x.y.a`) and fixing (`x.b = 0.5`) work the same way.
 
 ## The `rewrite` function
 
-The macro uses the [`rewrite`](@ref) function under the hood, and it can also be called directly to splice in a runtime value, just as `$` does in the macro:
+The macro uses the [`rewrite`](@ref) function under the hood, and it can also be called directly to splice in a runtime value:
 
 ```@example rewriting
 m2 = rewrite(base(), @vn(x) => Normal(0, 2))
@@ -151,7 +151,7 @@ rewrite(m, @vn(x.b) => Exponential(1.0))[@vn(x.b)]
 ## Plated and looped sites
 
 A tilde statement inside a `@plate` block or a plain `for` loop defines a site family, addressed by its name.
-Targeting the family replaces its whole construct with the single given statement, exactly as if the model had been written that way; other statements in the construct's body stay in the loop, and the family's dead array allocation is removed:
+Targeting the family replaces its whole construct with the single given statement; other statements in the construct's body stay in the loop, and the family's dead array allocation is removed:
 
 ```@example rewriting
 @wren function plated(N)
@@ -181,8 +181,7 @@ end
 rand(pf)
 ```
 
-In the opposite direction, a single statement can be replaced by an elementwise construct, with the block pairing the family's array allocation with the loop.
-The round trip returns to a model equivalent to the original:
+In the opposite direction, a single statement can be replaced by an elementwise construct, with the block pairing the family's array allocation with the loop:
 
 ```@example rewriting
 elem = @rewrite pm begin
