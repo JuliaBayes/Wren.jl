@@ -117,15 +117,15 @@ delay_fitted =
         15,
     ) | VarNamedTuple(; delays=delay_obs)
 delay_chn = nuts(Xoshiro(1), delay_fitted, 500, 2; progress=false)
-summarystats(delay_chn)
+delay_stats = summarystats(delay_chn)
 ```
 
 The model returns the daily mass function implied by its parameters, so a conditioned instance can slot straight into a larger composition.
-Here we instead fix the reporting delay ``p_d`` at its posterior means, and return to the alternatives at the end:
+Here we instead fix the reporting delay ``p_d`` at its posterior means, taken from the summary above, and return to the alternatives at the end:
 
 ```@example renewal
-mu_hat = mean(delay_chn[@vn(mu)])
-sigma_hat = mean(delay_chn[@vn(sigma)])
+mu_hat = delay_stats[@vn(mu), stat=:mean]
+sigma_hat = delay_stats[@vn(sigma), stat=:mean]
 delay_pmf = censored_pmf(LogNormal(mu_hat, sigma_hat); D=15)
 ```
 
@@ -201,7 +201,7 @@ I_u = I_0 e^{r u} \ (u \le 0), \qquad
 ```
 
 The second relation links growth rates and reproduction numbers through the generation time distribution ([Wallinga and Lipsitch 2007](https://doi.org/10.1098/rspb.2006.3754)); `R_to_r` solves it with a short Newton iteration.
-We use explicit loops rather than generator sums, which keeps the code fast under Enzyme's reverse-mode AD.
+We use explicit loops rather than generator sums, and mark them `@inbounds`, which keeps the code fast under Enzyme's reverse-mode AD; the seeded-history branch is what guarantees every index is in range.
 The clamp on ``r`` and the cap on infections keep the log-density finite at the extreme parameter values explored during warmup, where the exponential growth would otherwise overflow:
 
 ```@example renewal
@@ -226,7 +226,7 @@ end
 
 function renew(I0, R::AbstractVector, gen_pmf, r)
     I_t = similar(R)
-    for t in eachindex(R)
+    @inbounds for t in eachindex(R)
         pressure = zero(eltype(R))
         for (s, g) in enumerate(gen_pmf)
             past = t - s >= 1 ? I_t[t-s] : I0 * exp(r * (t - s))
@@ -255,7 +255,7 @@ For ``t - d \le 0`` the convolution reaches into the same seeded history as the 
 ```@example renewal
 function delay_convolve(x::AbstractVector, pmf, x0, r)
     y = similar(x)
-    for t in eachindex(x)
+    @inbounds for t in eachindex(x)
         acc = zero(eltype(x))
         for d in 0:(length(pmf)-1)
             past = t - d >= 1 ? x[t-d] : x0 * exp(r * (t - d))
@@ -577,11 +577,11 @@ We fix the correlation length ``\ell = 30`` and estimate ``\sigma_\delta \sim \m
     eta ~ MvNormal(zeros(n * n_weeks), I)
     E = reshape(eta, n, n_weeks)
     delta = similar(E)
-    prev = sigma .* (L_corr * E[:, 1])
+    prev = sigma .* (L_corr * @view E[:, 1])
     delta[:, 1] = prev
     scale = sigma * sqrt(1 - rho^2)
     for w in 2:n_weeks
-        prev = rho .* prev .+ scale .* (L_corr * E[:, w])
+        prev = rho .* prev .+ scale .* (L_corr * @view E[:, w])
         delta[:, w] = prev
     end
     return delta
@@ -590,7 +590,7 @@ end
 function expand_weeks(delta_w::AbstractMatrix, T)
     P, W = size(delta_w)
     out = similar(delta_w, T, P)
-    for g in 1:P, t in 1:T
+    @inbounds for g in 1:P, t in 1:T
         out[t, g] = delta_w[g, fld1(t, 7)]
     end
     return out
@@ -608,8 +608,8 @@ let
 end
 ```
 
-Submodels nest, so the patch-level reproduction number process is itself a Wren model: the same `random_walk` used in the single-patch model supplies the shared trend and `spatial_deviations` supplies the patch departures.
-The composed process is one unit that can be swapped or conditioned like any other submodel:
+Submodels nest, so the patch-level reproduction number process is itself a Wren model.
+It reuses `random_walk` from the single-patch model for the shared trend, adds the deviations, and can be swapped or conditioned like any other submodel:
 
 ```@example renewal
 @wren function patch_log_rt(trend_model, dev_model)
@@ -621,7 +621,7 @@ end
 
 ### Coupled process and observation models
 
-The renewal recursion gains a method for a matrix of reproduction numbers (time by patch) and the mixing matrix, with per-patch growth rates for the seeding, and the convolution maps over patches:
+The renewal recursion gains a method for a matrix of reproduction numbers (time by patch) and the mixing matrix, with per-patch growth rates for the seeding, and the convolution gains a matching matrix method:
 
 ```@example renewal
 function growth_rates(R::AbstractMatrix, gen_pmf)
@@ -636,12 +636,12 @@ function renew(I0::AbstractVector, R::AbstractMatrix, gen_pmf, K::AbstractMatrix
     T, P = size(R)
     I_t = similar(R)
     lambda = similar(I0)
-    for t in 1:T
+    @inbounds for t in 1:T
         for h in 1:P
             acc = zero(eltype(R))
-            for (s, g) in enumerate(gen_pmf)
+            for s in eachindex(gen_pmf)
                 past = t - s >= 1 ? I_t[t-s, h] : I0[h] * exp(growth[h] * (t - s))
-                acc += g * past
+                acc += gen_pmf[s] * past
             end
             lambda[h] = acc
         end
@@ -658,15 +658,20 @@ end
 
 function delay_convolve(x::AbstractMatrix, pmf, x0, growth)
     y = similar(x)
-    for g in axes(x, 2)
-        y[:, g] = delay_convolve(x[:, g], pmf, x0[g], growth[g])
+    @inbounds for g in axes(x, 2), t in axes(x, 1)
+        acc = zero(eltype(x))
+        for d in 0:(length(pmf)-1)
+            past = t - d >= 1 ? x[t-d, g] : x0[g] * exp(growth[g] * (t - d))
+            acc += pmf[d+1] * past
+        end
+        y[t, g] = acc
     end
     return y
 end
 ```
 
 The full model swaps the single-patch reproduction number process for the nested patch-level one; the delay and observation components are reused directly.
-We seed the outbreak in the most populous patch, ``\log I_{0,g} \sim \mathrm{Normal}(\log 50, 0.5)`` there and ``\mathrm{Normal}(\log 0.05, 0.5)`` elsewhere, so the epidemic has to reach the other patches through the mixing matrix:
+We seed the outbreak in the least populous patch, ``\log I_{0,g} \sim \mathrm{Normal}(\log 50, 0.5)`` there and ``\mathrm{Normal}(\log 0.05, 0.5)`` elsewhere, so the epidemic has to reach the other patches through the mixing matrix:
 
 ```@example renewal
 @wren function patch_renewal_cases(
@@ -694,7 +699,7 @@ We seed the outbreak in the most populous patch, ``\log I_{0,g} \sim \mathrm{Nor
 end
 
 n_weeks = cld(T, 7)
-origin = argmax(pop)
+origin = argmin(pop)
 patch_model = patch_renewal_cases(
     patch_log_rt(
         rt_model,
@@ -717,10 +722,10 @@ patch_model = patch_renewal_cases(
 ### Simulated data
 
 One prior draw now simulates an epidemic across all ten patches.
-The outbreak starts in the seeded patch and arrives in the others in roughly distance order, over a month later in the farthest:
+The outbreak grows in the seeded patch first and arrives in the well connected patches weeks before the most isolated ones:
 
 ```@example renewal
-patch_truth = rand(Xoshiro(14), patch_model)
+patch_truth = rand(Xoshiro(88), patch_model)
 patch_cases = patch_truth[@vn(cases)]
 
 let
@@ -740,9 +745,22 @@ end
 
 ### Fitting the coupled model
 
+The coupled posterior has harder geometry than the single-patch one, so we raise the target acceptance rate to 0.9.
+Keyword arguments to `nuts` pass through to [`DynamicHMC.mcmc_with_warmup`](@extref):
+
 ```@example renewal
+DHMC = Wren.Samplers.DynamicHMC
 patch_fitted = patch_model | VarNamedTuple(; cases=patch_cases)
-patch_chn = nuts(Xoshiro(1), patch_fitted, 500, 4; progress=false)
+patch_chn = nuts(
+    Xoshiro(1),
+    patch_fitted,
+    500,
+    4;
+    progress=false,
+    warmup_stages=DHMC.default_warmup_stages(;
+        stepsize_adaptation=DHMC.DualAveraging(δ=0.9),
+    ),
+)
 patch_chn
 ```
 
@@ -771,8 +789,8 @@ pairplot(
 ```
 
 The random walk step size, deviation scale, and cluster factor update strongly.
-So does the distance exponent ``\gamma``: seeding the outbreak in one patch means the arrival times in the others carry information about mixing.
-Had every patch been seeded at once there would be no arrivals to learn from, and ``\gamma`` would be weakly identified; finding out what the data can and cannot inform before using such a model on real data is one purpose of these checks.
+The distance exponent ``\gamma`` also updates, because the arrival time of the outbreak in each patch carries information about mixing.
+With every patch seeded at once there would be no arrivals to learn from and ``\gamma`` would be weakly identified; finding out what the data can and cannot inform is one purpose of these checks.
 
 The mixing matrix and deviations are return values of the model, so the same helpers recover their posteriors.
 Because distance enters as ``d^{-\gamma}``, most transmission is within patches, so the between-patch flows below are scaled relative to the largest one.
