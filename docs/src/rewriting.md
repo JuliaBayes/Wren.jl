@@ -41,7 +41,7 @@ end
 rand(broken)
 ```
 
-Runtime values from the caller's scope enter through `$` interpolation, described below.
+Runtime values from the caller's scope enter through `$` interpolation.
 
 ## Fixing a site to a value
 
