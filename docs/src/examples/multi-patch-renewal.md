@@ -107,20 +107,53 @@ The bounded priors keep every warmup proposal in a numerically safe region:
     return censored_pmf(LogNormal(mu, sigma); D=D)
 end
 
-delay_fitted =
-    delay_model(
-        truncated(Normal(1, 0.5); lower=0, upper=3),
-        truncated(Normal(0.5, 0.25); lower=0.1, upper=2),
-        windows,
-        wts,
-        zeros(length(strata)),
-        15,
-    ) | VarNamedTuple(; delays=delay_obs)
-delay_chn = nuts(Xoshiro(1), delay_fitted, 500, 2; progress=false)
+delay_instance = delay_model(
+    truncated(Normal(1, 0.5); lower=0, upper=3),
+    truncated(Normal(0.5, 0.25); lower=0.1, upper=2),
+    windows,
+    wts,
+    zeros(length(strata)),
+    15,
+)
+```
+
+The model returns the daily mass function implied by its parameters.
+A model's return value at a trace comes from `evaluate` with the `FromParams` latent source (see [Working with models](@ref models)); we wrap that once and use it to check every component before it enters the composition.
+Prior draws of the mass function span same-day reporting through to multi-week delays:
+
+```@example renewal
+function return_values(model, params)
+    retval, _ = evaluate(
+        model,
+        FromParams(params),
+        OriginalSpace(),
+        Wren.AccumulatorTuple(Wren.ParamsAccumulator()),
+    )
+    return retval
+end
+
+let
+    rng = Xoshiro(3)
+    fig = Figure(; size=(700, 300))
+    ax =
+        Axis(fig[1, 1]; xlabel="days", ylabel="probability", title="Prior reporting delays")
+    for _ in 1:100
+        pmf = return_values(delay_instance, rand(rng, delay_instance))
+        lines!(ax, 0:(length(pmf)-1), pmf; color=(:grey, 0.2))
+    end
+    fig
+end
+```
+
+Conditioning on the observed delays turns the same instance into the fitted model:
+
+```@example renewal
+delay_fitted = delay_instance | VarNamedTuple(; delays=delay_obs)
+delay_chn = nuts(Xoshiro(1), delay_fitted, 500, 4; progress=false)
 delay_stats = summarystats(delay_chn)
 ```
 
-The model returns the daily mass function implied by its parameters, so a conditioned instance can slot straight into a larger composition.
+A conditioned instance could slot straight into a larger composition.
 Here we instead fix the reporting delay ``p_d`` at its posterior means, taken from the summary above, and return to the alternatives at the end:
 
 ```@example renewal
@@ -184,6 +217,21 @@ It can also be conditioned on its own parameters and sampled again, which is use
 
 ```@example renewal
 rand(Xoshiro(1), rt_model | VarNamedTuple(; sigma=0.1))
+```
+
+Prior draws of the implied reproduction number start around 1.3 and drift slowly, without collapsing or exploding over the eight weeks:
+
+```@example renewal
+let
+    rng = Xoshiro(2)
+    fig = Figure(; size=(700, 300))
+    ax = Axis(fig[1, 1]; xlabel="day", ylabel="reproduction number")
+    for _ in 1:100
+        lines!(ax, exp.(return_values(rt_model, rand(rng, rt_model))); color=(:grey, 0.15))
+    end
+    hlines!(ax, [1.0]; color=:firebrick, linestyle=:dash)
+    fig
+end
 ```
 
 Daily infection incidence ``I_t`` follows the renewal process model ([Fraser 2007](https://doi.org/10.1371/journal.pone.0000758), [Cori et al. 2013](https://doi.org/10.1093/aje/kwt133)),
@@ -328,8 +376,8 @@ let
 end
 ```
 
-Simulated epidemics mostly grow slowly from around 50 reported cases a day, but a minority grow implausibly large.
-In a real analysis this check would motivate tightening the reproduction number priors; here we accept it and move on.
+Simulated epidemics mostly grow slowly from around 50 reported cases a day, with a heavy upper tail from the walks that hold ``\mathcal{R}_t`` above one for the whole window, already visible in the reproduction number check above.
+The component checks are what make a composed check like this one readable; when a draw looks wrong, the component it came from has its own plot to compare against.
 
 ### Fitting and parameter recovery
 
@@ -366,20 +414,9 @@ pairplot(
 ```
 
 To check recovery of the latent process we compare reproduction number trajectories.
-A model can be re-run at any trace using `evaluate` with the `FromParams` latent source (see [Working with models](@ref models)), which returns the model's return value at those parameters.
-The same helper therefore gives the trajectory at the truth and at each posterior draw, with `to_samples` converting the chain back to traces:
+`return_values` gives the trajectory at the truth and at each posterior draw, with `to_samples` converting the chain back to traces:
 
 ```@example renewal
-function return_values(model, params)
-    retval, _ = evaluate(
-        model,
-        FromParams(params),
-        OriginalSpace(),
-        Wren.AccumulatorTuple(Wren.ParamsAccumulator()),
-    )
-    return retval
-end
-
 posterior_returns(model, chn; thin=10) = [
     return_values(model, vnt) for
     vnt in vec(AbstractMCMC.to_samples(VarNamedTuple, chn)[1:thin:end, :])
@@ -438,7 +475,7 @@ T_obs = 42
 fit42 =
     single_model(random_walk(T_obs, rt_priors...), T_obs) |
     VarNamedTuple(; cases=cases_data[1:T_obs])
-chn42 = nuts(Xoshiro(1), fit42, 500, 2; progress=false)
+chn42 = nuts(Xoshiro(1), fit42, 500, 4; progress=false)
 
 forecast_model = single_model(random_walk_forecast(T, rt_priors...), T)
 
@@ -549,6 +586,32 @@ let
 end
 ```
 
+Prior draws of the off-diagonal mixing weights span near-uniform coupling to sharply local transmission, with the spread at each distance coming from the population products:
+
+```@example renewal
+mix_model = gravity_mixing(pop, dist, truncated(Normal(1.5, 0.5); lower=0))
+
+let
+    rng = Xoshiro(4)
+    fig = Figure(; size=(700, 300))
+    ax = Axis(
+        fig[1, 1];
+        xlabel="distance (km)",
+        ylabel="mixing weight",
+        yscale=log10,
+        title="Prior mixing weights",
+    )
+    for _ in 1:50
+        K = return_values(mix_model, rand(rng, mix_model))
+        for g in 1:n_patches, h in 1:n_patches
+            g == h && continue
+            scatter!(ax, dist[g, h], K[g, h]; color=(:grey, 0.15), markersize=3)
+        end
+    end
+    fig
+end
+```
+
 ### Spatially and temporally correlated deviations
 
 Patch reproduction numbers share the random walk from the single-patch model and add a patch deviation that evolves over weeks, so patches are coupled without moving in lockstep.
@@ -604,6 +667,31 @@ let
     ax = Axis(fig[1, 1]; xlabel="patch", ylabel="patch", title="Deviation correlation")
     hm = heatmap!(ax, exp.(-dist ./ ell); colorrange=(0, 1))
     Colorbar(fig[1, 2], hm)
+    fig
+end
+```
+
+Prior draws of the deviations wander to patch departures of a few tenths on the log scale and damp back towards the shared trend:
+
+```@example renewal
+n_weeks = cld(T, 7)
+dev_model = spatial_deviations(
+    L_corr,
+    n_weeks,
+    truncated(Normal(0, 0.2); lower=0),
+    truncated(Normal(0.8, 0.1); lower=0, upper=1),
+)
+
+let
+    rng = Xoshiro(5)
+    fig = Figure(; size=(700, 300))
+    ax = Axis(fig[1, 1]; xlabel="week", ylabel="deviation", title="Prior patch deviations")
+    for _ in 1:20
+        delta = return_values(dev_model, rand(rng, dev_model))
+        for g in 1:n_patches
+            lines!(ax, delta[g, :]; color=(:grey, 0.12))
+        end
+    end
     fig
 end
 ```
@@ -698,25 +786,42 @@ We seed the outbreak in the least populous patch, ``\log I_{0,g} \sim \mathrm{No
     return (; I_t, Y_t, R, delta=rt.delta, K_mix)
 end
 
-n_weeks = cld(T, 7)
 origin = argmin(pop)
 patch_model = patch_renewal_cases(
-    patch_log_rt(
-        rt_model,
-        spatial_deviations(
-            L_corr,
-            n_weeks,
-            truncated(Normal(0, 0.2); lower=0),
-            truncated(Normal(0.8, 0.1); lower=0, upper=1),
-        ),
-    ),
-    gravity_mixing(pop, dist, truncated(Normal(1.5, 0.5); lower=0)),
+    patch_log_rt(rt_model, dev_model),
+    mix_model,
     gen_pmf,
     delay_pmf,
     MvNormal([g == origin ? log(50) : log(0.05) for g in 1:n_patches], 0.25 * I),
     truncated(Normal(0, 0.1); lower=0),
     zeros(Int, T, n_patches),
 )
+```
+
+### Prior predictive checks
+
+The composed model gets the same check as the single-patch one.
+The seeded patch starts around 50 reported cases a day, the rest start near zero, and growth elsewhere can only arrive through the mixing matrix:
+
+```@example renewal
+patch_prior_chn = prior(Xoshiro(1), patch_model, 500; progress=false)
+
+let
+    fig = Figure(; size=(700, 600))
+    for g in 1:n_patches
+        ax = Axis(
+            fig[fld1(g, 2), mod1(g, 2)];
+            title="patch $g",
+            titlesize=10,
+            yscale=log10,
+            yticks=LinearTicks(3),
+        )
+        for draw in vec(patch_prior_chn[@vn(cases)])[1:50]
+            lines!(ax, max.(draw[:, g], 0.5); color=(:grey, 0.15))
+        end
+    end
+    fig
+end
 ```
 
 ### Simulated data
@@ -780,7 +885,6 @@ summarystats(patch_chn[patch_keys])
 The pairplot again compares prior and posterior, now including the spatial parameters:
 
 ```@example renewal
-patch_prior_chn = prior(Xoshiro(1), patch_model, 500; progress=false)
 pairplot(
     PairPlots.Series(patch_chn[patch_keys]; label="posterior", color=(:steelblue, 0.6)),
     PairPlots.Series(patch_prior_chn[patch_keys]; label="prior", color=(:grey, 0.4)),
