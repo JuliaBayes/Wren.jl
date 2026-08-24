@@ -24,9 +24,6 @@ m = @rewrite base() begin
 end
 ```
 
-The displayed AST is exactly what runs.
-The site `x` samples the submodel, precisely as if `base` had been declared with `x ~ inner()` all along.
-
 ```@example rewriting
 rand(m)
 ```
