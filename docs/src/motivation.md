@@ -57,15 +57,15 @@ This functionality depends on [RuntimeGeneratedFunctions.jl](https://github.com/
     GG is supposedly more powerful than RGF, but I haven't yet come across a use case where GG was necessary.
     Furthermore, RGF is actually maintained (for example it is used in ModelingToolkit.jl), and so it seems like a better choice for a dependency.
 
-Since the AST is in principle capable of capturing all Julia code, this approach is no less flexible than DynamicPPL, but additionally allows for several things (which are not yet implemented, but are planned):
+Since the AST is in principle capable of capturing all Julia code, this approach is no less flexible than DynamicPPL, but additionally allows for several things:
 
   - Higher-level probabilistic primitives, such as a `plate` construct which is used to mark conditionally independent loop iterations. See [issue #1](https://github.com/JuliaBayes/Wren.jl/issues/1) for a motivation of this.
 
-  - Programmatic construction of models. A user can, instead of writing Julia code, manually build up a Wren AST and generate a model with it.
+  - Programmatic construction of models (not yet implemented). A user can, instead of writing Julia code, manually build up a Wren AST and generate a model with it.
 
-  - Programmatic modification of models. Once constructed, a user can reach into the AST and modify it. The evaluation function will then be automatically regenerated. (For example, if you don't like the way an external package defines their submodel, you can modify it!)
+  - Programmatic modification of models. The right-hand sides of a completed model's statements can be replaced, and the evaluation function is regenerated automatically. (For example, if you don't like the way an external package defines their submodel, you can rewrite it!) See [Rewriting models](@ref rewriting).
 
-  - Static analysis of the model, for example, to extract a graphical representation. (See, e.g., [GraphPPL.jl](https://github.com/ReactiveBayes/GraphPPL.jl) for an existing implementation of this.) This might open up the possibility of more advanced inference algorithms which make use of this graphical representation, such as message passing.
+  - Static analysis of the model (not yet implemented), for example, to extract a graphical representation. (See, e.g., [GraphPPL.jl](https://github.com/ReactiveBayes/GraphPPL.jl) for an existing implementation of this.) This might open up the possibility of more advanced inference algorithms which make use of this graphical representation, such as message passing.
 
 This is a key difference from DynamicPPL, whose `@model` macro _directly_ emits the code of the evaluation function without storing it.
 Consequently, DynamicPPL models are completely opaque once they have been constructed, and the only way to extract information from them is to actually run the model.

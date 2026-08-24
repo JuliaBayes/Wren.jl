@@ -21,6 +21,7 @@ makedocs(;
         "syntax.md",
         "models.md",
         "submodels.md",
+        "rewriting.md",
         "mcmc.md",
         "motivation.md",
         "api.md",

@@ -106,3 +106,40 @@ logdensityof(Normal(), xsq) ≈ loglikelihood(accs)
 ```
 
 (You can also use this syntax for distributions, but it's much less interesting as the `retval` will also be the same as `rand(dist)`.)
+
+## Conditioning into a submodel
+
+A variable inside a submodel is conditioned from the outer model by using its prefixed name:
+
+```@example submodel
+@wren function noisy_inner()
+    a ~ Normal()
+    obs ~ Normal(a)
+end
+
+@wren function joint()
+    x ~ noisy_inner()
+    y ~ Normal()
+end
+
+cond = joint() | @vnt begin
+    x.obs := 0.75
+end
+```
+
+The inner model has been conditioned and swapped in for the original, so `obs` is observed rather than sampled:
+
+```@example submodel
+rand(cond)
+```
+
+This requires the site's right-hand side to be resolvable from the model's arguments alone; values for other sites stay on the outer model as usual.
+[`decondition`](@ref) removes conditioning, including values stored on a submodel:
+
+```@example submodel
+dec = decondition(cond, @vn(x.obs))
+```
+
+```@example submodel
+rand(dec)
+```
