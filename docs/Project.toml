@@ -9,4 +9,4 @@ Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 Wren = "bcabdda7-19af-429b-97ac-a6b557ca0f6c"
 
 [sources]
-Wren = {path = "../"}
+Wren = {path = "/Users/lshsa2/code/external/Wren.jl/.claude/worktrees/agent-aaa626ee8d29d3a00"}

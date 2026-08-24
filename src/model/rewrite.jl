@@ -6,10 +6,11 @@ each `vn` is replaced by the runtime value `value`, exactly as if the
 model had been written that way from the start. The original model is
 untouched. Distributions and submodels keep the site a sampling
 statement; any other value fixes the site to that deterministic value.
-`vn` may name a plain site, a literal indexed site (`@vn(x[1])`), or a
-plated or looped site family. `model[vn => value]` is equivalent sugar,
-and `model[vn]` reads the current right-hand side. To splice in an
-*expression* instead of a value, use [`@rewrite`](@ref).
+`vn` may name a plain site, a literal indexed site (`@vn(x[1])`), a
+plated or looped site family, or a property path into a submodel
+(`@vn(x.a)`). `model[vn => value]` is equivalent sugar, and `model[vn]`
+reads the current right-hand side through the same paths. To splice in
+an *expression* instead of a value, use [`@rewrite`](@ref).
 
 ```julia
 julia> rewrite(f(), @vn(x) => LogNormal())  # replace the distribution
@@ -37,9 +38,10 @@ block shares the `@wren` model-body grammar and every statement must
 target an existing site by name: `site ~ rhs` replaces a sampling
 statement's right-hand side, `site = value` fixes the site to a
 deterministic value, `@observe site ~ rhs` turns the statement into an
-observation, and an allocation-and-construct pair (`site = zeros(N)`
+observation, an allocation-and-construct pair (`site = zeros(N)`
 followed by a `@plate` block or `for` loop) replaces the site with an
-elementwise family. The spliced expressions become part of the model body,
+elementwise family, and a dotted target such as `x.a ~ rhs` rewrites
+inside the submodel at `x`. The spliced expressions become part of the model body,
 so local variables at the `@rewrite` call site do not resolve; an
 interpolation `\$value` evaluates in the caller's scope at rewrite time
 and splices the resulting value into any expression position.
@@ -60,7 +62,7 @@ See the manual page on rewriting models for the full semantics.
 """
 macro rewrite(model_expr, patch_expr)
     patch_expr, interp = _extract_interpolations(patch_expr)
-    patch = to_wren_exprs(patch_expr, __module__)
+    patch = _group_nested_patches(to_wren_exprs(patch_expr, __module__))
     _validate_patch(patch, first.(interp))
     values_expr =
         Expr(:tuple, Expr(:parameters, (Expr(:kw, k, esc(e)) for (k, e) in interp)...))
@@ -600,6 +602,92 @@ end
 
 ## The macro form.
 
+"""
+    _NestedPatch
+
+A group of patch statements targeting sites inside the submodel at
+`prefix` (from dotted targets such as `x.a ~ rhs`). Assembled at macro
+expansion time so that its identity, and therefore the
+evaluation-function cache, is stable per call site.
+"""
+struct _NestedPatch <: AbstractWrenExpr
+    prefix::Symbol
+    patch::Vector{Union{AbstractWrenExpr,LineNumberNode}}
+end
+
+# Split a dotted left-hand side into its leading site and the rest of
+# the path, handling both raw `Expr`s (tilde statements) and lowered
+# `WrenExpr`s (assignments). Returns `nothing` for non-dotted sides.
+_split_dotted_lhs(lhs) = nothing
+function _split_dotted_lhs(lhs::Union{Expr,WrenExpr})
+    lhs.head === :. || return nothing
+    base, field = lhs.args[1], lhs.args[2]
+    base isa Symbol && return (base, field isa QuoteNode ? field.value : field)
+    inner = _split_dotted_lhs(base)
+    inner === nothing && error(
+        "@rewrite: dotted targets must be property paths such as " *
+        "`x.a`; indexed prefixes are not supported",
+    )
+    prefix, rest = inner
+    rebuilt = lhs isa Expr ? Expr(:., rest, field) : WrenExpr(:., [rest, field])
+    return (prefix, rebuilt)
+end
+
+# Rebuild a patch statement with the leading site stripped from its
+# dotted target, or return `nothing` for plain targets.
+_strip_dotted(stmt) = nothing
+function _strip_dotted(stmt::Sample)
+    split = _split_dotted_lhs(stmt.lhs)
+    split === nothing && return nothing
+    prefix, rest = split
+    return (prefix, Sample(_lhs_name(rest), rest, stmt.rhs))
+end
+function _strip_dotted(stmt::Observe)
+    split = _split_dotted_lhs(stmt.lhs)
+    split === nothing && return nothing
+    prefix, rest = split
+    return (prefix, Observe(_lhs_name(rest), rest, stmt.rhs))
+end
+function _strip_dotted(stmt::WrenExpr)
+    stmt.head === :(=) || return nothing
+    split = _split_dotted_lhs(stmt.args[1])
+    split === nothing && return nothing
+    prefix, rest = split
+    return (prefix, WrenExpr(:(=), [rest, stmt.args[2]]))
+end
+
+"""
+    _group_nested_patches(patch)
+
+Collect patch statements with dotted targets into [`_NestedPatch`](@ref)
+groups, one per leading site, recursively for deeper paths. Called at
+macro expansion time.
+"""
+function _group_nested_patches(patch)
+    out = Union{AbstractWrenExpr,LineNumberNode}[]
+    groups = Dict{Symbol,_NestedPatch}()
+    for stmt in patch
+        split = stmt isa LineNumberNode ? nothing : _strip_dotted(stmt)
+        if split === nothing
+            push!(out, stmt)
+            continue
+        end
+        prefix, inner_stmt = split
+        np = get!(groups, prefix) do
+            np = _NestedPatch(prefix, Union{AbstractWrenExpr,LineNumberNode}[])
+            push!(out, np)
+            np
+        end
+        push!(np.patch, inner_stmt)
+    end
+    for np in values(groups)
+        grouped = _group_nested_patches(np.patch)
+        empty!(np.patch)
+        append!(np.patch, grouped)
+    end
+    return out
+end
+
 # Whether a patch statement is a `@plate` block or plain for loop, to
 # be swapped in for the target family's site wholesale.
 _is_construct_patch(stmt) = stmt isa Plate || (stmt isa WrenExpr && stmt.head === :for)
@@ -623,6 +711,10 @@ form. Called at macro expansion time.
 function _validate_patch(patch, markers::Vector{Symbol}=Symbol[])
     stmts = [stmt for stmt in patch if !(stmt isa LineNumberNode)]
     for (i, stmt) in enumerate(stmts)
+        if stmt isa _NestedPatch
+            _validate_patch(stmt.patch, markers)
+            continue
+        end
         if stmt isa OtherStatement && stmt.expr isa Symbol && stmt.expr in markers
             error("@rewrite: `\$` cannot interpolate a whole statement")
         end
@@ -675,6 +767,7 @@ end
 _patch_target(stmt::Sample) = stmt.name
 _patch_target(stmt::Observe) = stmt.name
 _patch_target(stmt::Plate) = only(_construct_families(stmt))
+_patch_target(stmt::_NestedPatch) = stmt.prefix
 function _patch_target(stmt::WrenExpr)
     stmt.head === :for && return only(_construct_families(stmt))
     return _lhs_name(stmt.args[1])
@@ -724,12 +817,25 @@ function _rewrite_patch(
     # A previous function-form rewrite of a patched site may have
     # left a hidden argument behind; the patch replaces the statement
     # that referred to it, so drop it. Interpolated `$` values become
-    # hidden arguments referenced by the patch's marker symbols.
+    # hidden arguments referenced by the patch's marker symbols, and
+    # each nested group resolves to a rewritten inner model that flows
+    # in the same way.
     stale = filter(
         argname -> haskey(model.args, argname),
         [_rewrite_arg_name(_patch_target(p)) for p in patch if !(p isa LineNumberNode)],
     )
-    args = merge(Base.structdiff(model.args, NamedTuple{(stale...,)}), interp)
+    nested = NamedTuple()
+    for p in patch
+        p isa _NestedPatch || continue
+        inner = getsite(model, VarName{p.prefix}())
+        is_submodel(typeof(inner)) || error(
+            "@rewrite: the site `$(p.prefix)` is not a submodel, so " *
+            "dotted targets under `$(p.prefix)` do not name sites inside it",
+        )
+        new_inner = _rewrite_patch(inner, p.patch, interp)
+        nested = merge(nested, NamedTuple{(_rewrite_arg_name(p.prefix),)}((new_inner,)))
+    end
+    args = merge(Base.structdiff(model.args, NamedTuple{(stale...,)}), interp, nested)
     key = (typeof(model.evaluation_fn), objectid(patch))
     return _rewritten_model(model, args, key) do
         stmts = model.stmts
@@ -750,6 +856,23 @@ function _rewrite_patch(
                     Union{AbstractWrenExpr,LineNumberNode}[p, construct],
                 )
                 i += 2
+                continue
+            end
+            if p isa _NestedPatch
+                # The rewritten inner model is already in `args`; point
+                # the outer site's statement at it.
+                argname = _rewrite_arg_name(p.prefix)
+                stmts = _rewrite_stmts(
+                    stmts,
+                    p.prefix,
+                    p.prefix,
+                    (matched, via_family) ->
+                        _value_replacement(matched, argname, :sample, via_family),
+                    false;
+                    family_rhs=argname,
+                    family_kind=:sample,
+                )
+                i += 1
                 continue
             end
             family_rhs, family_kind = _patch_family_rhs(p)
@@ -834,8 +957,50 @@ function _rewritten_form(stmts, argname::Symbol)
     end
 end
 
+# Property-path helpers for targets inside submodels, mirroring the
+# prefixed paths that conditioning uses.
+_prop_sym(::VarNames.Property{sym}) where {sym} = sym
+_optic_has_property(::VarNames.Iden) = false
+_optic_has_property(::VarNames.Property) = true
+_optic_has_property(optic::VarNames.Index) = _optic_has_property(optic.child)
+
+# The rest of a property-path target, dropping the leading site.
+function _strip_prefix(vn::VarName)
+    optic = VarNames.getoptic(vn)::VarNames.Property
+    return VarName{_prop_sym(optic)}(optic.child)
+end
+
+# Fetch the submodel at the head of a property-path target.
+function _nested_inner(model::Model, vn::VarName, verb::String)
+    sym = VarNames.getsym(vn)
+    inner = getsite(model, VarName{sym}())
+    is_submodel(typeof(inner)) || error(
+        "$verb: the site `$sym` is not a submodel, so `$vn` does not " *
+        "name a site inside it",
+    )
+    return sym, inner
+end
+
+function _guard_indexed_prefix(vn::VarName, verb::String)
+    _optic_has_property(VarNames.getoptic(vn)) && error(
+        "$verb: indexed prefixes such as `x[1].a` are not supported; " *
+        "target the site inside `$(VarNames.getsym(vn))` through a " *
+        "property path instead",
+    )
+    return nothing
+end
+
 function _rewrite_pair(model::Model, p::Pair{<:VarName})
     vn, new_rhs = p
+    optic = VarNames.getoptic(vn)
+    if optic isa VarNames.Property
+        # A property path targets a site inside the submodel at its
+        # head: rewrite the inner model and put it back.
+        sym, inner = _nested_inner(model, vn, "rewrite")
+        new_inner = _rewrite_pair(inner, _strip_prefix(vn) => new_rhs)
+        return _rewrite_pair(model, VarName{sym}() => new_inner)
+    end
+    _guard_indexed_prefix(vn, "rewrite")
     name = _site_name(vn)
     family = VarNames.getsym(vn)
     argname = _rewrite_arg_name(name)
@@ -904,6 +1069,13 @@ const _GETSITE_CACHE = Dict{Any,Any}()
 # Internal implementation of `model[vn]`; see the docstring on
 # `Base.getindex(::Model, ::VarName)`.
 function getsite(model::Model, vn::VarName)
+    optic = VarNames.getoptic(vn)
+    if optic isa VarNames.Property
+        # A property path reads through the submodel at its head.
+        _, inner = _nested_inner(model, vn, "getindex")
+        return getsite(inner, _strip_prefix(vn))
+    end
+    _guard_indexed_prefix(vn, "getindex")
     sym = _site_name(vn)
     argname = _rewrite_arg_name(sym)
     # Fast path: the site was previously rewritten with a value, which
@@ -1143,10 +1315,28 @@ end
 _display_rhs(rhs, ::NamedTuple) = rhs
 function _display_rhs(rhs::Symbol, args::NamedTuple)
     return if _is_rewrite_argname(rhs) && haskey(args, rhs)
-        _InlineValue(args[rhs])
+        _display_value(args[rhs])
     else
         rhs
     end
+end
+
+"""
+    _display_value_expr(value)
+
+The constructor-call expression that a hidden-argument `value` displays
+as, or `nothing` to display the value itself. Extensions add methods
+for their value types; a method must only return an expression that
+honestly reconstructs the value.
+"""
+_display_value_expr(::Any) = nothing
+
+# A value displays as its reconstructing constructor call where one is
+# known, so that the model reads exactly as its hand-written
+# counterpart, and as the value itself otherwise.
+function _display_value(v)
+    expr = _display_value_expr(v)
+    return expr === nothing ? _InlineValue(v) : expr
 end
 function _display_rhs(rhs::WrenExpr, args::NamedTuple)
     new_args = map(a -> _display_rhs(a, args), rhs.args)

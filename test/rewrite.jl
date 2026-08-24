@@ -101,6 +101,24 @@ end
     end
 end
 
+# Hand-written targets for display parity and nested rewriting.
+@wren function hand_gamma()
+    x ~ Gamma(2.0, 3.0)
+    y ~ Normal()
+end
+@wren function hand_normal42()
+    x ~ Normal()
+    y ~ Normal(4.0, 2.0)
+end
+@wren function rw_inner_exp()
+    a ~ Normal()
+    b ~ Exponential(1.0)
+end
+@wren function nested_hand()
+    x ~ rw_inner_exp()
+    y ~ Normal()
+end
+
 # Hand-written targets for family collapse, fixing, and construct
 # replacement.
 @wren function family_vec(N)
@@ -161,10 +179,11 @@ end
     end
 end
 
-# Statement display for comparing model IRs. Plate names are gensym'd
-# per model definition, so they are normalised away.
+# Statement display for comparing models as shown (hidden arguments
+# rendered inline). Plate names are gensym'd per model definition, so
+# they are normalised away.
 function _stmt_str(model)
-    str = sprint(show, MIME("text/plain"), model.stmts)
+    str = sprint(show, MIME("text/plain"), Wren._display_stmts(model))
     return replace(str, r"##plate#\d+" => "##plate#")
 end
 
@@ -992,19 +1011,153 @@ end
                     y ~ Normal($mu0, 2.0)
                 end
                 str = sprint(show, MIME("text/plain"), m)
-                @test occursin("x ~ LogNormal{Float64}(μ=0.0, σ=1.0)", str)
+                @test occursin("x ~ LogNormal(0.0, 1.0)", str)
                 @test occursin("y ~ Normal(4.0, 2.0)", str)
                 @test !occursin("Distributions.", str)
                 @test !occursin("#rewrite#", str)
             end
         end
 
+        @testset "display parity with hand-written models" begin
+            mm = @rewrite rw_base() begin
+                x ~ $(Gamma(2.0, 3.0))
+            end
+            fm = rewrite(rw_base(), @vn(x) => Gamma(2.0, 3.0))
+            @test _stmt_str(mm) == _stmt_str(hand_gamma())
+            @test _stmt_str(fm) == _stmt_str(hand_gamma())
+            let mu0 = 4.0
+                em = @rewrite rw_base() begin
+                    y ~ Normal($mu0, 2.0)
+                end
+                @test _stmt_str(em) == _stmt_str(hand_normal42())
+            end
+            # a wrapped distribution does not reconstruct from a plain
+            # constructor call, so its value shows instead
+            tm = rewrite(rw_base(), @vn(x) => truncated(Normal(); lower=0))
+            str = _stmt_str(tm)
+            @test occursin("lower=0.0", str)
+            @test !occursin("Distributions.", str)
+        end
+
         @testset "errors" begin
             # Meta.parse keeps the `$` unevaluated, unlike a quote here.
-            lhs_interp = Meta.parse("@rewrite m begin\n \$s ~ Normal()\nend")
-            @test_throws LoadError macroexpand(@__MODULE__, lhs_interp)
-            stmt_interp = Meta.parse("@rewrite m begin\n \$stmt\nend")
-            @test_throws LoadError macroexpand(@__MODULE__, stmt_interp)
+            for bad in (
+                "@rewrite m begin\n \$s ~ Normal()\nend",
+                "@rewrite m begin\n x[\$i] ~ Normal()\nend",
+                "@rewrite m begin\n \$s = 1.0\nend",
+                "@rewrite m begin\n \$stmt\nend",
+            )
+                @test_throws LoadError macroexpand(@__MODULE__, Meta.parse(bad))
+            end
+        end
+    end
+
+    @testset "nested targets" begin
+        nested_params = @vnt begin
+            x.a := 0.2
+            x.b := 0.5
+            y := 0.1
+        end
+
+        @testset "function form, macro form, and hand-written agree" begin
+            n1 = rewrite(hand_submodel(), @vn(x.b) => Exponential(1.0))
+            n2 = @rewrite hand_submodel() begin
+                x.b ~ Exponential(1.0)
+            end
+            assert_equivalent(n1, nested_hand(), nested_params)
+            assert_equivalent(n2, nested_hand(), nested_params)
+            for n in (n1, n2)
+                # the outer site holds a runtime model, shown compactly
+                @test occursin("x ~ Model(rw_inner)", sprint(show, MIME("text/plain"), n))
+                # the inner model's IR stays as-written
+                @test occursin("b ~ Exponential(1.0)", _stmt_str(n[@vn(x)]))
+            end
+        end
+
+        @testset "two levels, reader, and sugar" begin
+            t = rewrite(nested_top(), @vn(m.inner.b) => Exponential(1.0))
+            @test t[@vn(m.inner.b)] == Exponential(1.0)
+            @test t[@vn(m.inner.a)] == Normal()
+            t2 = @rewrite nested_top() begin
+                m.inner.b ~ Exponential(1.0)
+            end
+            @test t2[@vn(m.inner.b)] == Exponential(1.0)
+            s = hand_submodel()[@vn(x.b)=>Exponential(1.0)]
+            @test s[@vn(x.b)] == Exponential(1.0)
+            @test hand_submodel()[@vn(x.a)] == Normal()
+        end
+
+        @testset "fixing inside a submodel" begin
+            f1 = rewrite(hand_submodel(), @vn(x.b) => 0.5)
+            f2 = @rewrite hand_submodel() begin
+                x.b = 0.5
+            end
+            for f in (f1, f2)
+                @test Set(keys(rand(f))) == Set([@vn(x.a), @vn(y)])
+                @test f[@vn(x.b)] == 0.5
+            end
+        end
+
+        @testset "interpolation composes with dotted targets" begin
+            let mu0 = 4.0
+                n = @rewrite hand_submodel() begin
+                    x.b ~ Normal($mu0, 2.0)
+                end
+                accs = _components(n, nested_params)
+                @test logprior(accs) ≈
+                      logdensityof(Normal(), 0.2) +
+                      logdensityof(Normal(4.0, 2.0), 0.5) +
+                      logdensityof(Normal(), 0.1)
+            end
+        end
+
+        @testset "call sites reuse evaluation functions" begin
+            renest(m, v) = rewrite(m, @vn(x.b) => v)
+            n1 = renest(hand_submodel(), Exponential(1.0))
+            n2 = renest(hand_submodel(), Exponential(2.0))
+            @test n1.evaluation_fn === n2.evaluation_fn
+            @test n1[@vn(x)].evaluation_fn === n2[@vn(x)].evaluation_fn
+            renest_macro(m, v) = @rewrite m begin
+                x.b ~ $v
+            end
+            m1 = renest_macro(hand_submodel(), Exponential(1.0))
+            m2 = renest_macro(hand_submodel(), Exponential(2.0))
+            @test m1.evaluation_fn === m2.evaluation_fn
+            @test m1[@vn(x)].evaluation_fn === m2[@vn(x)].evaluation_fn
+        end
+
+        @testset "errors" begin
+            # the prefix must be a submodel site
+            @test_throws ErrorException rewrite(hand_submodel(), @vn(y.a) => Normal())
+            err = try
+                m = hand_submodel()
+                @rewrite m begin
+                    y.a ~ Normal()
+                end
+                nothing
+            catch e
+                e
+            end
+            @test err isa Exception
+            @test occursin("not a submodel", sprint(showerror, err))
+            # unknown inner sites list the inner model's sites
+            err2 = try
+                rewrite(hand_submodel(), @vn(x.c) => Normal())
+                nothing
+            catch e
+                e
+            end
+            @test err2 isa Exception
+            @test occursin("sites: a, b", sprint(showerror, err2))
+            # indexed prefixes are rejected in both forms
+            @test_throws ErrorException rewrite(
+                indexed_model(rw_inner()),
+                @vn(x[1].a) => Normal(),
+            )
+            @test_throws LoadError macroexpand(
+                @__MODULE__,
+                Meta.parse("@rewrite m begin\n x[1].a ~ Normal()\nend"),
+            )
         end
     end
 
@@ -1107,6 +1260,8 @@ end
                         x.b := 1.5
                     end),
                 "two-level nesting" => two_level,
+                "nested rewrite" =>
+                    rewrite(hand_submodel(), @vn(x.b) => Exponential(1.0)),
                 "interpolated value" => (
                     let mu0 = 0.5
                         @rewrite rw_base() begin

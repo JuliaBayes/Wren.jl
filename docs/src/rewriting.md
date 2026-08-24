@@ -34,21 +34,7 @@ rand(m)
 
 Each statement must name an existing site of the model.
 The replacement expressions become part of the model body, so they are re-evaluated on every model evaluation, and model arguments and module globals resolve as usual, but local variables at the `@rewrite` call site do not.
-An interpolation `$value` reaches them, evaluating in the caller's scope at rewrite time and splicing the resulting value into any expression position:
-
-```@example rewriting
-fitted = Gamma(2.0, 3.0)
-mu0 = 4.0
-
-g = @rewrite base() begin
-    x ~ $fitted
-    y ~ Normal($mu0, 2.0)
-end
-```
-
-```@example rewriting
-rand(g)
-```
+Runtime values from the caller's scope enter through `$` interpolation, described below.
 
 ## Fixing a site to a value
 
@@ -87,6 +73,54 @@ end
 rand(unfixed)
 ```
 
+## Interpolating runtime values
+
+An interpolation `$value` evaluates in the caller's scope at rewrite time and splices the resulting value into any expression position, whether as a whole right-hand side, embedded inside a larger expression, or as the value a site is fixed to:
+
+```@example rewriting
+fitted = Gamma(2.0, 3.0)
+mu0 = 4.0
+
+g = @rewrite base() begin
+    x ~ $fitted
+    y ~ Normal($mu0, 2.0)
+end
+```
+
+```@example rewriting
+rand(g)
+```
+
+```@example rewriting
+xhat = 0.75
+
+@rewrite chained() begin
+    x = $xhat
+end
+```
+
+## Rewriting inside a submodel
+
+A dotted target names a site inside the submodel at its head, so rewriting reaches through the tree without touching the submodel's definition:
+
+```@example rewriting
+deeper = @rewrite m begin
+    x.b ~ Exponential(1.0)
+end
+```
+
+```@example rewriting
+rand(deeper)
+```
+
+The outer site holds the rewritten inner model, whose own statements read as-written:
+
+```@example rewriting
+deeper[@vn(x)]
+```
+
+Deeper paths (`x.y.a`) and fixing (`x.b = 0.5`) work the same way.
+
 ## The `rewrite` function
 
 The macro uses the [`rewrite`](@ref) function under the hood, and it can also be called directly to splice in a runtime value, just as `$` does in the macro:
@@ -101,20 +135,11 @@ m2 = rewrite(base(), @vn(x) => Normal(0, 2))
 m2[@vn(x)]
 ```
 
-## Rewriting inside a submodel
-
-Rewriting targets the model's own sites, so a prefixed name such as `@vn(x.a)` does not name a site of the outer model.
-To rewrite a site inside a submodel, compose the two ingredients above, rewriting the inner model value and putting it back:
+Prefixed names target sites inside submodels, so the same property paths work across conditioning, `@rewrite` blocks, the function form, and the reader:
 
 ```@example rewriting
-nested = rewrite(m, @vn(x) => rewrite(m[@vn(x)], @vn(a) => Exponential(1.0)))
+rewrite(m, @vn(x.b) => Exponential(1.0))[@vn(x.b)]
 ```
-
-```@example rewriting
-rand(nested)
-```
-
-Prefixed targets are a natural extension of this composition.
 
 ## Plated and looped sites
 
@@ -206,11 +231,6 @@ ind = rewrite(indexed(inner()), @vn(x[1]) => Normal())
 rand(ind)
 ```
 
-## Conditioning into a submodel
-
-Rewriting also underlies conditioning values into a submodel from the outer model, where the conditioned submodel is rewritten in for the original.
-See the [submodels page](@ref submodels) for that interface.
-
 ## Benchmarking
 
 Rewriting happens at construction time, so a rewritten model evaluates at the same speed as its hand-written equivalent.
@@ -229,4 +249,39 @@ end
 
 ```@example rewriting
 @bmodel m AutoEnzyme(; mode=Reverse)
+```
+
+The same holds for a family collapsed into a single vectorised statement:
+
+```@example rewriting
+@wren function hand_vec()
+    mu ~ Normal()
+    y ~ product_distribution(fill(Exponential(2.0), 3))
+end
+
+@bmodel hand_vec() AutoEnzyme(; mode=Reverse)
+```
+
+```@example rewriting
+@bmodel pm AutoEnzyme(; mode=Reverse)
+```
+
+And for a rewrite reaching inside a submodel:
+
+```@example rewriting
+@wren function inner_exp()
+    a ~ Normal()
+    b ~ Exponential(1.0)
+end
+
+@wren function hand_nested()
+    x ~ inner_exp()
+    y ~ Normal()
+end
+
+@bmodel hand_nested() AutoEnzyme(; mode=Reverse)
+```
+
+```@example rewriting
+@bmodel deeper AutoEnzyme(; mode=Reverse)
 ```

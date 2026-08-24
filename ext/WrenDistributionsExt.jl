@@ -4,9 +4,26 @@ using Wren: Wren
 using Random: Random
 using Plaice: Plaice
 using FillArrays: Fill
-using Distributions: Distribution, product_distribution, Normal
+using Distributions: Distributions, Distribution, product_distribution, Normal
 
 Wren._product(dists::AbstractArray{<:Distribution}) = product_distribution(dists)
+
+# Display a distribution held in a hidden model argument as its
+# constructor call, so that a rewritten model reads exactly as its
+# hand-written counterpart. Only used when the call honestly
+# reconstructs the value; wrapped or transformed distributions (e.g.
+# truncated or product distributions) fall back to showing the value.
+function Wren._display_value_expr(d::Distribution)
+    reconstructed, ps = try
+        ps = Distributions.params(d)
+        all(p -> p isa Real, ps) || return nothing
+        (typeof(d).name.wrapper(ps...), ps)
+    catch
+        return nothing
+    end
+    reconstructed == d || return nothing
+    return Expr(:call, nameof(typeof(d)), ps...)
+end
 
 Wren.batched(iters, dist::Distribution) = product_distribution(Fill(dist, length(iters)))
 
