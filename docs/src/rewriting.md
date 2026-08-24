@@ -34,7 +34,21 @@ rand(m)
 
 Each statement must name an existing site of the model.
 The replacement expressions become part of the model body, so they are re-evaluated on every model evaluation, and model arguments and module globals resolve as usual, but local variables at the `@rewrite` call site do not.
-To splice in a runtime value, call [`rewrite`](@ref) directly, described below.
+An interpolation `$value` reaches them, evaluating in the caller's scope at rewrite time and splicing the resulting value into any expression position:
+
+```@example rewriting
+fitted = Gamma(2.0, 3.0)
+mu0 = 4.0
+
+g = @rewrite base() begin
+    x ~ $fitted
+    y ~ Normal($mu0, 2.0)
+end
+```
+
+```@example rewriting
+rand(g)
+```
 
 ## Fixing a site to a value
 
@@ -75,7 +89,7 @@ rand(unfixed)
 
 ## The `rewrite` function
 
-The macro uses the [`rewrite`](@ref) function under the hood, and it can also be called directly to splice in a runtime value rather than an expression:
+The macro uses the [`rewrite`](@ref) function under the hood, and it can also be called directly to splice in a runtime value, just as `$` does in the macro:
 
 ```@example rewriting
 m2 = rewrite(base(), @vn(x) => Normal(0, 2))
@@ -164,10 +178,10 @@ Rewrite the whole family instead ([issue #19](https://github.com/JuliaBayes/Wren
 
 ## Converting between plates and loops
 
-[`Wren.remove_plate`](@ref) and [`Wren.add_plate`](@ref) convert a model between its `@plate` and plain `for` loop spellings, and [`Wren.set_arg`](@ref) replaces a model argument while reusing the generated code:
+[`remove_plate`](@ref) and [`add_plate`](@ref) convert a model between its `@plate` and plain `for` loop spellings, and [`Wren.set_arg`](@ref) replaces a model argument while reusing the generated code:
 
 ```@example rewriting
-lm = Wren.remove_plate(plated(3))
+lm = remove_plate(plated(3))
 ```
 
 ```@example rewriting
@@ -203,22 +217,13 @@ Rewriting happens at construction time, so a rewritten model evaluates at the sa
 The model `m` from above rewrote `base` with `x ~ inner()`, which we can compare against the same model written directly:
 
 ```@example rewriting
+using Enzyme
+
 @wren function hand()
     x ~ inner()
     y ~ Normal()
 end
 
-@bmodel hand()
-```
-
-```@example rewriting
-@bmodel m
-```
-
-The same holds for gradients:
-
-```@example rewriting
-using Enzyme
 @bmodel hand() AutoEnzyme(; mode=Reverse)
 ```
 

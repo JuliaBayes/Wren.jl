@@ -40,21 +40,60 @@ deterministic value, `@observe site ~ rhs` turns the statement into an
 observation, and an allocation-and-construct pair (`site = zeros(N)`
 followed by a `@plate` block or `for` loop) replaces the site with an
 elementwise family. The spliced expressions become part of the model body,
-so local variables at the `@rewrite` call site do not resolve; to
-splice in a runtime value, use the function form [`rewrite`](@ref).
+so local variables at the `@rewrite` call site do not resolve; an
+interpolation `\$value` evaluates in the caller's scope at rewrite time
+and splices the resulting value into any expression position.
 
 ```julia
 julia> f2 = @rewrite f() begin
            x ~ LogNormal()
+       end;
+
+julia> d = Gamma(2.0, 3.0);
+
+julia> f3 = @rewrite f() begin
+           x ~ \$d
        end;
 ```
 
 See the manual page on rewriting models for the full semantics.
 """
 macro rewrite(model_expr, patch_expr)
+    patch_expr, interp = _extract_interpolations(patch_expr)
     patch = to_wren_exprs(patch_expr, __module__)
-    _validate_patch(patch)
-    return :($(_rewrite_patch)($(esc(model_expr)), $(patch)))
+    _validate_patch(patch, first.(interp))
+    values_expr =
+        Expr(:tuple, Expr(:parameters, (Expr(:kw, k, esc(e)) for (k, e) in interp)...))
+    return :($(_rewrite_patch)($(esc(model_expr)), $(patch), $values_expr))
+end
+
+"""
+    _extract_interpolations(expr)
+
+Replace every `\$value` in a `@rewrite` block with a hidden-argument
+marker symbol, returning the rewritten expression and the
+`marker => value_expression` pairs. The value expressions are later
+evaluated in the caller's scope and passed to the model as hidden
+arguments, so the same call site never regenerates the evaluation
+function.
+"""
+function _extract_interpolations(expr)
+    interp = Pair{Symbol,Any}[]
+    counter = Ref(0)
+    return _extract_interpolations!(interp, counter, expr), interp
+end
+_extract_interpolations!(interp, counter, x) = x
+function _extract_interpolations!(interp, counter, expr::Expr)
+    if expr.head === :$
+        counter[] += 1
+        marker = Symbol("#rewrite#\$", counter[])
+        push!(interp, marker => only(expr.args))
+        return marker
+    end
+    return Expr(
+        expr.head,
+        (_extract_interpolations!(interp, counter, a) for a in expr.args)...,
+    )
 end
 
 """
@@ -581,9 +620,20 @@ _is_assignment_patch(stmt) = stmt isa WrenExpr && stmt.head === :(=)
 Check that every statement in a `@rewrite` patch is of a supported
 form. Called at macro expansion time.
 """
-function _validate_patch(patch)
+function _validate_patch(patch, markers::Vector{Symbol}=Symbol[])
     stmts = [stmt for stmt in patch if !(stmt isa LineNumberNode)]
     for (i, stmt) in enumerate(stmts)
+        if stmt isa OtherStatement && stmt.expr isa Symbol && stmt.expr in markers
+            error("@rewrite: `\$` cannot interpolate a whole statement")
+        end
+        if stmt isa Union{Sample,Observe} &&
+           any(marker -> _mentions_symbol(stmt.lhs, marker), markers)
+            error("@rewrite: `\$` cannot interpolate a site name")
+        end
+        if _is_assignment_patch(stmt) &&
+           any(marker -> _mentions_symbol(stmt.args[1], marker), markers)
+            error("@rewrite: `\$` cannot interpolate a site name")
+        end
         if _is_construct_patch(stmt)
             fams = _construct_families(stmt)
             length(fams) == 1 || error(
@@ -666,15 +716,20 @@ _patch_family_rhs(stmt::Sample) = (stmt.rhs, :sample)
 _patch_family_rhs(stmt::Observe) = (nothing, :sample)
 _patch_family_rhs(stmt::WrenExpr) = (stmt.args[2], :fixed)
 
-function _rewrite_patch(model::Model, patch::Vector{Union{AbstractWrenExpr,LineNumberNode}})
+function _rewrite_patch(
+    model::Model,
+    patch::Vector{Union{AbstractWrenExpr,LineNumberNode}},
+    interp::NamedTuple=NamedTuple(),
+)
     # A previous function-form rewrite of a patched site may have
     # left a hidden argument behind; the patch replaces the statement
-    # that referred to it, so drop it.
+    # that referred to it, so drop it. Interpolated `$` values become
+    # hidden arguments referenced by the patch's marker symbols.
     stale = filter(
         argname -> haskey(model.args, argname),
         [_rewrite_arg_name(_patch_target(p)) for p in patch if !(p isa LineNumberNode)],
     )
-    args = Base.structdiff(model.args, NamedTuple{(stale...,)})
+    args = merge(Base.structdiff(model.args, NamedTuple{(stale...,)}), interp)
     key = (typeof(model.evaluation_fn), objectid(patch))
     return _rewritten_model(model, args, key) do
         stmts = model.stmts
@@ -821,15 +876,26 @@ end
 """
     _find_sample_rhs(stmts, sym::Symbol)
 
-Find the unique `Sample` statement for `sym` and return its right-hand
-side (as Wren IR). Errors if there is no match or more than one match.
+Find the unique `Sample` statement or plain assignment for `sym` and
+return its right-hand side (as Wren IR). Errors if there is no match or
+more than one match.
 """
 function _find_sample_rhs(stmts, sym::Symbol)
+    # An assignment is the site's statement only when `sym` is not a
+    # tilde site elsewhere (e.g. an array allocation for a family is
+    # not the family's statement).
+    allow_assignment = !_has_tilde_family(stmts, sym)
     found, n = _fold_stmts((nothing, 0), stmts; plate_bodies=false) do acc, stmt
-        stmt isa Sample && stmt.name === sym ? (stmt.rhs, acc[2] + 1) : acc
+        if stmt isa Sample && stmt.name === sym
+            (stmt.rhs, acc[2] + 1)
+        elseif allow_assignment && _is_site_assignment(stmt, sym)
+            (stmt.args[2], acc[2] + 1)
+        else
+            acc
+        end
     end
-    n == 0 && error("no tilde-statement found for `$sym`")
-    n > 1 && error("more than one tilde-statement found for `$sym`")
+    n == 0 && error("no statement found for `$sym`")
+    n > 1 && error("more than one statement found for `$sym`")
     return found
 end
 
@@ -1027,7 +1093,17 @@ that cannot be deepcopied.
 struct _InlineValue{T}
     value::T
 end
-Base.show(io::IO, v::_InlineValue) = show(io, v.value)
+function Base.show(io::IO, v::_InlineValue)
+    # Render the value the way it reads at a REPL with its module
+    # loaded, without module qualification of the type name. The
+    # IOContext handles types printed through `io`; the prefix strip
+    # handles packages that build their display context-free (e.g.
+    # Distributions via `string(typeof(d))`).
+    mod = parentmodule(typeof(v.value))
+    ctx = IOContext(io, :module => mod, :compact => true, :limit => true)
+    s = sprint(show, v.value; context=ctx)
+    return print(io, chopprefix(s, join(fullname(mod), '.') * "."))
+end
 Base.deepcopy_internal(v::_InlineValue, ::IdDict) = v
 
 """
@@ -1045,7 +1121,9 @@ function _display_stmts(model::Model)
 end
 
 # Rebuild a statement whose right-hand side references a hidden
-# `#rewrite#` argument so that it shows the stored value inline.
+# `#rewrite#` argument so that it shows the stored value inline. The
+# rhs is walked so that markers embedded inside larger expressions
+# (from `$` interpolation) render inline too.
 function _display_match(stmt, args::NamedTuple)
     if stmt isa Sample
         rhs = _display_rhs(stmt.rhs, args)
@@ -1067,4 +1145,8 @@ function _display_rhs(rhs::Symbol, args::NamedTuple)
     else
         rhs
     end
+end
+function _display_rhs(rhs::WrenExpr, args::NamedTuple)
+    new_args = map(a -> _display_rhs(a, args), rhs.args)
+    return all(splat(===), zip(new_args, rhs.args)) ? rhs : WrenExpr(rhs.head, new_args)
 end

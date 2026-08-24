@@ -83,6 +83,8 @@ export @wren,
     conditioned,
     decondition,
     rewrite,
+    remove_plate,
+    add_plate,
     @rewrite,
     rand_with_logp,
     evaluate,
@@ -103,7 +105,7 @@ export @wren,
     target_transform
 
 # Part of the API, but too generically named to export.
-public remove_plate, add_plate, set_arg
+public set_arg
 
 # Reexports
 using VarNames: @vn, @vnt, VarNamedTuple, VarName, Draw, parameters, extras

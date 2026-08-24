@@ -1,7 +1,7 @@
 module WrenRewriteTests
 
 using Wren
-using Wren: remove_plate, add_plate, set_arg
+using Wren: set_arg
 using Test
 using Distributions
 using Enzyme: Enzyme
@@ -908,6 +908,106 @@ end
         end
     end
 
+    @testset "interpolation" begin
+        @testset "caller-local values in all three positions" begin
+            # values live in a function's local scope, which the spliced
+            # expressions themselves cannot reach
+            function interpolate_all(m, d, mu, v)
+                tilded = @rewrite m begin
+                    x ~ $d
+                    y ~ Normal($mu, 2.0)
+                end
+                fixed = @rewrite m begin
+                    y = $v
+                end
+                return tilded, fixed
+            end
+            tilded, fixed = interpolate_all(rw_base(), LogNormal(), 4.0, 1.25)
+            @test tilded[@vn(x)] == LogNormal()
+            @test logjoint(tilded, VarNamedTuple(; x=0.5, y=4.5)) ≈
+                  logdensityof(LogNormal(), 0.5) + logdensityof(Normal(4.0, 2.0), 4.5)
+            @test Set(keys(rand(fixed))) == Set([@vn(x)])
+            @test fixed[@vn(y)] == 1.25
+        end
+
+        @testset "computed expressions and submodels" begin
+            m = @rewrite rw_base() begin
+                x ~ $(rw_inner())
+            end
+            @test Set(keys(rand(m))) == Set([@vn(x.a), @vn(x.b), @vn(y)])
+            m2 = @rewrite rw_base() begin
+                x ~ $(Normal(0.0, sqrt(2.0)))
+            end
+            @test m2[@vn(x)] == Normal(0.0, sqrt(2.0))
+        end
+
+        @testset "equivalent to the function form" begin
+            let d = Gamma(2.0, 3.0)
+                mm = @rewrite rw_base() begin
+                    x ~ $d
+                end
+                assert_equivalent(
+                    mm,
+                    rewrite(rw_base(), @vn(x) => d),
+                    VarNamedTuple(; x=0.5, y=-0.2),
+                )
+            end
+        end
+
+        @testset "same call site never regenerates the evaluation function" begin
+            resub(m, v) = @rewrite m begin
+                x ~ $v
+            end
+            m1 = resub(rw_base(), Normal(0, 2))
+            m2 = resub(rw_base(), Exponential(1.0))
+            @test m1.evaluation_fn === m2.evaluation_fn
+            @test rand(m2)[@vn(x)] > 0
+        end
+
+        @testset "hoisted once across plate and loop iterations" begin
+            let mu0 = 4.0
+                pm = @rewrite plated(3) begin
+                    y ~ Normal($mu0, 1.0 * i)
+                end
+                lm = @rewrite looped(3) begin
+                    y ~ Normal($mu0, 1.0 * i)
+                end
+                yv = [3.5, 4.5, 5.0]
+                for m in (pm, lm)
+                    accs = _components(m, @vnt begin
+                        x := 0.3
+                        y := yv
+                    end)
+                    @test logprior(accs) ≈
+                          logdensityof(Normal(), 0.3) +
+                          sum(logdensityof(Normal(4.0, 1.0 * i), yv[i]) for i in 1:3)
+                end
+            end
+        end
+
+        @testset "as-written display of interpolated values" begin
+            let d = LogNormal(), mu0 = 4.0
+                m = @rewrite rw_base() begin
+                    x ~ $d
+                    y ~ Normal($mu0, 2.0)
+                end
+                str = sprint(show, MIME("text/plain"), m)
+                @test occursin("x ~ LogNormal{Float64}(μ=0.0, σ=1.0)", str)
+                @test occursin("y ~ Normal(4.0, 2.0)", str)
+                @test !occursin("Distributions.", str)
+                @test !occursin("#rewrite#", str)
+            end
+        end
+
+        @testset "errors" begin
+            # Meta.parse keeps the `$` unevaluated, unlike a quote here.
+            lhs_interp = Meta.parse("@rewrite m begin\n \$s ~ Normal()\nend")
+            @test_throws LoadError macroexpand(@__MODULE__, lhs_interp)
+            stmt_interp = Meta.parse("@rewrite m begin\n \$stmt\nend")
+            @test_throws LoadError macroexpand(@__MODULE__, stmt_interp)
+        end
+    end
+
     @testset "conditioning push-down" begin
         @testset "prefixed paths reach into submodels" begin
             for m in (hand_submodel(), rewrite(rw_base(), @vn(x) => rw_inner()))
@@ -1007,6 +1107,13 @@ end
                         x.b := 1.5
                     end),
                 "two-level nesting" => two_level,
+                "interpolated value" => (
+                    let mu0 = 0.5
+                        @rewrite rw_base() begin
+                            y ~ Normal($mu0, 2.0)
+                        end
+                    end
+                ),
                 "collapsed plated family" =>
                     rewrite(plated(3), @vn(y) => Exponential(2.0)),
                 "collapsed looped family" =>
