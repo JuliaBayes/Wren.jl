@@ -960,8 +960,6 @@ end
 ## Where next
 
 In practice model development loops.
-Prior predictive checks suggest prior changes, fit diagnostics suggest model changes, and components are swapped without rewriting the rest.
-The submodels here are small on purpose, so each extension below is a new component slotted into the same composition.
 You could explore extending the model with:
 
   - Delay uncertainty: the reporting delay is fixed at its posterior means; an informed prior from the delay posterior, or joint fitting by passing the linelist-conditioned `delay_model` into the composition in place of the fixed ``p_d``, would propagate it.
