@@ -30,6 +30,17 @@ rand(m)
 
 Each statement must name an existing site of the model.
 The replacement expressions become part of the model body, so they are re-evaluated on every model evaluation, and model arguments and module globals resolve as usual, but local variables at the `@rewrite` call site do not.
+The model below builds, and only fails when evaluated:
+
+```@repl rewriting
+broken = let local_scale = 2.0
+    @rewrite base() begin
+        x ~ Normal(0.0, local_scale)
+    end
+end
+rand(broken)
+```
+
 Runtime values from the caller's scope enter through `$` interpolation, described below.
 
 ## Fixing a site to a value
