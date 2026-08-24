@@ -229,8 +229,7 @@ rand(ind)
 
 ## Benchmarking
 
-Rewriting happens at construction time, so a rewritten model evaluates at the same speed as its hand-written equivalent.
-The model `m` from above rewrote `base` with `x ~ inner()`, which we can compare against the same model written directly:
+Rewritten models benchmark against their hand-written equivalents:
 
 ```@example rewriting
 using Enzyme
