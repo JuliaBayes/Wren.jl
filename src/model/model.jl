@@ -125,16 +125,29 @@ function _show_namedtuple_tree(io::IO, nt::NamedTuple, prefix::String)
     end
 end
 
+# Compact display, used e.g. when a model is stored inside another
+# model's arguments.
+function Base.show(io::IO, model::Model)
+    print(io, "Model(", model.name)
+    if !isempty(model.conditioned)
+        print(io, " | ")
+        join(io, keys(model.conditioned), ", ")
+    end
+    return print(io, ")")
+end
+
 function Base.show(io::IO, ::MIME"text/plain", model::Model)
     prefix = get(io, :tree_prefix, "")
     printstyled(io, "Model ", model.name; bold=true)
     println(io)
 
     max_exprs = get(io, :max_wren_exprs, 20)
+    # Hidden `#rewrite#` arguments are folded into the displayed
+    # statements, so that a modified model shows as-written.
     entries = (
-        "arguments" => model.args,
+        "arguments" => _visible_args(model),
         "conditioned" => model.conditioned,
-        "expressions" => model.stmts,
+        "expressions" => _display_stmts(model),
     )
     for (i, (label, value)) in enumerate(entries)
         last = i == length(entries)

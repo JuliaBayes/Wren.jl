@@ -41,6 +41,7 @@ using .Expressions:
 include("model/model.jl")
 include("model/submodel.jl")
 include("model/emit.jl")
+include("model/rewrite.jl")
 include("interface.jl")
 include("vecmodel.jl")
 include("draw.jl")
@@ -80,6 +81,9 @@ export @wren,
     apply_parameter_space,
     condition,
     conditioned,
+    decondition,
+    rewrite,
+    @rewrite,
     rand_with_logp,
     evaluate,
     get_latent,
@@ -97,6 +101,9 @@ export @wren,
     benchmark_and_test,
     test_ad,
     target_transform
+
+# Part of the API, but too generically named to export.
+public remove_plate, add_plate, set_arg
 
 # Reexports
 using VarNames: @vn, @vnt, VarNamedTuple, VarName, Draw, parameters, extras

@@ -7,6 +7,7 @@ using Test
     include("syntax.jl")
     include("aliasing.jl")
     include("submodel.jl")
+    include("rewrite.jl")
     include("vecmodel.jl")
     include("draw.jl")
     include("ad.jl")
