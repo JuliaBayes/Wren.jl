@@ -149,7 +149,7 @@ Conditioning on the observed delays turns the same instance into the fitted mode
 
 ```@example renewal
 delay_fitted = delay_instance | VarNamedTuple(; delays=delay_obs)
-delay_chn = nuts(Xoshiro(1), delay_fitted, 500, 4; progress=false)
+delay_chn = nuts(Xoshiro(1), delay_fitted, 500, 2; progress=false)
 delay_stats = summarystats(delay_chn)
 ```
 
@@ -390,7 +390,7 @@ truth = rand(Xoshiro(132), model)
 cases_data = truth[@vn(cases)]
 
 fitted = model | VarNamedTuple(; cases=cases_data)
-chn = nuts(Xoshiro(1), fitted, 1000, 4; progress=false)
+chn = nuts(Xoshiro(1), fitted, 1000, 2; progress=false)
 chn
 ```
 
@@ -476,7 +476,7 @@ T_obs = 42
 fit42 =
     single_model(random_walk(T_obs, rt_priors...), T_obs) |
     VarNamedTuple(; cases=cases_data[1:T_obs])
-chn42 = nuts(Xoshiro(1), fit42, 500, 4; progress=false)
+chn42 = nuts(Xoshiro(1), fit42, 500, 2; progress=false)
 
 forecast_model = single_model(random_walk_forecast(T, rt_priors...), T)
 
@@ -867,7 +867,7 @@ patch_chn = nuts(
     Xoshiro(1),
     patch_fitted,
     500,
-    4;
+    2;
     progress=false,
     warmup_stages=DHMC.default_warmup_stages(;
         stepsize_adaptation=DHMC.DualAveraging(δ=0.9),
