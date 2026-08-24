@@ -272,15 +272,21 @@ function R_to_r(R, gen_pmf; newton_steps=2)
     return r
 end
 
+"Sum of `pmf`-weighted lags of `x` at `t`, reaching into the seeded history."
+function lagged_sum(x, t, pmf, x0, r, first_lag)
+    acc = zero(eltype(x))
+    @inbounds for (i, w) in enumerate(pmf)
+        s = first_lag + i - 1
+        past = t - s >= 1 ? x[t-s] : x0 * exp(r * (t - s))
+        acc += w * past
+    end
+    return acc
+end
+
 function renew(I0, R::AbstractVector, gen_pmf, r)
     I_t = similar(R)
     @inbounds for t in eachindex(R)
-        pressure = zero(eltype(R))
-        for (s, g) in enumerate(gen_pmf)
-            past = t - s >= 1 ? I_t[t-s] : I0 * exp(r * (t - s))
-            pressure += g * past
-        end
-        I_t[t] = min(R[t] * pressure, 1e15)
+        I_t[t] = min(R[t] * lagged_sum(I_t, t, gen_pmf, I0, r, 1), 1e15)
     end
     return I_t
 end
@@ -304,12 +310,7 @@ For ``t - d \le 0`` the convolution reaches into the same seeded history as the 
 function delay_convolve(x::AbstractVector, pmf, x0, r)
     y = similar(x)
     @inbounds for t in eachindex(x)
-        acc = zero(eltype(x))
-        for d in 0:(length(pmf)-1)
-            past = t - d >= 1 ? x[t-d] : x0 * exp(r * (t - d))
-            acc += pmf[d+1] * past
-        end
-        y[t] = acc
+        y[t] = lagged_sum(x, t, pmf, x0, r, 0)
     end
     return y
 end
@@ -726,12 +727,7 @@ function renew(I0::AbstractVector, R::AbstractMatrix, gen_pmf, K::AbstractMatrix
     lambda = similar(I0)
     @inbounds for t in 1:T
         for h in 1:P
-            acc = zero(eltype(R))
-            for s in eachindex(gen_pmf)
-                past = t - s >= 1 ? I_t[t-s, h] : I0[h] * exp(growth[h] * (t - s))
-                acc += gen_pmf[s] * past
-            end
-            lambda[h] = acc
+            lambda[h] = lagged_sum(view(I_t, :, h), t, gen_pmf, I0[h], growth[h], 1)
         end
         for g in 1:P
             pressure = zero(eltype(R))
@@ -747,12 +743,7 @@ end
 function delay_convolve(x::AbstractMatrix, pmf, x0, growth)
     y = similar(x)
     @inbounds for g in axes(x, 2), t in axes(x, 1)
-        acc = zero(eltype(x))
-        for d in 0:(length(pmf)-1)
-            past = t - d >= 1 ? x[t-d, g] : x0[g] * exp(growth[g] * (t - d))
-            acc += pmf[d+1] * past
-        end
-        y[t, g] = acc
+        y[t, g] = lagged_sum(view(x, :, g), t, pmf, x0[g], growth[g], 0)
     end
     return y
 end
@@ -804,23 +795,27 @@ The composed model gets the same check as the single-patch one.
 The seeded patch starts around 50 reported cases a day, the rest start near zero, and growth elsewhere can only arrive through the mixing matrix:
 
 ```@example renewal
-patch_prior_chn = prior(Xoshiro(1), patch_model, 500; progress=false)
-
-let
+function patch_grid(plot!; kwargs...)
     fig = Figure(; size=(700, 600))
     for g in 1:n_patches
         ax = Axis(
             fig[fld1(g, 2), mod1(g, 2)];
             title="patch $g",
             titlesize=10,
-            yscale=log10,
             yticks=LinearTicks(3),
+            kwargs...,
         )
-        for draw in vec(patch_prior_chn[@vn(cases)])[1:50]
-            lines!(ax, max.(draw[:, g], 0.5); color=(:grey, 0.15))
-        end
+        plot!(ax, g)
     end
-    fig
+    return fig
+end
+
+patch_prior_chn = prior(Xoshiro(1), patch_model, 500; progress=false)
+
+patch_grid(; yscale=log10) do ax, g
+    for draw in vec(patch_prior_chn[@vn(cases)])[1:50]
+        lines!(ax, max.(draw[:, g], 0.5); color=(:grey, 0.15))
+    end
 end
 ```
 
@@ -833,16 +828,28 @@ The outbreak grows in the seeded patch first and arrives in the well connected p
 patch_truth = rand(Xoshiro(88), patch_model)
 patch_cases = patch_truth[@vn(cases)]
 
+patch_grid() do ax, g
+    lines!(ax, patch_cases[:, g]; color=:steelblue)
+end
+```
+
+The same epidemic over the patch map, with marker area scaled by cases in the trailing week, shows the spread over space:
+
+```@example renewal
 let
-    fig = Figure(; size=(700, 600))
-    for g in 1:n_patches
-        ax = Axis(
-            fig[fld1(g, 2), mod1(g, 2)];
-            title="patch $g",
-            titlesize=10,
-            yticks=LinearTicks(3),
+    days = (14, 28, 42, 56)
+    week_cases = [sum(patch_cases[(d-6):d, g]) for g in 1:n_patches, d in days]
+    cmax = maximum(week_cases)
+    fig = Figure(; size=(700, 200))
+    for (i, d) in enumerate(days)
+        ax = Axis(fig[1, i]; title="day $d", titlesize=10)
+        hidedecorations!(ax)
+        scatter!(
+            ax,
+            coords;
+            markersize=4 .+ 24 .* sqrt.(week_cases[:, i] ./ cmax),
+            color=:steelblue,
         )
-        lines!(ax, patch_cases[:, g]; color=:steelblue)
     end
     fig
 end
@@ -902,30 +909,38 @@ Flows concentrate between large, nearby patches, and the deviations, averaged ov
 
 ```@example renewal
 patch_rets = posterior_returns(patch_fitted, patch_chn)
+patch_true_rets = return_values(patch_model, patch_truth)
 
 let
     delta_hat = vec(mean(stack(r.delta for r in patch_rets); dims=(2, 3)))
     K_hat = dropdims(mean(stack(r.K_mix for r in patch_rets); dims=3); dims=3)
-    lim = maximum(abs, delta_hat)
-    w_max = maximum(K_hat[g, h] for g in 1:n_patches, h in 1:n_patches if g != h)
-    fig = Figure(; size=(700, 320))
-    ax1 = Axis(fig[1, 1]; xlabel="x (km)", ylabel="y (km)", title="Posterior mean mixing")
-    for g in 1:n_patches, h in 1:n_patches
-        w = K_hat[g, h] / w_max
-        (g == h || w < 0.05) && continue
-        lines!(ax1, [coords[g], coords[h]]; color=(:grey, 0.8w), linewidth=5w)
+    delta_true = vec(mean(patch_true_rets.delta; dims=2))
+    K_true = patch_true_rets.K_mix
+    lim = max(maximum(abs, delta_hat), maximum(abs, delta_true))
+    offdiag_max(K) = maximum(K[g, h] for g in 1:n_patches, h in 1:n_patches if g != h)
+    w_max = max(offdiag_max(K_hat), offdiag_max(K_true))
+    function maps_row!(fig, row, K, delta, label)
+        ax1 = Axis(fig[row, 1]; xlabel="x (km)", ylabel="y (km)", title="$label mixing")
+        for g in 1:n_patches, h in 1:n_patches
+            w = K[g, h] / w_max
+            (g == h || w < 0.05) && continue
+            lines!(ax1, [coords[g], coords[h]]; color=(:grey, 0.8w), linewidth=5w)
+        end
+        scatter!(ax1, coords; markersize=marker_size, color=:steelblue)
+        ax2 = Axis(fig[row, 2]; xlabel="x (km)", title="$label deviation")
+        return scatter!(
+            ax2,
+            coords;
+            markersize=marker_size,
+            color=delta,
+            colormap=CairoMakie.Reverse(:RdBu),
+            colorrange=(-lim, lim),
+        )
     end
-    scatter!(ax1, coords; markersize=marker_size, color=:steelblue)
-    ax2 = Axis(fig[1, 2]; xlabel="x (km)", title="Posterior mean deviation")
-    sc = scatter!(
-        ax2,
-        coords;
-        markersize=marker_size,
-        color=delta_hat,
-        colormap=CairoMakie.Reverse(:RdBu),
-        colorrange=(-lim, lim),
-    )
-    Colorbar(fig[1, 3], sc; label="δ")
+    fig = Figure(; size=(700, 640))
+    maps_row!(fig, 1, K_true, delta_true, "True")
+    sc = maps_row!(fig, 2, K_hat, delta_hat, "Posterior mean")
+    Colorbar(fig[1:2, 3], sc; label="δ")
     fig
 end
 ```
@@ -934,21 +949,11 @@ Patch reproduction numbers are recovered with the same helpers as in the single-
 
 ```@example renewal
 R_patch = stack(r.R for r in patch_rets)
-R_patch_true = return_values(patch_model, patch_truth).R
+patch_true_rets = return_values(patch_model, patch_truth)
 
-let
-    fig = Figure(; size=(700, 600))
-    for g in 1:n_patches
-        ax = Axis(
-            fig[fld1(g, 2), mod1(g, 2)];
-            title="patch $g",
-            titlesize=10,
-            yticks=LinearTicks(3),
-        )
-        ci_bands!(ax, view(R_patch, :, g, :))
-        lines!(ax, R_patch_true[:, g]; color=:firebrick)
-    end
-    fig
+patch_grid() do ax, g
+    ci_bands!(ax, view(R_patch, :, g, :))
+    lines!(ax, patch_true_rets.R[:, g]; color=:firebrick)
 end
 ```
 
@@ -956,11 +961,12 @@ end
 
 In practice model development loops.
 Prior predictive checks suggest prior changes, fit diagnostics suggest model changes, and components are swapped without rewriting the rest.
-The submodels here are small on purpose, so each extension below is a new component slotted into the same composition:
+The submodels here are small on purpose, so each extension below is a new component slotted into the same composition.
+You could explore extending the model with:
 
   - Delay uncertainty: the reporting delay is fixed at its posterior means; an informed prior from the delay posterior, or joint fitting by passing the linelist-conditioned `delay_model` into the composition in place of the fixed ``p_d``, would propagate it.
   - Right truncation and nowcasting, so recent partially reported days can be fitted rather than discarded, as in [epinowcast](https://package.epinowcast.org/).
   - A Gaussian process reproduction number model in place of the random walk, as in [EpiNow2](https://epiforecasts.io/EpiNow2/).
   - Additional data streams observed from the same infection process, for example wastewater concentrations as in [EpiSewer](https://github.com/adrian-lison/EpiSewer).
 
-See [A Workflow for Infectious Disease Modelling](https://samabbott.co.uk/a-workflow-for-infectious-disease-modelling/paper.pdf) for the development loop in full.
+See [A Workflow for Infectious Disease Modelling](https://samabbott.co.uk/a-workflow-for-infectious-disease-modelling/paper.pdf) for a suggested workflow.
