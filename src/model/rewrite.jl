@@ -324,6 +324,22 @@ is a `:sample` right-hand side that references the construct's loop
 index, which can only mean the elementwise statement, and therefore
 replaces the right-hand side inside the construct instead.
 """
+# Whether any tilde statement (sampling or observation) has `name` as
+# its whole, plain left-hand side. Indexed statements such as `y[i]`
+# are a family, not a plain site, and do not count.
+function _has_plain_tilde(stmts, name::Symbol)
+    return _fold_stmts(false, stmts) do found, stmt
+        found || (stmt isa Union{Sample,Observe} && stmt.name === name)
+    end
+end
+
+# Whether any plain assignment `name = ...` appears in the statements.
+function _has_plain_assignment(stmts, name::Symbol)
+    return _fold_stmts(false, stmts) do found, stmt
+        found || _is_site_assignment(stmt, name)
+    end
+end
+
 function _rewrite_stmts(
     stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}},
     name::Symbol,
@@ -333,6 +349,17 @@ function _rewrite_stmts(
     family_rhs=nothing,
     family_kind::Symbol=:sample,
 )
+    # A name carried by both an assignment and a plain-lhs tilde
+    # statement (e.g. a derived value that is then observed) is
+    # ambiguous as a target.
+    if name === family &&
+       _has_plain_tilde(stmts, name) &&
+       _has_plain_assignment(stmts, name)
+        error(
+            "rewrite: `$name` names both an assignment and a tilde " *
+            "statement, so it does not identify a single site",
+        )
+    end
     result =
         _rewrite_pass(stmts, name, replacement, match_observe ? :tilde_observe : :tilde)
     result === nothing || return result

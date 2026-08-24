@@ -1062,6 +1062,48 @@ end
         end
     end
 
+    @testset "sites sharing a name" begin
+        # A name carried by both an assignment and a plain-lhs tilde
+        # statement does not identify a single site, in either form.
+        @wren function assigned_observed(v)
+            x = v
+            @observe x ~ Normal(0.0, 3.0)
+        end
+        @wren function soft_prior()
+            y ~ Normal()
+            x = 2 * y
+            @observe x ~ Normal(0.0, 3.0)
+        end
+        for m in (assigned_observed(2.0), soft_prior())
+            for bad in (
+                () -> rewrite(m, @vn(x) => Cauchy()),
+                () -> rewrite(m, @vn(x) => 9.9),
+                () -> @rewrite(m, begin
+                    x ~ Cauchy()
+                end),
+                () -> @rewrite(m, begin
+                    x = 9.9
+                end),
+            )
+                err = try
+                    bad()
+                    nothing
+                catch e
+                    e
+                end
+                @test err isa Exception
+                @test occursin("does not identify a single site", sprint(showerror, err))
+            end
+        end
+
+        # A family's allocation plus its indexed tilde statements is not
+        # a name clash: family targets keep working.
+        lm = rewrite(looped(3), @vn(y) => Exponential(2.0))
+        @test rand(lm)[@vn(y)] > 0
+        pm = rewrite(plated(3), @vn(y) => product_distribution(fill(Exponential(2.0), 3)))
+        @test Set(keys(rand(pm))) == Set([@vn(x), @vn(y)])
+    end
+
     @testset "nested targets" begin
         nested_params = @vnt begin
             x.a := 0.2
