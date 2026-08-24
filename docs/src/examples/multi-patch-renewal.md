@@ -15,7 +15,6 @@ using CairoMakie, PairPlots
 using LinearAlgebra: I, cholesky, Symmetric, normalize, norm
 using Random, Statistics
 using Enzyme
-using FlexiChains: summarystats
 import AbstractMCMC
 ```
 
@@ -94,7 +93,7 @@ Fitting the censored process with each stratum's own truncation corrects this,
 t_j \sim \mathrm{DoubleIntervalCensored}\!\left(\mathrm{LogNormal}(\mu, \sigma); D_j\right),
 ```
 
-where ``t_j`` is the observed delay of stratum ``j``, ``D_j`` runs from its primary event day to the analysis day, and each stratum's likelihood is weighted by its count with `weight`.
+where ``t_j`` is the observed delay of stratum ``j``, ``D_j`` runs from its primary event day to the analysis day, and each stratum's likelihood is weighted by its count with CensoredDistributions' `weight`.
 The bounded priors keep every warmup proposal in a numerically safe region:
 
 ```@example renewal
@@ -203,7 +202,7 @@ I_u = I_0 e^{r u} \ (u \le 0), \qquad
 
 The second relation links growth rates and reproduction numbers through the generation time distribution ([Wallinga and Lipsitch 2007](https://doi.org/10.1098/rspb.2006.3754)); `R_to_r` solves it with a short Newton iteration.
 We use explicit loops rather than generator sums, which keeps the code fast under Enzyme's reverse-mode AD.
-The clamp on ``r`` and the cap on infections keep the log density finite at the extreme parameter values explored during warmup, where the exponential growth would otherwise overflow:
+The clamp on ``r`` and the cap on infections keep the log-density finite at the extreme parameter values explored during warmup, where the exponential growth would otherwise overflow:
 
 ```@example renewal
 function R_to_r(R, gen_pmf; newton_steps=2)
@@ -275,7 +274,7 @@ function NegativeBinomialMeanClust(mu, alpha)
 end
 ```
 
-`check_args=false` serves the same purpose as the clamp and cap above, giving extreme proposals a log density of ``-\infty`` rather than an error.
+`check_args=false` serves the same purpose as the clamp and cap above, giving extreme proposals a log-density of ``-\infty`` rather than an error.
 
 ### The full model
 
@@ -367,8 +366,8 @@ pairplot(
 ```
 
 To check recovery of the latent process we compare reproduction number trajectories.
-A model can be re-run at any parameter set using `evaluate` with `FromParams`, which returns the model's return value at those parameters.
-The same helper therefore gives the trajectory at the truth and at each posterior draw, with `to_samples` converting the chain back to parameter sets:
+A model can be re-run at any trace using `evaluate` with the `FromParams` latent source (see [Working with models](@ref models)), which returns the model's return value at those parameters.
+The same helper therefore gives the trajectory at the truth and at each posterior draw, with `to_samples` converting the chain back to traces:
 
 ```@example renewal
 function return_values(model, params)
@@ -422,7 +421,7 @@ Fitting to a truncated series and simulating forward turns the same model into a
 We refit to the first 42 days, then re-run a 56-day model at each posterior draw.
 `FromParams` supplies every parameter the fit knows, and its `FromPrior` fallback draws what is missing, here the innovations beyond the fitted window and all of the cases.
 The bands below are therefore posterior predictive over the fitted window and forecasts beyond it.
-The vectorised walk samples its innovations as one block that a shorter fit cannot partially fill, so the forecast uses a variant that samples them element by element:
+The walk draws its innovations as a single multivariate site that a shorter fit cannot partially fill, so the forecast uses a variant that samples them element by element:
 
 ```@example renewal
 @wren function random_walk_forecast(n, init_prior, step_prior)
@@ -443,16 +442,16 @@ chn42 = nuts(Xoshiro(1), fit42, 500, 2; progress=false)
 
 forecast_model = single_model(random_walk_forecast(T, rt_priors...), T)
 
-predicted(model, chn, key; thin=5) = stack(
-    parameters(Draw(FromParams(vnt, FromPrior()), model; include_log_probs=false))[key]
+predicted(rng, model, chn, key; thin=5) = stack(
+    parameters(Draw(FromParams(vnt, FromPrior(rng)), model; include_log_probs=false))[key]
     for vnt in vec(AbstractMCMC.to_samples(VarNamedTuple, chn)[1:thin:end, :])
 )
 
-forecast = predicted(forecast_model, chn42, @vn(cases))
+forecast = predicted(Xoshiro(1), forecast_model, chn42, @vn(cases))
 summarystats(chn42[pp_keys])
 ```
 
-`predicted` re-runs a model at each posterior parameter set, drawing anything the fit has not seen from its prior.
+`predicted` re-runs a model at each posterior trace, drawing anything the fit has not seen from its prior.
 
 The last fortnight of the data, held out from the fit, sits inside the forecast intervals:
 
@@ -609,6 +608,17 @@ let
 end
 ```
 
+Submodels nest, so the patch-level reproduction number process is itself a Wren model: the same `random_walk` used in the single-patch model supplies the shared trend and `spatial_deviations` supplies the patch departures.
+The composed process is one unit that can be swapped or conditioned like any other submodel:
+
+```@example renewal
+@wren function patch_log_rt(trend_model, dev_model)
+    Z_t = (trend ~ trend_model)
+    delta = (deviations ~ dev_model)
+    return (; log_R=Z_t .+ expand_weeks(delta, length(Z_t)), delta)
+end
+```
+
 ### Coupled process and observation models
 
 The renewal recursion gains a method for a matrix of reproduction numbers (time by patch) and the mixing matrix, with per-patch growth rates for the seeding, and the convolution maps over patches:
@@ -655,13 +665,12 @@ function delay_convolve(x::AbstractMatrix, pmf, x0, growth)
 end
 ```
 
-The full model composes the three submodels.
-`rt_model` is the same random-walk submodel used in the single-patch model, the delay and observation components are reused directly, and the seeding carries over with a patch-level prior, ``\log I_{0,g} \sim \mathrm{Normal}(\log 20, 0.5)``:
+The full model swaps the single-patch reproduction number process for the nested patch-level one; the delay and observation components are reused directly.
+We seed the outbreak in the most populous patch, ``\log I_{0,g} \sim \mathrm{Normal}(\log 50, 0.5)`` there and ``\mathrm{Normal}(\log 0.05, 0.5)`` elsewhere, so the epidemic has to reach the other patches through the mixing matrix:
 
 ```@example renewal
 @wren function patch_renewal_cases(
     rt_model,
-    dev_model,
     mix_model,
     gen_pmf,
     delay_pmf,
@@ -669,11 +678,10 @@ The full model composes the three submodels.
     cluster_prior,
     cases,
 )
-    Z_t = (log_Rt ~ rt_model)
-    delta = (patch_dev ~ dev_model)
+    rt = (log_Rt ~ rt_model)
     K_mix = (mixing ~ mix_model)
     log_I0 ~ seed_prior
-    R = exp.(Z_t .+ expand_weeks(delta, length(Z_t)))
+    R = exp.(rt.log_R)
     I0 = exp.(log_I0)
     growth = growth_rates(R, gen_pmf)
     I_t = renew(I0, R, gen_pmf, K_mix, growth)
@@ -682,22 +690,25 @@ The full model composes the three submodels.
     for g in axes(cases, 2), t in axes(cases, 1)
         cases[t, g] ~ NegativeBinomialMeanClust(Y_t[t, g], cluster^2)
     end
-    return (; I_t, Y_t, R, delta, K_mix)
+    return (; I_t, Y_t, R, delta=rt.delta, K_mix)
 end
 
 n_weeks = cld(T, 7)
+origin = argmax(pop)
 patch_model = patch_renewal_cases(
-    rt_model,
-    spatial_deviations(
-        L_corr,
-        n_weeks,
-        truncated(Normal(0, 0.2); lower=0),
-        truncated(Normal(0.8, 0.1); lower=0, upper=1),
+    patch_log_rt(
+        rt_model,
+        spatial_deviations(
+            L_corr,
+            n_weeks,
+            truncated(Normal(0, 0.2); lower=0),
+            truncated(Normal(0.8, 0.1); lower=0, upper=1),
+        ),
     ),
     gravity_mixing(pop, dist, truncated(Normal(1.5, 0.5); lower=0)),
     gen_pmf,
     delay_pmf,
-    MvNormal(fill(log(20), n_patches), 0.25 * I),
+    MvNormal([g == origin ? log(50) : log(0.05) for g in 1:n_patches], 0.25 * I),
     truncated(Normal(0, 0.1); lower=0),
     zeros(Int, T, n_patches),
 )
@@ -705,10 +716,11 @@ patch_model = patch_renewal_cases(
 
 ### Simulated data
 
-One prior draw now simulates an epidemic across all ten patches:
+One prior draw now simulates an epidemic across all ten patches.
+The outbreak starts in the seeded patch and arrives in the others in roughly distance order, over a month later in the farthest:
 
 ```@example renewal
-patch_truth = rand(Xoshiro(75), patch_model)
+patch_truth = rand(Xoshiro(14), patch_model)
 patch_cases = patch_truth[@vn(cases)]
 
 let
@@ -738,9 +750,9 @@ The same computational checks apply:
 
 ```@example renewal
 patch_keys = [
-    @vn(log_Rt.sigma),
-    @vn(patch_dev.sigma),
-    @vn(patch_dev.rho),
+    @vn(log_Rt.trend.sigma),
+    @vn(log_Rt.deviations.sigma),
+    @vn(log_Rt.deviations.rho),
     @vn(mixing.gamma),
     @vn(cluster),
 ]
@@ -759,8 +771,8 @@ pairplot(
 ```
 
 The random walk step size, deviation scale, and cluster factor update strongly.
-The distance exponent ``\gamma`` updates less because a single epidemic contains limited information about mixing.
-Identifying this before using such a model on real data is one purpose of these checks.
+So does the distance exponent ``\gamma``: seeding the outbreak in one patch means the arrival times in the others carry information about mixing.
+Had every patch been seeded at once there would be no arrivals to learn from, and ``\gamma`` would be weakly identified; finding out what the data can and cannot inform before using such a model on real data is one purpose of these checks.
 
 The mixing matrix and deviations are return values of the model, so the same helpers recover their posteriors.
 Because distance enters as ``d^{-\gamma}``, most transmission is within patches, so the between-patch flows below are scaled relative to the largest one.
