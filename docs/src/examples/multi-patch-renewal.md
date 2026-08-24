@@ -2,7 +2,7 @@
 
 The time-varying reproduction number ``\mathcal{R}_t`` is the average number of new infections caused by each person infected at time ``t``, and estimating it from surveillance data is a routine part of outbreak response.
 The renewal process model is the standard tool for this ([Fraser 2007](https://doi.org/10.1371/journal.pone.0000758), [Cori et al. 2013](https://doi.org/10.1093/aje/kwt133), [Gostic et al. 2020](https://doi.org/10.1371/journal.pcbi.1008409)), and it underpinned real-time transmission estimates throughout the COVID-19 pandemic ([Abbott et al. 2020](https://doi.org/10.12688/wellcomeopenres.16006.2)).
-This example builds a renewal model for daily case counts with ``\mathcal{R}_t`` as the target estimand, then extends it to ten spatial patches coupled by a gravity mixing matrix.
+This example builds a renewal model for daily case counts with ``\mathcal{R}_t`` as the target estimand, then extends it to six spatial patches coupled by a gravity mixing matrix.
 Each component is a small [submodel](@ref submodels) or plain function, written as maths and then code.
 We simulate data from the prior, fit with NUTS, check parameter recovery, and forecast from a truncated fit, reusing the single-patch components in the multi-patch model.
 For model development and validation practice for models of this kind, see [A Workflow for Infectious Disease Modelling](https://samabbott.co.uk/a-workflow-for-infectious-disease-modelling/paper.pdf).
@@ -520,10 +520,10 @@ let
 end
 ```
 
-## Ten coupled patches
+## Six coupled patches
 
 Surveillance data are often spatially stratified.
-We extend the process model to ten patches whose infections mix, reusing the components above.
+We extend the process model to six patches whose infections mix, reusing the components above.
 
 ### Gravity mixing
 
@@ -567,7 +567,7 @@ end
 end
 
 rng = Xoshiro(42)
-n_patches = 10
+n_patches = 6
 coords = [100 * Point2(rand(rng), rand(rng)) for _ in 1:n_patches]
 pop = rand(rng, LogNormal(log(100_000), 0.75), n_patches)
 dist = [norm(p - q) for p in coords, q in coords]
@@ -796,7 +796,7 @@ The seeded patch starts around 50 reported cases a day, the rest start near zero
 
 ```@example renewal
 function patch_grid(plot!; kwargs...)
-    fig = Figure(; size=(700, 600))
+    fig = Figure(; size=(700, 450))
     for g in 1:n_patches
         ax = Axis(
             fig[fld1(g, 2), mod1(g, 2)];
@@ -821,11 +821,11 @@ end
 
 ### Simulated data
 
-One prior draw now simulates an epidemic across all ten patches.
-The outbreak grows in the seeded patch first and arrives in the well connected patches weeks before the most isolated ones:
+One prior draw now simulates an epidemic across all six patches.
+The outbreak grows in the seeded patch first, reaches the next patches around two weeks in, and takes another week to arrive in the last:
 
 ```@example renewal
-patch_truth = rand(Xoshiro(88), patch_model)
+patch_truth = rand(Xoshiro(8), patch_model)
 patch_cases = patch_truth[@vn(cases)]
 
 patch_grid() do ax, g
