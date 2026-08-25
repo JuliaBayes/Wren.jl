@@ -28,21 +28,6 @@ end
 rand(m)
 ```
 
-Each statement must name an existing site of the model.
-The replacement expressions become part of the model body, so they are re-evaluated on every model evaluation, and model arguments and module globals resolve as usual, but local variables at the `@rewrite` call site do not.
-The model below builds, and only fails when evaluated:
-
-```@repl rewriting
-broken = let local_scale = 2.0
-    @rewrite base() begin
-        x ~ Normal(0.0, local_scale)
-    end
-end
-rand(broken)
-```
-
-Runtime values from the caller's scope enter through `$` interpolation.
-
 ## Fixing a site to a value
 
 An assignment statement in the block makes the site deterministic, in the style of the [do-operator](https://en.wikipedia.org/wiki/Do-calculus):
@@ -82,7 +67,20 @@ rand(unfixed)
 
 ## Interpolating runtime values
 
-An interpolation `$value` evaluates in the caller's scope at rewrite time and splices the resulting value into any expression position:
+Each statement must name an existing site of the model.
+The replacement expressions become part of the model body, so they are re-evaluated on every model evaluation, and model arguments and module globals resolve as usual, but local variables at the `@rewrite` call site do not.
+The model below builds, and only fails when evaluated:
+
+```@repl rewriting
+broken = let local_scale = 2.0
+    @rewrite base() begin
+        x ~ Normal(0.0, local_scale)
+    end
+end
+rand(broken)
+```
+
+Runtime values from the caller's scope enter through `$` interpolation:
 
 ```@example rewriting
 fitted = Gamma(2.0, 3.0)
@@ -303,7 +301,7 @@ end
 ```
 
 The function form differs in one respect.
-Its value is stored as a hidden model argument, so the value is built once at rewrite time rather than on every evaluation, which can shift where work happens relative to the literal statement.
+Its value is stored as a hidden model argument, so the value is built once at rewrite time rather than on every evaluation.
 
 And for a rewrite reaching inside a submodel:
 
