@@ -723,7 +723,7 @@ The renewal recursion gains a method for a matrix of reproduction numbers (time 
 function growth_rates(R::AbstractMatrix, gen_pmf)
     growth = similar(R, size(R, 2))
     for h in axes(R, 2)
-        growth[h] = R_to_r(R[1, h], gen_pmf)
+        growth[h] = growth_rates(view(R, :, h), gen_pmf)
     end
     return growth
 end
@@ -831,8 +831,7 @@ end
 
 ### Simulated data
 
-One prior draw now simulates an epidemic across all six patches.
-The outbreak grows in the seeded patch first, reaches the next patches around two weeks in, and takes another week to arrive in the last:
+One prior draw now simulates an epidemic across all six patches:
 
 ```@example renewal
 patch_truth = rand(Xoshiro(8), patch_model)
@@ -905,26 +904,26 @@ The pairplot again compares prior and posterior, now including the spatial param
 compare_pairplot(patch_chn, patch_prior_chn, patch_keys, patch_truth)
 ```
 
-The random walk step size, deviation scale, and cluster factor update strongly.
-The distance exponent ``\gamma`` also updates, because the arrival time of the outbreak in each patch carries information about mixing.
-With every patch seeded at once there would be no arrivals to learn from and ``\gamma`` would be weakly identified; finding out what the data can and cannot inform is one purpose of these checks.
-
-The mixing matrix and deviations are return values of the model, so the same helpers recover their posteriors.
-Because distance enters as ``d^{-\gamma}``, most transmission is within patches, so the between-patch flows below are scaled relative to the largest one.
-Flows concentrate between large, nearby patches, and the deviations, averaged over weeks, vary smoothly in space, as the distance-decaying prior intends:
+Prior means, posterior means, and the simulated truth for the between-patch mixing weights and the week-averaged deviations:
 
 ```@example renewal
 patch_rets = posterior_returns(patch_fitted, patch_chn)
+patch_prior_rets = posterior_returns(patch_model, patch_prior_chn)
 patch_true_rets = return_values(patch_model, patch_truth)
 
+mean_returns(rets) = (
+    vec(mean(stack(r.delta for r in rets); dims=(2, 3))),
+    dropdims(mean(stack(r.K_mix for r in rets); dims=3); dims=3),
+)
+
 let
-    delta_hat = vec(mean(stack(r.delta for r in patch_rets); dims=(2, 3)))
-    K_hat = dropdims(mean(stack(r.K_mix for r in patch_rets); dims=3); dims=3)
+    delta_hat, K_hat = mean_returns(patch_rets)
+    delta_prior, K_prior = mean_returns(patch_prior_rets)
     delta_true = vec(mean(patch_true_rets.delta; dims=2))
     K_true = patch_true_rets.K_mix
-    lim = max(maximum(abs, delta_hat), maximum(abs, delta_true))
+    lim = maximum(maximum(abs, d) for d in (delta_hat, delta_prior, delta_true))
     offdiag_max(K) = maximum(K[g, h] for g in 1:n_patches, h in 1:n_patches if g != h)
-    w_max = max(offdiag_max(K_hat), offdiag_max(K_true))
+    w_max = maximum(offdiag_max(K) for K in (K_hat, K_prior, K_true))
     function maps_row!(fig, row, K, delta, label)
         ax1 = Axis(fig[row, 1]; xlabel="x (km)", ylabel="y (km)", title="$label mixing")
         for g in 1:n_patches, h in 1:n_patches
@@ -943,10 +942,11 @@ let
             colorrange=(-lim, lim),
         )
     end
-    fig = Figure(; size=(700, 640))
-    maps_row!(fig, 1, K_true, delta_true, "True")
-    sc = maps_row!(fig, 2, K_hat, delta_hat, "Posterior mean")
-    Colorbar(fig[1:2, 3], sc; label="δ")
+    fig = Figure(; size=(700, 940))
+    maps_row!(fig, 1, K_prior, delta_prior, "Prior mean")
+    maps_row!(fig, 2, K_hat, delta_hat, "Posterior mean")
+    sc = maps_row!(fig, 3, K_true, delta_true, "True")
+    Colorbar(fig[1:3, 3], sc; label="δ")
     fig
 end
 ```
@@ -965,12 +965,11 @@ end
 
 ## Where next
 
-In practice model development loops.
-You could explore extending the model with:
+Some other extensions to this model would be:
 
   - Delay uncertainty: the reporting delay is fixed at its posterior means; an informed prior from the delay posterior, or joint fitting by passing the linelist-conditioned `delay_model` into the composition in place of the fixed ``p_d``, would propagate it.
   - Right truncation and nowcasting, so recent partially reported days can be fitted rather than discarded, as in [epinowcast](https://package.epinowcast.org/).
   - A Gaussian process reproduction number model in place of the random walk, as in [EpiNow2](https://epiforecasts.io/EpiNow2/).
   - Additional data streams observed from the same infection process, for example wastewater concentrations as in [EpiSewer](https://github.com/adrian-lison/EpiSewer).
 
-See [A Workflow for Infectious Disease Modelling](https://samabbott.co.uk/a-workflow-for-infectious-disease-modelling/paper.pdf) for a suggested workflow.
+See [A Workflow for Infectious Disease Modelling](https://samabbott.co.uk/a-workflow-for-infectious-disease-modelling/paper.pdf) for an approach to developing models of this kind.
