@@ -206,15 +206,6 @@ end
 rand(pe)
 ```
 
-The index binds to the construct's loop variable, so `y[j] ~ Normal(mu, j)` rewrites a construct looping over `i` all the same.
-A statement without an index replaces the whole family, so a right-hand side that references the loop variable is an error:
-
-```@repl rewriting
-@rewrite plated(3) begin
-    y ~ Normal(mu, i)
-end
-```
-
 A single element of a family (e.g. `@vn(y[1])`) is not an addressable site, since the family's elements share one statement.
 Rewrite the whole family instead ([issue #19](https://github.com/JuliaBayes/Wren.jl/issues/19) tracks element-granular rewriting).
 
