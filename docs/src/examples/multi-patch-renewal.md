@@ -55,7 +55,7 @@ We take the generation time distribution from the literature, ``f_g = \mathrm{Ga
 Its day-zero mass is dropped, since a same-day term would put ``I_t`` on both sides of the renewal equation, and the remainder renormalised:
 
 ```@example renewal
-gen_pmf = censored_pmf(Gamma(6.5, 0.62); D=14, drop_zero=true)
+gen_pmf = censored_pmf(Gamma(6.5, 0.62); D=14, drop_zero=true);
 ```
 
 ### Fitting the reporting delay
@@ -159,7 +159,7 @@ Here we instead fix the reporting delay ``p_d`` at its posterior means, taken fr
 ```@example renewal
 mu_hat = delay_stats[@vn(mu), stat=:mean]
 sigma_hat = delay_stats[@vn(sigma), stat=:mean]
-delay_pmf = censored_pmf(LogNormal(mu_hat, sigma_hat); D=15)
+delay_pmf = censored_pmf(LogNormal(mu_hat, sigma_hat); D=15);
 ```
 
 ```@example renewal
@@ -571,8 +571,7 @@ n_patches = 6
 coords = [100 * Point2(rand(rng), rand(rng)) for _ in 1:n_patches]
 pop = rand(rng, LogNormal(log(100_000), 0.75), n_patches)
 dist = [norm(p - q) for p in coords, q in coords]
-marker_size = 8 .+ 8 .* sqrt.(pop ./ mean(pop))
-round.(Int, pop)
+marker_size = 8 .+ 8 .* sqrt.(pop ./ mean(pop));
 ```
 
 Marker area scales with population:
