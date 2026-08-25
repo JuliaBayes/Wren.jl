@@ -196,7 +196,6 @@ As a submodel this is a function of the length of the walk and the two priors:
 end
 ```
 
-The return value is the whole walk, which is what a parent model consumes.
 We use
 
 ```math
@@ -363,8 +362,6 @@ single_model(rt, n) = renewal_cases(
 model = single_model(rt_model, T)
 ```
 
-`single_model` fixes the delays and priors once, so the forecasting section can rebuild the same composition at another horizon.
-
 ### Prior predictive checks
 
 Prior predictive checks simulate data from the prior to check that model behaviour is epidemiologically plausible before fitting.
@@ -459,8 +456,6 @@ let
 end
 ```
 
-Posteriors are summarised as nested 30%, 60%, and 90% credible interval bands.
-
 ### Forecasting
 
 Fitting to a truncated series and simulating forward turns the same model into a forecast.
@@ -496,8 +491,6 @@ predicted(rng, model, chn, key; thin=5) = stack(
 forecast = predicted(Xoshiro(1), forecast_model, chn42, @vn(cases))
 summarystats(chn42[pp_keys])
 ```
-
-`predicted` re-runs a model at each posterior trace, drawing anything the fit has not seen from its prior.
 
 The last fortnight of the data, held out from the fit, sits inside the forecast intervals:
 
