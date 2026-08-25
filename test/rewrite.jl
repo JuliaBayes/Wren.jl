@@ -68,6 +68,13 @@ end
         y[i] ~ Normal(x, i)
     end
 end
+@wren function plated_scale(N)
+    y = zeros(N)
+    x ~ Normal()
+    @plate for i in 1:N
+        y[i] ~ Normal(x, 2.5)
+    end
+end
 
 # A model with literal indexed sites.
 @wren function indexed_model(sub)
@@ -98,6 +105,13 @@ end
     x ~ Normal()
     for i in 1:N
         y[i] ~ Normal(x, i)
+    end
+end
+@wren function looped_ar(N)
+    y = zeros(N)
+    x ~ Normal()
+    for i in 1:N
+        y[i] ~ Normal(i == 1 ? x : y[i-1], 1.0)
     end
 end
 
@@ -478,15 +492,53 @@ end
             end)
         end
 
-        @testset "elementwise rhs stays inside the plate" begin
+        @testset "indexed lhs rewrites elementwise inside the plate" begin
             mm = @rewrite plated(3) begin
-                y ~ Normal(x, i)
+                y[i] ~ Normal(x, i)
             end
             @test _stmt_str(mm) == _stmt_str(plated_idx(3))
             assert_equivalent(mm, plated_idx(3), @vnt begin
                 x := 0.3
                 y := [0.5, 1.0, 1.5]
             end)
+        end
+
+        @testset "indexed lhs stays elementwise without an index rhs" begin
+            mm = @rewrite plated(3) begin
+                y[i] ~ Normal(x, 2.5)
+            end
+            @test Set(keys(rand(mm))) == Set([@vn(x), @vn(y[1]), @vn(y[2]), @vn(y[3])])
+            @test _stmt_str(mm) == _stmt_str(plated_scale(3))
+            assert_equivalent(mm, plated_scale(3), @vnt begin
+                x := 0.3
+                y := [0.5, 1.0, 1.5]
+            end)
+        end
+
+        @testset "the patch index binds to the loop variable" begin
+            mm = @rewrite plated(3) begin
+                y[j] ~ Normal(x, j)
+            end
+            @test _stmt_str(mm) == _stmt_str(plated_idx(3))
+            assert_equivalent(mm, plated_idx(3), @vnt begin
+                x := 0.3
+                y := [0.5, 1.0, 1.5]
+            end)
+        end
+
+        @testset "a plain lhs referencing the loop variable errors" begin
+            err = try
+                @rewrite plated(3) begin
+                    y ~ Normal(x, i)
+                end
+                nothing
+            catch e
+                e
+            end
+            @test err isa Exception
+            msg = sprint(showerror, err)
+            @test occursin("references the loop variable `i`", msg)
+            @test occursin("use `y[i] ~ ...`", msg)
         end
 
         @testset "fixing a family to a value" begin
@@ -575,15 +627,68 @@ end
             end)
         end
 
-        @testset "elementwise rhs stays inside the loop" begin
+        @testset "indexed lhs rewrites elementwise inside the loop" begin
             lm = @rewrite looped(3) begin
-                y ~ Normal(x, i)
+                y[i] ~ Normal(x, i)
             end
             @test _stmt_str(lm) == _stmt_str(looped_idx(3))
             assert_equivalent(lm, looped_idx(3), @vnt begin
                 x := 0.3
                 y := [0.5, 1.0, 1.5]
             end)
+        end
+
+        @testset "the patch index binds to the loop variable" begin
+            lm = @rewrite looped(3) begin
+                y[j] ~ Normal(x, j)
+            end
+            @test _stmt_str(lm) == _stmt_str(looped_idx(3))
+            assert_equivalent(lm, looped_idx(3), @vnt begin
+                x := 0.3
+                y := [0.5, 1.0, 1.5]
+            end)
+        end
+
+        @testset "other-element references splice as written" begin
+            lm = @rewrite looped(3) begin
+                y[j] ~ Normal(j == 1 ? x : y[j-1], 1.0)
+            end
+            @test _stmt_str(lm) == _stmt_str(looped_ar(3))
+            assert_equivalent(lm, looped_ar(3), @vnt begin
+                x := 0.3
+                y := [0.5, 1.0, 1.5]
+            end)
+        end
+
+        @testset "a plain lhs referencing the loop variable errors" begin
+            err = try
+                @rewrite looped(3) begin
+                    y ~ Normal(x, i)
+                end
+                nothing
+            catch e
+                e
+            end
+            @test err isa Exception
+            msg = sprint(showerror, err)
+            @test occursin("references the loop variable `i`", msg)
+            @test occursin("use `y[i] ~ ...`", msg)
+        end
+
+        @testset "an indexed lhs without a family errors" begin
+            err = try
+                @rewrite rw_base() begin
+                    x[i] ~ Normal()
+                end
+                nothing
+            catch e
+                e
+            end
+            @test err isa Exception
+            @test occursin(
+                "not sampled inside a @plate block or for loop",
+                sprint(showerror, err),
+            )
         end
 
         @testset "fixing a family to a value" begin
@@ -693,7 +798,7 @@ end
             @test occursin("observed", sprint(showerror, err))
             # an elementwise `~` replacement keeps the observed flavour
             m2 = @rewrite loop_obs([0.1, 0.2]) begin
-                data ~ Normal(x, 1.0 * i)
+                data[i] ~ Normal(x, 1.0 * i)
             end
             accs = _components(m2, VarNamedTuple(; x=0.3))
             @test loglikelihood(accs) ≈
@@ -986,10 +1091,10 @@ end
         @testset "hoisted once across plate and loop iterations" begin
             let mu0 = 4.0
                 pm = @rewrite plated(3) begin
-                    y ~ Normal($mu0, 1.0 * i)
+                    y[i] ~ Normal($mu0, 1.0 * i)
                 end
                 lm = @rewrite looped(3) begin
-                    y ~ Normal($mu0, 1.0 * i)
+                    y[i] ~ Normal($mu0, 1.0 * i)
                 end
                 yv = [3.5, 4.5, 5.0]
                 for m in (pm, lm)

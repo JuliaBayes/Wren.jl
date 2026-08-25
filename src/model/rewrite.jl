@@ -38,7 +38,10 @@ block shares the `@wren` model-body grammar and every statement must
 target an existing site by name: `site ~ rhs` replaces a sampling
 statement's right-hand side, `site = value` fixes the site to a
 deterministic value, `@observe site ~ rhs` turns the statement into an
-observation, an allocation-and-construct pair (`site = zeros(N)`
+observation, an indexed target `site[i] ~ rhs` replaces the right-hand
+side elementwise inside the family's `@plate` block or `for` loop
+(with `i` bound to the construct's loop variable), an
+allocation-and-construct pair (`site = zeros(N)`
 followed by a `@plate` block or `for` loop) replaces the site with an
 elementwise family, and a dotted target such as `x.a ~ rhs` rewrites
 inside the submodel at `x`. The spliced expressions become part of the model body,
@@ -305,6 +308,7 @@ end
     _rewrite_stmts(
         stmts, name::Symbol, family::Symbol, replacement, match_observe::Bool;
         family_rhs=nothing, family_kind=:sample,
+        elementwise_idx=nothing, elementwise_patch=nothing,
     )
 
 Replace the statements for the site `name` in `stmts` with
@@ -316,13 +320,17 @@ exist, so a family target cannot hijack an unrelated assignment such
 as an array allocation. Errors if no statement matches, naming the
 available sites.
 
-A family target replaces the family's whole `@plate` or `for` construct
-with the single statement `family ~ family_rhs` (`family_kind ===
-:sample`) or `family = family_rhs` (`family_kind === :fixed`), exactly
-as-if-written (see [`_collapse_family_stmts`](@ref)). The one exception
-is a `:sample` right-hand side that references the construct's loop
-index, which can only mean the elementwise statement, and therefore
-replaces the right-hand side inside the construct instead.
+A plain family target replaces the family's whole `@plate` or `for`
+construct with the single statement `family ~ family_rhs`
+(`family_kind === :sample`) or `family = family_rhs` (`family_kind ===
+:fixed`), exactly as-if-written (see
+[`_collapse_family_stmts`](@ref)); a `:sample` right-hand side that
+references the construct's loop variable is an error, since the
+collapsed statement would leave the variable unbound. An indexed
+tilde patch such as `y[i] ~ rhs` instead sets `elementwise_idx` (to
+`:i`) and `elementwise_patch`, and replaces the right-hand side of the
+family's tilde statements inside the construct, with the patch's index
+symbol renamed to each construct's loop variable.
 """
 # Whether any tilde statement (sampling or observation) has `name` as
 # its whole, plain left-hand side. Indexed statements such as `y[i]`
@@ -348,6 +356,8 @@ function _rewrite_stmts(
     match_observe::Bool;
     family_rhs=nothing,
     family_kind::Symbol=:sample,
+    elementwise_idx::Union{Symbol,Nothing}=nothing,
+    elementwise_patch=nothing,
 )
     # A name carried by both an assignment and a plain-lhs tilde
     # statement (e.g. a derived value that is then observed) is
@@ -364,6 +374,15 @@ function _rewrite_stmts(
         _rewrite_pass(stmts, name, replacement, match_observe ? :tilde_observe : :tilde)
     result === nothing || return result
     if _has_tilde_family(stmts, family)
+        if elementwise_idx !== nothing
+            result =
+                _elementwise_family_pass(stmts, family, elementwise_idx, elementwise_patch)
+            result === nothing && error(
+                "rewrite: `$name` targets `$family` elementwise, but " *
+                "`$family` is not sampled inside a @plate block or for loop",
+            )
+            return result
+        end
         if name !== family
             error(
                 "rewrite: `$name` targets a single element of the site " *
@@ -371,9 +390,15 @@ function _rewrite_stmts(
                 "(see https://github.com/JuliaBayes/Wren.jl/issues/19); " *
                 "target the whole family `$family` instead.",
             )
-        elseif family_rhs !== nothing && !(
-            family_kind === :sample && _mentions_family_loop_idx(stmts, family, family_rhs)
-        )
+        elseif family_rhs !== nothing
+            if family_kind === :sample
+                idx = _referenced_family_loop_idx(stmts, family, family_rhs)
+                idx === nothing || error(
+                    "rewrite: the replacement for `$family` references the " *
+                    "loop variable `$idx`; use `$family[$idx] ~ ...` to " *
+                    "rewrite the family elementwise",
+                )
+            end
             new_stmt = if family_kind === :fixed
                 WrenExpr(:(=), [family, family_rhs])
             else
@@ -446,15 +471,111 @@ end
 _rebuild_construct(stmt::WrenExpr, body) =
     WrenExpr(:for, [stmt.args[1], WrenExpr(:block, body)])
 
-# Whether `rhs` references the loop index of any construct containing
-# the family, in which case it can only mean the elementwise statement.
-function _mentions_family_loop_idx(stmts, family::Symbol, rhs)
-    return _fold_stmts(false, stmts) do found, stmt
-        found || (
-            _is_family_construct(stmt, family) &&
-            _mentions_symbol(rhs, _construct_loop_idx(stmt))
-        )
+# The loop variable of a construct containing the family that `rhs`
+# references, or `nothing`. A collapsed single statement cannot bind
+# such a variable, so referencing one is an error for the caller.
+function _referenced_family_loop_idx(stmts, family::Symbol, rhs)
+    return _fold_stmts(nothing, stmts) do found, stmt
+        found !== nothing && return found
+        if _is_family_construct(stmt, family) &&
+           _mentions_symbol(rhs, _construct_loop_idx(stmt))
+            _construct_loop_idx(stmt)
+        else
+            nothing
+        end
     end
+end
+
+## Elementwise rewriting of a site family.
+
+"""
+    _patch_elementwise_idx(stmt)
+
+The index symbol of an indexed tilde patch such as `y[i] ~ rhs`, and
+`nothing` for any other patch. Such a patch rewrites the family's
+right-hand side elementwise, with the index symbol bound to the
+construct's loop variable. Literal indices (`y[1] ~ rhs`) target an
+exact-named site instead.
+"""
+_patch_elementwise_idx(stmt) = nothing
+function _patch_elementwise_idx(stmt::Union{Sample,Observe})
+    lhs = stmt.lhs
+    lhs isa Expr && lhs.head === :ref || return nothing
+    length(lhs.args) == 2 || return nothing
+    (lhs.args[1] isa Symbol && lhs.args[2] isa Symbol) || return nothing
+    return lhs.args[2]::Symbol
+end
+
+# Rename every free occurrence of `from` to `to` in an expression or IR
+# node. Quoted symbols (`:i`) are left alone.
+_rename_symbol(x, from::Symbol, to::Symbol) = x
+_rename_symbol(x::Symbol, from::Symbol, to::Symbol) = x === from ? to : x
+function _rename_symbol(x::Expr, from::Symbol, to::Symbol)
+    return Expr(x.head, (_rename_symbol(a, from, to) for a in x.args)...)
+end
+function _rename_symbol(x::WrenExpr, from::Symbol, to::Symbol)
+    return WrenExpr(x.head, map(a -> _rename_symbol(a, from, to), x.args))
+end
+
+# The replacement for one matched family tilde statement, keeping the
+# matched statement's left-hand side and flavour (latent sites stay
+# latent, observed statements stay observed).
+_elementwise_replacement(::Sample, matched::Sample, rhs) =
+    Sample(matched.name, matched.lhs, rhs)
+_elementwise_replacement(::Sample, matched::Observe, rhs) =
+    Observe(matched.name, matched.lhs, rhs)
+_elementwise_replacement(::Observe, matched::Union{Sample,Observe}, rhs) =
+    Observe(matched.name, matched.lhs, rhs)
+
+"""
+    _elementwise_family_pass(stmts, family::Symbol, idx::Symbol, patch)
+
+Replace the right-hand side of the family's tilde statements inside
+every `@plate` or `for` construct that samples `family`, splicing the
+patch's right-hand side with `idx` renamed to each construct's loop
+variable. Returns `nothing` when no construct samples the family.
+"""
+function _elementwise_family_pass(
+    stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}},
+    family::Symbol,
+    idx::Symbol,
+    patch::Union{Sample,Observe},
+)
+    count = Ref(0)
+    new_stmts = Union{AbstractWrenExpr,LineNumberNode}[
+        _elementwise_map(stmt, family, idx, patch, nothing, count) for stmt in stmts
+    ]
+    return count[] == 0 ? nothing : new_stmts
+end
+
+# Depth-first rebuild for the elementwise pass. `rhs` is the patch's
+# right-hand side renamed to the innermost enclosing construct's loop
+# variable, or `nothing` outside any construct for the family.
+_elementwise_map(lnn::LineNumberNode, ::Symbol, ::Symbol, patch, rhs, ::Ref{Int}) = lnn
+function _elementwise_map(stmt, family::Symbol, idx::Symbol, patch, rhs, count::Ref{Int})
+    if _is_family_construct(stmt, family)
+        loop_idx = _construct_loop_idx(stmt)
+        new_rhs = _rename_symbol(patch.rhs, idx, loop_idx)
+        body = Union{AbstractWrenExpr,LineNumberNode}[
+            _elementwise_map(s, family, idx, patch, new_rhs, count) for
+            s in _construct_body(stmt)
+        ]
+        return _rebuild_construct(stmt, body)
+    end
+    if rhs !== nothing &&
+       stmt isa Union{Sample,Observe} &&
+       get_top_level_symbol(stmt.lhs) === family
+        count[] += 1
+        return _elementwise_replacement(patch, stmt, rhs)
+    end
+    if stmt isa WrenExpr
+        args = map(a -> _elementwise_map(a, family, idx, patch, rhs, count), stmt.args)
+        return WrenExpr(stmt.head, args)
+    elseif stmt isa Plate
+        body = _elementwise_map(stmt.body, family, idx, patch, rhs, count)
+        return Plate(stmt.name, stmt.loop_idx, stmt.loop_iters, stmt.size, body)
+    end
+    return stmt
 end
 
 """
@@ -911,6 +1032,8 @@ function _rewrite_patch(
                 true;
                 family_rhs,
                 family_kind,
+                elementwise_idx=_patch_elementwise_idx(p),
+                elementwise_patch=p,
             )
             i += 1
         end
