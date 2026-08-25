@@ -194,9 +194,22 @@ end
 rand(elem)
 ```
 
-A right-hand side that references the loop index keeps its elementwise meaning, and replaces the right-hand side inside the construct:
+An indexed left-hand side keeps the family elementwise and replaces the right-hand side inside the construct:
 
 ```@example rewriting
+pe = @rewrite plated(3) begin
+    y[i] ~ Normal(mu, 1.0)
+end
+```
+
+```@example rewriting
+rand(pe)
+```
+
+The index binds to the construct's loop variable, so `y[j] ~ Normal(mu, j)` rewrites a construct looping over `i` all the same.
+A statement without an index replaces the whole family, so a right-hand side that references the loop variable is an error:
+
+```@repl rewriting
 @rewrite plated(3) begin
     y ~ Normal(mu, i)
 end
