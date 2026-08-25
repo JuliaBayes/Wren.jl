@@ -384,7 +384,7 @@ end
 ```
 
 Simulated epidemics mostly grow slowly from around 50 reported cases a day, with a heavy upper tail from the walks that hold ``\mathcal{R}_t`` above one for the whole window, already visible in the reproduction number check above.
-The component checks are what make a composed check like this one readable; when a draw looks wrong, the component it came from has its own plot to compare against.
+The component checks are what make a composed check like this one readable.
 
 ### Fitting and parameter recovery
 
