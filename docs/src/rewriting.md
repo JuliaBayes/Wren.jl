@@ -220,11 +220,17 @@ Rewrite the whole family instead ([issue #19](https://github.com/JuliaBayes/Wren
 
 ## Converting between plates and loops
 
-[`remove_plate`](@ref) and [`add_plate`](@ref) convert a model between its `@plate` and plain `for` loop spellings, and [`Wren.set_arg`](@ref) replaces a model argument while reusing the generated code:
+[`remove_plate`](@ref) and [`add_plate`](@ref) convert a model between its `@plate` and plain `for` loop spellings, as helpers built on rewriting:
 
 ```@example rewriting
 lm = remove_plate(plated(3))
 ```
+
+```@example rewriting
+add_plate(lm, @vn(y))
+```
+
+[`Wren.set_arg`](@ref) replaces a model argument while reusing the generated code:
 
 ```@example rewriting
 rand(Wren.set_arg(lm, :N, 5))
