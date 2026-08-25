@@ -321,6 +321,14 @@ function NegativeBinomialMeanClust(mu, alpha)
     r = 1 / alpha
     return NegativeBinomial(r, p; check_args=false)
 end
+
+growth_rates(R::AbstractVector, gen_pmf) = R_to_r(R[1], gen_pmf)
+
+function expected_renewal_given_Rt(R::AbstractVector, I0, gen_pmf, delay_pmf)
+    r0 = growth_rates(R, gen_pmf)
+    I_t = renew(I0, R, gen_pmf, r0)
+    return (; I_t, Y_t=delay_convolve(I_t, delay_pmf, I0, r0))
+end
 ```
 
 `check_args=false` serves the same purpose as the clamp and cap above, giving extreme proposals a log-density of ``-\infty`` rather than an error.
@@ -336,9 +344,7 @@ The `cases` argument only declares the shape of the `cases` array (see [Syntax a
     Z_t = (log_Rt ~ rt_model)
     log_I0 ~ init_prior
     R = exp.(Z_t)
-    r0 = R_to_r(R[1], gen_pmf)
-    I_t = renew(exp(log_I0), R, gen_pmf, r0)
-    Y_t = delay_convolve(I_t, delay_pmf, exp(log_I0), r0)
+    (; I_t, Y_t) = expected_renewal_given_Rt(R, exp(log_I0), gen_pmf, delay_pmf)
     cluster ~ cluster_prior
     for t in eachindex(cases)
         cases[t] ~ NegativeBinomialMeanClust(Y_t[t], cluster^2)
@@ -407,11 +413,13 @@ summarystats(chn[pp_keys])
 ```@example renewal
 truth_values(params, keys) = NamedTuple(Symbol(string(k)) => params[k] for k in keys)
 
-pairplot(
-    PairPlots.Series(chn[pp_keys]; label="posterior", color=(:steelblue, 0.6)),
-    PairPlots.Series(prior_chn[pp_keys]; label="prior", color=(:grey, 0.4)),
-    PairPlots.Truth(truth_values(truth, pp_keys); label="true values"),
+compare_pairplot(chn, prior_chn, keys, truth) = pairplot(
+    PairPlots.Series(chn[keys]; label="posterior", color=(:steelblue, 0.6)),
+    PairPlots.Series(prior_chn[keys]; label="prior", color=(:grey, 0.4)),
+    PairPlots.Truth(truth_values(truth, keys); label="true values"),
 )
+
+compare_pairplot(chn, prior_chn, pp_keys, truth)
 ```
 
 To check recovery of the latent process we compare reproduction number trajectories.
@@ -574,7 +582,7 @@ dist = [norm(p - q) for p in coords, q in coords]
 marker_size = 8 .+ 8 .* sqrt.(pop ./ mean(pop));
 ```
 
-Marker area scales with population:
+The six patches, with marker area scaled by population:
 
 ```@example renewal
 let
@@ -614,7 +622,7 @@ end
 
 ### Spatially and temporally correlated deviations
 
-Patch reproduction numbers share the random walk from the single-patch model and add a patch deviation that evolves over weeks, so patches are coupled without moving in lockstep.
+Patch reproduction numbers share the random walk from the single-patch model and add a patch deviation that evolves over weeks.
 The deviation follows a damped random walk across weeks whose innovations are correlated across space,
 
 ```math
@@ -746,6 +754,12 @@ function delay_convolve(x::AbstractMatrix, pmf, x0, growth)
     end
     return y
 end
+
+function expected_renewal_given_Rt(R::AbstractMatrix, I0, gen_pmf, delay_pmf, K)
+    growth = growth_rates(R, gen_pmf)
+    I_t = renew(I0, R, gen_pmf, K, growth)
+    return (; I_t, Y_t=delay_convolve(I_t, delay_pmf, I0, growth))
+end
 ```
 
 The full model swaps the single-patch reproduction number process for the nested patch-level one; the delay and observation components are reused directly.
@@ -765,10 +779,7 @@ We seed the outbreak in the least populous patch, ``\log I_{0,g} \sim \mathrm{No
     K_mix = (mixing ~ mix_model)
     log_I0 ~ seed_prior
     R = exp.(rt.log_R)
-    I0 = exp.(log_I0)
-    growth = growth_rates(R, gen_pmf)
-    I_t = renew(I0, R, gen_pmf, K_mix, growth)
-    Y_t = delay_convolve(I_t, delay_pmf, I0, growth)
+    (; I_t, Y_t) = expected_renewal_given_Rt(R, exp.(log_I0), gen_pmf, delay_pmf, K_mix)
     cluster ~ cluster_prior
     for g in axes(cases, 2), t in axes(cases, 1)
         cases[t, g] ~ NegativeBinomialMeanClust(Y_t[t, g], cluster^2)
@@ -891,11 +902,7 @@ summarystats(patch_chn[patch_keys])
 The pairplot again compares prior and posterior, now including the spatial parameters:
 
 ```@example renewal
-pairplot(
-    PairPlots.Series(patch_chn[patch_keys]; label="posterior", color=(:steelblue, 0.6)),
-    PairPlots.Series(patch_prior_chn[patch_keys]; label="prior", color=(:grey, 0.4)),
-    PairPlots.Truth(truth_values(patch_truth, patch_keys); label="true values"),
-)
+compare_pairplot(patch_chn, patch_prior_chn, patch_keys, patch_truth)
 ```
 
 The random walk step size, deviation scale, and cluster factor update strongly.
