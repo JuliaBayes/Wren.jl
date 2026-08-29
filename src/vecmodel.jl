@@ -312,6 +312,24 @@ _use_closure(::DI.AbstractADType) = false
 # overloaded in EnzymeExt as it depends on runtime activity error which isn't in Core
 _handle_enzyme(@nospecialize(vm::VecModel)) = vm
 
+# Create a copy of a VecModel with a deepcopied adprep. This is necessary for multithreaded
+# sampling because AD preparation objects are not thread-safe.
+# https://juliadiff.org/DifferentiationInterface.jl/DifferentiationInterface/stable/faq/limitations/#Multithreading
+function _copy_for_thread(vm::VecModel)
+    return VecModel(
+        _dealias(vm.model),
+        vm.adtype,
+        vm.lp_function,
+        vm.parameter_space,
+        vm.vecinfo,
+        vm.accs,
+        vm.dimension,
+        vm.lp_func,
+        deepcopy(vm.adprep),
+        copy(vm.sample),
+    )
+end
+
 # Run the model once to collect everything needed to vectorise it: the latent values, plus
 # the sampling sites that were hit exactly once (which provide the fast-path lookup).
 function _prepare_vecmodel_info(
