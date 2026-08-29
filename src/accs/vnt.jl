@@ -1,6 +1,6 @@
 """
     VNTAccumulator{AccName}(f::F, values::VarNamedTuple=VarNamedTuple()) where {AccName,F}
-    VNTAccumulator{AccName,KeepEmptyNamespaces}(f::F, values::VarNamedTuple=VarNamedTuple())
+    VNTAccumulator{AccName,KeepEmptySubmodels}(f::F, values::VarNamedTuple=VarNamedTuple())
 
 A generic accumulator that applies a function `f` to values seen during model execution
 and stores the results in a `VarNamedTuple`.
@@ -10,18 +10,11 @@ multiple forms of `VNTAccumulator` within the same set of accumulators. In theor
 `VNTAccumulator` with the same function `f` should use the same accumulator name. This is
 not enforced.
 
-`KeepEmptyNamespaces` controls what [`combine_with_namespace`](@ref) does with a submodel
-that accumulated nothing. When `false` (the default), the parent is left untouched, which is
-what user-facing accumulators want: `parameters(accs)` shouldn't sprout empty entries for
-submodels that sampled nothing. When `true`, an empty `VarNamedTuple` is stored under the
-submodel's `VarName` anyway, so that every submodel prefix is guaranteed to be present.
-
-The latter matters for the accumulator that builds a [`VecInfo`](@ref), because
-`scope(::FromVector, vn)` indexes the resulting `VarNamedTuple` with `vn` on every model
-evaluation. Guarding that lookup with a `haskey` would make it type-unstable for indexed
-submodels (`x[i] ~ inner()`), since the `PartialArray` mask check is runtime data that the
-compiler cannot fold, and that costs roughly 46x in evaluation time. Paying for the empty
-`VarNamedTuple` once during construction is much cheaper.
+`KeepEmptySubmodels` controls what [`combine_with_namespace`](@ref) does with a submodel
+that accumulated nothing (i.e., a key `@vn(a) => VarNamedTuple()` in the parent
+accumulator). When `false` (the default), the empty VNT is dropped from the parent, meaning
+that `@vn(a)` will not even be a key in the parent. When `true` the empty VNT is retained.
+In the absence of submodels, this option has no effect.
 
 The function `f` should have the signature:
 
@@ -33,16 +26,16 @@ from `f`.
 
 If `f` is a struct (and not a function), you also need to define `Base.copy` on `f`.
 """
-struct VNTAccumulator{AccName,KeepEmptyNamespaces,F,VNT<:VarNamedTuple} <:
+struct VNTAccumulator{AccName,KeepEmptySubmodels,F,VNT<:VarNamedTuple} <:
        AbstractAccumulator
     f::F
     values::VNT
 end
-function VNTAccumulator{AccName,KeepEmptyNamespaces}(
+function VNTAccumulator{AccName,KeepEmptySubmodels}(
     f::F,
     values::VarNamedTuple=VarNamedTuple(),
-) where {AccName,KeepEmptyNamespaces,F}
-    return VNTAccumulator{AccName,KeepEmptyNamespaces,F,typeof(values)}(f, values)
+) where {AccName,KeepEmptySubmodels,F}
+    return VNTAccumulator{AccName,KeepEmptySubmodels,F,typeof(values)}(f, values)
 end
 function VNTAccumulator{AccName}(
     f::F,
