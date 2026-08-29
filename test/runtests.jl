@@ -13,9 +13,6 @@ using Test
 
     if !Sys.iswindows()
         # problematic on windows CI, idk why
-        import Pkg
-        Pkg.add("Reactant")
-        using Reactant: Reactant
         include("reactant.jl")
     end
 end
