@@ -287,10 +287,7 @@ function combine_with_namespace(
     return AccumulatorTuple(combined)
 end
 
-@generated function scope(
-    accs::AccumulatorTuple{N,T},
-    vn::VarName,
-) where {N,T}
+@generated function scope(accs::AccumulatorTuple{N,T}, vn::VarName) where {N,T}
     names = fieldnames(T)
     calls = [:(scope(accs.nt.$(names[i]), vn)) for i in 1:N]
     return quote

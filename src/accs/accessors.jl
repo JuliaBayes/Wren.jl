@@ -60,3 +60,8 @@ Return the log joint density in transformed coordinates, i.e.
     logjoint_transformed(accs) = logjoint(accs) - logjac(accs).
 """
 logjoint_transformed(accs::AccumulatorTuple) = logjoint(accs) - logjac(accs)
+
+function _get_vec_sample(accs::AccumulatorTuple)
+    acc = getacc(accs, Val(VEC_SAMPLE_ACCNAME))
+    return acc.vals
+end

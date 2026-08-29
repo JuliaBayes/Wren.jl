@@ -477,9 +477,19 @@ end
 Draw a parameter vector compatible with `vecmodel`.
 """
 function Base.rand(rng::AbstractRNG, vecmodel::VecModel)
-    params = similar(vecmodel.sample)
-    acc = VecSampleAccumulator(params, vecmodel.vecinfo)
-    evaluate(vecmodel.model, FromPrior(rng), vecmodel.parameter_space, AccumulatorTuple(acc))
-    return params
+    return vectorise_latents(FromPrior(rng), vecmodel)
 end
 Base.rand(vecmodel::VecModel) = rand(default_rng(), vecmodel)
+
+"""
+    Wren.vectorise_latents(latent_source::AbstractLatentSource, vecmodel::VecModel)
+
+Draw model parameters from `latent_source` and return them as a vector compatible with
+`vecmodel`.
+"""
+function vectorise_latents(latent_source::AbstractLatentSource, vecmodel::VecModel)
+    params = similar(vecmodel.sample)
+    accs = AccumulatorTuple(VecSampleAccumulator(params, vecmodel.vecinfo))
+    _, accs = evaluate(vecmodel.model, latent_source, vecmodel.parameter_space, accs)
+    return _get_vec_sample(accs)
+end
