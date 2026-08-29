@@ -125,11 +125,18 @@ function _show_namedtuple_tree(io::IO, nt::NamedTuple, prefix::String)
     end
 end
 
+function Base.show(io::IO, model::Model)
+    print(io, "Model ", model.name)
+    if !isempty(model.args)
+        print(io, " (args: ", join(keys(model.args), ","), ")")
+    end
+end
+
+# In the REPL
 function Base.show(io::IO, ::MIME"text/plain", model::Model)
-    prefix = get(io, :tree_prefix, "")
     printstyled(io, "Model ", model.name; bold=true)
     println(io)
-
+    prefix = get(io, :tree_prefix, "")
     max_exprs = get(io, :max_wren_exprs, 20)
     entries = (
         "arguments" => model.args,
