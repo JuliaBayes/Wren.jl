@@ -240,6 +240,7 @@ LDP.logdensity_and_gradient(vecmodel, v)  # Requires an adtype.
 ```
 
 !!! note
+
     If you have a use for higher-order derivatives like Hessians, please open an issue!
 
 Wren in fact exports shorter functions for these, namely [`lp`](@ref) and [`lp_and_grad`](@ref), which are directly equivalent to the above.
