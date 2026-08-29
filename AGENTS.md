@@ -1,11 +1,13 @@
 # Instructions for Agents
 
   - **Always** use a temporary environment with Wren.jl dev'd into it to run code.
-    This avoids adding deps into Wren itself. For example, Distributions is not a
-    dependency of Wren.
+    This avoids adding deps into Wren itself.
+    For example, Distributions is not a dependency of Wren.
 
-  - `DensityInterface.logdensityof`, most relevant ADTypes, and `Enzyme.Reverse` are
-    re-exported by Wren. No need to import them.
+  - `DensityInterface.logdensityof`, most relevant ADTypes, and `Enzyme.Reverse` are re-exported by Wren.
+    No need to import them.
+
+  - When doing MCMC sampling **always** use the `progress=false` keyword argument unless you are working on the progress logging code itself.
 
 # Running models
 
