@@ -38,7 +38,6 @@ Reactant = "3c362404-f566-11ee-1572-e11a4b42c853"
 FlexiChains = {rev = "v0.7", url = "https://github.com/JuliaBayes/FlexiChains.jl"}
 Plaice = {rev = "pm", url = "https://github.com/JuliaBayes/Plaice.jl"}
 ProbabilityMeasures = {rev = "main", url = "https://github.com/JuliaBayes/ProbabilityMeasures.jl"}
-RuntimeGeneratedFunctions = {rev = "master", url = "https://github.com/penelopeysm/RuntimeGeneratedFunctions.jl"}
 
 [extensions]
 WrenDistributionsExt = ["Distributions", "FillArrays", "Plaice"]

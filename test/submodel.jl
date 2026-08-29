@@ -1,6 +1,8 @@
 module WrenSubmodelTests
 
 using Wren
+using Enzyme
+using ForwardDiff
 using Test
 using Distributions
 using VarNames
@@ -25,7 +27,7 @@ end
         end
 
         # With FromPrior
-        retval, accs = evaluate(
+        retval, accs = @inferred evaluate(
             returning_outer(returning_inner()),
             FromPrior(),
             OriginalSpace(),
@@ -42,7 +44,7 @@ end
         in_pars = @vnt begin
             x.a := 0.5
         end
-        retval, accs = evaluate(
+        retval, accs = @inferred evaluate(
             returning_outer(returning_inner()),
             FromParams(in_pars),
             OriginalSpace(),
@@ -78,7 +80,7 @@ end
         end
 
         # With FromPrior
-        retval, accs = evaluate(
+        retval, accs = @inferred evaluate(
             undefined_namespace_outer(returning_inner()),
             FromPrior(),
             OriginalSpace(),
@@ -93,7 +95,7 @@ end
         in_pars = @vnt begin
             x.a := 0.5
         end
-        retval, accs = evaluate(
+        retval, accs = @inferred evaluate(
             undefined_namespace_outer(returning_inner()),
             FromParams(in_pars),
             OriginalSpace(),
@@ -174,7 +176,7 @@ end
             x.a := a
             b := b
         end
-        retval, accs = evaluate(
+        retval, accs = @inferred evaluate(
             likelihood_outer(likelihood_inner() | VarNamedTuple(; obs=obs)),
             FromParams(in_pars),
             OriginalSpace(),
@@ -199,7 +201,7 @@ end
             # also return 42 from this model
         end
 
-        retval, accs = evaluate(
+        retval, accs = @inferred evaluate(
             empty_outer(empty_inner()),
             FromPrior(),
             OriginalSpace(),
@@ -226,7 +228,7 @@ end
         nested_model = outer_model(middle_model(returning_inner()))
 
         # With FromPrior
-        retval, accs = evaluate(
+        retval, accs = @inferred evaluate(
             nested_model,
             FromPrior(),
             OriginalSpace(),
@@ -242,7 +244,7 @@ end
             x.y.a := a
         end
         nested_model = outer_model(middle_model(returning_inner()))
-        retval, accs = evaluate(
+        retval, accs = @inferred evaluate(
             nested_model,
             FromParams(in_pars),
             OriginalSpace(),
@@ -251,6 +253,73 @@ end
         @test retval ≈ 2a + 2
         @test parameters(accs) == in_pars
         @test logprior(accs) ≈ logdensityof(Normal(), a)
+    end
+
+    @testset "vectorisation" begin
+        @testset "basic" begin
+            @wren function innerv()
+                x ~ Normal()
+            end
+            @wren function outerv(sub)
+                a ~ sub
+            end
+            vmodel = VecModel(outerv(innerv()), AutoEnzyme(; mode=Reverse))
+
+            r = rand(vmodel)
+            @test r isa AbstractVector{<:Real}
+            @test length(r) == 1
+            @test lp(vmodel, r) isa Real
+            @test last(lp_and_grad(vmodel, r)) isa AbstractVector{<:Real}
+        end
+
+        @testset "no fast path sitenames in submodel" begin
+            @wren function innerv2(N)
+                # No unique sitenames in this model
+                x = zeros(N)
+                for i in 1:N
+                    x[i] ~ Normal()
+                end
+            end
+            @wren function outerv2(sub)
+                a ~ sub
+            end
+            N = 5
+            vmodel = VecModel(outerv2(innerv2(N)), AutoEnzyme(; mode=Reverse))
+
+            # Check that there's an entry for the submodel even though it has
+            # no unique sitenames
+            @test haskey(vmodel.vecinfo.sitename_to_rat, @vn(a))
+
+            r = rand(vmodel)
+            @test r isa AbstractVector{<:Real}
+            @test length(r) == N
+            @test lp(vmodel, r) isa Real
+            @test last(lp_and_grad(vmodel, r)) isa AbstractVector{<:Real}
+        end
+
+        @testset "repeated submodel" begin
+            @wren function innerv3()
+                x ~ Normal()
+            end
+            @wren function outerv3(sub)
+                a = zeros(5)
+                for i in 1:5
+                    a[i] ~ sub
+                end
+            end
+            vmodel = VecModel(outerv3(innerv3()), AutoForwardDiff())
+            # Enzyme fails (https://github.com/JuliaBayes/Wren.jl/issues/10 ???)
+            # vmodel = VecModel(outerv3(innerv3()), AutoEnzyme(; mode=Reverse))
+            @test_broken false
+
+            @test all(i -> haskey(vmodel.vecinfo.sitename_to_rat, @vn(a[i])), 1:5)
+
+            r = rand(vmodel)
+            @test r isa AbstractVector{<:Real}
+            @test length(r) == N
+            @test lp(vmodel, r) isa Real
+            @test last(lp_and_grad(vmodel, r)) isa AbstractVector{<:Real}
+        end
     end
 end
 
