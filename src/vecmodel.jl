@@ -477,15 +477,9 @@ end
 Draw a parameter vector compatible with `vecmodel`.
 """
 function Base.rand(rng::AbstractRNG, vecmodel::VecModel)
-    # TODO: this is VERY inefficient
-    vecinfo, params =
-        _prepare_vecmodel_info(vecmodel.model, FromPrior(rng), vecmodel.parameter_space)
-    vecinfo == vecmodel.vecinfo || throw(
-        ArgumentError(
-            "The model produced a parameter layout that is incompatible with this " *
-            "VecModel.",
-        ),
-    )
+    params = similar(vecmodel.sample)
+    acc = VecSampleAccumulator(params, vecmodel.vecinfo)
+    evaluate(vecmodel.model, FromPrior(rng), vecmodel.parameter_space, AccumulatorTuple(acc))
     return params
 end
 Base.rand(vecmodel::VecModel) = rand(default_rng(), vecmodel)

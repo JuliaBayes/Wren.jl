@@ -32,6 +32,7 @@ include("latents/latents.jl")
 include("latents/prior.jl")
 include("latents/params.jl")
 include("latents/vector.jl")
+include("accs/vec_sample.jl")
 
 # Model definition
 include("model/expr.jl")

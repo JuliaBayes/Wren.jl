@@ -137,6 +137,13 @@ See also: [`split`](@ref)
 function combine end
 
 """
+    scope(acc::AbstractAccumulator, vn::VarName)
+
+Narrow `acc` for evaluation inside a submodel scoped by `vn`. The default is a no-op.
+"""
+scope(acc::AbstractAccumulator, ::VarName) = acc
+
+"""
     combine_with_namespace(parent, child, vn, template)
 
 Embed the contents of `child` beneath `vn`, then combine it with `parent`.
@@ -278,6 +285,18 @@ function combine_with_namespace(
         combine_with_namespace(parent_acc, child_acc, vn, template)
     end
     return AccumulatorTuple(combined)
+end
+
+@generated function scope(
+    accs::AccumulatorTuple{N,T},
+    vn::VarName,
+) where {N,T}
+    names = fieldnames(T)
+    calls = [:(scope(accs.nt.$(names[i]), vn)) for i in 1:N]
+    return quote
+        $(Expr(:meta, :inline))
+        AccumulatorTuple(NamedTuple{$names}(($(calls...),)))
+    end
 end
 
 """

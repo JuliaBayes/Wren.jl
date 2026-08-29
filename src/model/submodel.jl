@@ -32,7 +32,7 @@ function evaluate_submodel(
 )
     child_source = scope(latent_source, vn)
     child_space = scope(parameter_space, vn)
-    child_accs = map(split, accs)
+    child_accs = scope(map(split, accs), vn)
     had_params = haskey(child_accs, Val(PARAMS_ACCNAME))
     # TODO(penelopeysm): Do not unconditionally add ParamsAccumulator here.
     # https://github.com/JuliaBayes/Wren.jl/issues/5
