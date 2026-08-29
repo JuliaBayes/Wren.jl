@@ -32,10 +32,21 @@ using Reactant: Reactant
             return (r.val, r.derivs[2])
         end
 
-        for dist in (PM.Normal(0.0, 1.0),)
+        @testset "$(nameof(typeof(dist)))" for dist in (
+            # The idea in curating this list of distributions is that we probably want to
+            # test each distribution that has a different bijector. We don't need to test
+            # the log-density of every distribution since PM already tests Reactant
+            # compatibility with that. In principle, Plaice also tests Reactant
+            # compatibility on the bijectors, but it's probably worth doing that testing
+            # here as well since we are doing a bit more than just transforming the sample.
+            PM.Normal(), # identity
+            PM.LogNormal(), # positive
+            PM.Uniform(0.0, 1.0), # truncated
+            PM.MvNormal([0.0, 0.0], I), # identity multivariate
+        )
             model = f(dist)
             vm = VecModel(model, AutoReactant(AutoEnzyme(; mode=Enzyme.Reverse)))
-            params = [0.0]
+            params = rand(vm)
             true_lp, true_grad = true_logdens_and_grad(dist, params)
             @test lp(vm, params) ≈ true_lp
             l, grad = lp_and_grad(vm, params)

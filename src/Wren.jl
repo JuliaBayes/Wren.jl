@@ -130,6 +130,9 @@ export AutoForwardDiff, AutoReverseDiff, AutoMooncake, AutoEnzyme
 using EnzymeCore: Forward, Reverse
 export Forward, Reverse
 
+using LinearAlgebra: I, Diagonal, Symmetric
+export I, Diagonal, Symmetric
+
 # Sampling (could in principle be a different package)
 module Samplers
 using FlexiChains: FlexiChains
