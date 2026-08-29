@@ -34,7 +34,7 @@ function Wren._handle_enzyme(vm::Wren.VecModel{M,<:DI.AutoEnzyme}) where {M<:Wre
                     enable_runtime_activity(vm.adtype),
                     vm.lp_function,
                     vm.parameter_space,
-                    vm.ranges_and_transforms,
+                    vm.vecinfo,
                     vm.sample,
                 )
             else

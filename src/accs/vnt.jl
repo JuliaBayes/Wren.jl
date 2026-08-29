@@ -16,7 +16,7 @@ what user-facing accumulators want: `parameters(accs)` shouldn't sprout empty en
 submodels that sampled nothing. When `true`, an empty `VarNamedTuple` is stored under the
 submodel's `VarName` anyway, so that every submodel prefix is guaranteed to be present.
 
-The latter matters for the accumulator that builds a [`RangesAndTransforms`](@ref), because
+The latter matters for the accumulator that builds a [`VecInfo`](@ref), because
 `scope(::FromVector, vn)` indexes the resulting `VarNamedTuple` with `vn` on every model
 evaluation. Guarding that lookup with a `haskey` would make it type-unstable for indexed
 submodels (`x[i] ~ inner()`), since the `PartialArray` mask check is runtime data that the

@@ -131,10 +131,12 @@ Base.isequal(a::RangeAndTransform, b::RangeAndTransform) =
     isequal(a.range, b.range) && isequal(a.transform, b.transform)
 
 """
-    RangesAndTransforms
+    VecInfo
 
-Holds a `VarNamedTuple` mapping `VarName => RangeAndTransform`, together with a fast-path
-`VarNamedTuple` mapping `sitename => RangeAndTransform`.
+All the information needed to derive a vectorised form of a model.
+
+This struct holds a `VarNamedTuple` mapping `VarName => RangeAndTransform`, together with a
+fast-path `VarNamedTuple` mapping `sitename => RangeAndTransform`.
 
 The fast path is only hit for sampling sites that are encountered once and only once during
 model evaluation. This allows us to completely elide VarNamedTuple lookups for these sites.
@@ -157,8 +159,8 @@ end
 ```
 
 then the first VNT stores `@vn(a.x) => RangeAndTransform(...)`, and the second VNT stores
-`@vn(a.norm) => RangeAndTransform(...)`, **not** `@vn(a.myinner.norm)`. This design allows
-us to:
+`@vn(a.norm) => RangeAndTransform(...)`, **not** `@vn(myinner.norm)`. This design allows us
+to:
 
 - avoid passing the submodel site name into functions such as `scope`, which would pollute
   the signature with something that is only relevant for Wren (i.e., making it harder to
@@ -184,65 +186,62 @@ us to:
   same prefixed sampling site, whereas prefixing with the VarName allows each submodel's `x`
   to have a different entry.
 
-The main inner constructor takes a `VarNamedTuple` and a [`SiteNameTracker`](@ref). This
-guarantees that the actual information stored in both fields are consistent.
-
+The main inner constructor takes a `VarNamedTuple` and a [`SitenameCountAccumulator`](@ref).
+This guarantees that the actual information stored in both fields are consistent.
 """
-struct RangesAndTransforms{N<:VarNamedTuple,V<:VarNamedTuple}
-    sitename_lookup::N
-    slow_vnt::V
-    # Derives the fast-path lookup from the sites tracked during model evaluation.
-    function RangesAndTransforms(tracker::SiteNameTracker, slow_vnt::VarNamedTuple)
-        lookup = sitename_lookup(tracker, slow_vnt)
-        return new{typeof(lookup),typeof(slow_vnt)}(lookup, slow_vnt)
-    end
-    # Used by `scope`, where both fields have already been extracted from a parent
-    # RangesAndTransforms and are therefore already consistent with one another.
-    function RangesAndTransforms(lookup::VarNamedTuple, slow_vnt::VarNamedTuple)
-        return new{typeof(lookup),typeof(slow_vnt)}(lookup, slow_vnt)
-    end
+struct VecInfo{N<:VarNamedTuple,V<:VarNamedTuple}
+    sitename_to_rat::N
+    varname_to_rat::V
 end
-Base.:(==)(a::RangesAndTransforms, b::RangesAndTransforms) = a.slow_vnt == b.slow_vnt
+function VecInfo(sca::SitenameCountAccumulator, varnames_to_rats::VarNamedTuple)
+    sitenames_to_varnames = sca.entries
+    # TODO: This means that sitenames_to_rats will actually be a mapping of sitenames to
+    # either RATs or SeenMultipleTimes. Do we want to get rid of the latter?
+    sitenames_to_rats = VarNames.map_values!!(sitenames_to_varnames) do v
+        v isa SeenMultipleTimes ? v : varnames_to_rats[v]
+    end
+    return VecInfo(sitenames_to_rats, varnames_to_rats)
+end
+Base.:(==)(a::VecInfo, b::VecInfo) = a.varname_to_rat == b.varname_to_rat
 
 """
     FromVector(
         params::AbstractVector,
-        ranges_and_transforms::RangesAndTransforms
+        vecinfo::VecInfo
     ) <: AbstractLatentSource
 
 Provide latent values from a vector of flattened parameters, together with a
-`RangesAndTransforms` that provides information on how to recover the values in their
+`VecInfo` that provides information on how to recover the values in their
 original space.
 """
-struct FromVector{V<:AbstractVector,R<:RangesAndTransforms} <: AbstractLatentSource
+struct FromVector{V<:AbstractVector,R<:VecInfo} <: AbstractLatentSource
     params::V
-    ranges_and_transforms::R
+    vecinfo::R
 end
 @generated function _get_range_and_transform(
-    rat::RangesAndTransforms{<:VarNamedTuple{names,types}},
+    vi::VecInfo{<:VarNamedTuple{names,types}},
     vn::VarName,
     ::Val{sitename},
 ) where {names,types,sitename}
     idx = findfirst(==(sitename), names)
-    # The fieldtype check keeps us on the slow path for sitenames whose entry is not
-    # actually a RangeAndTransform, i.e. blacklisted sites, plus the pathological case where
-    # a plain sampling site shares its name with a submodel prefix.
+    # Need to check fieldtype because vi.sitename_to_rat might actually still contain
+    # SeenMultipleTimes objects. TODO(penelopeysm) Maybe this is worth fixing?
     return if idx !== nothing && fieldtype(types, idx) <: RangeAndTransform
-        :(rat.sitename_lookup.data.$sitename)
+        :(vi.sitename_to_rat.data.$sitename)
     else
-        :(rat.slow_vnt[vn])
+        :(vi.varname_to_rat[vn])
     end
 end
 
 """
     get_latent(source::FromVector, ...)
 
-When evaluating a model with `FromVector`, Wren first checks the `sitename_lookup` to see if
+When evaluating a model with `FromVector`, Wren first checks the `sitename_to_rat` to see if
 the `RangeAndTransform` has been stored there. If it hasn't, then it will do the potentially
 slower `VarNamedTuple` lookup.
 
 The implicit assumption here is that if `sitename` was only encountered once during the
-construction of the `RangesAndTransforms`, then it will only be encountered once during
+construction of the `VecInfo`, then it will only be encountered once during
 every model evaluation. This is true of essentially any model that is amenable to
 vectorisation.
 
@@ -266,7 +265,7 @@ the other branch, the slow path will still work (because `x`'s `RangeAndTransfor
 still be stored in the VNT!)
 """
 function get_latent(source::FromVector, vn::VarName, right, sitename::Val)
-    rt = _get_range_and_transform(source.ranges_and_transforms, vn, sitename)
+    rt = _get_range_and_transform(source.vecinfo, vn, sitename)
     range, tfm = rt.range, rt.transform
     return TransformedValue(view(source.params, range), tfm)
 end
@@ -274,11 +273,8 @@ end
 _maybe_get_vnt(source::VarNamedTuple, vn::VarName) =
     haskey(source, vn) ? source[vn] : VarNamedTuple()
 function scope(source::FromVector, vn::VarName)
-    rat = source.ranges_and_transforms
-    # As explained in the constructor docstring for RangesAndTransforms, both VNTs are
+    vi = source.vecinfo
+    # As explained in the constructor docstring for VecInfo, both VNTs are
     # prefixed using `vn` rather than the sitename, so we can directly index into it.
-    return FromVector(
-        source.params,
-        RangesAndTransforms(rat.sitename_lookup[vn], rat.slow_vnt[vn]),
-    )
+    return FromVector(source.params, VecInfo(vi.sitename_to_rat[vn], vi.varname_to_rat[vn]))
 end

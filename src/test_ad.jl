@@ -334,7 +334,7 @@ function benchmark_and_test(
             test_correctness.adtype,
             vecmodel.lp_function,
             vecmodel.parameter_space,
-            vecmodel.ranges_and_transforms,
+            vecmodel.vecinfo,
             vecmodel.sample,
         )
         _, grad = lp_and_grad(reference, vec_params)

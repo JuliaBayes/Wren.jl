@@ -41,7 +41,7 @@ struct _VecModelLP{
     C<:VarNamedTuple,
     F,
     S<:AbstractParameterSpace,
-    R<:RangesAndTransforms,
+    R<:VecInfo,
     AC<:AccumulatorTuple,
 }
     evaluation_fn::E
@@ -49,7 +49,7 @@ struct _VecModelLP{
     conditioned::C
     lp_function::F
     parameter_space::S
-    ranges_and_transforms::R
+    vecinfo::R
     accs::AC
 end
 function (f::_VecModelLP)(params::AbstractVector)
@@ -60,7 +60,7 @@ function (f::_VecModelLP)(params::AbstractVector)
         f.conditioned,
         f.lp_function,
         f.parameter_space,
-        f.ranges_and_transforms,
+        f.vecinfo,
         f.accs,
     )
 end
@@ -77,10 +77,10 @@ function _vecmodel_lp(
     conditioned::VarNamedTuple,
     lp_function,
     parameter_space::AbstractParameterSpace,
-    ranges_and_transforms::RangesAndTransforms,
+    vecinfo::VecInfo,
     accs::AccumulatorTuple,
 )
-    source = FromVector(params, ranges_and_transforms)
+    source = FromVector(params, vecinfo)
     _, accs = evaluation_fn(source, parameter_space, accs, model_args, conditioned)
     return lp_function(accs)
 end
@@ -155,7 +155,7 @@ since the mapping is invariant to the order in which the latent variables are en
   `VarNamedTuple` of values, wrap it in [`FromParams`](@ref).
 
   If you have already run the model once, you can avoid reevaluation entirely by calling the
-  positional constructor with a `RangesAndTransforms` and a parameter vector. This is mostly
+  positional constructor with a `VecInfo` and a parameter vector. This is mostly
   intended for advanced usage, please see the Wren source code for examples of how to do
   this.
 
@@ -175,7 +175,7 @@ struct VecModel{
     A<:Union{DI.AbstractADType,Nothing},
     F,
     S<:AbstractParameterSpace,
-    R<:RangesAndTransforms,
+    R<:VecInfo,
     AC<:AccumulatorTuple,
     L<:_VecModelLP,
     P,
@@ -185,7 +185,7 @@ struct VecModel{
     adtype::A
     lp_function::F
     parameter_space::S
-    ranges_and_transforms::R
+    vecinfo::R
     accs::AC
     dimension::Int
     lp_func::L
@@ -202,14 +202,14 @@ function VecModel(
     adtype::A,
     lp_function::F,
     parameter_space::S,
-    ranges_and_transforms::R,
+    vecinfo::R,
     params::X,
 ) where {
     M<:Model,
     A<:Union{DI.AbstractADType,Nothing},
     F,
     S<:AbstractParameterSpace,
-    R<:RangesAndTransforms,
+    R<:VecInfo,
     X<:AbstractVector,
 }
     # TODO: make accs customisable
@@ -224,7 +224,7 @@ function VecModel(
         model.conditioned,
         lp_function,
         parameter_space,
-        ranges_and_transforms,
+        vecinfo,
         accs,
     )
     adprep = if adtype === nothing || adtype isa NoAutoDiff
@@ -245,7 +245,7 @@ function VecModel(
             DI.Constant(model.conditioned),
             DI.Constant(lp_function),
             DI.Constant(parameter_space),
-            DI.Constant(ranges_and_transforms),
+            DI.Constant(vecinfo),
             DI.Constant(accs),
         )
     end
@@ -254,7 +254,7 @@ function VecModel(
         adtype,
         lp_function,
         parameter_space,
-        ranges_and_transforms,
+        vecinfo,
         accs,
         length(params),
         lp_func,
@@ -272,19 +272,8 @@ function VecModel(
     lp_function=logjoint_transformed,
     parameter_space::AbstractParameterSpace=UnconstrainedSpace(),
 )
-    # Get vectorised parameters.
-    values, sitename_tracker = _prepare_vecmodel_info(model, latent_source, parameter_space)
-    # Check that they're sensible, and flatten them into a single vector.
-    _validate_vectorised_params(values, parameter_space)
-    ranges_and_transforms, sample = _ranges_and_params(values, sitename_tracker)
-    return VecModel(
-        model,
-        adtype,
-        lp_function,
-        parameter_space,
-        ranges_and_transforms,
-        sample,
-    )
+    vecinfo, sample = _prepare_vecmodel_info(model, latent_source, parameter_space)
+    return VecModel(model, adtype, lp_function, parameter_space, vecinfo, sample)
 end
 
 function Base.show(io::IO, ::MIME"text/plain", vm::VecModel)
@@ -323,22 +312,6 @@ _use_closure(::DI.AbstractADType) = false
 # overloaded in EnzymeExt as it depends on runtime activity error which isn't in Core
 _handle_enzyme(@nospecialize(vm::VecModel)) = vm
 
-function _validate_vectorised_params(
-    values::VarNamedTuple,
-    parameter_space::AbstractParameterSpace,
-)
-    for (vn, tval) in pairs(values)
-        expected = target_transform(parameter_space, vn)
-        get_transform(tval) == expected || throw(
-            ArgumentError(
-                "The value for variable `$vn` uses $(get_transform(tval)), but " *
-                "the selected parameter space requires $expected.",
-            ),
-        )
-    end
-    return nothing
-end
-
 # Run the model once to collect everything needed to vectorise it: the latent values, plus
 # the sampling sites that were hit exactly once (which provide the fast-path lookup).
 function _prepare_vecmodel_info(
@@ -346,23 +319,17 @@ function _prepare_vecmodel_info(
     source::AbstractLatentSource,
     parameter_space::AbstractParameterSpace,
 )
-    accs = AccumulatorTuple(VectorisedParamsAccumulator(), SiteNameTracker())
+    accs = AccumulatorTuple(VectorisedParamsAccumulator(), SitenameCountAccumulator())
     _, accs = evaluate(model, source, parameter_space, accs)
-    return vectorised_params(accs), accs[SITENAME_TRACKER_ACCNAME]
-end
-function _ranges_and_params(
-    values::VarNamedTuple,
-    sitename_tracker::SiteNameTracker=SiteNameTracker(),
-)
+    vecvals = vectorised_params(accs)
+    sca = getacc(accs, Val{SITENAMECOUNT_ACCNAME}())
+
+    # TODO(penelopeysm): This might be slower than necessary due to boxing of the
+    # closed-over variables. It might be worth checking if a struct is better. However,
+    # since this is only done once at VecModel construction time, it's not a huge deal.
     params = Union{}[]
     offset = 1
-    # `map_pairs!!` rewrites the leaves in place of `values`, which keeps the structure of
-    # the VarNamedTuple intact. Rebuilding it leaf-by-leaf instead would silently drop any
-    # submodel that sampled nothing, since those are empty sub-VarNamedTuples with no leaves
-    # to iterate over -- and `scope(::FromVector, vn)` needs every submodel prefix to be
-    # present. It also means the ranges we hand out and the order in which we concatenate
-    # the values come from a single traversal, so they cannot disagree.
-    slow_vnt = VarNames.map_pairs!!(values) do (vn, tval)
+    varname_to_rat = VarNames.map_pairs!!(vecvals) do (vn, tval)
         value = get_internal_value(tval)
         value isa AbstractVector || throw(
             ArgumentError(
@@ -372,9 +339,11 @@ function _ranges_and_params(
         range = offset:(offset+length(value)-1)
         params = vcat(params, value)
         offset = last(range) + 1
-        return RangeAndTransform(range, get_transform(tval))
+        RangeAndTransform(range, get_transform(tval))
     end
-    return RangesAndTransforms(sitename_tracker, slow_vnt), params
+    vecinfo = VecInfo(sca, varname_to_rat)
+
+    return vecinfo, params
 end
 
 """
@@ -410,7 +379,7 @@ function lp_and_grad(vecmodel::VecModel, params::AbstractVector)
             DI.Constant(vecmodel.model.conditioned),
             DI.Constant(vecmodel.lp_function),
             DI.Constant(vecmodel.parameter_space),
-            DI.Constant(vecmodel.ranges_and_transforms),
+            DI.Constant(vecmodel.vecinfo),
             DI.Constant(vecmodel.accs),
         )
     end
@@ -447,7 +416,7 @@ function lp_and_grad!(grad::AbstractVector, vecmodel::VecModel, params::Abstract
             DI.Constant(vecmodel.model.conditioned),
             DI.Constant(vecmodel.lp_function),
             DI.Constant(vecmodel.parameter_space),
-            DI.Constant(vecmodel.ranges_and_transforms),
+            DI.Constant(vecmodel.vecinfo),
             DI.Constant(vecmodel.accs),
         )
     end
@@ -508,11 +477,10 @@ end
 Draw a parameter vector compatible with `vecmodel`.
 """
 function Base.rand(rng::AbstractRNG, vecmodel::VecModel)
-    # TODO: this is inefficient -- should write directly into the vector
-    values, _ =
+    # TODO: this is VERY inefficient
+    vecinfo, params =
         _prepare_vecmodel_info(vecmodel.model, FromPrior(rng), vecmodel.parameter_space)
-    ranges_and_transforms, params = _ranges_and_params(values)
-    ranges_and_transforms == vecmodel.ranges_and_transforms || throw(
+    vecinfo == vecmodel.vecinfo || throw(
         ArgumentError(
             "The model produced a parameter layout that is incompatible with this " *
             "VecModel.",
