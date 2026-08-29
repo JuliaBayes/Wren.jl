@@ -99,8 +99,8 @@ function combine(acc1::SitenameCountAccumulator, acc2::SitenameCountAccumulator)
     #     v = VarNamedTuple(x = VarNamedTuple())
     #     keys(v) # Returns [].
     #
-    # and we want to preserve empty VNTs in order to make sure that the hot path (namely
-    # `scope(::FromVector, ...)`) is type stable.
+    # and we want to preserve empty VNTs in order to make sure that a hot path (namely
+    # `scope(::FromVector, ...)`) is type stable. See the comments there for more info.
     return SitenameCountAccumulator(merge(acc1.entries, deduped))
 end
 

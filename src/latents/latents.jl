@@ -270,11 +270,36 @@ function get_latent(source::FromVector, vn::VarName, right, sitename::Val)
     return TransformedValue(view(source.params, range), tfm)
 end
 
-_maybe_get_vnt(source::VarNamedTuple, vn::VarName) =
-    haskey(source, vn) ? source[vn] : VarNamedTuple()
 function scope(source::FromVector, vn::VarName)
     vi = source.vecinfo
-    # As explained in the constructor docstring for VecInfo, both VNTs are
-    # prefixed using `vn` rather than the sitename, so we can directly index into it.
+    # As explained in the constructor docstring for VecInfo, both VNTs are prefixed using
+    # `vn` rather than the sitename, so we can directly index into it.
+    #
+    # Note that this implementation **forces** vi.sitename_to_rat to always contain an
+    # entry for `vn`, even if the submodel doesn't contain any unique sampling sites.
+    # For example, consider:
+    #
+    # @wren function inner()
+    #     x = zeros(10)
+    #     for i in 1:10
+    #         x[i] ~ Normal()
+    #     end
+    # end
+    #
+    # @wren function outer()
+    #     a ~ inner()
+    # end
+    #
+    # When running the submodel, there are no unique sampling sites, so in principle we
+    # don't need to record anything in the sitename_to_rat VNT. However, we can't completely
+    # elide it: we need to retain an empty VNT under the key `@vn(a)` so that the getindex
+    # call `vi.sitename_to_rat[vn]` doesn't throw an error. This creates an invariant that
+    # must be upheld during *construction* of `sitename_to_rat`. Specifically, see
+    # `combine(::SitenameCountAccumulator, ...)` for where this is fulfilled.
+    #
+    # It would be 'simpler' to just check if `haskey(vi.sitename_to_rat, vn)` and return an
+    # empty VNT if not. However, this is not type stable. Because scope(::FromVector, ...)
+    # is called during the hot path of model evaluation, we can't afford to introduce type
+    # instabilities.
     return FromVector(source.params, VecInfo(vi.sitename_to_rat[vn], vi.varname_to_rat[vn]))
 end
