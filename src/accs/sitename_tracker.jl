@@ -70,19 +70,23 @@ function accumulate_assume!!(
     right,
     logjac,
     template,
-    sitename,
-)
+    ::Val{sitename},
+) where {sitename}
     key = VarName{sitename}()
-    # TODO(penelopeysm): this could be compile time determined if the accumulate methods
-    # took Vals rather than Symbols. See https://github.com/JuliaBayes/Wren.jl/issues/51
     new_entry = haskey(acc.entries, key) ? SeenMultipleTimes() : vn
     # No template needed since `key` is a simple VarName
     new_entries = VarNames.setindex!!(acc.entries, new_entry, key)
     return SitenameCountAccumulator(new_entries)
 end
 
-accumulate_observe!!(acc::SitenameCountAccumulator, val, vn, right, template, sitename) =
-    acc
+accumulate_observe!!(
+    acc::SitenameCountAccumulator,
+    val,
+    vn,
+    right,
+    template,
+    @nospecialize(sitename::Val),
+) = acc
 
 reset(acc::SitenameCountAccumulator) = SitenameCountAccumulator()
 split(acc::SitenameCountAccumulator) = SitenameCountAccumulator()

@@ -78,7 +78,7 @@ function emit_model_expr(stmt::Sample, accs, conditioned, latent_source, paramet
                     $vn,
                     $rhs,
                     $template,
-                    $(QuoteNode(stmt.name)),
+                    $(Val{stmt.name}()),
                 )
             else
                 $init_tval = $(get_latent)($latent_source, $vn, $rhs, $(Val{stmt.name}()))
@@ -93,7 +93,7 @@ function emit_model_expr(stmt::Sample, accs, conditioned, latent_source, paramet
                     $rhs,
                     $logjac,
                     $template,
-                    $(QuoteNode(stmt.name)),
+                    $(Val{stmt.name}()),
                 )
             end
         end
@@ -303,7 +303,7 @@ function emit_model_expr(
     return quote
         if $(hasacc)($accs, $(Val{LOG_LIKELIHOOD_ACCNAME}()))
             $value = $value_expr
-            $accs = $(accumulate_addloglikelihood!!)($accs, $value, $(QuoteNode(stmt.name)))
+            $accs = $(accumulate_addloglikelihood!!)($accs, $value, $(Val{stmt.name}()))
         end
     end
 end
@@ -322,14 +322,8 @@ function emit_model_expr(stmt::Observe, accs, conditioned, latent_source, parame
         $val = $(lhs_val)
         $rhs = $rhs_expr
         $vn = $vn_expr
-        $accs = $(accumulate_observe!!)(
-            $accs,
-            $val,
-            $vn,
-            $rhs,
-            $template,
-            $(QuoteNode(stmt.name)),
-        )
+        $accs =
+            $(accumulate_observe!!)($accs, $val, $vn, $rhs, $template, $(Val{stmt.name}()))
     end
 end
 

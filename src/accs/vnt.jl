@@ -74,7 +74,7 @@ function accumulate_assume!!(
     right,
     logjac,
     template,
-    sitename,
+    @nospecialize(sitename::Val),
 )
     new_val = acc.f(val, tval, vn, right, logjac)
     return if new_val isa DoNotAccumulate
@@ -84,7 +84,14 @@ function accumulate_assume!!(
         update_values(acc, new_values)
     end
 end
-accumulate_observe!!(acc::VNTAccumulator, val, vn, right, template, sitename) = acc
+accumulate_observe!!(
+    acc::VNTAccumulator,
+    val,
+    vn,
+    right,
+    template,
+    @nospecialize(sitename::Val)
+) = acc
 
 _zero(acc::VNTAccumulator) = update_values(acc, empty(acc.values))
 reset(acc::VNTAccumulator) = _zero(acc)
