@@ -15,15 +15,23 @@ function _issue_error(str)
     )
 end
 
+# Parameter spaces
 include("space.jl")
+
+# Latent sources
+include("latents/latents.jl")
+include("latents/prior.jl")
+include("latents/params.jl")
+
+# Accumulators
 include("accs/accs.jl")
 include("accs/logp.jl")
 include("accs/vnt.jl")
 include("accs/params.jl")
-include("accs/vectorised_params.jl")
 include("accs/sitename_tracker.jl")
 include("accs/accessors.jl")
-include("latents/latents.jl")
+
+# Model definition
 include("model/expr.jl")
 using .Expressions:
     AbstractWrenExpr,
@@ -41,8 +49,15 @@ using .Expressions:
 include("model/model.jl")
 include("model/submodel.jl")
 include("model/emit.jl")
-include("interface.jl")
+
+# Vectorisation
+include("latents/vector.jl")
+include("accs/vectorised_params.jl")
+include("accs/vec_sample.jl")
 include("vecmodel.jl")
+
+# User-facing interface
+include("interface.jl")
 include("draw.jl")
 include("test_ad.jl")
 
@@ -74,6 +89,7 @@ export @wren,
     TransformedValue,
     VecModel,
     VectorisedParamsAccumulator,
+    vectorise_latents,
     WithBackend,
     WithExpectedResult,
     OriginalSpace,
@@ -114,6 +130,7 @@ export AutoForwardDiff, AutoReverseDiff, AutoMooncake, AutoEnzyme
 using EnzymeCore: Forward, Reverse
 export Forward, Reverse
 
+# Sampling (could in principle be a different package)
 module Samplers
 using FlexiChains: FlexiChains
 const CHAINTYPE = FlexiChains.VNChain

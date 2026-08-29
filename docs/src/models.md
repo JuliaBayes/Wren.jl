@@ -223,12 +223,25 @@ You can draw a vectorised sample from a `VecModel` with the `rand` function:
 v = rand(vecmodel)
 ```
 
+or you can convert existing parameters into a vectorised form with [`vectorise_latents`](@ref):
+
+```@example models
+ps = FromParams(rand(model))         # This is a VarNamedTuple in original model space.
+v = vectorise_latents(ps, vecmodel)  # Convert it to vectorised (and unconstrained) form.
+```
+
+Then you can calculate the log-density of these vectorised parameters, and their gradient:
+
 ```@example models
 import LogDensityProblems as LDP
 
 LDP.logdensity(vecmodel, v)               # Works without an adtype.
 LDP.logdensity_and_gradient(vecmodel, v)  # Requires an adtype.
 ```
+
+!!! note
+
+    If you have a use for higher-order derivatives like Hessians, please open an issue!
 
 Wren in fact exports shorter functions for these, namely [`lp`](@ref) and [`lp_and_grad`](@ref), which are directly equivalent to the above.
 Additionally, Wren provides an in-place gradient [`lp_and_grad!`](@ref) function, which may be useful for squeezing every last bit of performance out.

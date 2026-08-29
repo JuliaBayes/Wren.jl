@@ -10,6 +10,7 @@ using LinearAlgebra
 import LogDensityProblems as LDP
 using Plaice
 using Random
+using StableRNGs
 using Test
 using Wren
 
@@ -115,6 +116,32 @@ end
             @test_throws Exception LDP.logdensity_and_gradient(vm, yvec)
             @test_throws Exception lp_and_grad(vm, yvec)
             @test_throws Exception lp_and_grad!(similar(yvec), vm, yvec)
+        end
+    end
+
+    @testset "vectorise_latents and rand" begin
+        @wren function fexp()
+            x ~ Exponential()
+        end
+        model = fexp()
+
+        vm = VecModel(model, nothing)
+
+        x = @inferred rand(vm)
+        @test x isa AbstractVector{<:Real}
+        @test length(x) == 1
+
+        # check reproducibility
+        @test rand(Xoshiro(468), vm) == rand(Xoshiro(468), vm)
+
+        # check that there are some negative values, i.e., it's unconstrained space
+        xs = vcat([rand(StableRNG(i), vm) for i in 1:100]...)
+        @test any(xs .< 0)
+
+        for X in [0.1, 1.0, 10.0]
+            prms = FromParams(VarNamedTuple(x=X), nothing)
+            x = @inferred vectorise_latents(prms, vm)
+            @test x ≈ [log(X)]
         end
     end
 end
