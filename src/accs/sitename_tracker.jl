@@ -63,29 +63,34 @@ SitenameCountAccumulator() = SitenameCountAccumulator(VarNamedTuple())
 accumulator_name(::Type{<:SitenameCountAccumulator}) = SITENAMECOUNT_ACCNAME
 
 function accumulate_assume!!(
-    acc::SitenameCountAccumulator,
+    acc::SitenameCountAccumulator{<:VarNamedTuple{names}},
     val,
     tval,
     vn,
     right,
     logjac,
     template,
-    sitename,
-)
-    key = VarName{sitename}()
-    # TODO(penelopeysm): this could be compile time determined if the accumulate methods
-    # took Vals rather than Symbols. See https://github.com/JuliaBayes/Wren.jl/issues/51
-    new_entry = haskey(acc.entries, key) ? SeenMultipleTimes() : vn
-    # No template needed since `key` is a simple VarName
-    new_entries = VarNames.setindex!!(acc.entries, new_entry, key)
+    ::Val{sitename},
+) where {names,sitename}
+    new_entry = sitename in names ? SeenMultipleTimes() : vn
+    # No template needed since it's a simple VarName.
+    new_entries = VarNames.setindex!!(acc.entries, new_entry, VarName{sitename}())
     return SitenameCountAccumulator(new_entries)
 end
 
-accumulate_observe!!(acc::SitenameCountAccumulator, val, vn, right, template, sitename) =
-    acc
+function accumulate_observe!!(
+    acc::SitenameCountAccumulator,
+    val,
+    vn,
+    right,
+    template,
+    @nospecialize(sitename::Val),
+)
+    return acc
+end
 
-reset(acc::SitenameCountAccumulator) = SitenameCountAccumulator()
-split(acc::SitenameCountAccumulator) = SitenameCountAccumulator()
+reset(::SitenameCountAccumulator) = SitenameCountAccumulator()
+split(::SitenameCountAccumulator) = SitenameCountAccumulator()
 Base.copy(acc::SitenameCountAccumulator) = acc
 
 function combine(acc1::SitenameCountAccumulator, acc2::SitenameCountAccumulator)
