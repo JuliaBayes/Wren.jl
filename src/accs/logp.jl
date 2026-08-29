@@ -184,13 +184,6 @@ function Base.convert(
     return AccType(convert(T, logp(acc)))
 end
 
-function promote_for_threadsafe_eval(
-    acc::LogProbAccumulator,
-    ::Type{Tparam_eltype},
-) where {Tparam_eltype}
-    return basetypeof(acc)(convert(Tparam_eltype, logp(acc)))
-end
-
 """
     LogPriorAccumulator{T<:Number} <: LogProbAccumulator{T}
 

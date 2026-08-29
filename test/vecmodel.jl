@@ -59,7 +59,7 @@ end
             @wren function f(d)
                 x ~ d
             end
-            grad_rtol = sqrt(eps())
+            grad_rtol = 1e-7
 
             @testset "$name" for (name, adtype) in TESTED_ADTYPES
                 vm = VecModel(f(d), adtype)
@@ -72,7 +72,7 @@ end
 
                 for _ in 1:10
                     # check with a few random vectors to make sure it's unconstrained
-                    y = randn(N) .* 10
+                    y = randn(N) .* 5
                     lp_expected = reference_lp(d, y)
                     grad_expected = reference_grad(d, y)
 

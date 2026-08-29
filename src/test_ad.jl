@@ -279,7 +279,7 @@ function benchmark_and_test(
     vecmodel = VecModel(
         model,
         adtype;
-        params=FromParams(vnt_params, nothing),
+        latent_source=FromParams(vnt_params, nothing),
         lp_function,
         parameter_space,
     )
@@ -296,7 +296,7 @@ function benchmark_and_test(
         ref_vecmodel = VecModel(
             model,
             nothing;
-            params=FromParams(vnt_params, nothing),
+            latent_source=FromParams(vnt_params, nothing),
             lp_function,
             parameter_space,
         )
@@ -334,7 +334,7 @@ function benchmark_and_test(
             test_correctness.adtype,
             vecmodel.lp_function,
             vecmodel.parameter_space,
-            vecmodel.ranges_and_transforms,
+            vecmodel.vecinfo,
             vecmodel.sample,
         )
         _, grad = lp_and_grad(reference, vec_params)

@@ -1,28 +1,69 @@
-const SITENAME_TRACKER_ACCNAME = :SiteNameTracker
+const SITENAMECOUNT_ACCNAME = :SitenameCountAccumulator
 
 """
-    SiteNameTracker
+    SeenMultipleTimes
 
-Accumulator that identifies sampling sites hit exactly once during model evaluation. On
-the first hit of a `sitename`, its `VarName` is stored in a NamedTuple keyed by
-`sitename`. On any subsequent hit, the entry is removed and the `sitename` is blacklisted
-so it is never re-added.
-
-After evaluation, `entries` contains only the single-hit sites, mapping
-`sitename => VarName`. This is used to build a fast NamedTuple lookup for ranges and
-transforms, bypassing the slower VarNamedTuple path.
+Sentinel value that marks a sitename that was hit more than once during model evaluation.
 """
-struct SiteNameTracker{NT<:NamedTuple,BL<:Tuple} <: AbstractAccumulator
-    entries::NT
-    blacklist::BL
+struct SeenMultipleTimes end
+
+"""
+    SitenameCountAccumulator
+
+Accumulator that identifies sampling sites hit exactly once during model evaluation.
+
+After evaluating a model, the `entries` field should contain a mapping of *(maybe-prefixed)
+sitenames to (maybe-prefixed) `VarName`s*.
+
+For example, take the model
+
+```julia
+@wren function model(x)
+    @sample name=:sna a ~ Normal()
+    for i in eachindex(x)
+        @sample name=:snxi x[i] ~ Normal()
+    end
+end
+```
+
+Here, the `sna` site is only hit once during model evaluation, but `snx` is hit more than
+once (as long as `x` has length 2 or more). Thus, after evaluating the model with a
+`SitenameCountAccumulator`, it should contain the mappings `@vn(sna) => @vn(a)` and `@vn(snx) =>
+SeenMultipleTimes()`.
+
+On the first hit of a `sitename`, its `VarName` is stored in a `VarNamedTuple` under the key
+`VarName{sitename}()`. On any subsequent hit, the entry is replaced with
+[`SeenMultipleTimes`](@ref) so it is never re-added.
+
+## Submodel handling
+
+In the following example:
+
+```julia
+@wren function inner()
+    @sample name=:sna a ~ Normal()
 end
 
-SiteNameTracker() = SiteNameTracker(NamedTuple(), ())
+@wren function outer()
+    @sample name=:snx x ~ inner()
+end
+```
 
-accumulator_name(::Type{<:SiteNameTracker}) = SITENAME_TRACKER_ACCNAME
+After evaluating `outer()`, the `entries` field of the `SitenameCountAccumulator` should contain a
+mapping of `@vn(x.sna) => @vn(x.a)`. **Note:** the prefixed sitename is prefixed with the
+parent VarName, not the parent sitename (`snx`). The rationale for this is explained in
+[`VecInfo`](@ref).
+"""
+struct SitenameCountAccumulator{V<:VarNamedTuple} <: AbstractAccumulator
+    entries::V
+end
+
+SitenameCountAccumulator() = SitenameCountAccumulator(VarNamedTuple())
+
+accumulator_name(::Type{<:SitenameCountAccumulator}) = SITENAMECOUNT_ACCNAME
 
 function accumulate_assume!!(
-    acc::SiteNameTracker,
+    acc::SitenameCountAccumulator,
     val,
     tval,
     vn,
@@ -31,43 +72,71 @@ function accumulate_assume!!(
     template,
     sitename,
 )
-    if sitename in acc.blacklist
-        return acc
-    elseif haskey(acc.entries, sitename)
-        new_entries = Base.structdiff(acc.entries, NamedTuple{(sitename,)})
-        return SiteNameTracker(new_entries, (acc.blacklist..., sitename))
-    else
-        new_entries = merge(acc.entries, NamedTuple{(sitename,)}((vn,)))
-        return SiteNameTracker(new_entries, acc.blacklist)
-    end
+    key = VarName{sitename}()
+    # TODO(penelopeysm): this could be compile time determined if the accumulate methods
+    # took Vals rather than Symbols. See https://github.com/JuliaBayes/Wren.jl/issues/51
+    new_entry = haskey(acc.entries, key) ? SeenMultipleTimes() : vn
+    # No template needed since `key` is a simple VarName
+    new_entries = VarNames.setindex!!(acc.entries, new_entry, key)
+    return SitenameCountAccumulator(new_entries)
 end
 
-accumulate_observe!!(acc::SiteNameTracker, val, vn, right, template, sitename) = acc
+accumulate_observe!!(acc::SitenameCountAccumulator, val, vn, right, template, sitename) =
+    acc
 
-reset(acc::SiteNameTracker) = SiteNameTracker()
-split(acc::SiteNameTracker) = SiteNameTracker()
-Base.copy(acc::SiteNameTracker) = acc
+reset(acc::SitenameCountAccumulator) = SitenameCountAccumulator()
+split(acc::SitenameCountAccumulator) = SitenameCountAccumulator()
+Base.copy(acc::SitenameCountAccumulator) = acc
 
-function combine(acc1::SiteNameTracker, acc2::SiteNameTracker)
-    all_blacklisted = (acc1.blacklist..., acc2.blacklist...)
-    combined = NamedTuple()
-    for (k, v) in pairs(merge(acc1.entries, acc2.entries))
-        if k in all_blacklisted
-            continue
-        elseif haskey(acc1.entries, k) && haskey(acc2.entries, k)
-            all_blacklisted = (all_blacklisted..., k)
-        else
-            combined = merge(combined, NamedTuple{(k,)}((v,)))
-        end
+function combine(acc1::SitenameCountAccumulator, acc2::SitenameCountAccumulator)
+    # Replace any of acc2's entries that are already present in acc1 with SeenMultipleTimes
+    deduped = VarNames.map_pairs!!(acc2.entries) do (key, value)
+        haskey(acc1.entries, key) ? SeenMultipleTimes() : value
     end
-    return SiteNameTracker(combined, all_blacklisted)
+    # We need to use `merge` here instead of some function that iterates over keys (like
+    # map_pairs!!) because empty VNTs are not treated as keys:
+    #
+    #     v = VarNamedTuple(x = VarNamedTuple())
+    #     keys(v) # Returns [].
+    #
+    # and we want to preserve empty VNTs in order to make sure that a hot path (namely
+    # `scope(::FromVector, ...)`) is type stable. See the comments there for more info.
+    return SitenameCountAccumulator(merge(acc1.entries, deduped))
 end
 
 function combine_with_namespace(
-    acc1::SiteNameTracker,
-    acc2::SiteNameTracker,
-    ::VarName,
+    acc1::SitenameCountAccumulator,
+    acc2::SitenameCountAccumulator,
+    vn::VarName,
     template,
 )
-    return combine(acc1, acc2)
+    prefixed = VarNames.map_values!!(acc2.entries) do v
+        v isa SeenMultipleTimes ? v : VarNames.prefix(v, vn)
+    end
+    nested = VarNames.templated_setindex!!(VarNamedTuple(), prefixed, vn, template)
+    return combine(acc1, SitenameCountAccumulator(nested))
+end
+
+"""
+    map_sitenames_to_rats(sca::SitenameCountAccumulator, varnames_to_ranges::VarNamedTuple)
+
+`sca.entries` contains a mapping of sitenames visited only once, to the corresponding
+`VarName`s. Then `varnames_to_ranges` contains a mapping of `VarName`s to the corresponding
+`RangeAndTransform` structs.
+
+This function joins the two and returns a `VarNamedTuple` that maps sitenames (visited only
+once) to the corresponding `RangeAndTransform` structs.
+
+Resolve each `VarName` tracked by `tracker` against `vnt`, returning a `VarNamedTuple` that
+maps sitename-paths to the corresponding values in `vnt`. SeenMultipleTimes sites are left as
+[`SeenMultipleTimes`](@ref).
+"""
+function map_sitenames_to_rats(
+    sca::SitenameCountAccumulator,
+    varnames_to_rats::VarNamedTuple,
+)
+    sitenames_to_varnames = sca.entries
+    return VarNames.map_values!!(sitenames_to_varnames) do v
+        v isa SeenMultipleTimes ? v : varnames_to_rats[v]
+    end
 end

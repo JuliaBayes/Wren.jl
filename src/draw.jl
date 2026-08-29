@@ -79,18 +79,15 @@ end
 function _all_fixed_transforms(vecmodel::VecModel)
     return all(
         rt -> rt.transform isa FixedTransform,
-        values(vecmodel.ranges_and_transforms.vnt),
+        values(vecmodel.vecinfo.varname_to_rat),
     )
 end
 
-function _raw_params_from_fixed_transforms(
-    params::AbstractVector,
-    ranges_and_transforms::RangesAndTransforms,
-)
-    vnt = ranges_and_transforms.vnt
+function _raw_params_from_fixed_transforms(params::AbstractVector, vecinfo::VecInfo)
+    varname_to_rat = vecinfo.varname_to_rat
     raw_params = VarNamedTuple()
-    for (vn, rt) in pairs(vnt)
-        template = get(vnt.data, VarNames.getsym(vn), VarNames.NoTemplate())
+    for (vn, rt) in pairs(varname_to_rat)
+        template = get(varname_to_rat.data, VarNames.getsym(vn), VarNames.NoTemplate())
         raw_value = rt.transform.transform(params[rt.range])
         raw_params = VarNames.templated_setindex!!(raw_params, raw_value, vn, template)
     end
@@ -117,12 +114,11 @@ function VarNames.Draw(
 )
     _check_vecmodel_dimension(params, vecmodel)
     if !include_log_probs && _all_fixed_transforms(vecmodel)
-        raw_params =
-            _raw_params_from_fixed_transforms(params, vecmodel.ranges_and_transforms)
+        raw_params = _raw_params_from_fixed_transforms(params, vecmodel.vecinfo)
         return VarNames.Draw(raw_params, stats)
     end
 
-    source = FromVector(params, vecmodel.ranges_and_transforms)
+    source = FromVector(params, vecmodel.vecinfo)
     accs = _draw_accumulators(include_log_probs)
     _, accs = evaluate(vecmodel.model, source, vecmodel.parameter_space, accs)
     return _draw(accs, stats, include_log_probs)

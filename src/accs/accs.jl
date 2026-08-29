@@ -144,16 +144,6 @@ Embed the contents of `child` beneath `vn`, then combine it with `parent`.
 function combine_with_namespace end
 
 """
-    promote_for_threadsafe_eval(acc::AbstractAccumulator, ::Type{T}) where {T}
-
-Convert `acc` to a new accumulator that works with threadsafe evaluation. The type parameter
-`T` is the element type of the parameters that will be used for model evaluation.
-
-See the docstring of `ThreadSafeVarInfo(vi, ::Type{T})` for more details.
-"""
-promote_for_threadsafe_eval(acc::AbstractAccumulator, ::Type) = acc
-
-"""
     AccumulatorTuple{N,T<:NamedTuple}
 
 A collection of accumulators, stored as a `NamedTuple` of length `N`
