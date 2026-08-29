@@ -18,21 +18,18 @@ end
 # Parameter spaces
 include("space.jl")
 
+# Latent sources
+include("latents/latents.jl")
+include("latents/prior.jl")
+include("latents/params.jl")
+
 # Accumulators
 include("accs/accs.jl")
 include("accs/logp.jl")
 include("accs/vnt.jl")
 include("accs/params.jl")
-include("accs/vectorised_params.jl")
 include("accs/sitename_tracker.jl")
 include("accs/accessors.jl")
-
-# Latent sources
-include("latents/latents.jl")
-include("latents/prior.jl")
-include("latents/params.jl")
-include("latents/vector.jl")
-include("accs/vec_sample.jl")
 
 # Model definition
 include("model/expr.jl")
@@ -53,9 +50,14 @@ include("model/model.jl")
 include("model/submodel.jl")
 include("model/emit.jl")
 
+# Vectorisation
+include("latents/vector.jl")
+include("accs/vectorised_params.jl")
+include("accs/vec_sample.jl")
+include("vecmodel.jl")
+
 # User-facing interface
 include("interface.jl")
-include("vecmodel.jl")
 include("draw.jl")
 include("test_ad.jl")
 
