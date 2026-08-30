@@ -6,6 +6,8 @@ Wren is a probabilistic programming language that harnesses modern Julia tools t
 It relies on staged computation instead of directly emitting Julia code as, for example, [DynamicPPL](https://github.com/TuringLang/DynamicPPL.jl) does.
 Wren also supports powerful syntax-level vectorisation tools via the `@batch` macro.
 
+## Quick start
+
 ```julia
 using Wren
 using Distributions
