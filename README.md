@@ -1,6 +1,6 @@
 # Wren.jl
 
-[![Stable docs](https://img.shields.io/badge/docs-stable-blue.svg)](https://pysm.dev/Wren.jl/) <a href="https://pysm.dev/Wren.jl/"><img src="/docs/src/assets/logo.svg" align="right" alt="Wren.jl logo"></a>
+[![Stable docs](https://img.shields.io/badge/docs-stable-blue.svg)](https://pysm.dev/Wren.jl/) <a href="https://pysm.dev/Wren.jl/"><img src="/docs/src/assets/logo.svg" align="right" alt="Wren.jl logo" style="height: 140px;"></a>
 
 Wren is a probabilistic programming language that harnesses modern Julia tools to maximise performance.
 It relies on staged computation instead of directly emitting Julia code as, for example, [DynamicPPL](https://github.com/TuringLang/DynamicPPL.jl) does.
