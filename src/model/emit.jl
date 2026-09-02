@@ -23,6 +23,12 @@ end
 assign_or_set!!(lhs::Symbol, rhs, vn) = :($lhs = $rhs)
 function assign_or_set!!(lhs::Expr, rhs, vn)
     left_top_sym = get_top_level_symbol(lhs)
+    # Note: this mutates in place, which is only safe because `make_evaluation_fn` copies
+    # every argument that is written to at the top of the model body. Mutating the model's
+    # own argument array would be undefined behaviour under Enzyme, which is handed that
+    # array as a constant: storing active values into constant memory and reading them back
+    # silently drops the gradient of everything downstream (e.g. an `@observe` inside a
+    # `@plate` that depends on a variable sampled in the same plate).
     return :(
         $left_top_sym = $(Accessors.set)(
             $left_top_sym,

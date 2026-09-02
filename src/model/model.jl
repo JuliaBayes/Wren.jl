@@ -70,6 +70,29 @@ _dealias(v) = deepcopy(v)
 # models that are passed as arguments to models. However, this may need to be revisited.
 _dealias(model::Model) = model
 
+"""
+    collect_assigned_args(stmt, syms::Set{Symbol})
+
+Collect the top-level symbols written to by `x[i] ~ ...` statements, i.e. the arguments
+that the model body uses as scratch space. These have to be copied before the body runs;
+see the note in `assign_or_set!!`.
+"""
+collect_assigned_args(::Any, syms::Set{Symbol}) = syms
+function collect_assigned_args(stmt::Sample, syms::Set{Symbol})
+    stmt.lhs isa Expr && push!(syms, get_top_level_symbol(stmt.lhs))
+    return syms
+end
+collect_assigned_args(stmt::Plate, syms::Set{Symbol}) =
+    collect_assigned_args(stmt.body, syms)
+function collect_assigned_args(stmt::WrenExpr, syms::Set{Symbol})
+    foreach(arg -> collect_assigned_args(arg, syms), stmt.args)
+    return syms
+end
+function collect_assigned_args(stmts::AbstractVector, syms::Set{Symbol}=Set{Symbol}())
+    foreach(stmt -> collect_assigned_args(stmt, syms), stmts)
+    return syms
+end
+
 function make_evaluation_fn(
     argnames::Tuple{Vararg{Symbol}},
     stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}},
@@ -77,8 +100,13 @@ function make_evaluation_fn(
 )
     body = Expr(:block)
     @gensym model_args
+    assigned = collect_assigned_args(stmts)
     for k in argnames
-        push!(body.args, :($(k) = $model_args.$k))
+        # Arguments that the body writes into are copied once here, so that the body never
+        # mutates the model's own argument array. One copy per evaluation, as opposed to
+        # one per assignment if the writes themselves were made non-mutating.
+        rhs = k in assigned ? :($_dealias($model_args.$k)) : :($model_args.$k)
+        push!(body.args, :($(k) = $rhs))
     end
 
     @gensym accs conditioned latent_source parameter_space retval
