@@ -93,23 +93,72 @@ function collect_assigned_args(stmts::AbstractVector, syms::Set{Symbol}=Set{Symb
     return syms
 end
 
+"""
+    arg_is_conditioned_array(::Type{<:VarNamedTuple}, ::Val{sym})
+
+Whether `conditioned` holds a whole array for `sym`. Partial conditioning is expressed with
+a `PartialArray`, which is not an `AbstractArray`, so it correctly fails this test: its
+unconditioned indices are still sampled.
+
+`VarNamedTuple` carries its keys and value types as type parameters, so this is decided at
+compile time.
+"""
+function arg_is_conditioned_array(
+    ::Type{VarNames.VarNamedTuple{names,T}},
+    ::Val{sym},
+) where {names,T,sym}
+    idx = findfirst(isequal(sym), names)
+    idx === nothing && return false
+    return fieldtype(T, idx) <: AbstractArray
+end
+
+"""
+    maybe_dealias_arg(arg, conditioned::VarNamedTuple, ::Val{sym})
+
+Copy `arg` unless nothing active can ever be written into it, i.e. unless every
+`sym[...] ~ ...` site takes its value from `conditioned`. See the note in
+`assign_or_set!!` for why the copy is needed at all.
+
+Holding a whole array for `sym` is not enough on its own: if the conditioned array is
+smaller than the argument, the sites beyond its extent are still sampled. So the axes have
+to match too, which is a cheap runtime check on top of the compile-time one.
+
+`_dealias` is idempotent on already-dealiased arguments, so both branches return the same
+type.
+"""
+function maybe_dealias_arg(
+    arg,
+    conditioned::VarNames.VarNamedTuple,
+    v::Val{sym},
+) where {sym}
+    fully_conditioned =
+        arg_is_conditioned_array(typeof(conditioned), v) &&
+        axes(getfield(getfield(conditioned, :data), sym)) == axes(arg)
+    return fully_conditioned ? arg : _dealias(arg)
+end
+
 function make_evaluation_fn(
     argnames::Tuple{Vararg{Symbol}},
     stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}},
     mod::Module,
 )
     body = Expr(:block)
-    @gensym model_args
+    @gensym model_args accs conditioned latent_source parameter_space retval
     assigned = collect_assigned_args(stmts)
     for k in argnames
         # Arguments that the body writes into are copied once here, so that the body never
         # mutates the model's own argument array. One copy per evaluation, as opposed to
-        # one per assignment if the writes themselves were made non-mutating.
-        rhs = k in assigned ? :($_dealias($model_args.$k)) : :($model_args.$k)
+        # one per assignment if the writes themselves were made non-mutating. Arguments
+        # that are never written to, and ones that turn out to be fully conditioned, are
+        # passed through untouched -- this matters when they are large.
+        rhs = if k in assigned
+            :($maybe_dealias_arg($model_args.$k, $conditioned, $(Val(k))))
+        else
+            :($model_args.$k)
+        end
         push!(body.args, :($(k) = $rhs))
     end
 
-    @gensym accs conditioned latent_source parameter_space retval
     model_body = emit_statements(stmts, accs, conditioned, latent_source, parameter_space)
     push!(body.args, :($retval = $model_body))
     push!(body.args, :(return ($retval, $accs)))
