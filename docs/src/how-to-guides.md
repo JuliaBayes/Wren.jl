@@ -18,6 +18,7 @@ using Wren
 using Wren.Samplers
 using Enzyme
 using FillArrays
+using Random
 
 init = [0.6, 0.4]
 trans = [0.7 0.3; 0.2 0.8]
