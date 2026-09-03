@@ -86,20 +86,13 @@ rand(Xoshiro(468), ydef_model)
 
 It should be noted that the two models above are actually semantically equivalent: in both models, all `y[i]` are latent variables, regardless of whether `y` is an argument or defined in the model body.
 
-The first version (`yarg`) is more efficient, as it avoids performing the allocation of `y` each time the model is run.
-
 ```@example model
-using Chairmarks
-@b rand($yarg_model)
+@bmodel yarg_model
 ```
 
 ```@example model
-@b rand($ydef_model)
+@bmodel ydef_model
 ```
-
-Be aware that when running the model, the argument to the model will be mutated.
-Thus, one can really think of the function argument as **a 'scratch' buffer that declares the shape of the latent array**, whose contents are not used in any way.
-To avoid accidental aliasing footguns, Wren will make a copy of the argument at model construction time (not model evaluation time).
 
 Immutable structs largely behave the same way as top-level variables, and mutable structs follow the same principles as arrays.
 
