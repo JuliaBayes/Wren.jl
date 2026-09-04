@@ -1,5 +1,7 @@
 module WrenADTests
 
+@info "testing ad.jl"
+
 using DifferentiationInterface: AutoForwardDiff, AutoReverseDiff
 using Distributions
 using ForwardDiff

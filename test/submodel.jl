@@ -1,5 +1,7 @@
 module WrenSubmodelTests
 
+@info "testing submodel.jl"
+
 using Wren
 using Enzyme
 using ForwardDiff

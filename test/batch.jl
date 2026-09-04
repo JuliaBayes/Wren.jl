@@ -1,5 +1,7 @@
 module WrenBatchTests
 
+@info "testing batch.jl"
+
 using Test
 using Wren
 using Enzyme

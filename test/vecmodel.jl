@@ -1,5 +1,7 @@
 module WrenVecModelTests
 
+@info "testing vecmodel.jl"
+
 import DifferentiationInterface as DI
 using Distributions
 import ForwardDiff
@@ -63,6 +65,12 @@ end
             grad_rtol = 1e-7
 
             @testset "$name" for (name, adtype) in TESTED_ADTYPES
+                if d isa Distributions.AbstractMvNormal && adtype isa DI.AutoEnzyme
+                    continue
+                    # https://github.com/EnzymeAD/Enzyme.jl/issues/3527
+                    # https://github.com/EnzymeAD/Enzyme.jl/issues/3528
+                end
+
                 vm = VecModel(f(d), adtype)
                 x = rand(vm)
                 N = length(x)

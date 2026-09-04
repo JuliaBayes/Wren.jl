@@ -1,5 +1,7 @@
 module WrenSyntaxTests
 
+@info "testing syntax.jl"
+
 using Wren
 using Test
 using Distributions
