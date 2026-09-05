@@ -108,7 +108,7 @@ end
 #
 # CURRENTLY gets lowered to something like:
 #
-# y[1:N] ~ _product([Normal(x[i]) for i in 1:N])
+# y[1:N] ~ independent([Normal(x[i]) for i in 1:N])
 #
 # This can be improved! https://github.com/JuliaBayes/ProbabilityMeasures.jl/issues/15
 function emit_model_expr(stmt::Plate, accs, conditioned, latent_source, parameter_space)
@@ -138,9 +138,6 @@ struct Indexed{T}
     data::T
 end
 
-# Backend hook for @plate product distributions.
-function _product end
-
 """
     independent(dists::AbstractArray)
 
@@ -148,12 +145,12 @@ Return a distribution over arrays with the same shape as `dists`, where each ent
 is independently drawn from `dists[i]`.
 
 Used by `@plate` for indexed distributions without a specialised `batched` method.
-Currently supports arrays of univariate ProbabilityMeasures.jl measures.
+Backends (e.g. the Distributions and ProbabilityMeasures extensions) add methods for
+their own distribution types.
 """
 function independent end
 
 """
-    iid(dist, dims::Integer...)
     iid(dist, dims::Dims)
 
 Return independent draws from `dist` in an array of shape `(size(dist)..., dims...)`.
@@ -162,21 +159,20 @@ depend on the loop index.
 
 ```julia
 @wren function f(N)
-    x ~ iid(Normal(), N)    # length N
-    W ~ iid(Normal(), 3, N) # 3 × N
+    x ~ iid(Normal(), (N,))   # length N
+    W ~ iid(Normal(), (3, N)) # 3 × N
 end
 ```
 
-Currently supports ProbabilityMeasures.jl measures.
+The fallback is `independent(Fill(dist, dims))`; backends may add specialised methods.
 """
-function iid end
-iid(dist, dim::Integer, dims::Integer...) = iid(dist, (Int(dim), map(Int, dims)...))
+iid(dist, dims::Dims) = independent(FillArrays.Fill(dist, dims))
 
 # Q: unsure about type stability here because of the vararg specialisation thing. 
 # Might need the fallback on generated functions.
 function batched(iters::I, ::Val{F}, args...) where {I,F}
-    # Default fallback for batching-unaware calls: use _product instead
-    return _product([F((a isa Indexed ? a.data[i] : a for a in args)...) for i in iters])
+    # Default fallback for batching-unaware calls: use independent instead
+    return independent([F((a isa Indexed ? a.data[i] : a for a in args)...) for i in iters])
 end
 
 function batch_expr(expr, loop_idx, loop_iters)
@@ -211,10 +207,10 @@ function batch_expr(expr, loop_idx, loop_iters)
             Expr(:call, Wren.batched, loop_iters, fname, fargs...)
         else
             # a form we don't know how to handle -- just wrap in a product
-            #  --> _product([$expr for i in 1:J])
+            #  --> independent([$expr for i in 1:J])
             Expr(
                 :call,
-                Wren._product,
+                Wren.independent,
                 Expr(
                     :comprehension,
                     Expr(:generator, expr, Expr(:(=), loop_idx, loop_iters)),

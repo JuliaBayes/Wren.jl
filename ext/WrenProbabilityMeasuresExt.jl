@@ -24,7 +24,7 @@ Base.:(==)(a::Repeated, b::Repeated) = (a.dist == b.dist) & (a.dims == b.dims)
     Independent{C}
 
 The product measure of a collection `components` of measures. Construct it with
-`Wren.independent(dists::AbstractArray)` or `Wren.iid(dist, dims...)`.
+`Wren.independent(dists::AbstractArray)` or `Wren.iid(dist, dims)`.
 """
 struct Independent{C}
     components::C
@@ -252,8 +252,6 @@ function Plaice.to_unconstrained_vec(d::IndependentArray)
 end
 
 Wren.batched(iters, dist::PM.AbstractProbabilityMeasure) = Wren.iid(dist, size(iters))
-Wren._product(dists::AbstractArray{<:PM.AbstractProbabilityMeasure}) =
-    Wren.independent(dists)
 
 struct DiagNormal{M<:AbstractArray,S<:AbstractArray}
     mu::M

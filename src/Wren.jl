@@ -3,6 +3,7 @@ module Wren
 using DensityInterface: DensityInterface, logdensityof
 import DifferentiationInterface as DI
 using DocStringExtensions: TYPEDFIELDS
+using FillArrays: FillArrays
 using LogDensityProblems: LogDensityProblems
 using Plaice: Plaice
 using Random: AbstractRNG, default_rng
