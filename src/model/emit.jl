@@ -138,9 +138,39 @@ struct Indexed{T}
     data::T
 end
 
-# Semantically equivalent to product_distribution, but we can overload per distribution
-# backend
+# Backend hook for @plate product distributions.
 function _product end
+
+"""
+    independent(dists::AbstractArray)
+
+Return a distribution over arrays with the same shape as `dists`, where each entry
+is independently drawn from `dists[i]`.
+
+Used by `@plate` for indexed distributions without a specialised `batched` method.
+Currently supports arrays of univariate ProbabilityMeasures.jl measures.
+"""
+function independent end
+
+"""
+    iid(dist, dims::Integer...)
+    iid(dist, dims::Dims)
+
+Return independent draws from `dist` in an array of shape `(size(dist)..., dims...)`.
+The distribution is stored once. `@plate` uses this when the distribution does not
+depend on the loop index.
+
+```julia
+@wren function f(N)
+    x ~ iid(Normal(), N)    # length N
+    W ~ iid(Normal(), 3, N) # 3 × N
+end
+```
+
+Currently supports ProbabilityMeasures.jl measures.
+"""
+function iid end
+iid(dist, dim::Integer, dims::Integer...) = iid(dist, (Int(dim), map(Int, dims)...))
 
 # Q: unsure about type stability here because of the vararg specialisation thing. 
 # Might need the fallback on generated functions.
