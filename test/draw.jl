@@ -1,5 +1,7 @@
 module WrenDrawTests
 
+@info "testing draw.jl"
+
 using DifferentiationInterface: AutoForwardDiff
 using Distributions
 using ForwardDiff

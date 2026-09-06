@@ -5,6 +5,7 @@ using Test
 @testset verbose=true "Wren.jl" begin
     include("expr.jl")
     include("syntax.jl")
+    include("batch.jl")
     include("aliasing.jl")
     include("submodel.jl")
     include("vecmodel.jl")

@@ -86,20 +86,13 @@ rand(Xoshiro(468), ydef_model)
 
 It should be noted that the two models above are actually semantically equivalent: in both models, all `y[i]` are latent variables, regardless of whether `y` is an argument or defined in the model body.
 
-The first version (`yarg`) is more efficient, as it avoids performing the allocation of `y` each time the model is run.
-
 ```@example model
-using Chairmarks
-@b rand($yarg_model)
+@bmodel yarg_model
 ```
 
 ```@example model
-@b rand($ydef_model)
+@bmodel ydef_model
 ```
-
-Be aware that when running the model, the argument to the model will be mutated.
-Thus, one can really think of the function argument as **a 'scratch' buffer that declares the shape of the latent array**, whose contents are not used in any way.
-To avoid accidental aliasing footguns, Wren will make a copy of the argument at model construction time (not model evaluation time).
 
 Immutable structs largely behave the same way as top-level variables, and mutable structs follow the same principles as arrays.
 
@@ -214,6 +207,85 @@ loglikelihood(accs) ≈ sum(logdensityof.(Normal(parameters(accs)[@vn(mu)]), y))
 ```
 
 `@iid` and `@observe` can be combined in either order. Because the shape is taken from the current value of the left-hand side, that value must already exist when the statement runs: a model argument, or a value computed earlier in the model.
+
+## Batched tilde-statements
+
+One of Wren's unique features is syntax-level batching of tilde-statements.
+This is done using the `@plate` macro:
+
+```@example model
+@wren function batched(x, y)
+    N = length(x)
+    @plate for i in 1:N
+        x[i] ~ Normal()
+        y[i] ~ Normal(x[i])
+    end
+end
+x, y = randn(1000), randn(1000)
+model = batched(x, y) | VarNamedTuple(y=y)
+```
+
+Plated for-loops have the same semantics as regular for-loops.
+However, they are automatically lowered into a vectorised form, which is more or less analogous to
+
+```julia
+x[1:N] ~ MvNormal(Zeros(N), I)
+y[1:N] ~ MvNormal(x[1:N], I)
+```
+
+When `N` is large this can lead to significant speedups.
+
+**There are two important things to note about `@plate`.**
+
+**Firstly,** this batching is only valid if each iteration of the loop is independent of the others.
+By marking a loop with `@plate`, you are effectively asserting that this is the case.
+Wren does *not* verify this for you!
+
+As an example of an invalid use of `@plate`, consider the following:
+
+```julia
+@plate for i in 1:(N-1)
+    x[i+1] ~ Normal(x[i])
+end
+```
+
+This will be lowered into the equivalent of
+
+```julia
+x[(@. (1:(N-1)) + 1)] ~ MvNormal(x[1:(N-1)], I)
+```
+
+which has a different meaning: `x[i]` is now read before it is written to.
+
+**Secondly,** the batching is contingent on Wren knowing what to do with the right-hand side of the expression.
+Specifically, the right-hand side must be a function call; and additionally, there must be a custom method defined for `Wren.batched` which dispatches on the function on the right-hand side (in this case, `Normal`).
+Unfortunately, this means that it is more or less impossible to batch user-defined functions.
+
+In the case where Wren doesn't know how to batch the right-hand side, it will fall back to a regular product distribution, i.e.,
+
+```julia
+x[1:N] ~ product_distribution([Normal() for i in 1:N])
+y[1:N] ~ product_distribution([Normal(x[i]) for i in 1:N])
+```
+
+which guarantees correctness, but might not be as efficient as the vectorised form.
+
+!!! danger
+
+    Plates are a highly experimental feature and might not work in all cases.
+    In particular, please note the following limitations:
+
+      - The loop must contain only tilde-statements (`@observe` tilde-statements are fine).
+        This can in theory be relaxed but is not yet implemented.
+
+      - The loop must be `for SYMBOL in EXPR`, where `SYMBOL` is a single variable.
+        Thus, loops of the form `for (i, x) in enumerate(xs)` cannot be plated.
+        This probably cannot ever be supported.
+
+      - The only form of indexing allowed is `x[i]` (`i` being the loop variable; `x` can be any identifier).
+        This can in theory be relaxed to admit more forms, such as `x[i, j]`, `x[f(i)]`, `x[y[i]]`, etc., but this is not yet implemented.
+
+      - Plates will increase allocations and will almost certainly cause slowdowns on small loops.
 
 ## Manual log-likelihood addition
 

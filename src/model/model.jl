@@ -51,11 +51,38 @@ end
     _dealias
 
 Create a copy of a model argument that has the same contents, but avoids aliasing the user's
-data.
+data. This is called on the model's arguments each time the model is evaluated.
 
-This avoids 'surprise' mutations of the user's data when the model is evaluated. However,
-because it's called at model _construction_ time rather than _evaluation_, it avoids the
-performance implications of creating a copy of the data every time the model is evaluated.
+The main purpose of this is in fact to ensure correctness under AD with Enzyme.
+
+Specifically, the call to `DI.value_and_gradient` in `VecModel` passes the model's arguments
+as a `DI.Const`, which means that the model's arguments should never contain differentiable
+data. This is true at the start of the model (the differentiable data is in the active
+`params` argument), but if we then _write_ params into the model's arguments, then any
+gradients with respect to the model's arguments (i.e., gradients with respect to the params)
+will be lost.
+
+This is best illustrated with an example. Consider:
+
+```julia
+@wren function my_model(x)
+    x[1:4] ~ dist
+end
+```
+
+In the `VecModel` evaluation, this is lowered to something like:
+
+```julia
+function lp(params, x)
+    p14 = view(params, 1:4)
+    x[1:4] = p14  # Writing differentiable data into `x`!
+    return logdensityof(dist, x[1:4])
+end
+```
+
+Sometimes Enzyme does in fact return the correct gradient, but this relies on an LLVM
+optimisation and cannot be guaranteed. See
+https://github.com/EnzymeAD/Enzyme.jl/issues/2344.
 """
 function _dealias(v::SubArray{T}) where {T}
     v = collect(v)  # Avoid copying the entire parent array.
@@ -78,7 +105,7 @@ function make_evaluation_fn(
     body = Expr(:block)
     @gensym model_args
     for k in argnames
-        push!(body.args, :($(k) = $model_args.$k))
+        push!(body.args, :($(k) = $(Wren._dealias)($model_args.$k)))
     end
 
     @gensym accs conditioned latent_source parameter_space retval

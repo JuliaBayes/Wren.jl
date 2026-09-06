@@ -1,5 +1,7 @@
 module WrenVecModelTests
 
+@info "testing vecmodel.jl"
+
 import DifferentiationInterface as DI
 using Distributions
 import ForwardDiff
@@ -63,6 +65,17 @@ end
             grad_rtol = 1e-7
 
             @testset "$name" for (name, adtype) in TESTED_ADTYPES
+                if d isa Distributions.AbstractMvNormal && adtype isa AutoEnzyme
+                    continue
+                    # Reverse mode:
+                    # https://github.com/EnzymeAD/Enzyme.jl/issues/3527
+                    # https://github.com/EnzymeAD/Enzyme.jl/issues/3528
+                    #
+                    # Forward mode: MvNormal runs fine but then causes LKJCholesky to fail
+                    # https://github.com/EnzymeAD/Enzyme.jl/issues/3529
+                end
+                @info nameof(typeof(d)), name
+
                 vm = VecModel(f(d), adtype)
                 x = rand(vm)
                 N = length(x)

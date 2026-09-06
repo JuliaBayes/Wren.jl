@@ -1,5 +1,7 @@
 module WrenReactantTests
 
+@info "testing reactant.jl"
+
 using Wren
 using Plaice: Plaice
 using ProbabilityMeasures: ProbabilityMeasures as PM
