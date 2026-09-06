@@ -3,6 +3,8 @@ Check that for simple models, Wren is allocation-free.
 """
 module WrenAllocsTests
 
+@info "testing allocs.jl"
+
 using Wren
 using Distributions
 using Test
