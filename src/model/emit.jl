@@ -142,8 +142,9 @@ end
 # backend
 function _product end
 
-# Q: unsure about type stability here because of the vararg specialisation thing. 
-# Might need the fallback on generated functions.
+# TODO(penelopeysm): I'm unsure about type stability here because of the vararg
+# specialisation thing. We might need the fallback on generated functions with enumerated
+# arguments
 function batched(iters::I, ::Val{F}, args...; kwargs...) where {I,F}
     # Default fallback for batching-unaware calls: use _product instead
     return _product([
@@ -180,14 +181,11 @@ end
 
 function batch_expr(expr, loop_idx, loop_iters)
     # Check if the expr contains the loop index anywhere.
-    #
-    # TODO(penelopeysm): I think occurs_in_expr is too conservative as it will pick up
-    # things like `x.i`, which definitely is NOT a reference to the loop index `i`. However
-    # that shouldn't lead to any correctness issue, so probably not a big deal.
     return if !occurs_in_expr(expr, loop_idx)
         # If not, it's a constant wrt the loop.
+        #
         # TODO(penelopeysm): Use `iid(rhs, size(loop_iters))` here once it's in main,
-        # instead of forcing `batched`. https://github.com/JuliaBayes/Wren.jl/pull/71
+        # instead of `batched`. https://github.com/JuliaBayes/Wren.jl/pull/71
         Expr(:call, Wren.batched, loop_iters, expr)
     else
         if expr isa Expr && expr.head == :call
