@@ -479,7 +479,9 @@ function bridge_model(post, seed)
     data_json = PosteriorDB.load(PosteriorDB.dataset(post), String)
     stan_library = first(splitext(stan_path)) * "_model.so"
     return BridgeStan.StanModel(
-        isfile(stan_library) ? stan_library : stan_path, data_json, seed
+        isfile(stan_library) ? stan_library : stan_path,
+        data_json,
+        seed,
     )
 end
 
@@ -541,7 +543,11 @@ function verify_reactant(posterior_name; draws=30, seed=468)
 end
 
 function benchmark_one(
-    model_name; logdensity_only=false, stan_only=false, wren_only=false, seed=468
+    model_name;
+    logdensity_only=false,
+    stan_only=false,
+    wren_only=false,
+    seed=468,
 )
     post = PosteriorDB.posterior(PDB, model_name)
     stan_model = bridge_model(post, seed)
@@ -554,7 +560,7 @@ function benchmark_one(
         model = make_model(Val(Symbol(model_name)), data)
         measured = bench_wren(model, model_name, seed; logdensity_only)
         measured.dim == dimension || error(
-            "$model_name: Wren has $(measured.dim) parameters, Stan has $dimension"
+            "$model_name: Wren has $(measured.dim) parameters, Stan has $dimension",
         )
         measured
     end
@@ -604,9 +610,8 @@ function benchmark_models(
     metadata = nothing
     for model_name in models
         println(stderr, "Running: $model_name ...")
-        result, version = benchmark_one(
-            model_name; logdensity_only, stan_only, wren_only, seed
-        )
+        result, version =
+            benchmark_one(model_name; logdensity_only, stan_only, wren_only, seed)
         if metadata === nothing
             metadata = run_metadata(
                 version;
@@ -649,9 +654,8 @@ function verify_models(models; draws=30, seed=468)
             )
         catch error
             passed = false
-            @error "verification failed" posterior_name exception = (
-                error, catch_backtrace()
-            )
+            @error "verification failed" posterior_name exception =
+                (error, catch_backtrace())
         end
     end
     return passed
@@ -665,9 +669,9 @@ function time_comparison(results, backend_field, stan_field)
         backend_time = getfield(result, backend_field)
         stan_time = getfield(result, stan_field)
         if isfinite(backend_time) &&
-            backend_time > 0 &&
-            isfinite(stan_time) &&
-            stan_time > 0
+           backend_time > 0 &&
+           isfinite(stan_time) &&
+           stan_time > 0
             push!(ratios, backend_time / stan_time)
         end
     end
@@ -832,7 +836,7 @@ function write_table(io, results; logdensity_only=false, stan_only=false, wren_o
     eval_columns = length(eval_headers)
     gradient_columns = length(gradient_headers)
     pre_w = widths[1] + length(gap) + widths[2]
-    eval_w = sum(widths[3:(2 + eval_columns)]) + length(gap) * (eval_columns - 1)
+    eval_w = sum(widths[3:(2+eval_columns)]) + length(gap) * (eval_columns - 1)
     gradient_w = if iszero(gradient_columns)
         0
     else
@@ -1014,7 +1018,9 @@ function main(args=ARGS)
 
     full_catalog = isempty(options.positional) && shard_count == 1
     markdown_path = get(
-        ENV, "PDB_BENCH_MARKDOWN", full_catalog ? joinpath(@__DIR__, "posteriordb.md") : ""
+        ENV,
+        "PDB_BENCH_MARKDOWN",
+        full_catalog ? joinpath(@__DIR__, "posteriordb.md") : "",
     )
     isempty(markdown_path) || write_markdown(markdown_path, results, metadata, reference)
     return 0

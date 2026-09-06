@@ -6,27 +6,27 @@ Stan and Wren are timed at separate reproducible draws, and several priors are s
 
 ## Summary
 
-- **10 PosteriorDB posteriors** benchmarked.
+  - **10 PosteriorDB posteriors** benchmarked.
 
 Ratios are backend time divided by the corresponding Stan time; lower is better. Aggregates exclude failed measurements.
 
-| Workload | Successful measurements | Geometric mean vs Stan | Median vs Stan | Faster than Stan |
-|:--|--:|--:|--:|--:|
-| Wren log density | 10 / 10 | 0.40× | 0.44× | 9 / 10 |
-| Wren log density (Reactant) | 9 / 10 | 21.49× | 32.67× | 0 / 9 |
-| Enzyme gradient | 10 / 10 | 0.64× | 0.72× | 8 / 10 |
-| Reactant gradient | 9 / 10 | 13.66× | 18.39× | 0 / 9 |
+| Workload                    | Successful measurements | Geometric mean vs Stan | Median vs Stan | Faster than Stan |
+|:--------------------------- | -----------------------:| ----------------------:| --------------:| ----------------:|
+| Wren log density            | 10 / 10                 | 0.40×                  | 0.44×          | 9 / 10           |
+| Wren log density (Reactant) | 9 / 10                  | 21.49×                 | 32.67×         | 0 / 9            |
+| Enzyme gradient             | 10 / 10                 | 0.64×                  | 0.72×          | 8 / 10           |
+| Reactant gradient           | 9 / 10                  | 13.66×                 | 18.39×         | 0 / 9            |
 
 ## Environment
 
-- Julia: 1.12.7
-- System: Darwin aarch64
-- CPU: apple-m1 (6 logical threads)
-- Memory: 32.0 GiB
-- Benchmark parallelism: 1 Julia process(es), 1 Julia thread(s) each
-- BLAS: lbt, 6 thread(s)
-- Source revisions: Wren `c0d86ce`, ProbabilityMeasures `ab14474-dirty`
-- Packages: Wren 0.1.0, Reactant 0.2.284, Enzyme 0.13.200, BridgeStan 2.9.0, Stan 2.39.0
+  - Julia: 1.12.7
+  - System: Darwin aarch64
+  - CPU: apple-m1 (6 logical threads)
+  - Memory: 32.0 GiB
+  - Benchmark parallelism: 1 Julia process(es), 1 Julia thread(s) each
+  - BLAS: lbt, 6 thread(s)
+  - Source revisions: Wren `c0d86ce`, ProbabilityMeasures `ab14474-dirty`
+  - Packages: Wren 0.1.0, Reactant 0.2.284, Enzyme 0.13.200, BridgeStan 2.9.0, Stan 2.39.0
 
 *Table 1. Median log-density and gradient evaluation times. Wren: plain Julia; WrenRct: Reactant; EzyRvs: Enzyme reverse mode; RctRvs: Reactant with Enzyme reverse mode; RctRvs / Stan: RctRvs time divided by Stan gradient time (lower is better).*
 
@@ -52,18 +52,18 @@ Mh_data-Mh_model                      388   15.1 μs  54.7 μs   26.1 μs   30.5
 
 *Table 2. All measurements are relative to the Stan reference (lower is better). The Turing and Mooncake columns are from `DynamicPPL.jl/benchmarks/posteriordb.md` (I have not rerun these and instead just decided to show the ratio vs Stan).*
 
-| Model | dim | Wren lp | Turing lp | Enzyme grad | Reactant grad | Mooncake grad |
-|:--|--:|--:|--:|--:|--:|--:|
-| Rate_1_data-Rate_1_model | 1 | 0.25× | 0.61× | 0.82× | 126.27× | 1.75× |
-| GLM_Binomial_data-GLM_Binomial_model | 3 | 0.23× | 0.90× | 0.46× | 8.23× | 3.41× |
-| gp_pois_regr-gp_regr | 3 | 0.49× | 1.82× | 1.58× | err | 3.62× |
-| GLM_Poisson_Data-GLM_Poisson_model | 4 | 0.68× | 1.14× | 0.82× | 28.62× | 1.91× |
-| kidiq-kidscore_interaction | 5 | 1.02× | 1.45× | 0.33× | 4.50× | 0.88× |
-| sblri-blr | 6 | 0.39× | 3.58× | 0.62× | 25.04× | 3.82× |
-| arK-arK | 7 | 0.16× | 0.68× | 0.13× | 3.74× | 0.62× |
-| eight_schools-eight_schools_centered | 10 | 0.25× | 1.05× | 1.72× | 53.41× | 2.76× |
-| GLMM_Poisson_data-GLMM_Poisson_model | 45 | 0.62× | 1.12× | 0.92× | 18.39× | 1.59× |
-| Mh_data-Mh_model | 388 | 0.58× | 1.37× | 0.55× | 1.35× | 3.66× |
+| Model                                | dim | Wren lp | Turing lp | Enzyme grad | Reactant grad | Mooncake grad |
+|:------------------------------------ | ---:| -------:| ---------:| -----------:| -------------:| -------------:|
+| Rate_1_data-Rate_1_model             | 1   | 0.25×   | 0.61×     | 0.82×       | 126.27×       | 1.75×         |
+| GLM_Binomial_data-GLM_Binomial_model | 3   | 0.23×   | 0.90×     | 0.46×       | 8.23×         | 3.41×         |
+| gp_pois_regr-gp_regr                 | 3   | 0.49×   | 1.82×     | 1.58×       | err           | 3.62×         |
+| GLM_Poisson_Data-GLM_Poisson_model   | 4   | 0.68×   | 1.14×     | 0.82×       | 28.62×        | 1.91×         |
+| kidiq-kidscore_interaction           | 5   | 1.02×   | 1.45×     | 0.33×       | 4.50×         | 0.88×         |
+| sblri-blr                            | 6   | 0.39×   | 3.58×     | 0.62×       | 25.04×        | 3.82×         |
+| arK-arK                              | 7   | 0.16×   | 0.68×     | 0.13×       | 3.74×         | 0.62×         |
+| eight_schools-eight_schools_centered | 10  | 0.25×   | 1.05×     | 1.72×       | 53.41×        | 2.76×         |
+| GLMM_Poisson_data-GLMM_Poisson_model | 45  | 0.62×   | 1.12×     | 0.92×       | 18.39×        | 1.59×         |
+| Mh_data-Mh_model                     | 388 | 0.58×   | 1.37×     | 0.55×       | 1.35×         | 3.66×         |
 
 <details>
 <summary>Full benchmark Manifest.toml</summary>
@@ -1579,4 +1579,5 @@ git-tree-sha1 = "940c5a89c367f566812c5816a4d14e935e91651f"
 uuid = "52be201e-a5e9-5cfe-8bf2-2dc4b062171c"
 version = "0.25.0+0"
 ```
+
 </details>

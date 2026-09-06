@@ -35,18 +35,18 @@ process regression, linear regression, an autoregressive series, a centred
 hierarchical normal, a Poisson mixed model, and a capture-recapture model with a
 marginalised latent indicator.
 
-| Posterior | dim | Family |
-|:--|--:|:--|
-| `Rate_1_data-Rate_1_model` | 1 | Binomial proportion |
-| `GLM_Binomial_data-GLM_Binomial_model` | 3 | Binomial regression |
-| `gp_pois_regr-gp_regr` | 3 | Gaussian process regression |
-| `GLM_Poisson_Data-GLM_Poisson_model` | 4 | Poisson regression |
-| `kidiq-kidscore_interaction` | 5 | Linear regression with interaction |
-| `sblri-blr` | 6 | Bayesian linear regression |
-| `arK-arK` | 7 | Autoregressive series |
-| `eight_schools-eight_schools_centered` | 10 | Centred hierarchical normal |
-| `GLMM_Poisson_data-GLMM_Poisson_model` | 45 | Poisson mixed model |
-| `Mh_data-Mh_model` | 388 | Capture-recapture with heterogeneity |
+| Posterior                              | dim | Family                               |
+|:-------------------------------------- | ---:|:------------------------------------ |
+| `Rate_1_data-Rate_1_model`             | 1   | Binomial proportion                  |
+| `GLM_Binomial_data-GLM_Binomial_model` | 3   | Binomial regression                  |
+| `gp_pois_regr-gp_regr`                 | 3   | Gaussian process regression          |
+| `GLM_Poisson_Data-GLM_Poisson_model`   | 4   | Poisson regression                   |
+| `kidiq-kidscore_interaction`           | 5   | Linear regression with interaction   |
+| `sblri-blr`                            | 6   | Bayesian linear regression           |
+| `arK-arK`                              | 7   | Autoregressive series                |
+| `eight_schools-eight_schools_centered` | 10  | Centred hierarchical normal          |
+| `GLMM_Poisson_data-GLMM_Poisson_model` | 45  | Poisson mixed model                  |
+| `Mh_data-Mh_model`                     | 388 | Capture-recapture with heterogeneity |
 
 ## What the numbers do and do not mean
 
@@ -62,11 +62,11 @@ between them.
 Second, ProbabilityMeasures has no truncation, no improper priors and no beta
 measure, so several priors are substituted:
 
-| Stan prior | Wren prior |
-|:--|:--|
+| Stan prior                         | Wren prior       |
+|:---------------------------------- |:---------------- |
 | `truncated(Cauchy(0, s); lower=0)` | `Exponential(s)` |
 | `truncated(Normal(0, s); lower=0)` | `Exponential(s)` |
-| `Flat()` | `Normal(0, 100)` |
+| `Flat()`                           | `Normal(0, 100)` |
 
 A substituted model has a different posterior from the Stan program it is named
 after. Each substitution is marked at the tilde statement in
