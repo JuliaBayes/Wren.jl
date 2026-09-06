@@ -5,30 +5,6 @@ module WrenExprTests
 using Wren
 using Test
 
-# Normalise ASTs (mostly by removing line number nodes, which are not relevant for
-# semantics). This function is taken from JuliaFormatter
-_normalise_ast!(ex) = ex
-function _normalise_ast!(ex::Expr)
-    if ex.head === :block || ex.head === :quote || ex.head === :toplevel
-        filter!(ex.args) do x
-            !(isa(x, Expr) && x.head === :line || isa(x, LineNumberNode))
-        end
-    end
-    # macrocall's apparently _need_ to have a line number node or something in that
-    # position, so we can't remove it altogether -- but we can replace all such nodes with
-    # `nothing` so that they compare equal. See: https://stackoverflow.com/a/53285644
-    if ex.head === :macrocall
-        new_args = map(ex.args) do x
-            x isa LineNumberNode ? nothing : x
-        end
-        ex.args = new_args
-    end
-    for subex in ex.args
-        subex isa Expr && _normalise_ast!(subex)
-    end
-    return ex
-end
-
 # todo: This needs to be greatly expanded for our special nodes...
 
 @testset "expr unit tests" begin
@@ -36,14 +12,17 @@ end
         lower(expr) = only(
             filter(e -> e isa Wren.AbstractWrenExpr, Wren.to_wren_exprs(expr, @__MODULE__)),
         )
-        roundtrip(expr) = _normalise_ast!(Wren._wren_expr_to_model_expr(lower(expr)))
+        roundtrip(expr) = Wren._wren_expr_to_model_expr(lower(expr))
+        # Round-tripped macrocalls carry `nothing` where the parser puts a LineNumberNode.
+        iid_expr(inner) = Expr(:macrocall, Symbol("@iid"), nothing, inner)
+        observe_expr(inner) = Expr(:macrocall, Symbol("@observe"), nothing, inner)
 
         # `@iid` is a marker: it wraps the tilde-statement without rewriting it.
         s = lower(:(@iid x ~ Normal()))
         @test s isa Wren.IID{<:Wren.Sample}
         @test s.tilde.lhs == :x
         @test Wren._wren_expr_to_model_expr(s.tilde.rhs) == :(Normal())
-        @test roundtrip(:(@iid x ~ Normal())) == _normalise_ast!(:(@iid x ~ Normal()))
+        @test roundtrip(:(@iid x ~ Normal())) == iid_expr(:(x ~ Normal()))
 
         # Either order of `@iid` and `@observe` gives the same node.
         for expr in (:(@observe @iid y ~ Normal(mu)), :(@iid @observe y ~ Normal(mu)))
@@ -51,7 +30,7 @@ end
             @test o isa Wren.IID{<:Wren.Observe}
             @test o.tilde.lhs == :y
             @test Wren._wren_expr_to_model_expr(o.tilde.rhs) == :(Normal(mu))
-            @test roundtrip(expr) == _normalise_ast!(:(@iid @observe y ~ Normal(mu)))
+            @test roundtrip(expr) == iid_expr(observe_expr(:(y ~ Normal(mu))))
         end
 
         @test_throws ErrorException lower(:(@iid x))
@@ -62,26 +41,66 @@ end
         @test_throws ErrorException lower(:(z = @iid x ~ Normal()))
     end
 
+    @testset "occurs_in_expr" begin
+        f(expr) = Wren.occurs_in_expr(expr, :i)
+        @test f(:x) == false
+        @test f(:i) == true
+        @test f(:(x[i])) == true
+        @test f(:(x[i, j])) == true
+        @test f(:(x[j, i])) == true
+        @test f(:(x[j, k])) == false
+        @test f(:(x.a)) == false
+        @test f(:(x.i)) == false
+        @test f(:(x.a[i])) == true
+        @test f(:(i + 1)) == true
+    end
+
     @testset "plate" begin
+        @testset "occurs_in_kwargs" begin
+            function f(expr)
+                if expr.head != :call ||
+                   length(expr.args) < 3 ||
+                   !(expr.args[2] isa Expr) ||
+                   expr.args[2].head != :parameters
+                    error("expr must be a call with kwargs")
+                end
+                return Wren.occurs_in_kwargs(expr.args[2], :i)
+            end
+            @test !f(:(func(x; a=1, b=2)))
+            @test !f(:(func(x; i=1)))
+            @test f(:(func(x; x=i)))
+            @test f(:(func(x; i)))
+            @test f(:(func(x; a, i)))
+            @test f(:(func(x; x=f(i))))
+            @test !f(:(func(x; x=a.i)))
+        end
+
         @testset "replace_loop_idx_with_iters" begin
             f(expr) = Wren.replace_loop_idx_with_iters(expr, :i, :(1:J))
-            @test f(:x) == :x
-            @test f(:i) == :(1:J)
-            @test f(:(x[i])) == :(x[1:J])
-            @test f(:(x[i, j])) == :(x[1:J, j])
-            @test f(:(x[j, i])) == :(x[j, 1:J])
-            @test f(:(x[j, k])) == :(x[j, k])
-            @test f(:(x.a)) == :(x.a)
-            @test f(:(x.a[i])) == :(x.a[1:J])
-            @test f(:(x.a[i, j])) == :(x.a[1:J, j])
-            @test f(:(Normal(x[i]))) == :(Normal(x[1:J]))
-            @test f(:(Normal(x[i, j]))) == :(Normal(x[1:J, j]))
-            @test f(:(Normal(x.a[i]))) == :(Normal(x.a[1:J]))
+            @test f(:x) == (:x, false)
+            @test f(:i) == (:(1:J), true)
+            @test f(:(x[i])) == (:(x[1:J]), true)
+            @test f(:(x[i, j])) == (:(x[1:J, j]), true)
+            @test f(:(x[j, i])) == (:(x[j, 1:J]), true)
+            @test f(:(x[j, k])) == (:(x[j, k]), false)
+            @test f(:(x.a)) == (:(x.a), false)
+            @test f(:(x.i)) == (:(x.i), false) # NOTE: don't expand a field called `i`!
+            @test f(:(x.a[i])) == (:(x.a[1:J]), true)
+            @test f(:(x.a[i, j])) == (:(x.a[1:J, j]), true)
+            @test f(:(func(x))) == (:(func(x)), false)
+            @test f(:(func(x.i))) == (:(func(x.i)), false)
 
             # Broadcasting operations where needed...
-            @test f(:(i + 1)) == _normalise_ast!(:(@__dot__ (1:J) + 1))
-            @test f(:(x[i+1])) == _normalise_ast!(:(x[@__dot__ (1:J) + 1]))
-            @test f(:(x[-i])) == _normalise_ast!(:(x[@__dot__ -(1:J)]))
+            @test f(:(func(x[i]))) == (:(func.(x[1:J])), true)
+            @test f(:(func(x[i, j]))) == (:(func.(x[1:J, j])), true)
+            @test f(:(func(x.a[i]))) == (:(func.(x.a[1:J])), true)
+            @test f(:(i + 1)) == (:((1:J) .+ 1), true)
+            @test f(:(x[i+1])) == (:(x[(1:J) .+ 1]), true)
+            @test f(:(x[-i])) == (:(x[.-(1:J)]), true)
+            @test f(:(1 + x[i])) == (:(1 .+ x[1:J]), true)
+            @test f(:((1 + x[i]) * cnst)) == (:((1 .+ x[1:J]) .* cnst), true)
+            @test f(:((1 + x[i]) * y[i])) == (:((1 .+ x[1:J]) .* y[1:J]), true)
+            @test f(:(func(1 + x[i]))) == (:(func.(1 .+ x[1:J])), true)
 
             @test_broken false
             # The following expression should error:

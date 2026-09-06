@@ -8,7 +8,8 @@ using Distributions: Distribution, product_distribution, Normal
 
 Wren.independent(dists::AbstractArray{<:Distribution}) = product_distribution(dists)
 
-Wren.batched(iters, dist::Distribution) = product_distribution(Fill(dist, length(iters)))
+Wren.batched(iters, dist::Distribution; _kwargs...) =
+    product_distribution(Fill(dist, length(iters)))
 
 struct DiagNormal{M<:AbstractArray,S<:AbstractArray}
     mu::M
@@ -30,7 +31,8 @@ function Wren.batched(
     iters,
     ::Val{Normal},
     indexed_mu::Wren.Indexed,
-    indexed_sigma::Wren.Indexed,
+    indexed_sigma::Wren.Indexed;
+    _kwargs...,
 )
     # e.g. batched(1:10, Val(Normal), Indexed(x[1:10]), Indexed(y[1:10]))
     return DiagNormal(indexed_mu.data, indexed_sigma.data)
@@ -46,7 +48,7 @@ function Wren.logdensityof(d::IsoNormal, x)
     dist = sum(abs2, x .- d.mu)
     return -0.5 * dist - 0.5 * length(d.mu) * log(2π)
 end
-function Wren.batched(iters, ::Val{Normal}, indexed_mu::Wren.Indexed)
+function Wren.batched(iters, ::Val{Normal}, indexed_mu::Wren.Indexed; _kwargs...)
     # e.g. batched(1:10, Val(Normal), Indexed(x[1:10]))
     return IsoNormal(indexed_mu.data)
 end
@@ -67,6 +69,6 @@ function Wren.logdensityof(d::IIDNormal, x)
     N = length(x)
     return -0.5 * dist - N * log(d.sigma) - 0.5 * N * log(2π)
 end
-Wren.batched(iters, n::Normal) = IIDNormal(size(iters), n.μ, n.σ)
+Wren.batched(iters, n::Normal; _kwargs...) = IIDNormal(size(iters), n.μ, n.σ)
 
 end # module WrenDistributionsExt

@@ -189,94 +189,190 @@ The fallback is `independent(Fill(dist, dims))`; backends may add specialised me
 """
 iid(dist, dims::Dims) = independent(FillArrays.Fill(dist, dims))
 
-# Q: unsure about type stability here because of the vararg specialisation thing. 
-# Might need the fallback on generated functions.
-function batched(iters::I, ::Val{F}, args...) where {I,F}
+# TODO(penelopeysm): I'm unsure about type stability here because of the vararg
+# specialisation thing. We might need the fallback on generated functions with enumerated
+# arguments
+function batched(iters::I, ::Val{F}, args...; kwargs...) where {I,F}
     # Default fallback for batching-unaware calls: use independent instead
-    return independent([F((a isa Indexed ? a.data[i] : a for a in args)...) for i in iters])
+    return independent([
+        F((a isa Indexed ? a.data[i] : a for a in args)...; kwargs...) for i in iters
+    ])
+end
+
+function make_product_expr(rhs, loop_idx, loop_iters)
+    # This returns `Wren.independent([$rhs for $loop_idx in $loop_iters])`.
+    Expr(
+        :call,
+        Wren.independent,
+        Expr(:comprehension, Expr(:generator, rhs, Expr(:(=), loop_idx, loop_iters))),
+    )
+end
+function occurs_in_kwargs(parameters::Expr, loop_idx::Symbol)
+    for kw in parameters.args
+        if kw isa Symbol
+            if kw == loop_idx
+                # f(...; loop_idx) i.e., shorthand for f(...; loop_idx=loop_idx)
+                return true
+            else
+                continue
+            end
+        elseif kw isa Expr && kw.head == :kw
+            # f(...; kw = val_expr)
+            occurs_in_expr(kw.args[2], loop_idx) && return true
+        else
+            error("@plate: encountered unexpected kwarg expression $(kw)")
+        end
+    end
+    return false
 end
 
 function batch_expr(expr, loop_idx, loop_iters)
-    # Check if the expr contains the loop index anywhere. If not, it's a constant
-    # wrt the loop, so we can do a simple broadcast
-    return if occurs_in_expr(expr, loop_idx)
-        if expr isa Expr && expr.head == :call
-            # batch the call e.g. f(x[i], y[i])
-            #   --> batched(1:J, Val{f}(), (Indexed(x[1:J]), Indexed(y[1:J])))
-            #
-            # Note that we have to use `Val` here because `f` is often a type constructor
-            # e.g. `Normal`, which prevents us from dispatching on `::typeof(f)` (since
-            # typeof(Normal) is UnionAll). We use `Val{f}()` rather than `Val(f)` to make
-            # sure it's type stable.
-            fname = Expr(:call, Expr(:curly, Base.Val, expr.args[1]))
-            fargs = map(
-                arg -> begin
-                    expanded = replace_loop_idx_with_iters(arg, loop_idx, loop_iters)
-                    if occurs_in_expr(arg, loop_idx)
-                        viewed = if expanded isa Expr && expanded.head == :ref
-                            Expr(:macrocall, Symbol("@view"), nothing, expanded)
-                        else
-                            expanded
-                        end
-                        Expr(:call, Indexed, viewed)
-                    else
-                        expanded
-                    end
-                end,
-                expr.args[2:end],
-            )
-            Expr(:call, Wren.batched, loop_iters, fname, fargs...)
-        else
-            # a form we don't know how to handle -- just wrap in a product
-            #  --> independent([$expr for i in 1:J])
-            Expr(
-                :call,
-                Wren.independent,
-                Expr(
-                    :comprehension,
-                    Expr(:generator, expr, Expr(:(=), loop_idx, loop_iters)),
-                ),
-            )
-        end
-    else
-        # Constant wrt loop index, so no special handling needed
-        #  --> batched(1:J, $expr)
+    # Check if the expr contains the loop index anywhere.
+    return if !occurs_in_expr(expr, loop_idx)
+        # If not, it's a constant wrt the loop.
+        #
+        # TODO(penelopeysm): Use `iid(rhs, size(loop_iters))` here once it's in main,
+        # instead of `batched`. https://github.com/JuliaBayes/Wren.jl/pull/71
         Expr(:call, Wren.batched, loop_iters, expr)
+    else
+        if expr isa Expr && expr.head == :call
+            # First we'll check if the call has kwargs and if the loop index is referenced
+            # in any of them. If so, we'll fall back gracefully to the product distribution,
+            if (
+                length(expr.args) >= 2 &&
+                expr.args[2] isa Expr &&
+                expr.args[2].head == :parameters &&
+                occurs_in_kwargs(expr.args[2], loop_idx)
+            )
+                make_product_expr(expr, loop_idx, loop_iters)
+            else
+                # batch the call e.g. f(x[i], y[i])
+                #   --> batched(1:J, Val{f}(), (Indexed(x[1:J]), Indexed(y[1:J])))
+                #
+                # Note that we have to use `Val` here because `f` is often a type constructor
+                # e.g. `Normal`, which prevents us from dispatching on `::typeof(f)` (since
+                # typeof(Normal) is UnionAll). We use `Val{f}()` rather than `Val(f)` to make
+                # sure it's type stable.
+                fname = Expr(:call, Expr(:curly, Base.Val, expr.args[1]))
+
+                # Check if there are kwargs. If so, we extract them first.
+                kwargs_expr, positional_args =
+                    if length(expr.args) >= 2 &&
+                       expr.args[2] isa Expr &&
+                       expr.args[2].head == :parameters
+                        expr.args[2], expr.args[3:end]
+                    else
+                        nothing, expr.args[2:end]
+                    end
+
+                batched_positional_args = map(
+                    arg -> begin
+                        if arg isa Expr && arg.head == :parameters
+                            # Keyword arguments; we'll forward these directly into batched,
+                            # since we ascertained earlier that they don't contain the loop
+                            # index.
+                            arg
+                        else
+                            # Positional arguments.
+                            expanded, _ = replace_loop_idx_with_iters(
+                                arg,
+                                loop_idx,
+                                loop_iters,
+                            )
+                            # TODO(penelopeysm): Should we be using the second return value here to
+                            # determine whether or not to view???
+                            if occurs_in_expr(arg, loop_idx)
+                                viewed =
+                                    if expanded isa Expr && expanded.head == :ref
+                                        Expr(:macrocall, Symbol("@view"), nothing, expanded)
+                                    else
+                                        expanded
+                                    end
+                                Expr(:call, Indexed, viewed)
+                            else
+                                expanded
+                            end
+                        end
+                    end,
+                    positional_args,
+                )
+
+                if kwargs_expr === nothing
+                    Expr(:call, Wren.batched, loop_iters, fname, batched_positional_args...)
+                else
+                    Expr(
+                        :call,
+                        Wren.batched,
+                        kwargs_expr,
+                        loop_iters,
+                        fname,
+                        batched_positional_args...,
+                    )
+
+                end
+            end
+        else
+            # A form we don't know how to handle, but it does contain the loop index in some
+            # form. Just wrap in a product
+            make_product_expr(expr, loop_idx, loop_iters)
+        end
     end
 end
 
 """
     replace_loop_idx_with_iters(expr, loop_idx::Symbol, loop_iters)
 
-Replace all occurrences of `loop_idx` in `expr` with `loop_iters`.
+Replace all occurrences of `loop_idx` in `expr` with `loop_iters` and broadcast where necessary.
+
+Returns a tuple of `(new_expr, is_batched)` where `new_expr` is the modified expression and
+`is_batched` indicates whether or not the expression was batched (i.e., it used to refer to
+a loop index but now refers to the iteration range).
 """
 function replace_loop_idx_with_iters(expr, loop_idx::Symbol, loop_iters)
     return if expr isa Symbol
-        expr == loop_idx ? loop_iters : expr
+        expr == loop_idx ? (loop_iters, true) : (expr, false)
     elseif expr isa QuoteNode
-        QuoteNode(replace_loop_idx_with_iters(expr.value, loop_idx, loop_iters))
+        expr, false
     elseif expr isa Expr
         if expr.head in (:ref, :., :call)
-            new_args = map(
+            new_args_and_is_batched = map(
                 arg -> replace_loop_idx_with_iters(arg, loop_idx, loop_iters),
                 expr.args,
             )
-            new_expr = Expr(expr.head, new_args...)
-            if expr.head == :call && any(arg -> arg == loop_idx, expr.args)
+            new_args = first.(new_args_and_is_batched)
+            any_arg_was_batched = any(last.(new_args_and_is_batched))
+            if expr.head == :call && any_arg_was_batched
                 # e.g. i + 1 --> apart from just replacing i, we also need to broadcast the
-                # operation `@. (1:J) + 1`. Note that we need the `nothing` because
-                # `:macrocall` expects a LineNumberNode, but we can't provide it.
-                Expr(:macrocall, Symbol("@__dot__"), nothing, new_expr)
+                # operation `i .+ 1`.
+                new_expr = if Meta.isoperator(expr.args[1])
+                    # Operators like `x + y` need to become `.+(x, y)`
+                    broadcasted_op = Symbol(".", expr.args[1])
+                    Expr(expr.head, broadcasted_op, new_args[2:end]...)
+                else
+                    # Functions like `f(x, y)` need to become `f.(x, y)`. Annoyingly the
+                    # requisite Expr has a completely different form from the operator
+                    # case........
+                    func_sym = new_args[1]
+                    func_args = new_args[2:end]
+                    Expr(Symbol("."), func_sym, Expr(:tuple, func_args...))
+                end
+                return new_expr, true
+            elseif expr.head == :ref
+                # e.g. x[i + 1] -> x[@. (1:J) + 1] also causes the overall indexing
+                # expression to be batched
+                new_expr = Expr(expr.head, new_args...)
+                new_expr, any_arg_was_batched
             else
-                # ok to just replace.
-                new_expr
+                # e.g. x[const] -> x[const]
+                new_expr = Expr(expr.head, new_args...)
+                new_expr, false
             end
         else
             error("@plate: unsupported expression $(expr) with head $(expr.head)")
         end
     else
         # e.g. literals
-        expr
+        expr, false
     end
 end
 
@@ -295,7 +391,7 @@ function vectorise_plate_stmt(
     latent_source,
     parameter_space,
 )
-    new_lhs = replace_loop_idx_with_iters(stmt.lhs, loop_idx, loop_iters)
+    new_lhs, _ = replace_loop_idx_with_iters(stmt.lhs, loop_idx, loop_iters)
     rhs_expr = _wren_expr_to_model_expr(stmt.rhs)
     new_rhs = batch_expr(rhs_expr, loop_idx, loop_iters)
     return emit_model_expr(
@@ -308,7 +404,7 @@ function vectorise_plate_stmt(
 end
 
 occurs_in_expr(expr::Symbol, loop_idx::Symbol) = expr == loop_idx
-occurs_in_expr(expr::QuoteNode, loop_idx::Symbol) = occurs_in_expr(expr.value, loop_idx)
+occurs_in_expr(expr::QuoteNode, loop_idx::Symbol) = false
 occurs_in_expr(expr::Expr, loop_idx::Symbol) =
     any(arg -> occurs_in_expr(arg, loop_idx), expr.args)
 occurs_in_expr(expr, loop_idx) = false
@@ -322,7 +418,7 @@ function vectorise_plate_stmt(
     latent_source,
     parameter_space,
 )
-    new_lhs = replace_loop_idx_with_iters(stmt.lhs, loop_idx, loop_iters)
+    new_lhs, _ = replace_loop_idx_with_iters(stmt.lhs, loop_idx, loop_iters)
     rhs_expr = _wren_expr_to_model_expr(stmt.rhs)
     new_rhs = batch_expr(rhs_expr, loop_idx, loop_iters)
     return emit_model_expr(
