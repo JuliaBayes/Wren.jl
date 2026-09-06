@@ -20,8 +20,8 @@ end
 
 function test_model_equivalence(
     model1::Wren.Model,
-    model2::Wren.Model;
-    adtype::AbstractADType=AutoEnzyme(; mode=Reverse),
+    model2::Wren.Model,
+    adtype::Union{AbstractADType,Nothing}=AutoEnzyme(; mode=Reverse),
 )
     # Shouldn't matter which model we use to generate params, since they are equivalent
     params = rand(model1)
@@ -120,6 +120,24 @@ end
         end
     end
 
+    @testset "keyword arguments" begin
+        @wren function plate_kwargs(y, p)
+            @plate for i in eachindex(y)
+                y[i] ~ NegativeBinomial(2.0, p[i]; check_args=false)
+            end
+        end
+        @wren function noplate_kwargs(y, p)
+            @plate for i in eachindex(y)
+                y[i] ~ NegativeBinomial(2.0, p[i]; check_args=false)
+            end
+        end
+        test_model_equivalence(
+            plate_kwargs(ones(3), [0.1, 0.2, 0.3]),
+            noplate_kwargs(ones(3), [0.1, 0.2, 0.3]),
+            nothing,
+        )
+    end
+
     @testset "different examples of batchable syntax" begin
         # could really do with more examples here
 
@@ -141,7 +159,11 @@ end
             end
             n = 5
             y = randn(n)
-            test_model_equivalence(plate_subtraction(y, n), noplate_subtraction(y, n))
+            test_model_equivalence(
+                plate_subtraction(y, n),
+                noplate_subtraction(y, n),
+                nothing,
+            )
         end
     end
 end

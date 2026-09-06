@@ -8,6 +8,20 @@ using Test
 # todo: This needs to be greatly expanded for our special nodes...
 
 @testset "expr unit tests" begin
+    @testset "occurs_in_expr" begin
+        f(expr) = Wren.occurs_in_expr(expr, :i)
+        @test f(:x) == false
+        @test f(:i) == true
+        @test f(:(x[i])) == true
+        @test f(:(x[i, j])) == true
+        @test f(:(x[j, i])) == true
+        @test f(:(x[j, k])) == false
+        @test f(:(x.a)) == false
+        @test f(:(x.i)) == false
+        @test f(:(x.a[i])) == true
+        @test f(:(i + 1)) == true
+    end
+
     @testset "plate" begin
         @testset "replace_loop_idx_with_iters" begin
             f(expr) = Wren.replace_loop_idx_with_iters(expr, :i, :(1:J))

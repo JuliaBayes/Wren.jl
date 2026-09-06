@@ -25,7 +25,8 @@ function Wren.batched(
     iters,
     ::Val{PM.Normal},
     indexed_mu::Wren.Indexed,
-    indexed_sigma::Wren.Indexed,
+    indexed_sigma::Wren.Indexed;
+    _kwargs...,
 )
     # e.g. batched(1:10, Val(PM.Normal), Indexed(x[1:10]), Indexed(y[1:10]))
     return DiagNormal(indexed_mu.data, indexed_sigma.data)
@@ -41,7 +42,7 @@ function Wren.logdensityof(d::IsoNormal, x)
     dist = sum(abs2, x .- d.mu)
     return -0.5 * dist - 0.5 * length(d.mu) * log(2π)
 end
-function Wren.batched(iters, ::Val{PM.Normal}, indexed_mu::Wren.Indexed)
+function Wren.batched(iters, ::Val{PM.Normal}, indexed_mu::Wren.Indexed; _kwargs...)
     # e.g. batched(1:10, Val(PM.Normal), Indexed(x[1:10]))
     return IsoNormal(indexed_mu.data)
 end
@@ -62,6 +63,6 @@ function Wren.logdensityof(d::IIDNormal, x)
     N = length(x)
     return -0.5 * dist - N * log(d.sigma) - 0.5 * N * log(2π)
 end
-Wren.batched(iters, n::PM.Normal) = IIDNormal(size(iters), n.μ, n.σ)
+Wren.batched(iters, n::PM.Normal; _kwargs...) = IIDNormal(size(iters), n.μ, n.σ)
 
 end # module WrenProbabilityMeasuresExt
