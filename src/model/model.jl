@@ -195,6 +195,10 @@ macro observe(expr)
     error("@observe must be used inside @wren")
 end
 
+macro iid(expr)
+    error("@iid must be used inside @wren")
+end
+
 macro plate(args...)
     error("@plate must be used inside @wren")
 end

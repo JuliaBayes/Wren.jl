@@ -164,6 +164,8 @@ depend on the loop index.
 end
 ```
 
+Inside `@wren`, `@iid y ~ dist` is shorthand for `y ~ iid(dist, size(y))`.
+
 The fallback is `independent(Fill(dist, dims))`; backends may add specialised methods.
 """
 iid(dist, dims::Dims) = independent(FillArrays.Fill(dist, dims))

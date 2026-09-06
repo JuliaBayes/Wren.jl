@@ -6,6 +6,7 @@ using Random: Random
 using LinearAlgebra: Diagonal, LowerTriangular, UniformScaling, diag
 using DensityInterface: DensityInterface, logdensityof
 using ProbabilityMeasures: ProbabilityMeasures as PM
+using VarNames: VarNames
 
 """
     Repeated{D,N}
@@ -212,6 +213,13 @@ Plaice.from_vec(d::Independent) = Plaice.Reshape(size(d))
 Plaice.to_vec(d::Independent) = Plaice.Vec(size(d))
 Plaice.vec_length(d::Independent) = length(d)
 Plaice.unconstrained_vec_length(d::Independent) = length(d)
+
+# Entry `i` of the vectorised sample is entry `i` of `vec(x)`, and every transform here is
+# elementwise, so the constrained and unconstrained optics coincide.
+_index_optics(d::Independent) =
+    [VarNames.Index(Tuple(I), (;)) for I in vec(CartesianIndices(size(d)))]
+Plaice.optic_vec(d::Independent) = _index_optics(d)
+Plaice.unconstrained_optic_vec(d::Independent) = _index_optics(d)
 
 function Plaice.from_unconstrained_vec(d::IIDUnivariate)
     return ElementwiseInvLink(

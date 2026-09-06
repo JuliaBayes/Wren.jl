@@ -7,6 +7,9 @@ using Random: Xoshiro
 using Plaice: Plaice
 using ProbabilityMeasures: ProbabilityMeasures as PM
 using ForwardDiff: ForwardDiff
+using ReverseDiff: ReverseDiff
+using Mooncake: Mooncake
+using Enzyme: Enzyme
 using GPUArraysCore: GPUArraysCore
 using JLArrays: JLArray
 
@@ -15,6 +18,25 @@ function scalar_link(d, x)
     b = Plaice.to_unconstrained_vec(d)
     results = [Plaice.with_logabsdet_jacobian(b, xi) for xi in x]
     return vec([only(first(r)) for r in results]), sum(last, results)
+end
+
+# Hooks so that `Plaice.test_all` can run on Wren's product measures. These are test-only
+# concerns (Plaice's own extensions define them for the distributions they wrap), so they
+# live here rather than in the Wren extension.
+const WrenPMExt = Base.get_extension(Wren, :WrenProbabilityMeasuresExt)
+Plaice.is_continuous(d::WrenPMExt.IID) = Plaice.is_continuous(WrenPMExt._dist(d))
+Plaice.is_continuous(d::WrenPMExt.Independent) = all(Plaice.is_continuous, d.components)
+Plaice.rand_safe_ad(d::WrenPMExt.Independent) = rand(d)
+Plaice.can_test_in_support(::WrenPMExt.Independent, x) = true
+function Plaice.test_in_support(d::WrenPMExt.IIDUnivariate, x)
+    @test all(xi -> PM.insupport(WrenPMExt._dist(d), xi), x)
+end
+function Plaice.test_in_support(d::WrenPMExt.IIDMultivariate, x)
+    dist = WrenPMExt._dist(d)
+    @test all(c -> PM.insupport(dist, c), eachcol(reshape(x, length(dist), :)))
+end
+function Plaice.test_in_support(d::WrenPMExt.IndependentArray, x)
+    @test all(PM.insupport.(d.components, x))
 end
 
 function with_scalar_indexing_disallowed(f)
@@ -62,28 +84,15 @@ end
         @test logdensityof(m, x) ≈ scalar_logdensity(d, x)
 
         @testset "Plaice transforms" begin
-            to_u = Plaice.to_unconstrained_vec(m)
-            from_u = Plaice.from_unconstrained_vec(m)
-            @test Plaice.inverse(to_u) == from_u
-            @test Plaice.inverse(from_u) == to_u
-
+            # Wren-specific semantics: the elementwise link must agree with applying the
+            # scalar bijector of `d` to each entry.
             expected_y, expected_lj = scalar_link(d, x)
-            y, lj = Plaice.with_logabsdet_jacobian(to_u, x)
-            @test y isa AbstractVector
+            y, lj = Plaice.with_logabsdet_jacobian(Plaice.to_unconstrained_vec(m), x)
             @test y ≈ expected_y
             @test lj ≈ expected_lj
-            @test to_u(x) ≈ expected_y
-
-            x_back, lj_back = Plaice.with_logabsdet_jacobian(from_u, y)
-            @test size(x_back) == size(x)
-            @test x_back ≈ x
-            @test lj_back ≈ -expected_lj
-            @test from_u(y) ≈ x
-
-            @test Plaice.to_vec(m)(x) == vec(x)
-            @test Plaice.from_vec(m)(vec(x)) == x
-            @test Plaice.vec_length(m) == 12
-            @test Plaice.unconstrained_vec_length(m) == 12
+            # Inverses, roundtrips, vector lengths, optics, log-Jacobians and AD are all
+            # covered by Plaice's generic interface tests.
+            Plaice.test_all(m)
         end
     end
 
@@ -133,6 +142,7 @@ end
         y, lj = Plaice.with_logabsdet_jacobian(Plaice.to_unconstrained_vec(m), x)
         @test y == vec(x)
         @test iszero(lj)
+        Plaice.test_all(m)
     end
 
     @testset "Multinomial draws" begin
@@ -292,6 +302,7 @@ end
         x_back, lj_back = Plaice.with_logabsdet_jacobian(from_u, y)
         @test x_back ≈ x
         @test lj_back ≈ sum(log, x)
+        Plaice.test_all(m)
 
         udists = [PM.Uniform(0.0, 1.0), PM.Uniform(-2.0, 3.0)]
         um = independent(udists)
@@ -386,6 +397,57 @@ end
             rates = [0.5, 1.0, 2.0]
             accs = rand_with_logp(hetero_model(y, rates, 3))
             @test loglikelihood(accs) ≈ sum(logdensityof.(PM.Exponential.(rates), y))
+        end
+
+        @testset "@iid macro" begin
+            @wren function iid_obs(y)
+                σ ~ PM.Exponential(1.0)
+                @observe @iid y ~ PM.Normal(0.0, σ)
+            end
+            @wren function iid_obs_swapped(y)
+                σ ~ PM.Exponential(1.0)
+                @iid @observe y ~ PM.Normal(0.0, σ)
+            end
+            y = [0.3 1.2; 2.5 0.7]
+            for f in (iid_obs, iid_obs_swapped)
+                accs = rand_with_logp(f(y))
+                σ = parameters(accs)[@vn(σ)]
+                @test loglikelihood(accs) ≈ scalar_logdensity(PM.Normal(0.0, σ), y)
+                @test logprior(accs) ≈ logdensityof(PM.Exponential(1.0), σ)
+            end
+
+            # Without @observe, the left-hand side only provides the shape.
+            @wren function iid_latent(template)
+                x = template
+                @iid x ~ PM.Exponential(2.0)
+                return x
+            end
+            accs = rand_with_logp(iid_latent(zeros(2, 3)))
+            x = parameters(accs)[@vn(x)]
+            @test size(x) == (2, 3)
+            @test all(>(0), x)
+            @test logprior(accs) ≈ scalar_logdensity(PM.Exponential(2.0), x)
+            @test iszero(loglikelihood(accs))
+
+            @test_throws ErrorException macroexpand(
+                @__MODULE__,
+                :(@wren function bad_iid(y)
+                    @iid y
+                end),
+            )
+            @test_throws ErrorException macroexpand(
+                @__MODULE__,
+                :(@wren function bad_iid_args(y)
+                    @iid y ~ PM.Normal() PM.Normal()
+                end),
+            )
+            @test_throws ErrorException macroexpand(
+                @__MODULE__,
+                :(@wren function bad_iid_observe(y)
+                    @observe @iid y
+                end),
+            )
+            @test_throws ErrorException macroexpand(@__MODULE__, :(@iid y ~ PM.Normal()))
         end
     end
 end

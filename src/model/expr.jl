@@ -146,10 +146,34 @@ The actual function that handles part 1 of lowering, i.e., transforming the user
 into Wren's IR.
 """
 lower_to_wren(expr, ::Module, ::Bool=false) = expr
+
+_is_macrocall(expr, name::Symbol) = Meta.isexpr(expr, :macrocall) && expr.args[1] == name
+_macro_args(expr::Expr) = filter(a -> !(a isa LineNumberNode), expr.args[2:end])
+
+# `@iid lhs ~ rhs` lowers to `lhs ~ Wren.iid(rhs, Base.size(lhs))`. The references are
+# resolved at model evaluation time, so it does not matter that `Wren.iid` is defined after
+# this module is included.
+const _IID_REF = GlobalRef(parentmodule(@__MODULE__), :iid)
+const _SIZE_REF = GlobalRef(Base, :size)
+function _iid_tilde(tilde)
+    Meta.isexpr(tilde, :call, 3) && tilde.args[1] == :~ ||
+        error("@iid: expected an expression of the form `value ~ distribution`")
+    lhs, rhs = tilde.args[2:3]
+    return Expr(:call, :~, lhs, Expr(:call, _IID_REF, rhs, Expr(:call, _SIZE_REF, lhs)))
+end
+
 function lower_to_wren(expr::Expr, mod::Module, statement_position::Bool=false)
     if expr.head == :macrocall && expr.args[1] == Symbol("@observe")
         statement_position || error("@observe must be used as a statement")
         observed_expr = last(expr.args)
+        if _is_macrocall(observed_expr, Symbol("@iid"))
+            # @observe @iid lhs ~ rhs
+            iid_args = _macro_args(observed_expr)
+            length(iid_args) == 1 || error(
+                "@iid: expected a single expression of the form `value ~ distribution`",
+            )
+            observed_expr = _iid_tilde(only(iid_args))
+        end
         if !(
             observed_expr isa Expr &&
             observed_expr.head == :call &&
@@ -160,6 +184,28 @@ function lower_to_wren(expr::Expr, mod::Module, statement_position::Bool=false)
         length(observed_expr.args) == 3 || error("@observe: expected ~ to have 2 arguments")
         lhs, rhs = observed_expr.args[2:3]
         return Observe(Symbol(lhs), lhs, lower_to_wren(rhs, mod))
+    end
+
+    if expr.head == :macrocall && expr.args[1] == Symbol("@iid")
+        statement_position || error("@iid must be used as a statement")
+        iid_args = _macro_args(expr)
+        length(iid_args) == 1 ||
+            error("@iid: expected a single expression of the form `value ~ distribution`")
+        inner = only(iid_args)
+        if _is_macrocall(inner, Symbol("@observe"))
+            # @iid @observe lhs ~ rhs: rewrite the tilde and hand back to the @observe branch
+            observe_args = _macro_args(inner)
+            length(observe_args) == 1 ||
+                error("@observe: expected an expression of the form `value ~ distribution`")
+            rewritten = Expr(
+                :macrocall,
+                Symbol("@observe"),
+                nothing,
+                _iid_tilde(only(observe_args)),
+            )
+            return lower_to_wren(rewritten, mod, true)
+        end
+        return lower_to_wren(_iid_tilde(inner), mod, true)
     end
 
     if expr.head == :macrocall && expr.args[1] == Symbol("@plate")

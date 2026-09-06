@@ -64,6 +64,7 @@ include("test_ad.jl")
 
 export @wren,
     @addloglikelihood,
+    @iid,
     @observe,
     @plate,
     AbstractLatentSource,
