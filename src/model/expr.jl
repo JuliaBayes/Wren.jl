@@ -5,7 +5,7 @@ module Expressions
 
 Wren's probabilistic intermediate representation. This is for the most part a copy of
 Julia's `Expr` type, but with a few additional node types for probabilistic statements,
-namely [`Sample`](@ref), [`Observe`](@ref), and [`Plate`](@ref).
+namely [`Sample`](@ref), [`Observe`](@ref), [`IID`](@ref), and [`Plate`](@ref).
 
 The [`ReturnStatement`](@ref) type is used as a convenient wrapper around `Expr(:return,
 ...)` to allow for dispatch, but has the same meaning.
@@ -39,6 +39,19 @@ struct Observe{L,R} <: AbstractWrenExpr
     name::Symbol
     lhs::L
     rhs::R
+end
+
+"""
+    IID
+
+Representation of `@iid lhs ~ rhs` (wrapping a [`Sample`](@ref)), or of
+`@iid @observe lhs ~ rhs` / `@observe @iid lhs ~ rhs` (wrapping an [`Observe`](@ref)).
+
+The wrapped tilde-statement is stored as written; the meaning `lhs ~ iid(rhs, size(lhs))`
+is only given to it at the second stage of lowering, in `emit_model_expr`.
+"""
+struct IID{T<:Union{Sample,Observe}} <: AbstractWrenExpr
+    tilde::T
 end
 
 """
@@ -150,16 +163,26 @@ lower_to_wren(expr, ::Module, ::Bool=false) = expr
 _is_macrocall(expr, name::Symbol) = Meta.isexpr(expr, :macrocall) && expr.args[1] == name
 _macro_args(expr::Expr) = filter(a -> !(a isa LineNumberNode), expr.args[2:end])
 
-# `@iid lhs ~ rhs` lowers to `lhs ~ Wren.iid(rhs, Base.size(lhs))`. The references are
-# resolved at model evaluation time, so it does not matter that `Wren.iid` is defined after
-# this module is included.
-const _IID_REF = GlobalRef(parentmodule(@__MODULE__), :iid)
-const _SIZE_REF = GlobalRef(Base, :size)
-function _iid_tilde(tilde)
-    Meta.isexpr(tilde, :call, 3) && tilde.args[1] == :~ ||
-        error("@iid: expected an expression of the form `value ~ distribution`")
-    lhs, rhs = tilde.args[2:3]
-    return Expr(:call, :~, lhs, Expr(:call, _IID_REF, rhs, Expr(:call, _SIZE_REF, lhs)))
+# Lower the `lhs ~ rhs` inside `@observe lhs ~ rhs` into an `Observe` node.
+function _lower_observe(observed_expr, mod::Module)
+    if !(
+        observed_expr isa Expr &&
+        observed_expr.head == :call &&
+        observed_expr.args[1] == :~
+    )
+        error("@observe: expected an expression of the form `value ~ distribution`")
+    end
+    length(observed_expr.args) == 3 || error("@observe: expected ~ to have 2 arguments")
+    lhs, rhs = observed_expr.args[2:3]
+    return Observe(Symbol(lhs), lhs, lower_to_wren(rhs, mod))
+end
+
+# Extract the single argument of `@iid ...`.
+function _iid_arg(expr::Expr)
+    iid_args = _macro_args(expr)
+    length(iid_args) == 1 ||
+        error("@iid: expected a single expression of the form `value ~ distribution`")
+    return only(iid_args)
 end
 
 function lower_to_wren(expr::Expr, mod::Module, statement_position::Bool=false)
@@ -168,44 +191,23 @@ function lower_to_wren(expr::Expr, mod::Module, statement_position::Bool=false)
         observed_expr = last(expr.args)
         if _is_macrocall(observed_expr, Symbol("@iid"))
             # @observe @iid lhs ~ rhs
-            iid_args = _macro_args(observed_expr)
-            length(iid_args) == 1 || error(
-                "@iid: expected a single expression of the form `value ~ distribution`",
-            )
-            observed_expr = _iid_tilde(only(iid_args))
+            return IID(_lower_observe(_iid_arg(observed_expr), mod))
         end
-        if !(
-            observed_expr isa Expr &&
-            observed_expr.head == :call &&
-            observed_expr.args[1] == :~
-        )
-            error("@observe: expected an expression of the form `value ~ distribution`")
-        end
-        length(observed_expr.args) == 3 || error("@observe: expected ~ to have 2 arguments")
-        lhs, rhs = observed_expr.args[2:3]
-        return Observe(Symbol(lhs), lhs, lower_to_wren(rhs, mod))
+        return _lower_observe(observed_expr, mod)
     end
 
     if expr.head == :macrocall && expr.args[1] == Symbol("@iid")
         statement_position || error("@iid must be used as a statement")
-        iid_args = _macro_args(expr)
-        length(iid_args) == 1 ||
-            error("@iid: expected a single expression of the form `value ~ distribution`")
-        inner = only(iid_args)
+        inner = _iid_arg(expr)
         if _is_macrocall(inner, Symbol("@observe"))
-            # @iid @observe lhs ~ rhs: rewrite the tilde and hand back to the @observe branch
-            observe_args = _macro_args(inner)
-            length(observe_args) == 1 ||
-                error("@observe: expected an expression of the form `value ~ distribution`")
-            rewritten = Expr(
-                :macrocall,
-                Symbol("@observe"),
-                nothing,
-                _iid_tilde(only(observe_args)),
-            )
-            return lower_to_wren(rewritten, mod, true)
+            # @iid @observe lhs ~ rhs
+            return IID(_lower_observe(last(inner.args), mod))
         end
-        return lower_to_wren(_iid_tilde(inner), mod, true)
+        # @iid lhs ~ rhs
+        lowered = lower_to_wren(inner, mod, true)
+        lowered isa Sample ||
+            error("@iid: expected an expression of the form `value ~ distribution`")
+        return IID(lowered)
     end
 
     if expr.head == :macrocall && expr.args[1] == Symbol("@plate")
@@ -333,6 +335,9 @@ end
 function _wren_expr_to_model_expr(stmt::Observe)
     tilde = Expr(:call, :~, stmt.lhs, _wren_expr_to_model_expr(stmt.rhs))
     return Expr(:macrocall, Symbol("@observe"), nothing, tilde)
+end
+function _wren_expr_to_model_expr(stmt::IID)
+    return Expr(:macrocall, Symbol("@iid"), nothing, _wren_expr_to_model_expr(stmt.tilde))
 end
 function _wren_expr_to_model_expr(stmt::AddLogLikelihood)
     args = Any[Symbol("@addloglikelihood"), nothing]

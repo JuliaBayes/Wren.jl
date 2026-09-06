@@ -102,6 +102,25 @@ function emit_model_expr(stmt::Sample, accs, conditioned, latent_source, paramet
     end
 end
 
+# `@iid lhs ~ rhs` (or the `@observe` variants) means `lhs ~ iid(rhs, size(lhs))`: one
+# array-valued distribution of independent draws from `rhs`, with the same shape as the
+# current value of `lhs`. We rewrite the wrapped tilde-statement's right-hand side and then
+# emit it exactly as we would a plain `Sample` or `Observe`.
+function emit_model_expr(stmt::IID, accs, conditioned, latent_source, parameter_space)
+    tilde = stmt.tilde
+    rhs_expr = emit_model_expr(tilde.rhs, accs, conditioned, latent_source, parameter_space)
+    iid_rhs = :($(iid)($rhs_expr, $(Base.size)($(tilde.lhs))))
+    return emit_model_expr(
+        _with_rhs(tilde, iid_rhs),
+        accs,
+        conditioned,
+        latent_source,
+        parameter_space,
+    )
+end
+_with_rhs(stmt::Sample, rhs) = Sample(stmt.name, stmt.lhs, rhs)
+_with_rhs(stmt::Observe, rhs) = Observe(stmt.name, stmt.lhs, rhs)
+
 # @plate for i in 1:N
 #    y[i] ~ Normal(x[i])
 # end
@@ -262,6 +281,11 @@ function replace_loop_idx_with_iters(expr, loop_idx::Symbol, loop_iters)
 end
 
 vectorise_plate_stmt(lnn::LineNumberNode, idx, iters, ax, cond, ls, ps) = lnn
+function vectorise_plate_stmt(::IID, idx, iters, ax, cond, ls, ps)
+    # `@iid` already produces one array-valued statement; batching it over a plate has no
+    # defined semantics yet.
+    return error("@iid is not supported inside @plate")
+end
 function vectorise_plate_stmt(
     stmt::Sample,
     loop_idx,

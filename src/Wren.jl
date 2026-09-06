@@ -37,6 +37,7 @@ include("model/expr.jl")
 using .Expressions:
     AbstractWrenExpr,
     AddLogLikelihood,
+    IID,
     Observe,
     OtherStatement,
     Plate,

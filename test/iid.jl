@@ -463,6 +463,15 @@ end
                 end),
             )
             @test_throws ErrorException macroexpand(@__MODULE__, :(@iid y ~ PM.Normal()))
+            # Batching an @iid statement over a plate has no defined semantics.
+            @test_throws ErrorException macroexpand(
+                @__MODULE__,
+                :(@wren function iid_in_plate(y, N)
+                    @plate for i in 1:N
+                        @iid y[i] ~ PM.Normal()
+                    end
+                end),
+            )
         end
     end
 end
