@@ -1,5 +1,7 @@
 module WrenAliasingTests
 
+@info "testing aliasing.jl"
+
 using Wren
 using Distributions
 using Test

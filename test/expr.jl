@@ -1,5 +1,7 @@
 module WrenExprTests
 
+@info "testing expr.jl"
+
 using Wren
 using Test
 
