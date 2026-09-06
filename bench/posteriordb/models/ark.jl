@@ -1,4 +1,6 @@
 # PosteriorDB: arK-arK
+# Deviations: sigma prior is half-Cauchy(0, 2.5) in PDB, replaced with Exponential(2.5)
+# as PM doesn't have truncated distributions. Applied to both models for fairness.
 module ArK
 
 using PosteriorDB
@@ -17,27 +19,31 @@ end
 
 # ── DynamicPPL ──
 
-@model function arK_arK(K, T, y)
+@model function arK_arK(y, lags, K)
     alpha ~ Normal(0, 10)
     beta ~ product_distribution(Fill(Normal(0, 10), K))
-    sigma ~ truncated(Cauchy(0, 2.5); lower=0)
-    for t in (K+1):T
-        mu = alpha
-        for k in 1:K
-            mu += beta[k] * y[t-k]
-        end
-        y[t] ~ Normal(mu, sigma)
-    end
+    sigma ~ Exponential(2.5)
+    mu = alpha .+ lags * beta
+    DynamicPPL.@addlogprob! logpdf(
+        product_distribution(Fill(Normal(0, sigma), length(y))),
+        y .- mu,
+    )
 end
 
-const turing_model = arK_arK(data["K"], data["T"], data["y"])
+const turing_model = let
+    K = data["K"]
+    T = data["T"]
+    series = data["y"]
+    lags = [series[t-k] for t in (K+1):T, k in 1:K]
+    arK_arK(series[(K+1):T], lags, K)
+end
 
 # ── Wren ──
 
 @wren function ark_model(y, lags, prior_mean)
     alpha ~ PM.Normal(0.0, 10.0)
     beta ~ PM.MvNormal(prior_mean, 10.0 * I)
-    sigma ~ PM.Exponential(2.5) # substitutes truncated(Cauchy(0, 2.5); lower=0)
+    sigma ~ PM.Exponential(2.5)
     @observe y ~ ProductNormal(alpha .+ lags * beta, sigma)
     return nothing
 end

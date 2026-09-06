@@ -22,8 +22,7 @@ using LinearAlgebra: LowerTriangular, Symmetric, cholesky, diag
 using LogExpFunctions: log1pexp
 using SpecialFunctions: loggamma
 
-export ProductNormal,
-    ProductPoisson, ProductBinomialLogit, DenseMvNormal, poisson_logconst, binomial_logconst
+export ProductNormal, ProductPoisson, ProductBinomialLogit, DenseMvNormal
 
 const LOG2PI = log(2 * pi)
 
@@ -81,58 +80,37 @@ function DensityInterface.logdensityof(d::DenseMvNormal, x::AbstractVector{<:Num
 end
 
 """
-    ProductPoisson(lambda, logconst)
+    ProductPoisson(lambda)
 
-Independent Poisson observations with rates `lambda`, where `logconst` comes from
-[`poisson_logconst`](@ref).
+Independent Poisson observations with rates `lambda`.
 """
-struct ProductPoisson{L,C}
+struct ProductPoisson{L}
     lambda::L
-    logconst::C
 end
-
-"""
-    poisson_logconst(counts)
-
-The count-dependent term `-sum(loggamma, counts .+ 1)` of a product-Poisson log
-density.
-"""
-poisson_logconst(counts) = -sum(c -> loggamma(c + 1), counts)
 
 function DensityInterface.logdensityof(d::ProductPoisson, x::AbstractVector{<:Number})
-    return sum(x .* log.(d.lambda) .- d.lambda) + d.logconst
+    return sum(x .* log.(d.lambda) .- d.lambda .- loggamma.(x .+ 1))
 end
 
 """
-    ProductBinomialLogit(trials, logit_p, logconst)
+    ProductBinomialLogit(trials, logit_p)
 
 Independent binomial observations with `trials` trials and success probabilities
-`logistic.(logit_p)`. `trials` may be a scalar shared across all observations,
-and `logconst` comes from [`binomial_logconst`](@ref).
+`logistic.(logit_p)`. `trials` may be a scalar shared across all observations.
 
 Working on the logit scale keeps the density finite for the large linear
 predictors that vague regression priors admit.
 """
-struct ProductBinomialLogit{N,P,C}
+struct ProductBinomialLogit{N,P}
     trials::N
     logit_p::P
-    logconst::C
-end
-
-"""
-    binomial_logconst(trials, successes)
-
-The data-dependent binomial coefficient term of a product-binomial log density.
-"""
-function binomial_logconst(trials, successes)
-    return sum(
-        loggamma.(trials .+ 1) .- loggamma.(successes .+ 1) .-
-        loggamma.(trials .- successes .+ 1),
-    )
 end
 
 function DensityInterface.logdensityof(d::ProductBinomialLogit, x::AbstractVector{<:Number})
-    return sum(x .* d.logit_p .- d.trials .* log1pexp.(d.logit_p)) + d.logconst
+    return sum(
+        x .* d.logit_p .- d.trials .* log1pexp.(d.logit_p) .+ loggamma.(d.trials .+ 1) .-
+        loggamma.(x .+ 1) .- loggamma.(d.trials .- x .+ 1),
+    )
 end
 
 end # module PMProducts

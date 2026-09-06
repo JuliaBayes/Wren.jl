@@ -1,4 +1,6 @@
 # PosteriorDB: GLMM_Poisson_data-GLMM_Poisson_model
+# Deviations: eps prior is Flat() in PDB, replaced with MvNormal(0, 100I)
+# as PM doesn't have improper priors. Applied to both models for fairness.
 module GLMMPoisson
 
 using PosteriorDB
@@ -8,7 +10,7 @@ using LinearAlgebra: I
 using Wren: Wren, @wren, @observe, @addloglikelihood, logdensityof
 using ProbabilityMeasures: ProbabilityMeasures as PM
 
-using ..PMProducts: ProductPoisson, poisson_logconst
+using ..PMProducts: ProductPoisson
 
 const data = let
     pdb = PosteriorDB.database()
@@ -26,7 +28,7 @@ end
     beta1 ~ Uniform(-10, 10)
     beta2 ~ Uniform(-10, 20)
     beta3 ~ Uniform(-10, 10)
-    eps ~ product_distribution(Fill(Flat(), n))
+    eps ~ MvNormal(zeros(n), 100 * I)
     sigma ~ Uniform(0, 5)
     log_lambda =
         alpha .+ beta1 .* year .+ beta2 .* year_squared .+ beta3 .* year_cubed .+ eps
@@ -47,23 +49,16 @@ end
 
 # ── Wren ──
 
-@wren function glmm_poisson_model(
-    counts,
-    year,
-    year_squared,
-    year_cubed,
-    prior_mean,
-    logconst,
-)
+@wren function glmm_poisson_model(counts, year, year_squared, year_cubed, prior_mean)
     alpha ~ PM.Uniform(-20.0, 20.0)
     beta1 ~ PM.Uniform(-10.0, 10.0)
     beta2 ~ PM.Uniform(-10.0, 20.0)
     beta3 ~ PM.Uniform(-10.0, 10.0)
     sigma ~ PM.Uniform(0.0, 5.0)
-    eps ~ PM.MvNormal(prior_mean, 100.0 * I) # substitutes Flat()
+    eps ~ PM.MvNormal(prior_mean, 100.0 * I)
     log_lambda =
         alpha .+ beta1 .* year .+ beta2 .* year_squared .+ beta3 .* year_cubed .+ eps
-    @observe counts ~ ProductPoisson(exp.(log_lambda), logconst)
+    @observe counts ~ ProductPoisson(exp.(log_lambda))
     @addloglikelihood logdensityof(PM.MvNormal(prior_mean, sigma * I), eps)
     return nothing
 end
@@ -71,14 +66,7 @@ end
 const wren_model = let
     counts = data["C"]
     year = data["year"]
-    glmm_poisson_model(
-        counts,
-        year,
-        year .^ 2,
-        year .^ 3,
-        zeros(data["n"]),
-        poisson_logconst(counts),
-    )
+    glmm_poisson_model(counts, year, year .^ 2, year .^ 3, zeros(data["n"]))
 end
 
 end

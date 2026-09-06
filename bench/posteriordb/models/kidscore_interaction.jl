@@ -1,4 +1,8 @@
 # PosteriorDB: kidiq-kidscore_interaction
+# Deviations: sigma prior is half-Cauchy(0, 2.5) in PDB, replaced with Exponential(2.5)
+# as PM doesn't have truncated distributions. beta prior is Flat() in PDB, replaced
+# with MvNormal(0, 100I) as PM doesn't have improper priors. Applied to both models
+# for fairness.
 module KidscoreInteraction
 
 using PosteriorDB
@@ -20,8 +24,8 @@ end
 # ── DynamicPPL ──
 
 @model function kidiq_kidscore_interaction(kid_score, X)
-    beta ~ product_distribution(Fill(Flat(), 4))
-    sigma ~ truncated(Cauchy(0, 2.5); lower=0)
+    beta ~ MvNormal(zeros(4), 100 * I)
+    sigma ~ Exponential(2.5)
     DynamicPPL.@addlogprob! logpdf(
         product_distribution(Fill(Normal(0, sigma), size(kid_score))),
         kid_score .- X * beta,
@@ -38,8 +42,8 @@ end
 # ── Wren ──
 
 @wren function kidscore_interaction(kid_score, X, prior_mean)
-    beta ~ PM.MvNormal(prior_mean, 100.0 * I) # substitutes Flat()
-    sigma ~ PM.Exponential(2.5) # substitutes truncated(Cauchy(0, 2.5); lower=0)
+    beta ~ PM.MvNormal(prior_mean, 100.0 * I)
+    sigma ~ PM.Exponential(2.5)
     @observe kid_score ~ ProductNormal(X * beta, sigma)
     return nothing
 end

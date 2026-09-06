@@ -1,4 +1,6 @@
 # PosteriorDB: sblri-blr
+# Deviations: sigma prior is half-Normal(0, 10) in PDB, replaced with Exponential(10)
+# as PM doesn't have truncated distributions. Applied to both models for fairness.
 module SblriBLR
 
 using PosteriorDB
@@ -25,7 +27,7 @@ end
     X = X.value
     y = y.value
     beta ~ product_distribution(Fill(Normal(0, 10), D))
-    sigma ~ truncated(Normal(0, 10); lower=0)
+    sigma ~ Exponential(10)
     DynamicPPL.@addlogprob! logpdf(
         product_distribution(Fill(Normal(0, sigma), size(y))),
         y .- X * beta,
@@ -38,7 +40,7 @@ const turing_model = dppl_sblri_blr(_FixedData(data["X"]), _FixedData(data["y"])
 
 @wren function sblri_blr(y, X, prior_mean)
     beta ~ PM.MvNormal(prior_mean, 10.0 * I)
-    sigma ~ PM.Exponential(10.0) # substitutes truncated(Normal(0, 10); lower=0)
+    sigma ~ PM.Exponential(10.0)
     @observe y ~ ProductNormal(X * beta, sigma)
     return nothing
 end
