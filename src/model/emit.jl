@@ -164,7 +164,9 @@ function batch_expr(expr, loop_idx, loop_iters)
             fname = Expr(:call, Expr(:curly, Base.Val, expr.args[1]))
             fargs = map(
                 arg -> begin
-                    expanded = replace_loop_idx_with_iters(arg, loop_idx, loop_iters)
+                    expanded, _ = replace_loop_idx_with_iters(arg, loop_idx, loop_iters)
+                    # TODO(penelopeysm): Should we be using the second return value here to
+                    # determine whether or not to view???
                     if occurs_in_expr(arg, loop_idx)
                         viewed = if expanded isa Expr && expanded.head == :ref
                             Expr(:macrocall, Symbol("@view"), nothing, expanded)
@@ -201,35 +203,57 @@ end
 """
     replace_loop_idx_with_iters(expr, loop_idx::Symbol, loop_iters)
 
-Replace all occurrences of `loop_idx` in `expr` with `loop_iters`.
+Replace all occurrences of `loop_idx` in `expr` with `loop_iters` and broadcast where necessary.
+
+Returns a tuple of `(new_expr, is_batched)` where `new_expr` is the modified expression and
+`is_batched` indicates whether or not the expression was batched (i.e., it used to refer to
+a loop index but now refers to the iteration range).
 """
 function replace_loop_idx_with_iters(expr, loop_idx::Symbol, loop_iters)
     return if expr isa Symbol
-        expr == loop_idx ? loop_iters : expr
+        expr == loop_idx ? (loop_iters, true) : (expr, false)
     elseif expr isa QuoteNode
-        QuoteNode(replace_loop_idx_with_iters(expr.value, loop_idx, loop_iters))
+        expr, false
     elseif expr isa Expr
         if expr.head in (:ref, :., :call)
-            new_args = map(
+            new_args_and_is_batched = map(
                 arg -> replace_loop_idx_with_iters(arg, loop_idx, loop_iters),
                 expr.args,
             )
-            new_expr = Expr(expr.head, new_args...)
-            if expr.head == :call && any(arg -> arg == loop_idx, expr.args)
+            new_args = first.(new_args_and_is_batched)
+            any_arg_was_batched = any(last.(new_args_and_is_batched))
+            if expr.head == :call && any_arg_was_batched
                 # e.g. i + 1 --> apart from just replacing i, we also need to broadcast the
-                # operation `@. (1:J) + 1`. Note that we need the `nothing` because
-                # `:macrocall` expects a LineNumberNode, but we can't provide it.
-                Expr(:macrocall, Symbol("@__dot__"), nothing, new_expr)
+                # operation `i .+ 1`.
+                new_expr = if Meta.isoperator(expr.args[1])
+                    # Operators like `x + y` need to become `.+(x, y)`
+                    broadcasted_op = Symbol(".", expr.args[1])
+                    Expr(expr.head, broadcasted_op, new_args[2:end]...)
+                else
+                    # Functions like `f(x, y)` need to become `f.(x, y)`. Annoyingly the
+                    # requisite Expr has a completely different form from the operator
+                    # case........
+                    func_sym = new_args[1]
+                    func_args = new_args[2:end]
+                    Expr(Symbol("."), func_sym, Expr(:tuple, func_args...))
+                end
+                return new_expr, true
+            elseif expr.head == :ref
+                # e.g. x[i + 1] -> x[@. (1:J) + 1] also causes the overall indexing
+                # expression to be batched
+                new_expr = Expr(expr.head, new_args...)
+                new_expr, any_arg_was_batched
             else
-                # ok to just replace.
-                new_expr
+                # e.g. x[const] -> x[const]
+                new_expr = Expr(expr.head, new_args...)
+                new_expr, false
             end
         else
             error("@plate: unsupported expression $(expr) with head $(expr.head)")
         end
     else
         # e.g. literals
-        expr
+        expr, false
     end
 end
 
@@ -243,7 +267,7 @@ function vectorise_plate_stmt(
     latent_source,
     parameter_space,
 )
-    new_lhs = replace_loop_idx_with_iters(stmt.lhs, loop_idx, loop_iters)
+    new_lhs, _ = replace_loop_idx_with_iters(stmt.lhs, loop_idx, loop_iters)
     rhs_expr = _wren_expr_to_model_expr(stmt.rhs)
     new_rhs = batch_expr(rhs_expr, loop_idx, loop_iters)
     return emit_model_expr(
@@ -270,7 +294,7 @@ function vectorise_plate_stmt(
     latent_source,
     parameter_space,
 )
-    new_lhs = replace_loop_idx_with_iters(stmt.lhs, loop_idx, loop_iters)
+    new_lhs, _ = replace_loop_idx_with_iters(stmt.lhs, loop_idx, loop_iters)
     rhs_expr = _wren_expr_to_model_expr(stmt.rhs)
     new_rhs = batch_expr(rhs_expr, loop_idx, loop_iters)
     return emit_model_expr(
