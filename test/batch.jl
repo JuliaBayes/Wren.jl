@@ -36,10 +36,16 @@ function test_model_equivalence(
     vm2 = VecModel(model2, adtype)
     @test vm1.dimension == vm2.dimension
     vparams = vectorise_latents(FromParams(params), vm1)
-    lp1, grad1 = lp_and_grad(vm1, vparams)
-    lp2, grad2 = lp_and_grad(vm2, vparams)
-    @test lp1 ≈ lp2
-    @test grad1 ≈ grad2
+    if adtype === nothing
+        lp1 = lp(vm1, vparams)
+        lp2 = lp(vm2, vparams)
+        @test lp1 ≈ lp2
+    else
+        lp1, grad1 = lp_and_grad(vm1, vparams)
+        lp2, grad2 = lp_and_grad(vm2, vparams)
+        @test lp1 ≈ lp2
+        @test grad1 ≈ grad2
+    end
 end
 
 @testset "batch.jl" begin
@@ -111,6 +117,31 @@ end
                 sample_observe1(zeros(3), ones(3)),
                 sample_observe2(zeros(3), ones(3)),
             )
+        end
+    end
+
+    @testset "different examples of batchable syntax" begin
+        # could really do with more examples here
+
+        @testset "issue #72" begin
+            # https://github.com/JuliaBayes/Wren.jl/issues/72
+            @wren function plate_subtraction(y, n)
+                μ ~ Normal(0, 1)
+                m = fill(μ, n)
+                @plate for k in eachindex(y)
+                    @observe y[k] ~ Normal(1 - m[k], 1.0)
+                end
+            end
+            @wren function noplate_subtraction(y, n)
+                μ ~ Normal(0, 1)
+                m = fill(μ, n)
+                for k in eachindex(y)
+                    @observe y[k] ~ Normal(1 - m[k], 1.0)
+                end
+            end
+            n = 5
+            y = randn(n)
+            test_model_equivalence(plate_subtraction(y, n), noplate_subtraction(y, n))
         end
     end
 end
