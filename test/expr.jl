@@ -32,6 +32,8 @@ using Test
             @test f(:(x[i+1])) == (:(x[(1:J) .+ 1]), true)
             @test f(:(x[-i])) == (:(x[.-(1:J)]), true)
             @test f(:(1 + x[i])) == (:(1 .+ x[1:J]), true)
+            @test f(:((1 + x[i]) * cnst)) == (:((1 .+ x[1:J]) .* cnst), true)
+            @test f(:((1 + x[i]) * y[i])) == (:((1 .+ x[1:J]) .* y[1:J]), true)
             @test f(:(func(1 + x[i]))) == (:(func.(1 .+ x[1:J])), true)
 
             @test_broken false
