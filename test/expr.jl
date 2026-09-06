@@ -5,30 +5,6 @@ module WrenExprTests
 using Wren
 using Test
 
-# Normalise ASTs (mostly by removing line number nodes, which are not relevant for
-# semantics). This function is taken from JuliaFormatter
-_normalise_ast!(ex) = ex
-function _normalise_ast!(ex::Expr)
-    if ex.head === :block || ex.head === :quote || ex.head === :toplevel
-        filter!(ex.args) do x
-            !(isa(x, Expr) && x.head === :line || isa(x, LineNumberNode))
-        end
-    end
-    # macrocall's apparently _need_ to have a line number node or something in that
-    # position, so we can't remove it altogether -- but we can replace all such nodes with
-    # `nothing` so that they compare equal. See: https://stackoverflow.com/a/53285644
-    if ex.head === :macrocall
-        new_args = map(ex.args) do x
-            x isa LineNumberNode ? nothing : x
-        end
-        ex.args = new_args
-    end
-    for subex in ex.args
-        subex isa Expr && _normalise_ast!(subex)
-    end
-    return ex
-end
-
 # todo: This needs to be greatly expanded for our special nodes...
 
 @testset "expr unit tests" begin
