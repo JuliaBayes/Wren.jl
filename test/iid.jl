@@ -33,7 +33,7 @@ function Plaice.test_in_support(d::WrenPMExt.IIDUnivariate, x)
 end
 function Plaice.test_in_support(d::WrenPMExt.IIDMultivariate, x)
     dist = WrenPMExt._dist(d)
-    @test all(c -> PM.insupport(dist, c), eachcol(reshape(x, length(dist), :)))
+    @test all(c -> PM.insupport(dist, c), eachcol(reshape(x, only(size(dist)), :)))
 end
 function Plaice.test_in_support(d::WrenPMExt.IndependentArray, x)
     @test all(PM.insupport.(d.components, x))
