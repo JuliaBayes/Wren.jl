@@ -1,4 +1,11 @@
-# Wren benchmarks
+# TL;DR
+
+```
+cd bench/posteriordb
+julia --project=. run.jl
+```
+
+# PosteriorDB benchmarks
 
 `posteriordb.jl` compares [Wren](https://github.com/JuliaBayes/Wren.jl) with the
 matching Stan implementation on ten PosteriorDB posteriors, and places the
