@@ -39,7 +39,7 @@ function _format(::Nothing, base)
     return "—"
 end
 function _format(x::Exception, base)
-    msg = sprint(showerror, x)
+    msg = join(Base.split(sprint(showerror, x), "\n"), "; ")
     # Truncate long messages
     MAX_LEN = 80
     if length(msg) > MAX_LEN
@@ -49,7 +49,9 @@ function _format(x::Exception, base)
 end
 function _format(x::Real, base::Union{Real,Nothing})
     ratio = base === nothing ? "" : @sprintf("(%.2fx)", x / base)
-    absolute = if x < 1e-3
+    absolute = if x < 1e-6
+        @sprintf("%.3f ns", x * 1e9)
+    elseif x < 1e-3
         @sprintf("%.3f μs", x * 1e6)
     elseif x < 1.0
         @sprintf("%.3f ms", x * 1e3)
