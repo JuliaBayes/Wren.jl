@@ -56,7 +56,7 @@ function _format(x::Real, base::Union{Real,Nothing})
     else
         @sprintf("%.3f s", x)
     end
-    return rpad(absolute, 12) * ratio
+    return lpad(absolute, 11) * " " * ratio
 end
 
 function Base.show(io::IO, ::MIME"text/plain", r::BenchResult)
