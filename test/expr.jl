@@ -23,6 +23,25 @@ using Test
     end
 
     @testset "plate" begin
+        @testset "occurs_in_kwargs" begin
+            function f(expr)
+                if expr.head != :call ||
+                   length(expr.args) < 3 ||
+                   !(expr.args[2] isa Expr) ||
+                   expr.args[2].head != :parameters
+                    error("expr must be a call with kwargs")
+                end
+                return Wren.occurs_in_kwargs(expr.args[2], :i)
+            end
+            @test !f(:(func(x; a=1, b=2)))
+            @test !f(:(func(x; i=1)))
+            @test f(:(func(x; x=i)))
+            @test f(:(func(x; i)))
+            @test f(:(func(x; a, i)))
+            @test f(:(func(x; x=f(i))))
+            @test !f(:(func(x; x=a.i)))
+        end
+
         @testset "replace_loop_idx_with_iters" begin
             f(expr) = Wren.replace_loop_idx_with_iters(expr, :i, :(1:J))
             @test f(:x) == (:x, false)

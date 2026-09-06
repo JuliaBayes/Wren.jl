@@ -161,9 +161,13 @@ function make_product_expr(rhs, loop_idx, loop_iters)
 end
 function occurs_in_kwargs(parameters::Expr, loop_idx::Symbol)
     for kw in parameters.args
-        if kw isa Symbol && kw == loop_idx
-            # f(...; loop_idx) i.e., shorthand for f(...; loop_idx=loop_idx)
-            return true
+        if kw isa Symbol
+            if kw == loop_idx
+                # f(...; loop_idx) i.e., shorthand for f(...; loop_idx=loop_idx)
+                return true
+            else
+                continue
+            end
         elseif kw isa Expr && kw.head == :kw
             # f(...; kw = val_expr)
             occurs_in_expr(kw.args[2], loop_idx) && return true
