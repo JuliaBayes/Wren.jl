@@ -185,6 +185,21 @@ end
             t
         @test value ≈ expected_lp(log(2.0))
         @test only(grad) ≈ -1.75
+
+        # The same gradient through the reverse-mode backends, checked against ForwardDiff.
+        for adtype in (
+            AutoReverseDiff(),
+            AutoMooncake(),
+            AutoEnzyme(; mode=Enzyme.Reverse, function_annotation=Enzyme.Const),
+        )
+            result = test_ad(
+                scale_model(x),
+                adtype;
+                latent_source=FromParams(VarNamedTuple(; σ=2.0)),
+                verbose=false,
+            )
+            @test result.grad_actual ≈ result.grad_expected
+        end
     end
 
     @testset "sample shapes" begin

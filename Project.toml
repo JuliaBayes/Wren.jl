@@ -40,7 +40,7 @@ Plaice = {rev = "pm", url = "https://github.com/JuliaBayes/Plaice.jl"}
 ProbabilityMeasures = {rev = "main", url = "https://github.com/JuliaBayes/ProbabilityMeasures.jl"}
 
 [extensions]
-WrenDistributionsExt = ["Distributions", "Plaice"]
+WrenDistributionsExt = ["Distributions", "FillArrays", "Plaice"]
 WrenEnzymeExt = ["Enzyme", "DifferentiationInterface"]
 WrenMooncakeExt = ["Mooncake"]
 WrenProbabilityMeasuresExt = ["ProbabilityMeasures", "Plaice"]
