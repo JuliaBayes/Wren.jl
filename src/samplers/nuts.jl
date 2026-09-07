@@ -118,7 +118,8 @@ function nuts(
     copy!(Random.TaskLocalRNG(), rng)
 
     if progress
-        pbar = ProgressBar(; columns=:default, transient=false)
+        title = "Sampling $(model.name)"
+        pbar = ProgressBar(; columns=:detailed, transient=false, expand=true, title=title)
         channel = Channel{ChannelMsg}(nchains * 2)
         update_every = max(1, niters ÷ 100)
     end
