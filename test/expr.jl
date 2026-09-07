@@ -8,6 +8,39 @@ using Test
 # todo: This needs to be greatly expanded for our special nodes...
 
 @testset "expr unit tests" begin
+    @testset "iid" begin
+        lower(expr) = only(
+            filter(e -> e isa Wren.AbstractWrenExpr, Wren.to_wren_exprs(expr, @__MODULE__)),
+        )
+        roundtrip(expr) = Wren._wren_expr_to_model_expr(lower(expr))
+        # Round-tripped macrocalls carry `nothing` where the parser puts a LineNumberNode.
+        iid_expr(inner) = Expr(:macrocall, Symbol("@iid"), nothing, inner)
+        observe_expr(inner) = Expr(:macrocall, Symbol("@observe"), nothing, inner)
+
+        # `@iid` is a marker: it wraps the tilde-statement without rewriting it.
+        s = lower(:(@iid x ~ Normal()))
+        @test s isa Wren.IID{<:Wren.Sample}
+        @test s.tilde.lhs == :x
+        @test Wren._wren_expr_to_model_expr(s.tilde.rhs) == :(Normal())
+        @test roundtrip(:(@iid x ~ Normal())) == iid_expr(:(x ~ Normal()))
+
+        # Either order of `@iid` and `@observe` gives the same node.
+        for expr in (:(@observe @iid y ~ Normal(mu)), :(@iid @observe y ~ Normal(mu)))
+            o = lower(expr)
+            @test o isa Wren.IID{<:Wren.Observe}
+            @test o.tilde.lhs == :y
+            @test Wren._wren_expr_to_model_expr(o.tilde.rhs) == :(Normal(mu))
+            @test roundtrip(expr) == iid_expr(observe_expr(:(y ~ Normal(mu))))
+        end
+
+        @test_throws ErrorException lower(:(@iid x))
+        @test_throws ErrorException lower(:(@iid x ~ Normal() Normal()))
+        @test_throws ErrorException lower(:(@observe @iid x))
+        @test_throws ErrorException lower(:(@iid @observe x))
+        # Not in statement position
+        @test_throws ErrorException lower(:(z = @iid x ~ Normal()))
+    end
+
     @testset "occurs_in_expr" begin
         f(expr) = Wren.occurs_in_expr(expr, :i)
         @test f(:x) == false

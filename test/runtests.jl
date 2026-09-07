@@ -10,6 +10,7 @@ using Test
     include("submodel.jl")
     include("vecmodel.jl")
     include("draw.jl")
+    include("iid.jl")
     include("ad.jl")
 
     if !Sys.iswindows()

@@ -6,7 +6,7 @@ using Plaice: Plaice
 using FillArrays: Fill
 using Distributions: Distribution, product_distribution, Normal
 
-Wren._product(dists::AbstractArray{<:Distribution}) = product_distribution(dists)
+Wren.independent(dists::AbstractArray{<:Distribution}) = product_distribution(dists)
 
 Wren.batched(iters, dist::Distribution; _kwargs...) =
     product_distribution(Fill(dist, length(iters)))

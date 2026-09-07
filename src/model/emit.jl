@@ -102,13 +102,32 @@ function emit_model_expr(stmt::Sample, accs, conditioned, latent_source, paramet
     end
 end
 
+# `@iid lhs ~ rhs` (or the `@observe` variants) means `lhs ~ iid(rhs, size(lhs))`: one
+# array-valued distribution of independent draws from `rhs`, with the same shape as the
+# current value of `lhs`. We rewrite the wrapped tilde-statement's right-hand side and then
+# emit it exactly as we would a plain `Sample` or `Observe`.
+function emit_model_expr(stmt::IID, accs, conditioned, latent_source, parameter_space)
+    tilde = stmt.tilde
+    rhs_expr = emit_model_expr(tilde.rhs, accs, conditioned, latent_source, parameter_space)
+    iid_rhs = :($(iid)($rhs_expr, $(Base.size)($(tilde.lhs))))
+    return emit_model_expr(
+        _with_rhs(tilde, iid_rhs),
+        accs,
+        conditioned,
+        latent_source,
+        parameter_space,
+    )
+end
+_with_rhs(stmt::Sample, rhs) = Sample(stmt.name, stmt.lhs, rhs)
+_with_rhs(stmt::Observe, rhs) = Observe(stmt.name, stmt.lhs, rhs)
+
 # @plate for i in 1:N
 #    y[i] ~ Normal(x[i])
 # end
 #
 # CURRENTLY gets lowered to something like:
 #
-# y[1:N] ~ _product([Normal(x[i]) for i in 1:N])
+# y[1:N] ~ independent([Normal(x[i]) for i in 1:N])
 #
 # This can be improved! https://github.com/JuliaBayes/ProbabilityMeasures.jl/issues/15
 function emit_model_expr(stmt::Plate, accs, conditioned, latent_source, parameter_space)
@@ -138,25 +157,53 @@ struct Indexed{T}
     data::T
 end
 
-# Semantically equivalent to product_distribution, but we can overload per distribution
-# backend
-function _product end
+"""
+    independent(dists::AbstractArray)
+
+Return a distribution over arrays with the same shape as `dists`, where each entry
+is independently drawn from `dists[i]`.
+
+Used by `@plate` for indexed distributions without a specialised `batched` method.
+Backends (e.g. the Distributions and ProbabilityMeasures extensions) add methods for
+their own distribution types.
+"""
+function independent end
+
+"""
+    iid(dist, dims::Dims)
+
+Return independent draws from `dist` in an array of shape `(size(dist)..., dims...)`.
+The distribution is stored once. `@plate` uses this when the distribution does not
+depend on the loop index.
+
+```julia
+@wren function f(N)
+    x ~ iid(Normal(), (N,))   # length N
+    W ~ iid(Normal(), (3, N)) # 3 × N
+end
+```
+
+Inside `@wren`, `@iid y ~ dist` is shorthand for `y ~ iid(dist, size(y))`.
+
+The fallback is `independent(Fill(dist, dims))`; backends may add specialised methods.
+"""
+iid(dist, dims::Dims) = independent(FillArrays.Fill(dist, dims))
 
 # TODO(penelopeysm): I'm unsure about type stability here because of the vararg
 # specialisation thing. We might need the fallback on generated functions with enumerated
 # arguments
 function batched(iters::I, ::Val{F}, args...; kwargs...) where {I,F}
-    # Default fallback for batching-unaware calls: use _product instead
-    return _product([
+    # Default fallback for batching-unaware calls: use independent instead
+    return independent([
         F((a isa Indexed ? a.data[i] : a for a in args)...; kwargs...) for i in iters
     ])
 end
 
 function make_product_expr(rhs, loop_idx, loop_iters)
-    # This returns `Wren._product([$rhs for $loop_idx in $loop_iters])`.
+    # This returns `Wren.independent([$rhs for $loop_idx in $loop_iters])`.
     Expr(
         :call,
-        Wren._product,
+        Wren.independent,
         Expr(:comprehension, Expr(:generator, rhs, Expr(:(=), loop_idx, loop_iters))),
     )
 end
@@ -330,6 +377,11 @@ function replace_loop_idx_with_iters(expr, loop_idx::Symbol, loop_iters)
 end
 
 vectorise_plate_stmt(lnn::LineNumberNode, idx, iters, ax, cond, ls, ps) = lnn
+function vectorise_plate_stmt(::IID, idx, iters, ax, cond, ls, ps)
+    # `@iid` already produces one array-valued statement; batching it over a plate has no
+    # defined semantics yet.
+    return error("@iid is not supported inside @plate")
+end
 function vectorise_plate_stmt(
     stmt::Sample,
     loop_idx,

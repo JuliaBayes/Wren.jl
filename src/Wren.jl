@@ -3,6 +3,7 @@ module Wren
 using DensityInterface: DensityInterface, logdensityof
 import DifferentiationInterface as DI
 using DocStringExtensions: TYPEDFIELDS
+using FillArrays: FillArrays
 using LogDensityProblems: LogDensityProblems
 using Plaice: Plaice
 using Random: AbstractRNG, default_rng
@@ -36,6 +37,7 @@ include("model/expr.jl")
 using .Expressions:
     AbstractWrenExpr,
     AddLogLikelihood,
+    IID,
     Observe,
     OtherStatement,
     Plate,
@@ -63,6 +65,7 @@ include("test_ad.jl")
 
 export @wren,
     @addloglikelihood,
+    @iid,
     @observe,
     @plate,
     AbstractLatentSource,
@@ -96,6 +99,8 @@ export @wren,
     apply_parameter_space,
     condition,
     conditioned,
+    iid,
+    independent,
     rand_with_logp,
     evaluate,
     get_latent,
