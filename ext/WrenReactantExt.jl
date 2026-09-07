@@ -65,9 +65,8 @@ function Wren.VecModel(
 
     reactant_sample = Reactant.to_rarray(sample)
     value_and_gradient_at = ValueAndGradientCallable(lp_func, adtype)
-    compiled_lp = Reactant.@allowscalar Reactant.@compile lp_func(reactant_sample)
-    compiled_value_and_gradient =
-        Reactant.@allowscalar Reactant.@compile value_and_gradient_at(reactant_sample)
+    compiled_lp = Reactant.@compile lp_func(reactant_sample)
+    compiled_value_and_gradient = Reactant.@compile value_and_gradient_at(reactant_sample)
     adprep = ReactantPrep(compiled_lp, compiled_value_and_gradient)
 
     return Wren.VecModel(

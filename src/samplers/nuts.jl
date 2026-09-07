@@ -110,7 +110,7 @@ function nuts(
         t = time()
         print("Doing AD preparation... ")
     end
-    vecmodel = Wren.VecModel(model, adtype)
+    vm_single = Wren.VecModel(model, adtype)
     if progress
         println("done in $(round(time() - t, digits=2)) seconds.")
     end
@@ -125,6 +125,7 @@ function nuts(
 
     tasks = [
         Threads.@spawn begin
+            vm = Wren._copy_for_thread(vm_single)
             reporter = if progress
                 ChannelReporter(channel, j, update_every)
             else
@@ -133,12 +134,12 @@ function nuts(
             try
                 results = DynamicHMC.mcmc_with_warmup(
                     Random.TaskLocalRNG(),
-                    vecmodel,
+                    vm,
                     niters;
                     reporter,
                     dynamichmc_kwargs...,
                 )
-                to_draws(results, vecmodel)
+                to_draws(results, vm)
             catch e
                 if progress
                     put!(channel, ErrorUpdate(j))

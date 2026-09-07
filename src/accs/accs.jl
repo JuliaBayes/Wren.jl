@@ -11,8 +11,8 @@ seen so far.
 
 An accumulator type `T <: AbstractAccumulator` must implement the following methods:
 - `accumulator_name(acc::T)` or `accumulator_name(::Type{T})`
-- `accumulate_observe!!(acc::T, val, vn, dist, template, sitename)`
-- `accumulate_assume!!(acc::T, val, tval, vn, dist, logjac, template, sitename)`
+- `accumulate_observe!!(acc::T, val, vn, dist, template, ::Val{sitename})`
+- `accumulate_assume!!(acc::T, val, tval, vn, dist, logjac, template, ::Val{sitename})`
 - `reset(acc::T)`
 - `Base.copy(acc::T)`
 
@@ -30,8 +30,8 @@ In these functions:
   tilde-statement is a literal observation like `0.0 ~ Normal()`, then `vn` is `nothing`.
 - `template` is a value that conveys the shape of the top-level symbol in `vn`, and is
   used specifically for accumulators that carry VarNamedTuples.
-- `sitename` is a compile-time `Symbol` identifying the sampling site in the model source
-  code. Each distinct tilde statement has a unique `sitename`.
+- `sitename` is a compile-time `Val{::Symbol}` identifying the sampling site in the model
+  source code. Each distinct tilde statement has a unique `sitename`.
 
 To be able to work with multi-threading, it should also implement:
 - `split(acc::T)`
@@ -53,7 +53,7 @@ the name only depends on the type of `acc`, not on its value.
 accumulator_name(acc::AbstractAccumulator) = accumulator_name(typeof(acc))
 
 """
-    accumulate_observe!!(acc::AbstractAccumulator, right, left, vn, template, sitename)
+    accumulate_observe!!(acc::AbstractAccumulator, right, left, vn, template, ::Val{sitename})
 
 Update `acc` in a `tilde_observe!!` call. Returns the updated `acc`.
 
@@ -66,7 +66,7 @@ See also: [`accumulate_assume!!`](@ref)
 function accumulate_observe!! end
 
 """
-    accumulate_assume!!(acc::AbstractAccumulator, val, tval, vn, dist, logjac, template, sitename)
+    accumulate_assume!!(acc::AbstractAccumulator, val, tval, vn, dist, logjac, template, ::Val{sitename})
 
 Update `acc` in a `tilde_assume!!` call. Returns the updated `acc`.
 
@@ -79,16 +79,21 @@ See also: [`accumulate_observe!!`](@ref)
 function accumulate_assume!! end
 
 """
-    accumulate_addloglikelihood!!(acc::AbstractAccumulator, value, sitename)
+    accumulate_addloglikelihood!!(acc::AbstractAccumulator, value, ::Val{sitename})
 
 Update `acc` when an `@addloglikelihood` statement is encountered. `value` is the scalar
-log-likelihood increment. `sitename` is a compile-time `Symbol` identifying the statement.
+log-likelihood increment. `sitename` is a compile-time `Val{::Symbol}` identifying the
+statement.
 
 Returns the updated `acc`. The default implementation is a no-op.
 
 See also: [`accumulate_observe!!`](@ref), [`accumulate_assume!!`](@ref)
 """
-accumulate_addloglikelihood!!(acc::AbstractAccumulator, value, sitename) = acc
+accumulate_addloglikelihood!!(
+    acc::AbstractAccumulator,
+    value,
+    @nospecialize(sitename::Val)
+) = acc
 
 """
     reset(acc::AbstractAccumulator)
@@ -320,7 +325,7 @@ function map_accumulator(
 end
 
 """
-    accumulate_assume!!(at::AccumulatorTuple, val, tval, vn, dist, logjac, template, sitename)
+    accumulate_assume!!(at::AccumulatorTuple, val, tval, vn, dist, logjac, template, ::Val{sitename})
 
 Update all the accumulators of `at` by calling `accumulate_assume!!` on them.
 """
@@ -354,7 +359,7 @@ Update all the accumulators of `at` by calling `accumulate_assume!!` on them.
 end
 
 """
-    accumulate_observe!!(at::AccumulatorTuple, val, vn, right, template, sitename)
+    accumulate_observe!!(at::AccumulatorTuple, val, vn, right, template, ::Val{sitename})
 
 Update all the accumulators of `at` by calling `accumulate_observe!!` on them.
 """
@@ -378,7 +383,7 @@ Update all the accumulators of `at` by calling `accumulate_observe!!` on them.
 end
 
 """
-    accumulate_addloglikelihood!!(at::AccumulatorTuple, value, sitename)
+    accumulate_addloglikelihood!!(at::AccumulatorTuple, value, ::Val{sitename})
 
 Update all the accumulators of `at` by calling `accumulate_addloglikelihood!!` on them.
 """
