@@ -224,8 +224,8 @@ macro iid(expr)
     error("@iid must be used inside @wren")
 end
 
-macro plate(args...)
-    error("@plate must be used inside @wren")
+macro batch(args...)
+    error("@batch must be used inside @wren")
 end
 
 macro addloglikelihood(args...)

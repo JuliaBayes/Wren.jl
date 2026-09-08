@@ -243,12 +243,12 @@ end
             @test ld isa eltype(d)
             @test iszero(logdensityof(m, Float32.(x)))
         end
-        @wren function empty_plate(y, N)
-            @plate for i in 1:N
+        @wren function empty_batch(y, N)
+            @batch for i in 1:N
                 @observe y[i] ~ PM.Exponential(2.0)
             end
         end
-        @test iszero(loglikelihood(rand_with_logp(empty_plate(Float64[], 0))))
+        @test iszero(loglikelihood(rand_with_logp(empty_batch(Float64[], 0))))
     end
 
     @testset "MvNormal result types" begin
@@ -390,22 +390,22 @@ end
             @test loglikelihood(accs) ≈ scalar_logdensity(d, y)
         end
 
-        @testset "@plate with a shared distribution" begin
-            @wren function plate_model(y, N)
-                @plate for i in 1:N
+        @testset "@batch with a shared distribution" begin
+            @wren function batch_model(y, N)
+                @batch for i in 1:N
                     @observe y[i] ~ PM.Exponential(2.0)
                 end
             end
             y = [0.1, 0.4, 1.3]
-            accs = rand_with_logp(plate_model(y, 3))
+            accs = rand_with_logp(batch_model(y, 3))
             @test loglikelihood(accs) ≈ scalar_logdensity(PM.Exponential(2.0), y)
             @test WrenCore.batched(1:3, PM.Exponential(2.0)) ==
                   iid(PM.Exponential(2.0), (3,))
         end
 
-        @testset "@plate with indexed parameters" begin
+        @testset "@batch with indexed parameters" begin
             @wren function hetero_model(y, rates, N)
-                @plate for i in 1:N
+                @batch for i in 1:N
                     @observe y[i] ~ PM.Exponential(rates[i])
                 end
             end
@@ -464,11 +464,10 @@ end
                 end),
             )
             @test_throws ErrorException macroexpand(@__MODULE__, :(@iid y ~ PM.Normal()))
-            # Batching an @iid statement over a plate has no defined semantics.
             @test_throws ErrorException macroexpand(
                 @__MODULE__,
-                :(@wren function iid_in_plate(y, N)
-                    @plate for i in 1:N
+                :(@wren function iid_in_batch(y, N)
+                    @batch for i in 1:N
                         @iid y[i] ~ PM.Normal()
                     end
                 end),

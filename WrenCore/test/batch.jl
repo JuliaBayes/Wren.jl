@@ -50,11 +50,11 @@ end
 
 @testset "batch.jl" begin
     @testset "semantic invariance" begin
-        # `@plate for ... end` should *always* have the same behaviour as `for ... end`
+        # `@batch for ... end` should *always* have the same behaviour as `for ... end`
 
         @testset "sample" begin
             @wren function sample1(x)
-                @plate for i in 1:3
+                @batch for i in 1:3
                     x[i] ~ Normal()
                 end
             end
@@ -69,7 +69,7 @@ end
         @testset "observe" begin
             @wren function observe1(x)
                 a ~ Normal()
-                @plate for i in 1:3
+                @batch for i in 1:3
                     @observe x[i] ~ Normal(a)
                 end
             end
@@ -85,7 +85,7 @@ end
         @testset "conditioned" begin
             @wren function conditioned1(x)
                 a ~ Normal()
-                @plate for i in 1:3
+                @batch for i in 1:3
                     x[i] ~ Normal(a)
                 end
             end
@@ -102,7 +102,7 @@ end
 
         @testset "sample + observe" begin
             @wren function sample_observe1(x, y)
-                @plate for i in 1:3
+                @batch for i in 1:3
                     x[i] ~ Normal()
                     @observe y[i] ~ Normal(x[i])
                 end
@@ -121,19 +121,19 @@ end
     end
 
     @testset "keyword arguments" begin
-        @wren function plate_kwargs(y, p)
-            @plate for i in eachindex(y)
+        @wren function batch_kwargs(y, p)
+            @batch for i in eachindex(y)
                 y[i] ~ NegativeBinomial(2.0, p[i]; check_args=false)
             end
         end
-        @wren function noplate_kwargs(y, p)
-            @plate for i in eachindex(y)
+        @wren function nobatch_kwargs(y, p)
+            @batch for i in eachindex(y)
                 y[i] ~ NegativeBinomial(2.0, p[i]; check_args=false)
             end
         end
         test_model_equivalence(
-            plate_kwargs(ones(3), [0.1, 0.2, 0.3]),
-            noplate_kwargs(ones(3), [0.1, 0.2, 0.3]),
+            batch_kwargs(ones(3), [0.1, 0.2, 0.3]),
+            nobatch_kwargs(ones(3), [0.1, 0.2, 0.3]),
             nothing,
         )
     end
@@ -143,14 +143,14 @@ end
 
         @testset "issue #72" begin
             # https://github.com/JuliaBayes/Wren.jl/issues/72
-            @wren function plate_subtraction(y, n)
+            @wren function batch_subtraction(y, n)
                 μ ~ Normal(0, 1)
                 m = fill(μ, n)
-                @plate for k in eachindex(y)
+                @batch for k in eachindex(y)
                     @observe y[k] ~ Normal(1 - m[k], 1.0)
                 end
             end
-            @wren function noplate_subtraction(y, n)
+            @wren function nobatch_subtraction(y, n)
                 μ ~ Normal(0, 1)
                 m = fill(μ, n)
                 for k in eachindex(y)
@@ -160,8 +160,8 @@ end
             n = 5
             y = randn(n)
             test_model_equivalence(
-                plate_subtraction(y, n),
-                noplate_subtraction(y, n),
+                batch_subtraction(y, n),
+                nobatch_subtraction(y, n),
                 nothing,
             )
         end
