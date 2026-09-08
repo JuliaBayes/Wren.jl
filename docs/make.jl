@@ -1,14 +1,5 @@
 using Pkg: Pkg
 
-# Because our `docs` folder is not placed under Wren or WrenCore, we need to manually read
-# in the version of Wren so that we have something to use for the version picker.
-#
-# In actual deployment settings, this should be ignored by Documenter, in favour of the
-# version number inferred from the git tag:
-# https://github.com/JuliaDocs/Documenter.jl/pull/2449
-using TOML: TOML
-const WREN_VERSION = TOML.parsefile(joinpath(@__DIR__, "..", "Wren", "Project.toml"))["version"]
-
 using Wren
 using WrenCore
 using Documenter
@@ -23,7 +14,11 @@ links = InterLinks(
 
 makedocs(;
     sitename="Wren.jl",
-    format=Documenter.HTML(; inventory_version=WREN_VERSION),
+    # Explicitly pass an empty `inventory_version` to silence warnings when building docs.
+    # This has no effect on deployed docs (i.e. on GitHub Pages) since Documenter will
+    # automatically detect the inventory version from the git tag. See
+    # https://github.com/JuliaDocs/Documenter.jl/pull/2449
+    format=Documenter.HTML(; inventory_version=""),
     modules=[Wren, WrenCore],
     pages=[
         "index.md",

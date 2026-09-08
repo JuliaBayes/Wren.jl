@@ -45,10 +45,10 @@ using Reactant: Reactant
             PM.LogNormal(), # positive
             PM.Uniform(0.0, 1.0), # truncated
             PM.MvNormal([0.0, 0.0], I), # identity multivariate
-            Wren.iid(PM.Normal(0.5, 2.0), (3,)),
-            Wren.iid(PM.Exponential(1.5), (2, 2)),
-            Wren.iid(PM.Uniform(-1.0, 2.0), (4,)),
-            Wren.iid(PM.MvNormal([0.0, 0.0], I), (2,)),
+            WrenCore.iid(PM.Normal(0.5, 2.0), (3,)),
+            WrenCore.iid(PM.Exponential(1.5), (2, 2)),
+            WrenCore.iid(PM.Uniform(-1.0, 2.0), (4,)),
+            WrenCore.iid(PM.MvNormal([0.0, 0.0], I), (2,)),
         )
             model = f(dist)
             vm = VecModel(model, AutoReactant(AutoEnzyme(; mode=Enzyme.Reverse)))
