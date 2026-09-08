@@ -81,7 +81,7 @@ You can access the trace with `parameters(accs)`, and the log-density with `logj
 At this point, you are probably wondering what an `AccumulatorTuple` is.
 This is a good point to talk about the general evaluation framework that Wren uses, which is heavily lifted from DynamicPPL.
 
-The entry point for _all_ Wren model evaluation is the [`evaluate`](@ref) function.
+The entry point for _all_ Wren model evaluation is the [`WrenCore.evaluate`](@ref) function.
 It takes exactly four arguments:
 
   - a *model* (of course!);
@@ -94,7 +94,7 @@ It takes exactly four arguments:
     The latter three arguments *directly* map to DynamicPPL's initialisation strategies, transform strategies, and accumulators. If you want to read more about that, please see [the DynamicPPL docs](https://turinglang.org/DynamicPPL.jl/stable/evaluation/). (All of that is written by me as well!)
 
 The parameter space argument is slightly more advanced, and we'll leave it for later.
-For now, suffice it to say that we'll always use [`OriginalSpace()`](@ref) as this value, which essentially stipulates that all variables should not be transformed.
+For now, suffice it to say that we'll always use [`WrenCore.OriginalSpace()`](@ref) as this value, which essentially stipulates that all variables should not be transformed.
 
 Let's focus on the other two arguments: the latent source and the accumulators.
 
@@ -114,13 +114,14 @@ FromParams(trace)
 
 An accumulator, on the other hand, is a struct that holds information that is collected during model evaluation.
 An `AccumulatorTuple` wraps multiple such objects (with some special magic, which is mostly hidden, to maximise type stability).
+Because most users shouldn't really need to reach for these types on a daily basis, we keep them in WrenCore rather than re-exporting them from Wren.
 
 ```@example models
-accs = Wren.AccumulatorTuple(
-    Wren.LogPriorAccumulator(),
-    Wren.LogLikelihoodAccumulator(),
-    Wren.ParamsAccumulator(),
-)
+using WrenCore:
+    AccumulatorTuple, LogPriorAccumulator, LogLikelihoodAccumulator, ParamsAccumulator
+
+accs =
+    AccumulatorTuple(LogPriorAccumulator(), LogLikelihoodAccumulator(), ParamsAccumulator())
 ```
 
 The good thing about this design is that you can choose which accumulators to include: for example, if you aren't interested in the log-density, you can include _only_ the `ParamsAccumulator`, and the log-density calculations will be skipped entirely.
@@ -128,6 +129,8 @@ The good thing about this design is that you can choose which accumulators to in
 Now that we have the ingredients, let's put it all together:
 
 ```@example models
+using WrenCore: evaluate, OriginalSpace
+
 retval, accs = evaluate(model, FromParams(trace), OriginalSpace(), accs);
 ```
 
