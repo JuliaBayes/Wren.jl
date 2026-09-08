@@ -1,8 +1,8 @@
 # TL;DR
 
 ```
-cd bench/posteriordb
-julia --project=. run.jl
+cd bench
+julia --project=. posteriordb/run.jl
 ```
 
 # PosteriorDB benchmarks
