@@ -81,8 +81,11 @@ function pretty_time(seconds)
 end
 
 function benchmark_pair(models, backend, seed)
-    wren_model =
-        WrenCore.VecModel(models.wren, backend.wren; latent_source=WrenCore.FromPrior(Xoshiro(seed)))
+    wren_model = WrenCore.VecModel(
+        models.wren,
+        backend.wren;
+        latent_source=WrenCore.FromPrior(Xoshiro(seed)),
+    )
     # A bit hacky to extract the internal field, but it is a vector already in the right
     # shape...
     params = wren_model.sample

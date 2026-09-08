@@ -251,7 +251,8 @@ function benchmark_and_test(
     end
     atol, rtol = promote(atol, rtol)
 
-    _, accs = evaluate(model, latent_source, OriginalSpace(), WrenCore.default_accumulators())
+    _, accs =
+        evaluate(model, latent_source, OriginalSpace(), WrenCore.default_accumulators())
     vnt_params = parameters(accs)
 
     # Model-level benchmarking: sample and logjoint

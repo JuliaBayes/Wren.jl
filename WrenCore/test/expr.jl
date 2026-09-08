@@ -10,7 +10,10 @@ using Test
 @testset "expr unit tests" begin
     @testset "iid" begin
         lower(expr) = only(
-            filter(e -> e isa WrenCore.AbstractWrenExpr, WrenCore.to_wren_exprs(expr, @__MODULE__)),
+            filter(
+                e -> e isa WrenCore.AbstractWrenExpr,
+                WrenCore.to_wren_exprs(expr, @__MODULE__),
+            ),
         )
         roundtrip(expr) = WrenCore._wren_expr_to_model_expr(lower(expr))
         # Round-tripped macrocalls carry `nothing` where the parser puts a LineNumberNode.

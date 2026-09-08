@@ -43,7 +43,7 @@ DynamicPPL.@model function dppl_eight_schools(y, sigma, J)
     return (mu=mu, tau=tau)
 end
 
-path = "mnist.csv"
+path = joinpath(@__DIR__, "mnist.csv")
 data, _ = readdlm(path, ',', header=true)
 labels = Int.(data[:, 1])
 image_vec = data[:, 2:end]

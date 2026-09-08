@@ -16,7 +16,12 @@ using Term.Progress: ProgressBar, addjob!, update!, start!, stop!, render
 
 Sample from the prior distribution of a Wren model.
 """
-function prior(model::WrenCore.Model, niters::Integer, nchains::Integer=1; progress::Bool=true)
+function prior(
+    model::WrenCore.Model,
+    niters::Integer,
+    nchains::Integer=1;
+    progress::Bool=true,
+)
     return prior(Random.default_rng(), model, niters, nchains; progress)
 end
 function prior(

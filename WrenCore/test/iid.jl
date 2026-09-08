@@ -399,7 +399,8 @@ end
             y = [0.1, 0.4, 1.3]
             accs = rand_with_logp(plate_model(y, 3))
             @test loglikelihood(accs) ≈ scalar_logdensity(PM.Exponential(2.0), y)
-            @test WrenCore.batched(1:3, PM.Exponential(2.0)) == iid(PM.Exponential(2.0), (3,))
+            @test WrenCore.batched(1:3, PM.Exponential(2.0)) ==
+                  iid(PM.Exponential(2.0), (3,))
         end
 
         @testset "@plate with indexed parameters" begin
