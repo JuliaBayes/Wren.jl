@@ -298,7 +298,13 @@ function batch_expr(expr, loop_idx, loop_iters)
                 )
 
                 if kwargs_expr === nothing
-                    Expr(:call, WrenCore.batched, loop_iters, fname, batched_positional_args...)
+                    Expr(
+                        :call,
+                        WrenCore.batched,
+                        loop_iters,
+                        fname,
+                        batched_positional_args...,
+                    )
                 else
                     Expr(
                         :call,

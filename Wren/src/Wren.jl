@@ -8,7 +8,8 @@ include("samplers/nuts.jl")
 export prior, nuts
 
 # Re-exports
-using WrenCore: @wren,
+using WrenCore:
+    @wren,
     # DSL
     @addloglikelihood,
     @iid,

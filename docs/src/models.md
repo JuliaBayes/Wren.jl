@@ -117,13 +117,11 @@ An `AccumulatorTuple` wraps multiple such objects (with some special magic, whic
 Because most users shouldn't really need to reach for these types on a daily basis, we keep them in WrenCore rather than re-exporting them from Wren.
 
 ```@example models
-using WrenCore: AccumulatorTuple, LogPriorAccumulator, LogLikelihoodAccumulator, ParamsAccumulator
+using WrenCore:
+    AccumulatorTuple, LogPriorAccumulator, LogLikelihoodAccumulator, ParamsAccumulator
 
-accs = AccumulatorTuple(
-    LogPriorAccumulator(),
-    LogLikelihoodAccumulator(),
-    ParamsAccumulator(),
-)
+accs =
+    AccumulatorTuple(LogPriorAccumulator(), LogLikelihoodAccumulator(), ParamsAccumulator())
 ```
 
 The good thing about this design is that you can choose which accumulators to include: for example, if you aren't interested in the log-density, you can include _only_ the `ParamsAccumulator`, and the log-density calculations will be skipped entirely.
