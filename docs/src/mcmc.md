@@ -29,24 +29,24 @@ model = eight_schools(y, sigma, J)
 ## Prior
 
 ```@docs
-Wren.Samplers.prior
+Wren.prior
 ```
 
 ```@example mcmc
-using Wren.Samplers
+using Wren
 prior(model, 1000, 4; progress=false)
 ```
 
 ## NUTS
 
 ```@docs
-Wren.Samplers.nuts
+Wren.nuts
 ```
 
 ```@example mcmc
 using Enzyme
 adtype = AutoEnzyme(; mode=Reverse)
 
-using Wren.Samplers
+using Wren
 nuts(model, 1000, 4; adtype=adtype, progress=false)
 ```

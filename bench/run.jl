@@ -1,10 +1,10 @@
-if VERSION < v"1.13-"
-    error("This script requires Julia 1.13 or later")
-end
+# if VERSION < v"1.13-"
+#     error("This script requires Julia 1.13 or later")
+# end
 
 using ADTypes
 using Chairmarks: @be
-using Differ
+# using Differ
 using Distributions
 using DynamicPPL
 using Enzyme
@@ -16,11 +16,11 @@ using Random: Xoshiro
 using Reactant
 using ReverseDiff
 using Statistics: median
-using Wren
+using WrenCore
 
 include("pmtransforms.jl")
 include("models.jl")
-include("differ_rules.jl")
+# include("differ_rules.jl")
 
 using .BenchmarkModels
 
@@ -40,8 +40,8 @@ const BACKENDS = (
         dppl=ADTypes.AutoMooncakeForward(),
     ),
     (name="MooncakeRvs", wren=ADTypes.AutoMooncake(), dppl=ADTypes.AutoMooncake()),
-    (name="DifferFwd", wren=Differ.AutoDifferForwards(), dppl=Differ.AutoDifferForwards()),
-    (name="DifferRvs", wren=Differ.AutoDifferReverse(), dppl=Differ.AutoDifferReverse()),
+    # (name="DifferFwd", wren=Differ.AutoDifferForwards(), dppl=Differ.AutoDifferForwards()),
+    # (name="DifferRvs", wren=Differ.AutoDifferReverse(), dppl=Differ.AutoDifferReverse()),
     (
         name="EnzymeFwd",
         wren=ADTypes.AutoEnzyme(; mode=Forward),
@@ -82,28 +82,28 @@ end
 
 function benchmark_pair(models, backend, seed)
     wren_model =
-        Wren.VecModel(models.wren, backend.wren; params=Wren.FromPrior(Xoshiro(seed)))
+        WrenCore.VecModel(models.wren, backend.wren; latent_source=WrenCore.FromPrior(Xoshiro(seed)))
     # A bit hacky to extract the internal field, but it is a vector already in the right
     # shape...
     params = wren_model.sample
 
-    wren_value, wren_grad = Wren.lp_and_grad(wren_model, params)
+    wren_value, wren_grad = WrenCore.lp_and_grad(wren_model, params)
 
     if backend.dppl === nothing
-        reference = Wren.VecModel(
+        reference = WrenCore.VecModel(
             models.wren,
             ADTypes.AutoForwardDiff();
-            params=FromPrior(Xoshiro(seed)),
+            latent_source=FromPrior(Xoshiro(seed)),
         )
-        reference_value, reference_grad = Wren.lp_and_grad(reference, params)
+        reference_value, reference_grad = WrenCore.lp_and_grad(reference, params)
         @assert isapprox(wren_value, reference_value; rtol=1e-8, atol=1e-8)
         @assert isapprox(wren_grad, reference_grad; rtol=1e-7, atol=1e-8)
 
-        Wren.lp(wren_model, params)
-        wren_lp = median(@be Wren.lp($wren_model, $params) seconds=BENCHMARK_SECONDS)
-        Wren.lp_and_grad(wren_model, params)
+        WrenCore.lp(wren_model, params)
+        wren_lp = median(@be WrenCore.lp($wren_model, $params) seconds=BENCHMARK_SECONDS)
+        WrenCore.lp_and_grad(wren_model, params)
         wren_grad_bench =
-            median(@be Wren.lp_and_grad($wren_model, $params) seconds=BENCHMARK_SECONDS)
+            median(@be WrenCore.lp_and_grad($wren_model, $params) seconds=BENCHMARK_SECONDS)
 
         return (
             dppl_lp=nothing,
@@ -122,16 +122,16 @@ function benchmark_pair(models, backend, seed)
     @assert isapprox(wren_value, dppl_value; rtol=1e-8, atol=1e-8)
     @assert isapprox(wren_grad, dppl_grad; rtol=1e-7, atol=1e-8)
 
-    Wren.lp(wren_model, params)
-    wren_lp = median(@be Wren.lp($wren_model, $params) seconds=BENCHMARK_SECONDS)
+    WrenCore.lp(wren_model, params)
+    wren_lp = median(@be WrenCore.lp($wren_model, $params) seconds=BENCHMARK_SECONDS)
     LogDensityProblems.logdensity(dppl_model, params)
     dppl_lp = median(
         @be LogDensityProblems.logdensity($dppl_model, $params) seconds=BENCHMARK_SECONDS
     )
 
-    Wren.lp_and_grad(wren_model, params)
+    WrenCore.lp_and_grad(wren_model, params)
     wren_grad_bench =
-        median(@be Wren.lp_and_grad($wren_model, $params) seconds=BENCHMARK_SECONDS)
+        median(@be WrenCore.lp_and_grad($wren_model, $params) seconds=BENCHMARK_SECONDS)
     LogDensityProblems.logdensity_and_gradient(dppl_model, params)
     dppl_grad_bench = median(
         @be LogDensityProblems.logdensity_and_gradient($dppl_model, $params) seconds=BENCHMARK_SECONDS
@@ -210,12 +210,12 @@ function main()
         for (backend_index, backend) in enumerate(BACKENDS)
             seed = 468 + 10 * model_index + backend_index
             # mnist causes Differ to stackoverflow
-            backend.wren isa Differ.AutoDifferForwards &&
-                contains(models.name, "mnist") &&
-                continue
-            backend.wren isa Differ.AutoDifferReverse &&
-                contains(models.name, "mnist") &&
-                continue
+            # backend.wren isa Differ.AutoDifferForwards &&
+            #     contains(models.name, "mnist") &&
+            #     continue
+            # backend.wren isa Differ.AutoDifferReverse &&
+            #     contains(models.name, "mnist") &&
+            #     continue
             try
                 result = benchmark_pair(models, backend, seed)
                 print_result(models.name, backend.name, result)
