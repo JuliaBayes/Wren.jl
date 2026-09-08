@@ -59,7 +59,7 @@ This functionality depends on [RuntimeGeneratedFunctions.jl](https://github.com/
 
 Since the AST is in principle capable of capturing all Julia code, this approach is no less flexible than DynamicPPL, but additionally allows for several things (which are not yet implemented, but are planned):
 
-  - Higher-level probabilistic primitives, such as a `plate` construct which is used to mark conditionally independent loop iterations. See [issue #1](https://github.com/JuliaBayes/Wren.jl/issues/1) for a motivation of this.
+  - Higher-level probabilistic primitives, such as a `batch` construct which is used to mark conditionally independent loop iterations. See [issue #1](https://github.com/JuliaBayes/Wren.jl/issues/1) for a motivation of this.
 
   - Programmatic construction of models. A user can, instead of writing Julia code, manually build up a Wren AST and generate a model with it.
 

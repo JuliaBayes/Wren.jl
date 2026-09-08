@@ -58,7 +58,7 @@ using Test
         @test f(:(i + 1)) == true
     end
 
-    @testset "plate" begin
+    @testset "batch" begin
         @testset "occurs_in_kwargs" begin
             function f(expr)
                 if expr.head != :call ||

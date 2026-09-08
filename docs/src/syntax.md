@@ -211,12 +211,12 @@ loglikelihood(accs) ≈ sum(logdensityof.(Normal(parameters(accs)[@vn(mu)]), y))
 ## Batched tilde-statements
 
 One of Wren's unique features is syntax-level batching of tilde-statements.
-This is done using the `@plate` macro:
+This is done using the `@batch` macro:
 
 ```@example model
 @wren function batched(x, y)
     N = length(x)
-    @plate for i in 1:N
+    @batch for i in 1:N
         x[i] ~ Normal()
         y[i] ~ Normal(x[i])
     end
@@ -225,7 +225,7 @@ x, y = randn(1000), randn(1000)
 model = batched(x, y) | VarNamedTuple(y=y)
 ```
 
-Plated for-loops have the same semantics as regular for-loops.
+Batched for-loops have the same semantics as regular for-loops.
 However, they are automatically lowered into a vectorised form, which is more or less analogous to
 
 ```julia
@@ -235,16 +235,16 @@ y[1:N] ~ MvNormal(x[1:N], I)
 
 When `N` is large this can lead to significant speedups.
 
-**There are two important things to note about `@plate`.**
+**There are two important things to note about `@batch`.**
 
 **Firstly,** this batching is only valid if each iteration of the loop is independent of the others.
-By marking a loop with `@plate`, you are effectively asserting that this is the case.
+By marking a loop with `@batch`, you are effectively asserting that this is the case.
 Wren does *not* verify this for you!
 
-As an example of an invalid use of `@plate`, consider the following:
+As an example of an invalid use of `@batch`, consider the following:
 
 ```julia
-@plate for i in 1:(N-1)
+@batch for i in 1:(N-1)
     x[i+1] ~ Normal(x[i])
 end
 ```
@@ -272,20 +272,20 @@ which guarantees correctness, but might not be as efficient as the vectorised fo
 
 !!! danger
 
-    Plates are a highly experimental feature and might not work in all cases.
+    Batches are a highly experimental feature and might not work in all cases.
     In particular, please note the following limitations:
 
       - The loop must contain only tilde-statements (`@observe` tilde-statements are fine).
         This can in theory be relaxed but is not yet implemented.
 
       - The loop must be `for SYMBOL in EXPR`, where `SYMBOL` is a single variable.
-        Thus, loops of the form `for (i, x) in enumerate(xs)` cannot be plated.
+        Thus, loops of the form `for (i, x) in enumerate(xs)` cannot be batched.
         This probably cannot ever be supported.
 
       - The only form of indexing allowed is `x[i]` (`i` being the loop variable; `x` can be any identifier).
         This can in theory be relaxed to admit more forms, such as `x[i, j]`, `x[f(i)]`, `x[y[i]]`, etc., but this is not yet implemented.
 
-      - Plates will increase allocations and will almost certainly cause slowdowns on small loops.
+      - Batches will increase allocations and will almost certainly cause slowdowns on small loops.
 
 ## Manual log-likelihood addition
 

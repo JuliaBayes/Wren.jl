@@ -121,21 +121,12 @@ end
 _with_rhs(stmt::Sample, rhs) = Sample(stmt.name, stmt.lhs, rhs)
 _with_rhs(stmt::Observe, rhs) = Observe(stmt.name, stmt.lhs, rhs)
 
-# @plate for i in 1:N
-#    y[i] ~ Normal(x[i])
-# end
-#
-# CURRENTLY gets lowered to something like:
-#
-# y[1:N] ~ independent([Normal(x[i]) for i in 1:N])
-#
-# This can be improved! https://github.com/JuliaBayes/ProbabilityMeasures.jl/issues/15
-function emit_model_expr(stmt::Plate, accs, conditioned, latent_source, parameter_space)
+function emit_model_expr(stmt::Batch, accs, conditioned, latent_source, parameter_space)
     # stmt.body isa block expr
     @gensym loop_iters
     initialise_iter_expr = :($loop_iters = $(stmt.loop_iters))
     body_exprs = [
-        vectorise_plate_stmt(
+        vectorise_batch_stmt(
             s,
             stmt.loop_idx,
             loop_iters,
@@ -151,7 +142,7 @@ end
 """
     Indexed
 
-Marker struct to indicate that the argument is an object indexed by the plate loop index.
+Marker struct to indicate that the argument is an object indexed by the batch loop index.
 """
 struct Indexed{T}
     data::T
@@ -163,7 +154,7 @@ end
 Return a distribution over arrays with the same shape as `dists`, where each entry
 is independently drawn from `dists[i]`.
 
-Used by `@plate` for indexed distributions without a specialised `batched` method.
+Used by `@batch` for indexed distributions without a specialised `batched` method.
 Backends (e.g. the Distributions and ProbabilityMeasures extensions) add methods for
 their own distribution types.
 """
@@ -173,7 +164,7 @@ function independent end
     iid(dist, dims::Dims)
 
 Return independent draws from `dist` in an array of shape `(size(dist)..., dims...)`.
-The distribution is stored once. `@plate` uses this when the distribution does not
+The distribution is stored once. `@batch` uses this when the distribution does not
 depend on the loop index.
 
 ```julia
@@ -220,7 +211,7 @@ function occurs_in_kwargs(parameters::Expr, loop_idx::Symbol)
             # f(...; kw = val_expr)
             occurs_in_expr(kw.args[2], loop_idx) && return true
         else
-            error("@plate: encountered unexpected kwarg expression $(kw)")
+            error("@batch: encountered unexpected kwarg expression $(kw)")
         end
     end
     return false
@@ -374,7 +365,7 @@ function replace_loop_idx_with_iters(expr, loop_idx::Symbol, loop_iters)
                 new_expr, false
             end
         else
-            error("@plate: unsupported expression $(expr) with head $(expr.head)")
+            error("@batch: unsupported expression $(expr) with head $(expr.head)")
         end
     else
         # e.g. literals
@@ -382,13 +373,13 @@ function replace_loop_idx_with_iters(expr, loop_idx::Symbol, loop_iters)
     end
 end
 
-vectorise_plate_stmt(lnn::LineNumberNode, idx, iters, ax, cond, ls, ps) = lnn
-function vectorise_plate_stmt(::IID, idx, iters, ax, cond, ls, ps)
-    # `@iid` already produces one array-valued statement; batching it over a plate has no
+vectorise_batch_stmt(lnn::LineNumberNode, idx, iters, ax, cond, ls, ps) = lnn
+function vectorise_batch_stmt(::IID, idx, iters, ax, cond, ls, ps)
+    # `@iid` already produces one array-valued statement; batching it over a batch has no
     # defined semantics yet.
-    return error("@iid is not supported inside @plate")
+    return error("@iid is not supported inside @batch")
 end
-function vectorise_plate_stmt(
+function vectorise_batch_stmt(
     stmt::Sample,
     loop_idx,
     loop_iters,
@@ -415,7 +406,7 @@ occurs_in_expr(expr::Expr, loop_idx::Symbol) =
     any(arg -> occurs_in_expr(arg, loop_idx), expr.args)
 occurs_in_expr(expr, loop_idx) = false
 
-function vectorise_plate_stmt(
+function vectorise_batch_stmt(
     stmt::Observe,
     loop_idx,
     loop_iters,

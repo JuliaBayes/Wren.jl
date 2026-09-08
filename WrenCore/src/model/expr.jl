@@ -5,7 +5,7 @@ module Expressions
 
 Wren's probabilistic intermediate representation. This is for the most part a copy of
 Julia's `Expr` type, but with a few additional node types for probabilistic statements,
-namely [`Sample`](@ref), [`Observe`](@ref), [`IID`](@ref), and [`Plate`](@ref).
+namely [`Sample`](@ref), [`Observe`](@ref), [`IID`](@ref), and [`Batch`](@ref).
 
 The [`ReturnStatement`](@ref) type is used as a convenient wrapper around `Expr(:return,
 ...)` to allow for dispatch, but has the same meaning.
@@ -55,12 +55,12 @@ struct IID{T<:Union{Sample,Observe}} <: AbstractWrenExpr
 end
 
 """
-    Plate
+    Batch
 
 Representation of
 
 ```julia
-@plate [name=NAME] [size=SIZE] for LOOP_IDX in LOOP_ITERS
+@batch [name=NAME] [size=SIZE] for LOOP_IDX in LOOP_ITERS
     BODY
 end
 ```
@@ -68,7 +68,7 @@ end
 `name` must be a single Symbol. If not specified, a gensym'd name is used.
 If `size` is not specified, it will be `nothing`.
 """
-struct Plate{I,S,B} <: AbstractWrenExpr
+struct Batch{I,S,B} <: AbstractWrenExpr
     name::Symbol
     loop_idx::Symbol
     loop_iters::I
@@ -210,8 +210,8 @@ function lower_to_wren(expr::Expr, mod::Module, statement_position::Bool=false)
         return IID(lowered)
     end
 
-    if expr.head == :macrocall && expr.args[1] == Symbol("@plate")
-        statement_position || error("@plate must be used as a statement")
+    if expr.head == :macrocall && expr.args[1] == Symbol("@batch")
+        statement_position || error("@batch must be used as a statement")
         plate_args = filter(a -> !(a isa LineNumberNode), expr.args[2:end])
         size_expr = nothing
         name_expr = nothing
@@ -222,24 +222,24 @@ function lower_to_wren(expr::Expr, mod::Module, statement_position::Bool=false)
             elseif arg isa Expr && arg.head == :(=) && arg.args[1] == :name
                 name_val = arg.args[2]
                 name_val isa QuoteNode && name_val.value isa Symbol ||
-                    error("@plate: `name` must be a single Symbol (e.g. `name=:obs`)")
+                    error("@batch: `name` must be a single Symbol (e.g. `name=:obs`)")
                 name_expr = name_val.value
             elseif arg isa Expr && arg.head == :for
                 for_expr = arg
             else
-                error("@plate: unexpected argument `$arg`")
+                error("@batch: unexpected argument `$arg`")
             end
         end
-        for_expr !== nothing || error("@plate: expected a for loop")
+        for_expr !== nothing || error("@batch: expected a for loop")
         loop_spec = for_expr.args[1]
         loop_spec isa Expr && loop_spec.head == :(=) ||
-            error("@plate: expected `for VAR in ITER`")
+            error("@batch: expected `for VAR in ITER`")
         loop_idx = loop_spec.args[1]
-        loop_idx isa Symbol || error("@plate: loop variable must be a single identifier")
+        loop_idx isa Symbol || error("@batch: loop variable must be a single identifier")
         loop_iters = loop_spec.args[2]
         body = lower_to_wren(for_expr.args[2], mod, true)
-        plate_name = name_expr === nothing ? gensym(:plate) : name_expr
-        return Plate(plate_name, loop_idx, loop_iters, size_expr, body)
+        plate_name = name_expr === nothing ? gensym(:batch) : name_expr
+        return Batch(plate_name, loop_idx, loop_iters, size_expr, body)
     end
 
     if expr.head == :macrocall && expr.args[1] == Symbol("@addloglikelihood")
@@ -318,10 +318,10 @@ _wren_expr_to_model_expr(expr) = expr
 function _wren_expr_to_model_expr(stmt::WrenExpr)
     return Expr(stmt.head, map(_wren_expr_to_model_expr, stmt.args)...)
 end
-function _wren_expr_to_model_expr(stmt::Plate)
+function _wren_expr_to_model_expr(stmt::Batch)
     body = _wren_expr_to_model_expr(stmt.body)
     for_expr = Expr(:for, Expr(:(=), stmt.loop_idx, stmt.loop_iters), body)
-    args = Any[Symbol("@plate"), nothing]
+    args = Any[Symbol("@batch"), nothing]
     push!(args, Expr(:(=), :name, QuoteNode(stmt.name)))
     if stmt.size !== nothing
         push!(args, Expr(:(=), :size, stmt.size))

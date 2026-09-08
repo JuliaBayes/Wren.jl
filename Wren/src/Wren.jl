@@ -14,7 +14,7 @@ using WrenCore:
     @addloglikelihood,
     @iid,
     @observe,
-    @plate,
+    @batch,
     # Models
     Model,
     condition,
@@ -44,7 +44,7 @@ export @wren,
     @addloglikelihood,
     @iid,
     @observe,
-    @plate,
+    @batch,
     # Models
     Model,
     condition,

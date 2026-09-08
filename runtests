@@ -1,0 +1,4 @@
+#!/usr/bin/env sh
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+# Wren doesn't have tests yet, so we only test WrenCore
+julia --project="$SCRIPT_DIR/WrenCore" -e "using Pkg; Pkg.test()"
