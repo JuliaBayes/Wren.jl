@@ -109,4 +109,8 @@ model_fast = prior_model_fast | VarNamedTuple(obs_seq=obs_seq)
 @bmodel model_fast
 ```
 
+Unfortunately this didn't speed the model up a lot...
+That's because with this model, we spend most of our time doing calculations related to the HMM, making the part we can optimise with Wren's tools relatively small.
+We could of course try to speed up the HMM and explore whether [StaticArrays.jl](https://github.com/JuliaArrays/StaticArrays.jl) improves the situation for us (but that would be a subject for a proper HMM guide).
+
 [^1]: You may also use the [`@addloglikelihood`](@ref) macro to increment the ... well, loglikelihood manually. Be aware that you sacrifice the ability to call `rand` on your model, and that many other parts of the Bayesian workflow will also not integrate as smoothly with models using [`@addloglikelihood`](@ref).
