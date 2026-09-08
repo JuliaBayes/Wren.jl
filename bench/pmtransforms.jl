@@ -4,7 +4,7 @@ using DensityInterface: DensityInterface
 using ProbabilityMeasures: ProbabilityMeasures as PM
 using Random: AbstractRNG, randn
 using Plaice: Plaice
-using Wren: Wren
+using WrenCore: WrenCore
 
 export Categorical, IsoNormal, MvCategorical
 

@@ -1,0 +1,36 @@
+name = "Wren"
+uuid = "bcabdda7-19af-429b-97ac-a6b557ca0f6c"
+version = "0.1.0"
+authors = ["Penelope Yong <penelopeysm@gmail.com>"]
+
+[deps]
+AbstractMCMC = "80f14c24-f653-4e6a-9b94-39d6b0f70001"
+DensityInterface = "b429d917-457f-4dbc-8f4c-0cc954292b1d"
+DifferentiationInterface = "a0c0ee7d-e4b9-4e03-894e-1c5f64a51d63"
+DynamicHMC = "bbc10e6e-7c05-544b-b16e-64fede858acb"
+Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
+EnzymeCore = "f151be2c-9106-41f4-ab19-57ee4f262869"
+FlexiChains = "4a37a8b9-6e57-4b92-8664-298d46e639f7"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+StatsAPI = "82ae8749-77ed-4fe6-ae5f-f523153014b0"
+Term = "22787eb5-b846-44ae-b979-8e399b8463ab"
+VarNames = "09a315b2-63fc-4165-8d7f-d59368e770cc"
+WrenCore = "008b59e7-bbda-4991-901b-b08f5cfc584d"
+
+[sources]
+FlexiChains = {rev = "v0.7", url = "https://github.com/JuliaBayes/FlexiChains.jl"}
+
+[compat]
+AbstractMCMC = "5"
+DensityInterface = "0.4"
+DifferentiationInterface = "0.7"
+DynamicHMC = "3"
+Enzyme = "0.13"
+EnzymeCore = "0.6 - 0.8"
+FlexiChains = "0.7"
+LinearAlgebra = "1"
+Random = "1"
+StatsAPI = "1"
+Term = "2"
+VarNames = "0.1"

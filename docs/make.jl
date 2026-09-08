@@ -1,7 +1,7 @@
 using Pkg: Pkg
-Pkg.develop(Pkg.PackageSpec(; path=dirname(@__DIR__)))
 
 using Wren
+using WrenCore
 using Documenter
 using DocumenterCodeBlocks
 using DocumenterInterLinks
@@ -14,8 +14,12 @@ links = InterLinks(
 
 makedocs(;
     sitename="Wren.jl",
-    format=Documenter.HTML(),
-    modules=[Wren],
+    # Explicitly pass an empty `inventory_version` to silence warnings when building docs.
+    # This has no effect on deployed docs (i.e. on GitHub Pages) since Documenter will
+    # automatically detect the inventory version from the git tag. See
+    # https://github.com/JuliaDocs/Documenter.jl/pull/2449
+    format=Documenter.HTML(; inventory_version=""),
+    modules=[Wren, WrenCore],
     pages=[
         "index.md",
         "syntax.md",
