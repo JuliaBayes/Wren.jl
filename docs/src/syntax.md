@@ -191,6 +191,23 @@ rand(yarg_obs([1.0, 2.0, 3.0]))
 
 However, note that once a statement has been marked with `@observe`, you cannot 'uncondition' it without modifying the model's stored AST itself.
 
+## Independent and identically distributed draws
+
+Array-valued data are often modelled as independent draws from a single distribution. Writing this as a loop over `@observe y[i] ~ dist` works, but evaluates one scalar density per element. Wren provides `@iid`, which lowers `@iid y ~ dist` to `y ~ Wren.iid(dist, size(y))`: one array-valued distribution of independent draws from `dist` with the same shape as `y`. Backends can specialise `Wren.iid` for their distribution types, so this also lets them evaluate the whole array at once.
+
+```@example model
+@wren function iid_obs(y)
+    mu ~ Normal()
+    @observe @iid y ~ Normal(mu)
+end
+
+y = [1.0, 2.0, 3.0]
+accs = rand_with_logp(iid_obs(y))
+loglikelihood(accs) ≈ sum(logdensityof.(Normal(parameters(accs)[@vn(mu)]), y))
+```
+
+`@iid` and `@observe` can be combined in either order. Because the shape is taken from the current value of the left-hand side, that value must already exist when the statement runs: a model argument, or a value computed earlier in the model.
+
 ## Batched tilde-statements
 
 One of Wren's unique features is syntax-level batching of tilde-statements.
