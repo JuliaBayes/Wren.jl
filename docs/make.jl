@@ -22,11 +22,13 @@ makedocs(;
     modules=[Wren, WrenCore],
     pages=[
         "index.md",
-        "syntax.md",
-        "models.md",
-        "submodels.md",
-        "mcmc.md",
-        "motivation.md",
+        "Tutorials" => [
+            "tutorials/syntax.md",
+            "tutorials/models.md",
+            "tutorials/submodels.md",
+            "tutorials/mcmc.md",
+        ],
+        "Explanations" => ["explanations/enzyme.md", "explanations/motivation.md"],
         "api.md",
     ],
     checkdocs=:exports,

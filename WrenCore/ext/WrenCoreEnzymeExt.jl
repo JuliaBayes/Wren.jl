@@ -29,8 +29,12 @@ function WrenCore._handle_enzyme(
         lp_and_grad(vm, vm.sample)
     catch e
         if e isa Enzyme.Compiler.EnzymeRuntimeActivityError
-            if WrenCore.AUTO_RUNTIME_ACTIVITY[]
-                @warn "enabling runtime activity for Enzyme; this may lead to slightly worse performance."
+            if WrenCore.AUTO_RUNTIME_ACTIVITY[] === false
+                rethrow(e)
+            else
+                if WrenCore.AUTO_RUNTIME_ACTIVITY[] === nothing
+                    @info "enabling Enzyme runtime activity for model $(vm.model.name); this may lead to slightly worse performance but should generally not be a cause for concern."
+                end
                 return WrenCore.VecModel(
                     vm.model,
                     enable_runtime_activity(vm.adtype),
@@ -39,8 +43,6 @@ function WrenCore._handle_enzyme(
                     vm.vecinfo,
                     vm.sample,
                 )
-            else
-                rethrow(e)
             end
         else
             rethrow(e)
