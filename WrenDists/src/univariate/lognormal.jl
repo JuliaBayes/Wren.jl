@@ -14,7 +14,9 @@ LogNormal() = LogNormal(0.0, 1.0)
     # Match `σ` to `z` so integer parameters do not reduce `BigFloat` precision.
     σ = oftype(z, d.σ)
     return select(
-        x > zero(x), () -> -(z^2 + log2π) / 2 - logt(σ) - lx, () -> oftype(float(z), -Inf)
+        x > zero(x),
+        () -> -(z^2 + log2π) / 2 - logt(σ) - lx,
+        () -> oftype(float(z), -Inf),
     )
 end
 

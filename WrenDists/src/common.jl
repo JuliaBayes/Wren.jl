@@ -3,9 +3,7 @@ abstract type WrenDist end
 
 DensityInterface.DensityKind(::WrenDist) = DensityInterface.HasDensity()
 
-function Random.rand(
-    rng::AbstractRNG, sp::Random.SamplerTrivial{<:WrenDist}
-)
+function Random.rand(rng::AbstractRNG, sp::Random.SamplerTrivial{<:WrenDist})
     return rand(rng, sp[])
 end
 
