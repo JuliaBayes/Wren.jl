@@ -141,6 +141,25 @@ end
     @testset "different examples of batchable syntax" begin
         # could really do with more examples here
 
+        @testset "issue #79" begin
+            # https://github.com/JuliaBayes/Wren.jl/issues/79
+            @wren function batch_diagonal(x, y)
+                @batch for i in 1:2
+                    x[i] ~ Normal(y[i, i])
+                end
+            end
+            @wren function nobatch_diagonal(x, y)
+                for i in 1:2
+                    x[i] ~ Normal(y[i, i])
+                end
+            end
+            y = [1.0 10.0; 20.0 2.0]
+            test_model_equivalence(
+                batch_diagonal(zeros(2), y),
+                nobatch_diagonal(zeros(2), y),
+            )
+        end
+
         @testset "issue #72" begin
             # https://github.com/JuliaBayes/Wren.jl/issues/72
             @wren function batch_subtraction(y, n)
