@@ -15,16 +15,8 @@ end
 
 function insupport(d::Dirichlet, x::AbstractVector{<:Number})
     length(x) == length(d.α) || return false
-    total = zero(eltype(x))
-    least = zero(eltype(x))
-    finite = true
-    for xᵢ in x
-        finite &= isfinite(xᵢ)
-        total += xᵢ
-        least = min(least, xᵢ)
-    end
     tol = sqrt(eps(basefloat(float(eltype(x)))))
-    return finite & (least >= zero(least)) & (abs(total - one(total)) <= tol)
+    return all(isfinite, x) & (minimum(x) >= zero(eltype(x))) & (abs(sum(x) - one(eltype(x))) <= tol)
 end
 
 # `loggamma` throws below zero, so evaluate it at one when the parameters are invalid.
@@ -46,11 +38,7 @@ end
 function DensityInterface.logdensityof(d::Dirichlet, x::AbstractVector{<:Number})
     T = float(promote_type(eltype(d.α), eltype(x)))
     length(x) == length(d.α) || return convert(T, -Inf)
-    logp = -logmvbeta(d, T)
-    for (αᵢ, xᵢ) in zip(d.α, x)
-        logp += xlogyt(convert(T, αᵢ) - one(T), convert(T, xᵢ))
-    end
-    value = logp
+    value = -logmvbeta(d, T) + sum(xlogyt.(convert.(T, d.α) .- one(T), convert.(T, x)))
     return select(insupport(d, x) & checkparams(d), () -> value, () -> convert(T, -Inf))
 end
 
