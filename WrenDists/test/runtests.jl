@@ -13,12 +13,12 @@ if RUN_REACTANT
     include("reactant.jl")
 end
 
-function test_dist(name, d_wd, d_ref; n_test=100, n_reactant=10, plaice_zero_allocs=())
+function test_dist(name, d_wd, d_ref; plaice_zero_allocs=())
     @testset "$name" begin
         rng = Xoshiro(468)
         @testset "logdensityof consistent with Distributions" begin
-            for _ in 1:n_test
-                x = Float64.(rand(rng, d_ref))
+            for _ in 1:100
+                x = rand(rng, d_ref)
                 @test logdensityof(d_wd, x) ≈ logpdf(d_ref, x)
             end
         end
@@ -31,7 +31,7 @@ function test_dist(name, d_wd, d_ref; n_test=100, n_reactant=10, plaice_zero_all
         end
         if RUN_REACTANT
             @testset "Reactant" begin
-                points = [Float64.(rand(RNG, d_ref)) for _ in 1:n_reactant]
+                points = [rand(rng, d_ref) for _ in 1:10]
                 test_reactant(d_wd, points)
             end
         end
