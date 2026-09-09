@@ -37,7 +37,7 @@ using Wren
 prior(model, 1000, 4; progress=false)
 ```
 
-## NUTS
+## [NUTS](@id nuts)
 
 ```@docs
 Wren.nuts

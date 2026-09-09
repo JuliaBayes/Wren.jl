@@ -151,7 +151,7 @@ Please see their respective docs for more information!
 
 ## Conditioning
 
-This is in some ways more fundamental, but I had to explain what a `VarNamedTuple` was first. :-)
+This is in some ways more fundamental, but we had to explain what a `VarNamedTuple` was first. :-)
 
 To condition a model on some observed data, you can use the `|` operator:
 
@@ -174,7 +174,7 @@ cond_model = condition(f_orig(), vnt)
 
 Unfortunately, the `VarNamedTuple`s that you use for conditioning will almost certainly not be the same as those drawn from a model.
 Thus, you will likely have to construct a `VarNamedTuple` yourself.
-Better docs on this will hopefully come at some point in time but here are some syntax examples:
+More thorough docs on this will hopefully come at some point in time but here are some syntax examples:
 
 ```@example models
 # NamedTuple-like syntax.
@@ -200,7 +200,7 @@ end
 nothing # hide
 ```
 
-## Vectorisation
+## [Vectorisation](@id vectorisation)
 
 Wren models can be converted into a vectorised form, i.e., one where the parameters are supplied as a vector rather than a `VarNamedTuple`.
 This is done with the `VecModel` constructor, which takes a model and an `AbstractADType` object:

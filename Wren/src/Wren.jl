@@ -9,8 +9,9 @@ export prior, nuts
 
 # Re-exports
 using WrenCore:
-    @wren,
+    WrenCore,
     # DSL
+    @wren,
     @addloglikelihood,
     @iid,
     @observe,
@@ -39,8 +40,9 @@ using WrenCore:
     FromPrior,
     FromParams
 
-export @wren,
+export WrenCore,
     # DSL
+    @wren,
     @addloglikelihood,
     @iid,
     @observe,
