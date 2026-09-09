@@ -1,0 +1,72 @@
+struct Poisson{L<:Number} <: DiscreteUnivariateDist
+    λ::L
+end
+
+Base.eltype(::Type{Poisson{L}}) where {L} = float(L)
+
+checkparams(d::Poisson) = isfinite(d.λ) & (d.λ >= zero(d.λ))
+
+@inline function insupport(d::Poisson, x::Number)
+    return isinteger(x) & (x >= zero(x))
+end
+
+@inline function horizon(d::Poisson)
+    λ = float(d.λ)
+    n = λ + 20 * sqrt(max(λ, zero(λ))) + 60
+    return ((n > zero(n)) & (n <= typemax(Int))) ? ceil(Int, n) : 0
+end
+
+@inline usable(d::Poisson) = checkparams(d) & (horizon(d) > 0)
+
+@inline function DensityInterface.logdensityof(d::Poisson, x::Number)
+    T = masstype(d, x)
+    λ, k = convert(T, d.λ), convert(T, x)
+    # Define `0 * log(0)` as zero.
+    a = select(k == zero(T), () -> zero(T), () -> k * logt(λ))
+    # `loggamma` rejects negative integers before the support check runs.
+    g = loggamma(max(k, zero(T)) + one(T))
+    # If `log(k!)` overflows, the mass is zero; avoid `Inf - Inf`.
+    return select(insupport(d, x) & isfinite(g), () -> a - λ - g, () -> convert(T, -Inf))
+end
+
+# --- Poisson quantile machinery (needed by rand) ---
+
+# `P(X ≤ k) = Q(k+1, λ)` and `P(X > k) = P(k+1, λ)`.
+@inline function _poisson_tails(::Type{T}, d::Poisson, x::Number) where {T<:AbstractFloat}
+    nan = convert(T, NaN)
+    usable(d) || return (nan, nan)
+    k = floor(convert(T, x))
+    isnan(k) && return (nan, nan)
+    k < zero(T) && return (zero(T), one(T))
+    lower, upper = gamma_inc(k + one(T), convert(T, d.λ))
+    return (upper, lower)
+end
+
+@inline function _poisson_cdf(::Type{T}, d::Poisson, x::Number) where {T<:AbstractFloat}
+    return _poisson_tails(T, d, x)[1]
+end
+
+function _poisson_quantile(::Type{T}, d::Poisson, q::Number) where {T<:AbstractFloat}
+    usable(d) || return convert(T, NaN)
+    p = convert(T, q)
+    hi = convert(T, horizon(d))
+    p >= one(T) && return hi
+    p > zero(T) || return zero(T)
+    λ = convert(T, d.λ)
+    # A normal approximation with a continuity correction starts within a step or two.
+    z = convert(T, -sqrt2 * erfcinvt(2 * p))
+    k = clamp(floor(λ + z * sqrt(λ) - one(T) / 2), zero(T), hi)
+    while (k > zero(T)) && (_poisson_cdf(T, d, k - one(T)) >= p)
+        k -= one(T)
+    end
+    while (k < hi) && (_poisson_cdf(T, d, k) < p)
+        k += one(T)
+    end
+    return k
+end
+
+# CDF inversion avoids the `exp(-λ)` underflow in product-of-uniforms sampling.
+@inline function Base.rand(rng::AbstractRNG, d::Poisson)
+    T = noisetype(d)
+    return _poisson_quantile(T, d, rand(rng, T))
+end
