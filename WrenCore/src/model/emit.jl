@@ -357,7 +357,15 @@ function replace_loop_idx_with_iters(expr, loop_idx::Symbol, loop_iters)
             elseif expr.head == :ref
                 # e.g. x[i + 1] -> x[@. (1:J) + 1] also causes the overall indexing
                 # expression to be batched
-                new_expr = Expr(expr.head, new_args...)
+                new_expr = if count(last, new_args_and_is_batched) > 1
+                    # Preserve paired indices, e.g. x[i, i], rather than a Cartesian product.
+                    args = map(new_args_and_is_batched) do (arg, is_batched)
+                        is_batched ? arg : Expr(:call, Base.Ref, arg)
+                    end
+                    Expr(:., Base.getindex, Expr(:tuple, args...))
+                else
+                    Expr(expr.head, new_args...)
+                end
                 new_expr, any_arg_was_batched
             else
                 # e.g. x[const] -> x[const]
