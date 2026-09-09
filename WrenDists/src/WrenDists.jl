@@ -39,9 +39,14 @@ include("univariate/poisson.jl")
 include("univariate/plaice.jl")
 
 # Multivariate
+abstract type MultivariateDist <: WrenDist end
+abstract type DiscreteMultivariateDist <: MultivariateDist end
 include("multivariate/mvnormal.jl")
 include("multivariate/dirichlet.jl")
 include("multivariate/multinomial.jl")
+
+# Plaice interface for multivariate distributions
+include("multivariate/plaice.jl")
 
 export logdensityof
 

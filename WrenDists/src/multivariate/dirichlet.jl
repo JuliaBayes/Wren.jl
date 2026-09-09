@@ -1,4 +1,4 @@
-struct Dirichlet{V<:AbstractVector{<:Number}} <: WrenDist
+struct Dirichlet{V<:AbstractVector{<:Number}} <: MultivariateDist
     α::V
 end
 

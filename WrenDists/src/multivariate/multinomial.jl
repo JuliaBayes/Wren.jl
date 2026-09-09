@@ -1,4 +1,4 @@
-struct Multinomial{N<:Integer,V<:AbstractVector{<:Number}} <: WrenDist
+struct Multinomial{N<:Integer,V<:AbstractVector{<:Number}} <: DiscreteMultivariateDist
     n::N
     p::V
 end

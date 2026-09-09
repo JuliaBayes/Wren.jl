@@ -1,6 +1,6 @@
 const MvNormalFactor = Union{AbstractMatrix{<:Number},UniformScaling{<:Number}}
 
-struct MvNormal{V<:AbstractVector{<:Number},F<:MvNormalFactor} <: WrenDist
+struct MvNormal{V<:AbstractVector{<:Number},F<:MvNormalFactor} <: MultivariateDist
     μ::V
     L::F
 end
