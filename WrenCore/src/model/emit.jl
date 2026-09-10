@@ -104,12 +104,14 @@ end
 
 # `@iid lhs ~ rhs` (or the `@observe` variants) means `lhs ~ iid(rhs, size(lhs))`: one
 # array-valued distribution of independent draws from `rhs`, with the same shape as the
-# current value of `lhs`. We rewrite the wrapped tilde-statement's right-hand side and then
-# emit it exactly as we would a plain `Sample` or `Observe`.
+# current value of `lhs`. If lhs is undefined, `@iid lhs ~ rhs size=dims` can be used
+# to set `dims`. We rewrite the wrapped tilde-statement's right-hand side and then emit
+# it exactly as we would a plain `Sample` or `Observe`.
 function emit_model_expr(stmt::IID, accs, conditioned, latent_source, parameter_space)
     tilde = stmt.tilde
     rhs_expr = emit_model_expr(tilde.rhs, accs, conditioned, latent_source, parameter_space)
-    iid_rhs = :($(iid)($rhs_expr, $(Base.size)($(tilde.lhs))))
+    dims_expr = stmt.size === nothing ? :($(Base.size)($(tilde.lhs))) : stmt.size
+    iid_rhs = :($(iid)($rhs_expr, $dims_expr))
     return emit_model_expr(
         _with_rhs(tilde, iid_rhs),
         accs,
@@ -176,9 +178,14 @@ end
 
 Inside `@wren`, `@iid y ~ dist` is shorthand for `y ~ iid(dist, size(y))`.
 
+When the lhs is undefined, as is typically the case when setting up priors, use the
+`size` keyword to set its shape `@iid mu ~ dist size=k` where k may be either a tuple
+or an integer.
+
 The fallback is `independent(Fill(dist, dims))`; backends may add specialised methods.
 """
 iid(dist, dims::Dims) = independent(FillArrays.Fill(dist, dims))
+iid(dist, n::Integer) = iid(dist, (n,))
 
 # TODO(penelopeysm): I'm unsure about type stability here because of the vararg
 # specialisation thing. We might need the fallback on generated functions with enumerated
