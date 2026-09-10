@@ -2,115 +2,94 @@
 
 ## Custom distributions
 
-Sometimes we have to work with models whose log likelihood is not defined based on a typical distribution but instead comes from some arbitrary function.
-Here, we'll explain how to write such models in Wren by using hidden Markov models as an example.
+Even though the Julia ecosystem[^1] already provides a rich set of distributions we can directly use with Wren, we may sometimes still have to work with distributions that we need to define ourselves.
 
-When fitting hidden Markov models, we usually learn about the parameter values by integrating out the latent states using the forward algorithm.
-Since we can write any Julia code we'd like inside a `@wren` model, we can rely on [`HiddenMarkovModels.jl`](https://juliastats.org/HiddenMarkovModels.jl/stable/) for HMM structs and the forward algorithm.
+In this example, we'll demonstrate how to write a zero-inflated Poisson distribution[^2] that allows us to not only run inference but also to benefit from other important workflow features Wren provides, such as sampling from the prior.
 
-Let's simulate a sequence of observations and latent states that we can then fit our model to.
+### Set up
+
+We need to define `PoissonZeroInflated` to store the parameters and methods for `Wren.logdensityof` and `Base.rand`:
 
 ```julia
-using HiddenMarkovModels
-using Distributions
-using LinearAlgebra
+using ProbabilityMeasures
 using Wren
-using Wren.Samplers
+using WrenCore: iid
 using Enzyme
-using FillArrays
-using Random
+using Random: AbstractRNG
+using LogExpFunctions: logaddexp
 
-init = [0.6, 0.4]
-trans = [0.7 0.3; 0.2 0.8]
-dists = [MvNormal([-0.5, -0.8], I), MvNormal([0.5, 0.8], I)]
+struct PoissonZeroInflated
+    lambda::Float64
+    pi::Float64
 
-sim_hmm = HMM(init, trans, dists)
+    function PoissonZeroInflated(lambda, pi)
+        @assert lambda > 0 && 0 <= pi <= 1
+        return new(lambda, pi)
+    end
+end
 
-T = 200
-state_seq, obs_seq = rand(sim_hmm, T)
+function Wren.logdensityof(d::PoissonZeroInflated, x::Int)
+    if x == 0
+        log_pi = log(d.pi)
+        log_1m_pi_pois0 = log(1 - d.pi) - d.lambda
+        return logaddexp(log_pi, log_1m_pi_pois0)
+    else
+        return log(1 - d.pi) + logdensityof(Poisson(d.lambda), x)
+    end
+end
+
+function Base.rand(rng::AbstractRNG, d::PoissonZeroInflated)
+    return rand(rng) < d.pi ? 0 : Int(rand(rng, Poisson(d.lambda)))
+end
 ```
+
+If you are used to working with custom distributions in Turing.jl, you may notice that we are not implementing the `Distributions` interface – all Wren needs to know is how to calculate the logdensity and how to draw a sample.
 
 ### Naive model
 
-To allow Wren to work with these samples, all we need to define is the `logdensityof` our HMM and a way for it to draw samples from the HMM[^1]:
+First we simulate zero-inflated counts that depend on some binary covariate (think for example the location where counts were recorded) that we can fit our model to:
 
 ```julia
-struct WrappedHMM{T}
-    hmm::T
-    steps::Int
-end
+# Distributions per covariate group
+lambdas = [4.5, 7.0]
+pis = [0.6, 0.2]
+dists = [PoissonZeroInflated(lambda, pi) for (lambda, pi) in zip(lambdas, pis)]
 
-Base.rand(rng::AbstractRNG, d::WrappedHMM) = last(rand(rng, d.hmm, d.steps))
-
-Wren.logdensityof(d::WrappedHMM, obs_seq) = Wren.logdensityof(d.hmm, obs_seq)
+n = 100
+x = rand([1, 2], n)
+y = rand.(dists[x]);
 ```
 
-That's all!
-
-Wren will now be able to be able to work with our custom distribution like it would with any other distribution.
-As you can see, we're not required to subtype an abstract type in `Distributions` or conform to any other interface.
-
-Time to see the model in action:
+Next up is fitting the model.
+The `y = zeros(Int, length(x))` line declares the shape of the observation array; its values are ignored once we condition on the data (see [Arrays and structs](@ref)).
 
 ```julia
-@wren function hmm_model_naive(steps)
-    # we can use p ~ Beta() and 1 - p instead of Dirichlet
-    init_1 ~ Beta(2, 2)
-    trans_11 ~ Beta(2, 2)
-    trans_22 ~ Beta(2, 2)
-
-    # two latent states each emitting two observations
-    μ ~ product_distribution(Fill(MvNormal(zeros(2), I), 2))
-
-    # define the HMM
-    init = [init_1, 1 - init_1]
-    trans = [trans_11 1 - trans_11; 1 - trans_22 trans_22]
-    dists = [MvNormal(μ[:, 1], I), MvNormal(μ[:, 2], I)]
-    hmm = HMM(init, trans, dists)
-
-    obs_seq ~ WrappedHMM(hmm, steps)
-
-    return nothing
+@wren function poisson_zeroinflated_naive(x)
+    k = maximum(x)
+    lambda ~ iid(Gamma(2, 1), (k,))
+    pi ~ iid(Uniform(0, 1), (k,))
+    for i in eachindex(x)
+        @observe y[i] ~ PoissonZeroInflated(lambda[x[i]], pi[x[i]])
+    end
 end
 
-prior_model_naive = hmm_model_naive(T)
-model_naive = prior_model_naive | VarNamedTuple(obs_seq=obs_seq)
+prior_model_naive = poisson_zeroinflated_naive(x)
+model_naive = prior_model_naive | VarNamedTuple(y=y)
 @bmodel model_naive
 ```
 
+TODO: should we run MCMC and recover the parameters? Is this relevant for this how-to? Depends on how focused we want to keep it.
+
 ### Optimised model
 
-Typically, the naive model is easiest to reason about because it's closest to how we think of the model conceptually.
-Let's see how much extra performance we can squeeze out by moving away from that naive model!
+TODO: Showcase batched distribution? Could then link to another how-to guide that describes this in more detail – here we just apply it?
 
-```julia
-@wren function hmm_model_fast(steps)
-    # we can use p ~ Beta() and 1 - p instead of Dirichlet
-    init_1 ~ Beta(2, 2)
-    trans_11 ~ Beta(2, 2)
-    trans_22 ~ Beta(2, 2)
+## addloglikelihood macro
 
-    # 1, 2 are the first state; 3, 4 are the second
-    μ ~ product_distribution(Fill(Normal(), 4))
+TODO: Add more detail here, describe limitations, refer to the operations above that would not be possible using the macro.
 
-    # define the HMM
-    init = [init_1, 1 - init_1]
-    trans = [trans_11 1 - trans_11; 1 - trans_22 trans_22]
-    dists = [MvNormal(μ[1:2], I), MvNormal(μ[3:4], I)]
-    hmm = HMM(init, trans, dists)
+You may also use the [`@addloglikelihood`](@ref) macro to increment the ... well, loglikelihood manually. Be aware that you sacrifice the ability to call `rand` on your model, and that many other parts of the Bayesian workflow will also not integrate as smoothly with models using [`@addloglikelihood`](@ref).
 
-    obs_seq ~ WrappedHMM(hmm, steps)
+[^1]: See for example [MeasureBase.jl](https://github.com/JuliaMath/MeasureBase.jl). Wren also works with [Distributions.jl](https://github.com/juliastats/distributions.jl) but note that these distributions may not be GPU-compatible.
 
-    return nothing
-end
-
-prior_model_fast = hmm_model_fast(T)
-model_fast = prior_model_fast | VarNamedTuple(obs_seq=obs_seq)
-@bmodel model_fast
-```
-
-Unfortunately this didn't speed the model up a lot...
-That's because with this model, we spend most of our time doing calculations related to the HMM, making the part we can optimise with Wren's tools relatively small.
-We could of course try to speed up the HMM and explore whether [StaticArrays.jl](https://github.com/JuliaArrays/StaticArrays.jl) improves the situation for us (but that would be a subject for a proper HMM guide).
-
-[^1]: You may also use the [`@addloglikelihood`](@ref) macro to increment the ... well, loglikelihood manually. Be aware that you sacrifice the ability to call `rand` on your model, and that many other parts of the Bayesian workflow will also not integrate as smoothly with models using [`@addloglikelihood`](@ref).
+[^2]: A zero-inflated Poisson distribution accounts for zero counts that would not by described by a standard Poisson by mixing a Bernoulli and Poisson component.
