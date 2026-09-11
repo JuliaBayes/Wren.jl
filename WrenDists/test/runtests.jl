@@ -1,5 +1,6 @@
 using WrenDists
 using WrenDists: logdensityof
+using WrenCore: WrenCore
 using Distributions
 using LinearAlgebra
 using Random
@@ -33,6 +34,31 @@ function test_dist(name, d_wd, d_ref; plaice_zero_allocs=())
             @testset "Reactant" begin
                 points = [rand(rng, d_ref) for _ in 1:10]
                 test_reactant(d_wd, points)
+            end
+        end
+        @testset "iid" begin
+            is_univariate = d_wd isa WrenDists.UnivariateDist
+            dims = is_univariate ? (3, 4) : (3,)
+            m = WrenCore.iid(d_wd, dims)
+            @test size(m) == (size(d_wd)..., dims...)
+            @test length(m) == prod(size(m))
+            x = rand(rng, m)
+            @test size(x) == size(m)
+            if is_univariate
+                @test logdensityof(m, x) ≈ sum(logdensityof(d_wd, xi) for xi in x)
+            else
+                n = prod(size(d_wd))
+                slices = eachcol(reshape(x, n, :))
+                @test logdensityof(m, x) ≈ sum(logdensityof(d_wd, c) for c in slices)
+            end
+        end
+        @testset "independent" begin
+            if d_wd isa WrenDists.UnivariateDist
+                dists = [d_wd, d_wd, d_wd]
+                m = WrenCore.independent(dists)
+                x = rand(rng, m)
+                @test size(x) == (3,)
+                @test logdensityof(m, x) ≈ sum(logdensityof.(dists, x))
             end
         end
     end
