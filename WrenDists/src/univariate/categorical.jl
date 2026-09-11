@@ -14,7 +14,7 @@ Base.eltype(::Type{Categorical{V}}) where {V} = float(eltype(V))
 end
 
 @inline function DensityInterface.logdensityof(d::Categorical, x::Number)
-    return logt(massat(d, x))
+    return log(massat(d, x))
 end
 
 # Some tools cannot stop a loop based on `q`, so count every partial sum below it.

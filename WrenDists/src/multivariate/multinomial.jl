@@ -11,14 +11,8 @@ end
 
 function insupport(d::Multinomial, x::AbstractVector{<:Number})
     length(x) == length(d.p) || return false
-    remaining = d.n
-    ok = true
-    for xᵢ in x
-        valid = isfinite(xᵢ) & isinteger(xᵢ) & (xᵢ >= zero(xᵢ)) & (xᵢ <= remaining)
-        ok &= valid
-        remaining -= select(valid, () -> xᵢ, () -> zero(xᵢ))
-    end
-    return ok & iszero(remaining)
+    ok = all(xᵢ -> isfinite(xᵢ) & isinteger(xᵢ) & (xᵢ >= zero(xᵢ)), x)
+    return ok & (sum(x) == d.n)
 end
 
 function DensityInterface.logdensityof(d::Multinomial, x::AbstractVector{<:Number})

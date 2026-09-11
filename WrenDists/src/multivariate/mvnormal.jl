@@ -29,7 +29,7 @@ function logdetfactor(d::MvNormal, ::Type{T}) where {T}
     R = float(T)
     acc = zero(R)
     for i in 1:length(d.μ)
-        acc += logt(convert(R, d.L[i, i]))
+        acc += log(convert(R, d.L[i, i]))
     end
     return acc
 end
@@ -38,13 +38,13 @@ function logdetfactor(d::DiagMvNormal, ::Type{T}) where {T}
     R = float(T)
     acc = zero(R)
     for σ in d.L.diag
-        acc += logt(convert(R, σ))
+        acc += log(convert(R, σ))
     end
     return acc
 end
 
 function logdetfactor(d::IsoMvNormal, ::Type{T}) where {T}
-    return length(d.μ) * logt(convert(float(T), d.L.λ))
+    return length(d.μ) * log(convert(float(T), d.L.λ))
 end
 
 whiten(d::MvNormal, x::AbstractVector{<:Number}) = LowerTriangular(d.L) \ (x .- d.μ)
@@ -81,10 +81,10 @@ _whiten_batch(L::UniformScaling, X::AbstractMatrix) = X ./ L.λ
 _whiten_batch(::UniformScaling{Bool}, X::AbstractMatrix) = X
 _whiten_batch(L::Diagonal, X::AbstractMatrix) = X ./ L.diag
 _whiten_batch(L::AbstractMatrix, X::AbstractMatrix) = LowerTriangular(L) \ X
-_logdet_factor_batch(L::UniformScaling, n, ::Type{T}) where {T} = n * logt(T(L.λ))
-_logdet_factor_batch(L::Diagonal, n, ::Type{T}) where {T} = sum(x -> logt(T(x)), L.diag)
+_logdet_factor_batch(L::UniformScaling, n, ::Type{T}) where {T} = n * log(T(L.λ))
+_logdet_factor_batch(L::Diagonal, n, ::Type{T}) where {T} = sum(x -> log(T(x)), L.diag)
 _logdet_factor_batch(L::AbstractMatrix, n, ::Type{T}) where {T} =
-    sum(x -> logt(T(x)), diag(L))
+    sum(x -> log(T(x)), diag(L))
 _centered_batch(X::AbstractMatrix, μ::AbstractVector) = X .- μ
 function _iid_logdensityof(dist::MvNormal, x::AbstractArray)
     n = length(dist.μ)

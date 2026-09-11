@@ -11,8 +11,8 @@ Base.eltype(::Type{Bernoulli{P}}) where {P} = float(P)
     p = convert(T, d.p)
     return select(
         x == one(x),
-        () -> logt(p),
-        () -> select(x == zero(x), () -> log1pt(-p), () -> convert(T, -Inf)),
+        () -> log(p),
+        () -> select(x == zero(x), () -> log1p(-p), () -> convert(T, -Inf)),
     )
 end
 

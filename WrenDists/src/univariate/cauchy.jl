@@ -11,7 +11,7 @@ Cauchy() = Cauchy(0.0, 1.0)
 @inline function DensityInterface.logdensityof(d::Cauchy, x::Number)
     z = zval(d, x)
     σ = oftype(z, d.σ)
-    return -logt(σ) - logπ - 2 * log(hypot(one(z), z))
+    return -log(σ) - logπ - 2 * log(hypot(one(z), z))
 end
 
 @inline function Base.rand(rng::AbstractRNG, d::Cauchy)

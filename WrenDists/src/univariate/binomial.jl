@@ -18,8 +18,8 @@ end
     T = masstype(d, x)
     n, k, p = convert(T, d.n), convert(T, x), convert(T, d.p)
     # Skip zero terms so `p = 0` and `p = 1` work.
-    a = select(k == zero(T), () -> zero(T), () -> k * logt(p))
-    b = select(k == n, () -> zero(T), () -> (n - k) * log1pt(-p))
+    a = select(k == zero(T), () -> zero(T), () -> k * log(p))
+    b = select(k == n, () -> zero(T), () -> (n - k) * log1p(-p))
     return select(insupport(d, x), () -> logbinom(n, k) + a + b, () -> convert(T, -Inf))
 end
 

@@ -12,7 +12,7 @@ Laplace() = Laplace(0.0, 1.0)
     z = zval(d, x)
     # Match `b` to `z` so integer parameters do not reduce `BigFloat` precision.
     b = oftype(z, d.b)
-    return -abs(z) - logt(2 * b)
+    return -abs(z) - log(2 * b)
 end
 
 # The difference of two unit exponential samples follows Laplace(0, 1).

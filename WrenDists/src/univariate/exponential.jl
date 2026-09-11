@@ -9,7 +9,7 @@ Exponential() = Exponential(1.0)
 @inline function DensityInterface.logdensityof(d::Exponential, x::Number)
     s = sval(d, x)
     θ = oftype(s, d.θ)
-    return select(x >= zero(x), () -> -(s + logt(θ)), () -> oftype(float(s), -Inf))
+    return select(x >= zero(x), () -> -(s + log(θ)), () -> oftype(float(s), -Inf))
 end
 
 # Apply `θ` after drawing noise so automatic differentiation can follow it.

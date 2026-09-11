@@ -12,7 +12,7 @@ Normal() = Normal(0.0, 1.0)
     z = zval(d, x)
     # Match `σ` to `z` so integer parameters do not reduce `BigFloat` precision.
     σ = oftype(z, d.σ)
-    return -(z^2 + log2π) / 2 - logt(σ)
+    return -(z^2 + log2π) / 2 - log(σ)
 end
 
 # Apply `μ` and `σ` after drawing noise so automatic differentiation can follow them.

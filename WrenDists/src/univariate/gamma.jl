@@ -23,9 +23,9 @@ end
     α, θ, y = convert(T, d.α), convert(T, d.θ), convert(T, x)
     # `loggamma` throws for a non-positive argument, so an invalid shape takes `NaN`.
     lg = select(α > zero(T), () -> loggamma(α), () -> convert(T, NaN))
-    value = muladd(α - one(T), logt(y), -(y / θ)) - lg - α * logt(θ)
+    value = muladd(α - one(T), log(y), -(y / θ)) - lg - α * log(θ)
     # At `x = 0` the formula settles every shape but `α = 1`, where `0 * log(0)` is `NaN`.
-    atzero = select(α == one(T), () -> -logt(θ), () -> value)
+    atzero = select(α == one(T), () -> -log(θ), () -> value)
     return select(
         insupport(d, y) & (y > zero(T)),
         () -> value,
@@ -43,7 +43,7 @@ gammaquantile(a::Number, p::Number) = exp(gammalogquantile(a, p))
 function gammalogquantile(a::Number, p::Number)
     fixedlength(a, p) && return gammalogquantile_fixed(a, p)
     lower = p <= one(p) / 2
-    target = lower ? logt(p) : log1p(-p)
+    target = lower ? log(p) : log1p(-p)
     lg = loggamma(a)
     u = gammaquantile_start(a, p)
     tol = sqrt(eps(basefloat(typeof(p))))
@@ -64,7 +64,7 @@ gammaquantile_fixed(a::Number, p::Number) = exp(gammalogquantile_fixed(a, p))
 
 function gammalogquantile_fixed(a::Number, p::Number)
     lower = p <= one(p) / 2
-    target = select(lower, () -> logt(p), () -> log1pt(-p))
+    target = select(lower, () -> log(p), () -> log1p(-p))
     lg = loggamma(a)
     u = gammaquantile_start(a, p)
     for _ in 1:GAMMAQUANTILE_STEPS
@@ -94,12 +94,12 @@ end
   Hilferty's cube-root normal approximation is good to a few digits.
 =#
 @inline function gammaquantile_start(a::Number, p::Number)
-    logr = (logt(p) + loggamma(a + one(a))) / a
+    logr = (log(p) + loggamma(a + one(a))) / a
     z = -(sqrt2 * erfcinvt(2 * p))
     w = a * (one(a) - inv(9 * a) + z / (3 * sqrt(a)))^3
-    small = logr < logt((one(a) + a) / (5 * a))
+    small = logr < log((one(a) + a) / (5 * a))
     usable = isfinite(w) & (w > zero(w))
-    return select(small | !usable, () -> logr, () -> logt(w))
+    return select(small | !usable, () -> logr, () -> log(w))
 end
 
 function _gamma_quantile(d::Gamma, p::Number)

@@ -14,8 +14,8 @@ end
     T = masstype(d, x)
     k, p = convert(T, x), convert(T, d.p)
     # At `p == 1` the tail factor is `0 * -Inf`. Define it as zero.
-    tail = select(k == zero(T), () -> zero(T), () -> k * log1pt(-p))
-    return select(insupport(d, x), () -> logt(p) + tail, () -> convert(T, -Inf))
+    tail = select(k == zero(T), () -> zero(T), () -> k * log1p(-p))
+    return select(insupport(d, x), () -> log(p) + tail, () -> convert(T, -Inf))
 end
 
 @inline function Base.rand(rng::AbstractRNG, d::Geometric)
@@ -23,5 +23,5 @@ end
     u = rand(rng, noisetype(d))
     p = convert(T, d.p)
     # `log1p(-u)` rather than `log(1 - u)`, so an exact zero draw gives zero, not `Inf`.
-    return floor(log1pt(-u) / log1pt(-p))
+    return floor(log1p(-u) / log1p(-p))
 end

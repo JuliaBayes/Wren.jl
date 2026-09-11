@@ -22,7 +22,7 @@ end
     T = masstype(d, x)
     λ, k = convert(T, d.λ), convert(T, x)
     # Define `0 * log(0)` as zero.
-    a = select(k == zero(T), () -> zero(T), () -> k * logt(λ))
+    a = select(k == zero(T), () -> zero(T), () -> k * log(λ))
     # `loggamma` rejects negative integers before the support check runs.
     g = loggamma(max(k, zero(T)) + one(T))
     # If `log(k!)` overflows, the mass is zero; avoid `Inf - Inf`.

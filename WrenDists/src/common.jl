@@ -15,25 +15,6 @@ Base.rand(d::WrenDist) = rand(Random.default_rng(), d)
 
 wrappedconditions(::Type) = false
 
-@inline function logt(x::Number)
-    return select(x < zero(x), () -> oftype(float(x), NaN), () -> log(x))
-end
-
-@inline function log1pt(x::Number)
-    return select(x < -one(x), () -> oftype(float(x), NaN), () -> log1p(x))
-end
-
-@inline function log1mexpt(a::Number)
-    return select(a > -logtwo, () -> logt(-expm1(a)), () -> log1p(-exp(a)))
-end
-
-@inline function logbetat(α::Number, β::Number)
-    valid = (α > zero(α)) & (β > zero(β))
-    a = select(valid, () -> α, () -> one(α))
-    b = select(valid, () -> β, () -> one(β))
-    v = loggamma(a) + loggamma(b) - loggamma(a + b)
-    return select(valid, () -> v, () -> oftype(v, NaN))
-end
 
 @inline function erfcinvt(y::Number)
     valid = (y >= zero(y)) & (y <= 2 * one(y))

@@ -37,12 +37,12 @@ end
 
 @inline function loggammap(a::Number, x::Number)
     fixedlength(a, x) && return loggammapq_fixed(a, x)[1]
-    return x < a + one(a) ? gammap_series(a, x) : log1mexpt(gammaq_cf(a, x))
+    return x < a + one(a) ? gammap_series(a, x) : log1mexp(gammaq_cf(a, x))
 end
 
 @inline function loggammaq(a::Number, x::Number)
     fixedlength(a, x) && return loggammapq_fixed(a, x)[2]
-    return x < a + one(a) ? log1mexpt(gammap_series(a, x)) : gammaq_cf(a, x)
+    return x < a + one(a) ? log1mexp(gammap_series(a, x)) : gammaq_cf(a, x)
 end
 
 @inline function loggammapq_fixed(a::Number, x::Number)
@@ -50,8 +50,8 @@ end
     lower = x < crossover
     ls = gammap_series_fixed(a, min(x, crossover))
     lq = gammaq_cf_fixed(a, max(x, crossover))
-    logp = select(lower, () -> ls, () -> log1mexpt(lq))
-    logq = select(lower, () -> log1mexpt(ls), () -> lq)
+    logp = select(lower, () -> ls, () -> log1mexp(lq))
+    logq = select(lower, () -> log1mexp(ls), () -> lq)
     exact = a <= gammainc_maxshape(typeof(x))
     nan = oftype(ls, NaN)
     return (select(exact, () -> logp, () -> nan), select(exact, () -> logq, () -> nan))
@@ -67,7 +67,7 @@ function gammap_series(a::Number, x::Number)
         term *= x / (a + n)
         total += term
     end
-    return muladd(a, logt(x), -x) - loggamma(a + one(a)) + logt(total)
+    return muladd(a, log(x), -x) - loggamma(a + one(a)) + log(total)
 end
 
 function gammap_series_fixed(a::Number, x::Number)
@@ -77,7 +77,7 @@ function gammap_series_fixed(a::Number, x::Number)
         term *= x / (a + n)
         total += term
     end
-    return muladd(a, logt(x), -x) - loggamma(a + one(a)) + logt(total)
+    return muladd(a, log(x), -x) - loggamma(a + one(a)) + log(total)
 end
 
 function gammaq_cf(a::Number, x::Number)
@@ -103,7 +103,7 @@ function gammaq_cf(a::Number, x::Number)
         settled = abs(delta - one(delta)) <= tol
         settled & ((zeroed == 0) | (i >= zeroed + precision(F))) && break
     end
-    return muladd(a, logt(x), -x) - loggamma(a) + logt(h)
+    return muladd(a, log(x), -x) - loggamma(a) + log(h)
 end
 
 function gammaq_cf_fixed(a::Number, x::Number)
@@ -120,7 +120,7 @@ function gammaq_cf_fixed(a::Number, x::Number)
         c = floortiny(b + an / c, tiny)
         h *= d * c
     end
-    return muladd(a, logt(x), -x) - loggamma(a) + logt(h)
+    return muladd(a, log(x), -x) - loggamma(a) + log(h)
 end
 
 @inline floortiny(v, tiny) = select(abs(v) < tiny, () -> tiny, () -> v)

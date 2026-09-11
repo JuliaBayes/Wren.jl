@@ -1,7 +1,7 @@
 module WrenDistsReactantExt
 
 using WrenDists: WrenDists, GAMMAINC_TERMS, GAMMAQUANTILE_STEPS
-using WrenDists: basefloat, floortiny, log1pt, logt, select
+using WrenDists: basefloat, floortiny, select
 using WrenDists: gammaquantile_start, gammaquantile_step
 using Reactant: Reactant, TracedRNumber, @trace
 using SpecialFunctions: SpecialFunctions, loggamma
@@ -23,7 +23,7 @@ function WrenDists.gammap_series_fixed(a::T, x::T) where {T<:TracedRNumber}
         term = term * (x / (a + n))
         total = total + term
     end
-    return muladd(a, logt(x), -x) - loggamma(a + one(T)) + logt(total)
+    return muladd(a, log(x), -x) - loggamma(a + one(T)) + log(total)
 end
 
 function WrenDists.gammaq_cf_fixed(a::T, x::T) where {T<:TracedRNumber}
@@ -41,12 +41,12 @@ function WrenDists.gammaq_cf_fixed(a::T, x::T) where {T<:TracedRNumber}
         c = floortiny(b + an / c, tiny)
         h = h * (d * c)
     end
-    return muladd(a, logt(x), -x) - loggamma(a) + logt(h)
+    return muladd(a, log(x), -x) - loggamma(a) + log(h)
 end
 
 function WrenDists.gammalogquantile_fixed(a::T, p::T) where {T<:TracedRNumber}
     lower = p <= one(T) / 2
-    target = select(lower, () -> logt(p), () -> log1pt(-p))
+    target = select(lower, () -> log(p), () -> log1p(-p))
     lg = loggamma(a)
     u = gammaquantile_start(a, p)
     @trace for k in 1:GAMMAQUANTILE_STEPS

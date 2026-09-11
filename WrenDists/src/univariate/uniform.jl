@@ -11,7 +11,7 @@ Uniform() = Uniform(0.0, 1.0)
 @inline function DensityInterface.logdensityof(d::Uniform, x::Number)
     u = uval(d, x)
     w = oftype(u, d.b - d.a)
-    return select((x >= d.a) & (x <= d.b), () -> -logt(w), () -> oftype(float(u), -Inf))
+    return select((x >= d.a) & (x <= d.b), () -> -log(w), () -> oftype(float(u), -Inf))
 end
 
 @inline function Base.rand(rng::AbstractRNG, d::Uniform)

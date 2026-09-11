@@ -16,10 +16,10 @@ Weibull() = Weibull(1.0, 1.0)
     value = select(
         isinf(s),
         () -> oftype(s, -Inf),
-        () -> logt(α) - logt(θ) + (α - one(α)) * logt(s) - s^α,
+        () -> log(α) - log(θ) + (α - one(α)) * log(s) - s^α,
     )
     # At `x = 0` the formula settles every shape but `α = 1`, where `0 * log(0)` is `NaN`.
-    atzero = select(α == one(α), () -> -logt(θ), () -> value)
+    atzero = select(α == one(α), () -> -log(θ), () -> value)
     return select(
         x > zero(x),
         () -> value,

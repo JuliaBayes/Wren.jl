@@ -1,11 +1,11 @@
 module WrenDists
 
 using DensityInterface: DensityInterface, logdensityof
-using IrrationalConstants: log2π, logπ, logtwo, sqrt2
-using LogExpFunctions: xlogy
+using IrrationalConstants: log2π, logπ, sqrt2
+using LogExpFunctions: log1mexp, xlogy
 using LinearAlgebra: Diagonal, LowerTriangular, UniformScaling, diag
 using Random: Random, AbstractRNG
-using SpecialFunctions: erfcinv, gamma_inc, loggamma
+using SpecialFunctions: erfcinv, gamma_inc, logbeta, loggamma
 using Plaice: Plaice
 using VarNames: VarNames
 include("common.jl")
