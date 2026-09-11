@@ -3,6 +3,8 @@ struct Multinomial{N<:Integer,V<:AbstractVector{<:Number}} <: DiscreteMultivaria
     p::V
 end
 
+Base.size(d::Multinomial) = (length(d.p),)
+
 function Base.eltype(::Type{Multinomial{N,V}}) where {N,V}
     return Vector{float(eltype(V))}
 end

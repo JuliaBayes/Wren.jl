@@ -2,6 +2,8 @@ struct Dirichlet{V<:AbstractVector{<:Number}} <: MultivariateDist
     α::V
 end
 
+Base.size(d::Dirichlet) = (length(d.α),)
+
 Base.eltype(::Type{Dirichlet{V}}) where {V} = Vector{float(eltype(V))}
 
 function checkparams(d::Dirichlet)

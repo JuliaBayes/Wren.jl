@@ -2,21 +2,26 @@ module WrenDists
 
 using DensityInterface: DensityInterface, logdensityof
 using IrrationalConstants: log2π, logπ, logtwo, sqrt2
-using LinearAlgebra: Diagonal, LowerTriangular, UniformScaling
+using LinearAlgebra: Diagonal, LowerTriangular, UniformScaling, diag
 using Random: Random, AbstractRNG
 using SpecialFunctions: erfcinv, gamma_inc, loggamma
 using Plaice: Plaice
 using VarNames: VarNames
-
 include("common.jl")
 include("gammainc.jl")
-
-# Univariate continuous
 
 # Abstract types exist solely for Plaice dispatch purposes, nothing else!
 abstract type UnivariateDist <: WrenDist end
 abstract type UnconstrainedUnivariateDist <: UnivariateDist end
 abstract type PositiveUnivariateDist <: UnivariateDist end
+abstract type DiscreteUnivariateDist <: UnivariateDist end
+abstract type MultivariateDist <: WrenDist end
+abstract type DiscreteMultivariateDist <: MultivariateDist end
+
+# Independent products (needs abstract types above)
+include("independent.jl")
+
+# Univariate continuous
 include("univariate/normal.jl")
 include("univariate/lognormal.jl")
 include("univariate/exponential.jl")
@@ -28,7 +33,6 @@ include("univariate/gamma.jl")
 include("univariate/beta.jl")
 
 # Univariate discrete
-abstract type DiscreteUnivariateDist <: UnivariateDist end
 include("univariate/bernoulli.jl")
 include("univariate/binomial.jl")
 include("univariate/categorical.jl")
@@ -39,8 +43,6 @@ include("univariate/poisson.jl")
 include("univariate/plaice.jl")
 
 # Multivariate
-abstract type MultivariateDist <: WrenDist end
-abstract type DiscreteMultivariateDist <: MultivariateDist end
 include("multivariate/mvnormal.jl")
 include("multivariate/dirichlet.jl")
 include("multivariate/multinomial.jl")

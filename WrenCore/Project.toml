@@ -26,19 +26,18 @@ VarNames = "09a315b2-63fc-4165-8d7f-d59368e770cc"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
 Mooncake = "da2b9cff-9c12-43a0-ae48-6db2b0edb7d6"
-ProbabilityMeasures = "d96443b0-2461-4412-bb6f-797ac5201ef9"
 Reactant = "3c362404-f566-11ee-1572-e11a4b42c853"
+WrenDists = "2ad4af40-d7c9-42b2-92b0-e09d37d1e75a"
 
 [sources]
 Plaice = {rev = "pm", url = "https://github.com/JuliaBayes/Plaice.jl"}
-ProbabilityMeasures = {rev = "main", url = "https://github.com/JuliaBayes/ProbabilityMeasures.jl"}
 
 [extensions]
 WrenCoreDistributionsExt = ["Distributions", "FillArrays", "Plaice"]
 WrenCoreEnzymeExt = ["Enzyme", "DifferentiationInterface"]
 WrenCoreMooncakeExt = ["Mooncake"]
-WrenCoreProbabilityMeasuresExt = ["ProbabilityMeasures", "Plaice"]
 WrenCoreReactantExt = ["ADTypes", "Enzyme", "Reactant"]
+WrenCoreWrenDistsExt = "WrenDists"
 
 [compat]
 ADTypes = "1"
@@ -60,6 +59,4 @@ RuntimeGeneratedFunctions = "0.5.25"
 Statistics = "1"
 StatsAPI = "1"
 VarNames = "0.1.4"
-
-[extras]
-ProbabilityMeasures = "d96443b0-2461-4412-bb6f-797ac5201ef9"
+WrenDists = "0.1"
