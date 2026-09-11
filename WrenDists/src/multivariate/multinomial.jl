@@ -21,9 +21,9 @@ function DensityInterface.logdensityof(d::Multinomial, x::AbstractVector{<:Numbe
     n = convert(T, d.n)
     xT = convert.(T, x)
     pT = convert.(T, d.p)
-    result = loggamma(max(n, zero(T)) + one(T)) -
-             sum(loggamma.(max.(xT, zero(T)) .+ one(T))) +
-             sum(xlogy.(xT, pT))
+    result =
+        loggamma(max(n, zero(T)) + one(T)) - sum(loggamma.(max.(xT, zero(T)) .+ one(T))) +
+        sum(xlogy.(xT, pT))
     return select(insupport(d, x), () -> result, () -> convert(T, -Inf))
 end
 

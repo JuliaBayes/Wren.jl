@@ -18,7 +18,8 @@ end
 function insupport(d::Dirichlet, x::AbstractVector{<:Number})
     length(x) == length(d.α) || return false
     tol = sqrt(eps(basefloat(float(eltype(x)))))
-    return all(isfinite, x) & (minimum(x) >= zero(eltype(x))) & (abs(sum(x) - one(eltype(x))) <= tol)
+    return all(isfinite, x) & (minimum(x) >= zero(eltype(x))) &
+           (abs(sum(x) - one(eltype(x))) <= tol)
 end
 
 # `loggamma` throws below zero, so evaluate it at one when the parameters are invalid.

@@ -79,10 +79,7 @@ function _zero_logdensity(dist::WrenDist, x::AbstractArray)
 end
 
 # Each slice is one draw. This fallback is CPU-only.
-function _iid_logdensityof(
-    dist::MultivariateDist,
-    x::AbstractArray{<:Any,M},
-) where {M}
+function _iid_logdensityof(dist::MultivariateDist, x::AbstractArray{<:Any,M}) where {M}
     slices = eachslice(x; dims=ntuple(i -> i + 1, Val(M - 1)))
     return sum(Base.Fix1(logdensityof, dist), slices; init=_zero_logdensity(dist, x))
 end
@@ -211,4 +208,3 @@ end
 function Plaice.to_unconstrained_vec(d::IndependentArray)
     return ElementwiseLink(Plaice.scalar_to_scalar_bijector.(d.components), size(d))
 end
-
