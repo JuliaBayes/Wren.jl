@@ -27,6 +27,10 @@ function test_dist(name, d_wd, d_ref; plaice_zero_allocs=())
             @test rand(Xoshiro(468), d_wd) == rand(Xoshiro(468), d_wd)
             @test rand(Xoshiro(468), d_wd) != rand(Xoshiro(469), d_wd)
         end
+        @testset "type stability" begin
+            x = @inferred rand(rng, d_wd)
+            @inferred logdensityof(d_wd, x)
+        end
         @testset "Plaice" begin
             Plaice.test_all(d_wd; expected_zero_allocs=plaice_zero_allocs)
         end
