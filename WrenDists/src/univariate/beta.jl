@@ -20,7 +20,7 @@ end
 @inline function DensityInterface.logdensityof(d::Beta, x::Number)
     T = _valuetype(d, x)
     α, β, y = convert(T, d.α), convert(T, d.β), convert(T, x)
-    value = xlogyt(α - one(T), y) + xlogyt(β - one(T), one(T) - y) - logbetat(α, β)
+    value = xlogy(α - one(T), y) + xlogy(β - one(T), one(T) - y) - logbetat(α, β)
     return select(insupport(d, y) & checkparams(d), () -> value, () -> convert(T, -Inf))
 end
 

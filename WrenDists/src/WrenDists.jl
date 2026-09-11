@@ -2,6 +2,7 @@ module WrenDists
 
 using DensityInterface: DensityInterface, logdensityof
 using IrrationalConstants: log2π, logπ, logtwo, sqrt2
+using LogExpFunctions: xlogy
 using LinearAlgebra: Diagonal, LowerTriangular, UniformScaling, diag
 using Random: Random, AbstractRNG
 using SpecialFunctions: erfcinv, gamma_inc, loggamma

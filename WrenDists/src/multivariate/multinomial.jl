@@ -25,13 +25,11 @@ function DensityInterface.logdensityof(d::Multinomial, x::AbstractVector{<:Numbe
     T = float(promote_type(typeof(d.n), eltype(d.p), eltype(x)))
     length(x) == length(d.p) || return convert(T, -Inf)
     n = convert(T, d.n)
-    logp = loggamma(max(n, zero(T)) + one(T))
-    for i in eachindex(d.p)
-        xᵢ, pᵢ = convert(T, x[i]), convert(T, d.p[i])
-        logp -= loggamma(max(xᵢ, zero(T)) + one(T))
-        logp += select(xᵢ == zero(T), () -> zero(T), () -> xᵢ * logt(pᵢ))
-    end
-    result = logp
+    xT = convert.(T, x)
+    pT = convert.(T, d.p)
+    result = loggamma(max(n, zero(T)) + one(T)) -
+             sum(loggamma.(max.(xT, zero(T)) .+ one(T))) +
+             sum(xlogy.(xT, pT))
     return select(insupport(d, x), () -> result, () -> convert(T, -Inf))
 end
 

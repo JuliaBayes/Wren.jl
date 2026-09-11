@@ -27,11 +27,6 @@ end
     return select(a > -logtwo, () -> logt(-expm1(a)), () -> log1p(-exp(a)))
 end
 
-@inline function xlogyt(x::Number, y::Number)
-    ly = logt(y)
-    return select((x == zero(x)) & !isfinite(ly), () -> zero(float(x * ly)), () -> x * ly)
-end
-
 @inline function logbetat(α::Number, β::Number)
     valid = (α > zero(α)) & (β > zero(β))
     a = select(valid, () -> α, () -> one(α))

@@ -40,7 +40,7 @@ end
 function DensityInterface.logdensityof(d::Dirichlet, x::AbstractVector{<:Number})
     T = float(promote_type(eltype(d.α), eltype(x)))
     length(x) == length(d.α) || return convert(T, -Inf)
-    value = -logmvbeta(d, T) + sum(xlogyt.(convert.(T, d.α) .- one(T), convert.(T, x)))
+    value = -logmvbeta(d, T) + sum(xlogy.(convert.(T, d.α) .- one(T), convert.(T, x)))
     return select(insupport(d, x) & checkparams(d), () -> value, () -> convert(T, -Inf))
 end
 
