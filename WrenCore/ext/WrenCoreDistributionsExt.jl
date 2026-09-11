@@ -8,9 +8,6 @@ using Distributions: Distribution, product_distribution, Normal
 
 WrenCore.independent(dists::AbstractArray{<:Distribution}) = product_distribution(dists)
 
-WrenCore.batched(iters, dist::Distribution; _kwargs...) =
-    product_distribution(Fill(dist, length(iters)))
-
 struct DiagNormal{M<:AbstractArray,S<:AbstractArray}
     mu::M
     sigma::S
@@ -53,22 +50,22 @@ function WrenCore.batched(iters, ::Val{Normal}, indexed_mu::WrenCore.Indexed; _k
     return IsoNormal(indexed_mu.data)
 end
 
-struct IIDNormal{T<:Tuple,M<:Number,S<:Number}
-    size::T
-    mu::M
-    sigma::S
-end
-Base.rand(rng::Random.AbstractRNG, d::IIDNormal) = randn(rng, d.size) .* d.sigma .+ d.mu
-Plaice.from_unconstrained_vec(d::IIDNormal) = Plaice.Reshape(d.size)
-Plaice.to_unconstrained_vec(d::IIDNormal) = Plaice.Vec(d.size)
-function WrenCore.logdensityof(d::IIDNormal, x)
-    inv_sigma = inv(d.sigma)
-    # dist = sum(xi -> abs2((xi - d.mu) * inv_sigma), x)
-    # ^ This is faster, but creates lots of allocs
-    dist = sum(abs2, (x .- d.mu) .* inv_sigma)
-    N = length(x)
-    return -0.5 * dist - N * log(d.sigma) - 0.5 * N * log(2π)
-end
-WrenCore.batched(iters, n::Normal; _kwargs...) = IIDNormal(size(iters), n.μ, n.σ)
+# struct IIDNormal{T<:Tuple,M<:Number,S<:Number}
+#     size::T
+#     mu::M
+#     sigma::S
+# end
+# Base.rand(rng::Random.AbstractRNG, d::IIDNormal) = randn(rng, d.size) .* d.sigma .+ d.mu
+# Plaice.from_unconstrained_vec(d::IIDNormal) = Plaice.Reshape(d.size)
+# Plaice.to_unconstrained_vec(d::IIDNormal) = Plaice.Vec(d.size)
+# function WrenCore.logdensityof(d::IIDNormal, x)
+#     inv_sigma = inv(d.sigma)
+#     # dist = sum(xi -> abs2((xi - d.mu) * inv_sigma), x)
+#     # ^ This is faster, but creates lots of allocs
+#     dist = sum(abs2, (x .- d.mu) .* inv_sigma)
+#     N = length(x)
+#     return -0.5 * dist - N * log(d.sigma) - 0.5 * N * log(2π)
+# end
+# WrenCore.batched(iters, n::Normal; _kwargs...) = IIDNormal(size(iters), n.μ, n.σ)
 
 end # module WrenCoreDistributionsExt

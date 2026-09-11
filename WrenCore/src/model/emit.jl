@@ -123,20 +123,22 @@ _with_rhs(stmt::Observe, rhs) = Observe(stmt.name, stmt.lhs, rhs)
 
 function emit_model_expr(stmt::Batch, accs, conditioned, latent_source, parameter_space)
     # stmt.body isa block expr
-    @gensym loop_iters
+    @gensym loop_iters loop_iters_size
     initialise_iter_expr = :($loop_iters = $(stmt.loop_iters))
+    initialise_size_expr = :($loop_iters_size = $(Base.size)($loop_iters))
     body_exprs = [
         vectorise_batch_stmt(
             s,
             stmt.loop_idx,
             loop_iters,
+            loop_iters_size,
             accs,
             conditioned,
             latent_source,
             parameter_space,
         ) for s in stmt.body.args
     ]
-    return Expr(:block, initialise_iter_expr, body_exprs...)
+    return Expr(:block, initialise_iter_expr, initialise_size_expr, body_exprs...)
 end
 
 """
@@ -217,14 +219,11 @@ function occurs_in_kwargs(parameters::Expr, loop_idx::Symbol)
     return false
 end
 
-function batch_expr(expr, loop_idx, loop_iters)
+function batch_expr(expr, loop_idx, loop_iters, loop_iters_size)
     # Check if the expr contains the loop index anywhere.
     return if !occurs_in_expr(expr, loop_idx)
         # If not, it's a constant wrt the loop.
-        #
-        # TODO(penelopeysm): Use `iid(rhs, size(loop_iters))` here once it's in main,
-        # instead of `batched`. https://github.com/JuliaBayes/Wren.jl/pull/71
-        Expr(:call, WrenCore.batched, loop_iters, expr)
+        Expr(:call, WrenCore.iid, expr, loop_iters_size)
     else
         if expr isa Expr && expr.head == :call
             # First we'll check if the call has kwargs and if the loop index is referenced
@@ -316,6 +315,12 @@ function batch_expr(expr, loop_idx, loop_iters)
     end
 end
 
+occurs_in_expr(expr::Symbol, loop_idx::Symbol) = expr == loop_idx
+occurs_in_expr(expr::QuoteNode, loop_idx::Symbol) = false
+occurs_in_expr(expr::Expr, loop_idx::Symbol) =
+    any(arg -> occurs_in_expr(arg, loop_idx), expr.args)
+occurs_in_expr(expr, loop_idx) = false
+
 """
     replace_loop_idx_with_iters(expr, loop_idx::Symbol, loop_iters)
 
@@ -381,16 +386,15 @@ function replace_loop_idx_with_iters(expr, loop_idx::Symbol, loop_iters)
     end
 end
 
-vectorise_batch_stmt(lnn::LineNumberNode, idx, iters, ax, cond, ls, ps) = lnn
-function vectorise_batch_stmt(::IID, idx, iters, ax, cond, ls, ps)
-    # `@iid` already produces one array-valued statement; batching it over a batch has no
-    # defined semantics yet.
+vectorise_batch_stmt(lnn::LineNumberNode, idx, iters, size, ax, cond, ls, ps) = lnn
+function vectorise_batch_stmt(::IID, idx, iters, size, ax, cond, ls, ps)
     return error("@iid is not supported inside @batch")
 end
 function vectorise_batch_stmt(
     stmt::Sample,
     loop_idx,
     loop_iters,
+    loop_iters_size,
     accs,
     conditioned,
     latent_source,
@@ -398,7 +402,7 @@ function vectorise_batch_stmt(
 )
     new_lhs, _ = replace_loop_idx_with_iters(stmt.lhs, loop_idx, loop_iters)
     rhs_expr = _wren_expr_to_model_expr(stmt.rhs)
-    new_rhs = batch_expr(rhs_expr, loop_idx, loop_iters)
+    new_rhs = batch_expr(rhs_expr, loop_idx, loop_iters, loop_iters_size)
     return emit_model_expr(
         Sample(stmt.name, new_lhs, new_rhs),
         accs,
@@ -408,16 +412,11 @@ function vectorise_batch_stmt(
     )
 end
 
-occurs_in_expr(expr::Symbol, loop_idx::Symbol) = expr == loop_idx
-occurs_in_expr(expr::QuoteNode, loop_idx::Symbol) = false
-occurs_in_expr(expr::Expr, loop_idx::Symbol) =
-    any(arg -> occurs_in_expr(arg, loop_idx), expr.args)
-occurs_in_expr(expr, loop_idx) = false
-
 function vectorise_batch_stmt(
     stmt::Observe,
     loop_idx,
     loop_iters,
+    loop_iters_size,
     accs,
     conditioned,
     latent_source,
@@ -425,7 +424,7 @@ function vectorise_batch_stmt(
 )
     new_lhs, _ = replace_loop_idx_with_iters(stmt.lhs, loop_idx, loop_iters)
     rhs_expr = _wren_expr_to_model_expr(stmt.rhs)
-    new_rhs = batch_expr(rhs_expr, loop_idx, loop_iters)
+    new_rhs = batch_expr(rhs_expr, loop_idx, loop_iters, loop_iters_size)
     return emit_model_expr(
         Observe(stmt.name, new_lhs, new_rhs),
         accs,
