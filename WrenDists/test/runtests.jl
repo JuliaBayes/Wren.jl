@@ -254,7 +254,8 @@ const DIRICHLET_PLAICE = (to_vec, from_vec)
         WrenDists.MvNormal(μ, L),
         Distributions.MvNormal(μ, Σ);
         plaice_zero_allocs=MULTIVARIATE_PLAICE,
-        skipped_adtypes=("EnzymeRvs"),
+        # https://github.com/EnzymeAD/Enzyme.jl/issues/1991
+        skipped_adtypes=("EnzymeFwd"),
     )
     σ = [1.0, 2.0]
     test_dist(
@@ -274,26 +275,8 @@ const DIRICHLET_PLAICE = (to_vec, from_vec)
         WrenDists.Dirichlet([2.0, 3.0, 1.0]),
         Distributions.Dirichlet([2.0, 3.0, 1.0]);
         plaice_zero_allocs=DIRICHLET_PLAICE,
-        #=  ReverseDiff's error is this:
-
-        ArgumentError: type does not have a definite number of fields
-          Stacktrace:
-            [1] fieldcount(t::Any)
-              @ Base ./runtime_internals.jl:1163
-            [2] #113#114
-              @ ~/.julia/packages/ReverseDiff/XfRVo/src/derivatives/broadcast.jl:27 [inlined]
-            [3] var"#113#114"(F::Any, ::Any, ::Any)
-              @ ReverseDiff ./none:0
-            [4] (::Core.GeneratedFunctionStub)(::UInt64, ::Method, ::Any, ::Vararg{Any})
-              @ Base ./expr.jl:1694
-            [5] istypeorclosure
-              @ ~/.julia/packages/ReverseDiff/XfRVo/src/derivatives/broadcast.jl:22 [inlined]
-            [6] mayhavetracked
-              @ ~/.julia/packages/ReverseDiff/XfRVo/src/derivatives/broadcast.jl:29 [inlined]
-            [...]
-
-        which really doesn't seem like our fault at all,
-        =# skipped_adtypes=(
+        # https://github.com/JuliaDiff/ReverseDiff.jl/issues/289
+        skipped_adtypes=(
             "ReverseDiff",
             "ReverseDiffCpl",
         ),
@@ -303,7 +286,7 @@ const DIRICHLET_PLAICE = (to_vec, from_vec)
         WrenDists.Multinomial(10, [0.2, 0.3, 0.5]),
         Distributions.Multinomial(10, [0.2, 0.3, 0.5]);
         plaice_zero_allocs=MULTIVARIATE_PLAICE,
-        # Same as above
+        # https://github.com/JuliaDiff/ReverseDiff.jl/issues/289
         skipped_adtypes=("ReverseDiff", "ReverseDiffCpl"),
     )
 end
