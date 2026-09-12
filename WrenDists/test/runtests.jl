@@ -67,6 +67,8 @@ function test_dist(
     other_ad_testcases=(),
 )
     @testset "$name" begin
+        @info "Testing $name"
+
         rng = Xoshiro(468)
 
         @testset "logdensityof consistent with Distributions" begin
@@ -165,12 +167,19 @@ const DIRICHLET_PLAICE = (to_vec, from_vec)
         WrenDists.Laplace(1.0, 2.0),
         Distributions.Laplace(1.0, 2.0);
         plaice_zero_allocs=UNIVARIATE_PLAICE,
+        # Sample point != μ to avoid abs(0) subgradient disagreement across AD backends
+        other_ad_testcases=(let f(x) = logdensityof(WrenDists.Laplace(x[1], x[2]), 1.5)
+            ADTestCase(f, [1.0, 2.0], (), ())
+        end,),
     )
     test_dist(
         "Cauchy",
         WrenDists.Cauchy(1.0, 2.0),
         Distributions.Cauchy(1.0, 2.0);
         plaice_zero_allocs=UNIVARIATE_PLAICE,
+        other_ad_testcases=(let f(x) = logdensityof(WrenDists.Cauchy(x[1], x[2]), 1.0)
+            ADTestCase(f, [1.0, 2.0], (), ())
+        end,),
     )
 
     # Continuous positive
@@ -179,24 +188,36 @@ const DIRICHLET_PLAICE = (to_vec, from_vec)
         WrenDists.LogNormal(0.5, 0.3),
         Distributions.LogNormal(0.5, 0.3);
         plaice_zero_allocs=UNIVARIATE_PLAICE,
+        other_ad_testcases=(let f(x) = logdensityof(WrenDists.LogNormal(x[1], x[2]), 1.5)
+            ADTestCase(f, [0.5, 0.3], (), ())
+        end,),
     )
     test_dist(
         "Exponential",
         WrenDists.Exponential(3.0),
         Distributions.Exponential(3.0);
         plaice_zero_allocs=UNIVARIATE_PLAICE,
+        other_ad_testcases=(let f(x) = logdensityof(WrenDists.Exponential(x[1]), 1.0)
+            ADTestCase(f, [3.0], (), ())
+        end,),
     )
     test_dist(
         "Weibull",
         WrenDists.Weibull(1.5, 2.0),
         Distributions.Weibull(1.5, 2.0);
         plaice_zero_allocs=UNIVARIATE_PLAICE,
+        other_ad_testcases=(let f(x) = logdensityof(WrenDists.Weibull(x[1], x[2]), 1.0)
+            ADTestCase(f, [1.5, 2.0], (), ())
+        end,),
     )
     test_dist(
         "Gamma",
         WrenDists.Gamma(2.0, 1.0),
         Distributions.Gamma(2.0, 1.0);
         plaice_zero_allocs=UNIVARIATE_PLAICE,
+        other_ad_testcases=(let f(x) = logdensityof(WrenDists.Gamma(x[1], x[2]), 1.0)
+            ADTestCase(f, [2.0, 1.0], (), ())
+        end,),
     )
 
     # Continuous bounded
@@ -205,12 +226,18 @@ const DIRICHLET_PLAICE = (to_vec, from_vec)
         WrenDists.Beta(2.0, 3.0),
         Distributions.Beta(2.0, 3.0);
         plaice_zero_allocs=UNIVARIATE_PLAICE,
+        other_ad_testcases=(let f(x) = logdensityof(WrenDists.Beta(x[1], x[2]), 0.5)
+            ADTestCase(f, [2.0, 3.0], (), ())
+        end,),
     )
     test_dist(
         "Uniform",
         WrenDists.Uniform(1.0, 3.0),
         Distributions.Uniform(1.0, 3.0);
         plaice_zero_allocs=UNIVARIATE_PLAICE,
+        other_ad_testcases=(let f(x) = logdensityof(WrenDists.Uniform(x[1], x[2]), 2.0)
+            ADTestCase(f, [1.0, 3.0], (), ())
+        end,),
     )
 
     # Discrete univariate
@@ -219,37 +246,81 @@ const DIRICHLET_PLAICE = (to_vec, from_vec)
         WrenDists.Bernoulli(0.3),
         Distributions.Bernoulli(0.3);
         plaice_zero_allocs=UNIVARIATE_PLAICE,
+        other_ad_testcases=(let f(x) = logdensityof(WrenDists.Bernoulli(x[1]), 1)
+            ADTestCase(f, [0.3], (), ())
+        end,),
     )
     test_dist(
         "Categorical",
         WrenDists.Categorical([0.2, 0.3, 0.5]),
         Distributions.Categorical([0.2, 0.3, 0.5]);
         plaice_zero_allocs=UNIVARIATE_PLAICE,
+        other_ad_testcases=(let f(x) = logdensityof(WrenDists.Categorical(x), 2)
+            ADTestCase(f, [0.2, 0.3, 0.5], (), ())
+        end,),
     )
     test_dist(
         "Binomial",
         WrenDists.Binomial(20, 0.4),
         Distributions.Binomial(20, 0.4);
         plaice_zero_allocs=UNIVARIATE_PLAICE,
+        other_ad_testcases=(let f(x) = logdensityof(WrenDists.Binomial(20, x[1]), 8)
+            ADTestCase(f, [0.4], (), ())
+        end,),
     )
     test_dist(
         "Poisson",
         WrenDists.Poisson(7.0),
         Distributions.Poisson(7.0);
         plaice_zero_allocs=UNIVARIATE_PLAICE,
+        other_ad_testcases=(let f(x) = logdensityof(WrenDists.Poisson(x[1]), 7)
+            ADTestCase(f, [7.0], (), ())
+        end,),
     )
     test_dist(
         "Geometric",
         WrenDists.Geometric(0.3),
         Distributions.Geometric(0.3);
         plaice_zero_allocs=UNIVARIATE_PLAICE,
+        other_ad_testcases=(let f(x) = logdensityof(WrenDists.Geometric(x[1]), 3)
+            ADTestCase(f, [0.3], (), ())
+        end,),
     )
 
     # Additional parameter combos
-    test_dist("Gamma(0.5,3)", WrenDists.Gamma(0.5, 3.0), Distributions.Gamma(0.5, 3.0))
-    test_dist("Gamma(1,1)", WrenDists.Gamma(1.0, 1.0), Distributions.Gamma(1.0, 1.0))
-    test_dist("Beta(0.5,0.5)", WrenDists.Beta(0.5, 0.5), Distributions.Beta(0.5, 0.5))
-    test_dist("Beta(1,1)", WrenDists.Beta(1.0, 1.0), Distributions.Beta(1.0, 1.0))
+    test_dist(
+        "Gamma(0.5,3)",
+        WrenDists.Gamma(0.5, 3.0),
+        Distributions.Gamma(0.5, 3.0);
+        other_ad_testcases=(let f(x) = logdensityof(WrenDists.Gamma(x[1], x[2]), 1.0)
+            ADTestCase(f, [0.5, 3.0], (), ())
+        end,),
+    )
+    test_dist(
+        "Gamma(1,1)",
+        WrenDists.Gamma(1.0, 1.0),
+        Distributions.Gamma(1.0, 1.0);
+        other_ad_testcases=(let f(x) = logdensityof(WrenDists.Gamma(x[1], x[2]), 1.0)
+            ADTestCase(f, [1.0, 1.0], (), ())
+        end,),
+    )
+    test_dist(
+        "Beta(0.5,0.5)",
+        WrenDists.Beta(0.5, 0.5),
+        Distributions.Beta(0.5, 0.5);
+        other_ad_testcases=(let f(x) = logdensityof(WrenDists.Beta(x[1], x[2]), 0.5)
+            ADTestCase(f, [0.5, 0.5], (), ())
+        end,),
+    )
+    test_dist(
+        "Beta(1,1)",
+        WrenDists.Beta(1.0, 1.0),
+        Distributions.Beta(1.0, 1.0);
+        # α != 1 to avoid xlogy(0, x) gradient disagreement across AD backends
+        other_ad_testcases=(let f(x) = logdensityof(WrenDists.Beta(x[1], x[2]), 0.5)
+            ADTestCase(f, [1.5, 1.5], (), ())
+        end,),
+    )
 
     # Multivariate
     μ = [1.0, 2.0]
@@ -262,6 +333,9 @@ const DIRICHLET_PLAICE = (to_vec, from_vec)
         plaice_zero_allocs=MULTIVARIATE_PLAICE,
         # https://github.com/EnzymeAD/Enzyme.jl/issues/1991
         skipped_adtypes=["EnzymeFwd"],
+        other_ad_testcases=(let f(x) = logdensityof(WrenDists.MvNormal(x[1:2], [x[3] 0.0; x[4] x[5]]), [0.5, 0.5])
+            ADTestCase(f, [1.0, 2.0, 1.0, 0.5, 1.0], (), ("EnzymeFwd",))
+        end,),
     )
     σ = [1.0, 2.0]
     test_dist(
@@ -269,12 +343,18 @@ const DIRICHLET_PLAICE = (to_vec, from_vec)
         WrenDists.MvNormal(μ, Diagonal(σ)),
         Distributions.MvNormal(μ, Diagonal(σ .^ 2));
         plaice_zero_allocs=MULTIVARIATE_PLAICE,
+        other_ad_testcases=(let f(x) = logdensityof(WrenDists.MvNormal(x[1:2], Diagonal(x[3:4])), [0.5, 0.5])
+            ADTestCase(f, [1.0, 2.0, 1.0, 2.0], (), ())
+        end,),
     )
     test_dist(
         "MvNormal (isotropic)",
         WrenDists.MvNormal(μ, 2.0 * I),
         Distributions.MvNormal(μ, 4.0 * I);
         plaice_zero_allocs=MULTIVARIATE_PLAICE,
+        other_ad_testcases=(let f(x) = logdensityof(WrenDists.MvNormal(x[1:2], x[3] * I), [0.5, 0.5])
+            ADTestCase(f, [1.0, 2.0, 2.0], (), ())
+        end,),
     )
     test_dist(
         "Dirichlet",
@@ -283,6 +363,10 @@ const DIRICHLET_PLAICE = (to_vec, from_vec)
         plaice_zero_allocs=DIRICHLET_PLAICE,
         # https://github.com/JuliaDiff/ReverseDiff.jl/issues/289
         skipped_adtypes=["ReverseDiff", "ReverseDiffCpl"],
+        # α != 1 to avoid xlogy(0, x) gradient disagreement across AD backends
+        other_ad_testcases=(let f(x) = logdensityof(WrenDists.Dirichlet(x), [0.3, 0.5, 0.2])
+            ADTestCase(f, [2.0, 3.0, 1.5], (), ("ReverseDiff", "ReverseDiffCpl"))
+        end,),
     )
     test_dist(
         "Multinomial",
@@ -291,5 +375,8 @@ const DIRICHLET_PLAICE = (to_vec, from_vec)
         plaice_zero_allocs=MULTIVARIATE_PLAICE,
         # https://github.com/JuliaDiff/ReverseDiff.jl/issues/289
         skipped_adtypes=["ReverseDiff", "ReverseDiffCpl"],
+        other_ad_testcases=(let f(x) = logdensityof(WrenDists.Multinomial(10, x), [2, 3, 5])
+            ADTestCase(f, [0.2, 0.3, 0.5], (), ("ReverseDiff", "ReverseDiffCpl"))
+        end,),
     )
 end
