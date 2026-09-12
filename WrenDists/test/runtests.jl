@@ -56,7 +56,7 @@ function test_dist(
         end
 
         @testset "logdensityof is differentiable wrt sample" begin
-            if (
+            if !(
                 d_wd isa WrenDists.DiscreteUnivariateDist ||
                 d_wd isa WrenDists.DiscreteMultivariateDist
             )
@@ -255,7 +255,7 @@ const DIRICHLET_PLAICE = (to_vec, from_vec)
         Distributions.MvNormal(μ, Σ);
         plaice_zero_allocs=MULTIVARIATE_PLAICE,
         # https://github.com/EnzymeAD/Enzyme.jl/issues/1991
-        skipped_adtypes=("EnzymeFwd"),
+        skipped_adtypes=["EnzymeFwd"],
     )
     σ = [1.0, 2.0]
     test_dist(
@@ -276,7 +276,7 @@ const DIRICHLET_PLAICE = (to_vec, from_vec)
         Distributions.Dirichlet([2.0, 3.0, 1.0]);
         plaice_zero_allocs=DIRICHLET_PLAICE,
         # https://github.com/JuliaDiff/ReverseDiff.jl/issues/289
-        skipped_adtypes=("ReverseDiff", "ReverseDiffCpl"),
+        skipped_adtypes=["ReverseDiff", "ReverseDiffCpl"],
     )
     test_dist(
         "Multinomial",
@@ -284,6 +284,6 @@ const DIRICHLET_PLAICE = (to_vec, from_vec)
         Distributions.Multinomial(10, [0.2, 0.3, 0.5]);
         plaice_zero_allocs=MULTIVARIATE_PLAICE,
         # https://github.com/JuliaDiff/ReverseDiff.jl/issues/289
-        skipped_adtypes=("ReverseDiff", "ReverseDiffCpl"),
+        skipped_adtypes=["ReverseDiff", "ReverseDiffCpl"],
     )
 end
