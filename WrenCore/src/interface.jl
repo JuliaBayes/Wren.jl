@@ -35,6 +35,34 @@ method keeps the evaluation pipeline explicit.
     )
 end
 
+"""
+    reevaluate(
+        model::Model,
+        params::AbstractMatrix{<:VarNamedTuple},
+        accs::AccumulatorTuple=default_accumulators(),
+        fallback::Union{AbstractLatentSource,Nothing}=nothing,
+    )
+
+Evaluate `model` once for each entry of `params`, taking every latent variable's value from
+that entry. Returns a matrix of `(retval, accs)` tuples sharing `params`' axes.
+
+A variable absent from an entry is taken from `fallback`, or raises an error when `fallback`
+is `nothing`.
+
+`accs` is a template: each evaluation gets its own accumulators via [`reset`](@ref), so
+results never alias one another.
+"""
+function reevaluate(
+    model::Model,
+    params::AbstractMatrix{<:VarNamedTuple},
+    accs::AccumulatorTuple=default_accumulators(),
+    fallback::Union{AbstractLatentSource,Nothing}=nothing,
+)
+    return map(params) do vnt
+        evaluate(model, FromParams(vnt, fallback), OriginalSpace(), map(reset, accs))
+    end
+end
+
 function Base.rand(rng::AbstractRNG, model::Model)
     _, accs = evaluate(
         model,
@@ -101,6 +129,35 @@ end
 `model | values` is an alias for [`condition(model, values)`](@ref).
 """
 Base.:|(model::Model, values::VarNamedTuple) = condition(model, values)
+
+"""
+    decondition(model::Model, vns::VarName...)::Model
+
+Remove `vns` from the set of variables that `model` is conditioned on, returning a new
+model. A variable is removed if it is subsumed by any of `vns`, so `decondition(model,
+@vn(x))` also removes `x[1]` and `x.a`. With no `vns`, every conditioned variable is
+removed.
+
+Variables observed with `@observe` are part of the model's structure rather than its
+conditioning, and are unaffected.
+"""
+function decondition(model::Model, vns::VarName...)
+    old = conditioned(model)
+    new_conditioned = if isempty(vns)
+        VarNamedTuple()
+    else
+        kept = [vn for (vn, _) in pairs(old) if !any(v -> VarNames.subsumes(v, vn), vns)]
+        VarNames.subset(old, kept)
+    end
+    return Model(
+        model.name,
+        model.args,
+        model.stmts,
+        model.mod;
+        conditioned=new_conditioned,
+        evaluation_fn=model.evaluation_fn,
+    )
+end
 
 """
     logjoint(model::Model, params::VarNamedTuple)

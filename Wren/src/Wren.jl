@@ -7,6 +7,10 @@ include("samplers/prior.jl")
 include("samplers/nuts.jl")
 export prior, nuts
 
+# Post-processing
+include("predict.jl")
+export predict
+
 # Re-exports
 using WrenCore:
     WrenCore,
@@ -19,6 +23,7 @@ using WrenCore:
     # Models
     Model,
     condition,
+    decondition,
     rand_with_logp,
     logjoint,
     logprior,
@@ -50,6 +55,7 @@ export WrenCore,
     # Models
     Model,
     condition,
+    decondition,
     rand_with_logp,
     logjoint,
     logprior,
