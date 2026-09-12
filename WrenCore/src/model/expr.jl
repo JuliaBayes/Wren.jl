@@ -164,6 +164,21 @@ lower_to_wren(expr, ::Module, ::Bool=false) = expr
 _is_macrocall(expr, name::Symbol) = Meta.isexpr(expr, :macrocall) && expr.args[1] == name
 _macro_args(expr::Expr) = filter(a -> !(a isa LineNumberNode), expr.args[2:end])
 
+# Error if `@observe`'s own macro arguments hold more than the single `lhs ~ rhs`
+# expression -- typically a `size=...` that ends up bound to `@observe` because
+# `@iid` isn't the innermost macro, e.g. `@iid @observe lhs ~ rhs size=N`.
+function _check_observe_args(expr::Expr)
+    args = _macro_args(expr)
+    length(args) <= 1 && return nothing
+    for arg in args
+        arg isa Expr &&
+            arg.head == :(=) &&
+            arg.args[1] == :size &&
+            error("@observe: invalid `size` argument, use `@iid` as the innermost macro")
+    end
+    error("@observe: unexpected argument(s) `$(args[2:end])`")
+end
+
 # Lower the `lhs ~ rhs` inside `@observe lhs ~ rhs` into an `Observe` node.
 function _lower_observe(observed_expr, mod::Module)
     if !(
@@ -172,12 +187,6 @@ function _lower_observe(observed_expr, mod::Module)
         observed_expr.args[1] == :~
     )
         error("@observe: expected an expression of the form `value ~ distribution`")
-    end
-    for arg in _macro_args(observed_expr)
-        arg.args[1] == :size &&
-            error(
-                "@observe: invalid `size` argument, uses `@iid` as the innermost macro"
-            )
     end
     length(observed_expr.args) == 3 || error("@observe: expected ~ to have 2 arguments")
     lhs, rhs = observed_expr.args[2:3]
@@ -211,6 +220,7 @@ function lower_to_wren(expr::Expr, mod::Module, statement_position::Bool=false)
             size_expr, inner = _iid_args(observed_expr)
             return IID(_lower_observe(inner, mod), size_expr)
         end
+        _check_observe_args(expr)
         return _lower_observe(observed_expr, mod)
     end
 
@@ -219,6 +229,7 @@ function lower_to_wren(expr::Expr, mod::Module, statement_position::Bool=false)
         size_expr, inner = _iid_args(expr)
         if _is_macrocall(inner, Symbol("@observe"))
             # @iid @observe lhs ~ rhs
+            _check_observe_args(inner)
             return IID(_lower_observe(last(inner.args), mod), size_expr)
         end
         # @iid lhs ~ rhs
@@ -347,7 +358,8 @@ function _wren_expr_to_model_expr(stmt::Batch)
     push!(args, for_expr)
     return Expr(:macrocall, args...)
 end
-_tilde_expr(stmt::{<:Union{Sample,Observe}}) = Expr(:call, :~, stmt.lhs, _wren_expr_to_model_expr(stmt.rhs))
+_tilde_expr(stmt::Union{Sample,Observe}) =
+    Expr(:call, :~, stmt.lhs, _wren_expr_to_model_expr(stmt.rhs))
 
 function _wren_expr_to_model_expr(stmt::Sample)
     return _tilde_expr(stmt)
