@@ -276,10 +276,7 @@ const DIRICHLET_PLAICE = (to_vec, from_vec)
         Distributions.Dirichlet([2.0, 3.0, 1.0]);
         plaice_zero_allocs=DIRICHLET_PLAICE,
         # https://github.com/JuliaDiff/ReverseDiff.jl/issues/289
-        skipped_adtypes=(
-            "ReverseDiff",
-            "ReverseDiffCpl",
-        ),
+        skipped_adtypes=("ReverseDiff", "ReverseDiffCpl"),
     )
     test_dist(
         "Multinomial",
