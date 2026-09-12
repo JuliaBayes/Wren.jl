@@ -2,6 +2,7 @@ using WrenDists
 using WrenDists: logdensityof
 using WrenCore: WrenCore
 import DifferentiationInterface as DI
+import DifferentiationInterfaceTest as DIT
 using Distributions
 using ForwardDiff
 using ReverseDiff
@@ -14,7 +15,6 @@ using Test
 include("plaice.jl")
 
 const TESTED_ADTYPES = (
-    "ForwardDiff" => DI.AutoForwardDiff(),
     "ReverseDiff" => DI.AutoReverseDiff(),
     "ReverseDiffCpl" => DI.AutoReverseDiff(; compile=true),
     "MooncakeFwd" => DI.AutoMooncakeForward(),
@@ -22,13 +22,19 @@ const TESTED_ADTYPES = (
     "EnzymeFwd" => DI.AutoEnzyme(; mode=Enzyme.Forward),
     "EnzymeRvs" => DI.AutoEnzyme(; mode=Enzyme.Reverse),
 )
+const REF_ADTYPE = DI.AutoForwardDiff()
 
-function logp_from_uncons(y, dist)
-    finv = Plaice.from_unconstrained_vec(dist)
-    x = finv(y)
-    # Just checking that the logdensity is differentiable, so no need to include the
-    # Jacobian
-    return logdensityof(dist, x)
+function make_logp_from_sample_scenario(dist)
+    function logp_from_uncons(y, dist)
+        finv = Plaice.from_unconstrained_vec(dist)
+        x = finv(y)
+        # Just checking that the logdensity is differentiable, so no need to include the
+        # Jacobian
+        return logdensityof(dist, x)
+    end
+    f = Base.Fix2(logp_from_uncons, dist)
+    y = randn(Xoshiro(468), Plaice.unconstrained_vec_length(dist))
+    return DIT.compute_results(DIT.Scenario{:gradient, :out}(f, y), REF_ADTYPE)
 end
 
 const RUN_REACTANT = !Sys.iswindows()
@@ -44,6 +50,7 @@ function test_dist(
     plaice_zero_allocs=(),
     test_batched=true,
     skipped_adtypes=(),
+    other_ad_functions=(),
 )
     @testset "$name" begin
         rng = Xoshiro(468)
@@ -60,33 +67,15 @@ function test_dist(
                 d_wd isa WrenDists.DiscreteUnivariateDist ||
                 d_wd isa WrenDists.DiscreteMultivariateDist
             )
-                ref_adtype = DI.AutoForwardDiff()
-                y = randn(rng, Plaice.unconstrained_vec_length(d_wd))
-                ref_prep =
-                    DI.prepare_gradient(logp_from_uncons, ref_adtype, y, DI.Constant(d_wd))
-                @testset "$adtype_name" for (adtype_name, adtype) in TESTED_ADTYPES
-                    adtype == ref_adtype || adtype_name in skipped_adtypes && continue
-                    prep =
-                        DI.prepare_gradient(logp_from_uncons, adtype, y, DI.Constant(d_wd))
-                    for _ in 1:10
-                        y = rand(rng, Plaice.unconstrained_vec_length(d_wd))
-                        g_ref = DI.gradient(
-                            logp_from_uncons,
-                            ref_prep,
-                            ref_adtype,
-                            y,
-                            DI.Constant(d_wd),
-                        )
-                        g = DI.gradient(
-                            logp_from_uncons,
-                            prep,
-                            adtype,
-                            y,
-                            DI.Constant(d_wd),
-                        )
-                        @test isapprox(g, g_ref; rtol=1e-6, atol=1e-6)
-                    end
-                end
+                scen = make_logp_from_sample_scenario(d_wd)
+                backends = [adtype for (name, adtype) in TESTED_ADTYPES if !(name in skipped_adtypes)]
+                DIT.test_differentiation(backends, [scen])
+            end
+        end
+
+        @testset "logdensityof is differentiable wrt params" begin
+            for func in other_ad_functions
+                @test true
             end
         end
 
