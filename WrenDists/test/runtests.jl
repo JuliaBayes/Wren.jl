@@ -32,6 +32,7 @@ function make_logp_from_sample_scenario(dist)
         # Jacobian
         return logdensityof(dist, x)
     end
+    # have to use Fix2 because of a DIT dispatch bug
     f = Base.Fix2(logp_from_uncons, dist)
     y = randn(Xoshiro(468), Plaice.unconstrained_vec_length(dist))
     return DIT.compute_results(DIT.Scenario{:gradient, :out}(f, y), REF_ADTYPE)
