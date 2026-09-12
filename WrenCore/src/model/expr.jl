@@ -54,7 +54,6 @@ struct IID{T<:Union{Sample,Observe},S} <: AbstractWrenExpr
     tilde::T
     size::S
 end
-IID(tilde::Union{Sample,Observe}) = IID(tilde, nothing)
 
 """
     Batch
@@ -173,6 +172,12 @@ function _lower_observe(observed_expr, mod::Module)
         observed_expr.args[1] == :~
     )
         error("@observe: expected an expression of the form `value ~ distribution`")
+    end
+    for arg in _macro_args(observed_expr)
+        arg.args[1] == :size &&
+            error(
+                "@observe: invalid `size` argument, uses `@iid` as the innermost macro"
+            )
     end
     length(observed_expr.args) == 3 || error("@observe: expected ~ to have 2 arguments")
     lhs, rhs = observed_expr.args[2:3]
@@ -342,7 +347,7 @@ function _wren_expr_to_model_expr(stmt::Batch)
     push!(args, for_expr)
     return Expr(:macrocall, args...)
 end
-_tilde_expr(stmt) = Expr(:call, :~, stmt.lhs, _wren_expr_to_model_expr(stmt.rhs))
+_tilde_expr(stmt::{<:Union{Sample,Observe}}) = Expr(:call, :~, stmt.lhs, _wren_expr_to_model_expr(stmt.rhs))
 
 function _wren_expr_to_model_expr(stmt::Sample)
     return _tilde_expr(stmt)
