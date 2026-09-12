@@ -18,7 +18,6 @@ VarNames = "09a315b2-63fc-4165-8d7f-d59368e770cc"
 WrenCore = "008b59e7-bbda-4991-901b-b08f5cfc584d"
 
 [sources]
-Plaice = {rev = "pm", url = "https://github.com/JuliaBayes/Plaice.jl"}
 WrenCore = {path = ".."}
 
 [compat]

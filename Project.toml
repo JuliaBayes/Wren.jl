@@ -1,2 +1,2 @@
 [workspace]
-projects = ["WrenCore", "Wren", "WrenDists", "docs", "bench"]
+projects = ["WrenCore", "Wren", "WrenDists", "WrenDists/test", "docs", "bench"]

@@ -29,15 +29,12 @@ Mooncake = "da2b9cff-9c12-43a0-ae48-6db2b0edb7d6"
 Reactant = "3c362404-f566-11ee-1572-e11a4b42c853"
 WrenDists = "2ad4af40-d7c9-42b2-92b0-e09d37d1e75a"
 
-[sources]
-Plaice = {rev = "pm", url = "https://github.com/JuliaBayes/Plaice.jl"}
-
 [extensions]
 WrenCoreDistributionsExt = ["Distributions", "FillArrays", "Plaice"]
 WrenCoreEnzymeExt = ["Enzyme", "DifferentiationInterface"]
 WrenCoreMooncakeExt = ["Mooncake"]
 WrenCoreReactantExt = ["ADTypes", "Enzyme", "Reactant"]
-WrenCoreWrenDistsExt = "WrenDists"
+WrenCoreWrenDistsExt = ["WrenDists"]
 
 [compat]
 ADTypes = "1"
@@ -46,12 +43,13 @@ Chairmarks = "1"
 DensityInterface = "0.4"
 DifferentiationInterface = "0.7"
 DocStringExtensions = "0.9"
-EnzymeCore = "0.6 - 0.8"
 Enzyme = "0.13"
+EnzymeCore = "0.6 - 0.8"
 FillArrays = "1"
 LinearAlgebra = "1"
 LogDensityProblems = "2"
 Mooncake = "0.4, 0.5"
+Plaice = "0.1.0"
 Preferences = "1"
 Random = "1"
 Reactant = "0.2"
