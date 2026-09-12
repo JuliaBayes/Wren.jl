@@ -104,7 +104,7 @@ end
 
 # `@iid lhs ~ rhs` (or the `@observe` variants) means `lhs ~ iid(rhs, size(lhs))`: one
 # array-valued distribution of independent draws from `rhs`, with the same shape as the
-# current value of `lhs`. If lhs is undefined, `@iid lhs ~ rhs size=dims` can be used
+# current value of `lhs`. If `lhs` is undefined, `@iid lhs ~ rhs size=dims` can be used
 # to set `dims`. We rewrite the wrapped tilde-statement's right-hand side and then emit
 # it exactly as we would a plain `Sample` or `Observe`.
 function emit_model_expr(stmt::IID, accs, conditioned, latent_source, parameter_space)
