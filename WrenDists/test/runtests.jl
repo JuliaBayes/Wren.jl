@@ -22,6 +22,7 @@ const TESTED_ADTYPES = (
     "EnzymeFwd" => DI.AutoEnzyme(; mode=Enzyme.Forward),
     "EnzymeRvs" => DI.AutoEnzyme(; mode=Enzyme.Reverse),
 )
+const REF_ADTYPE = DI.AutoForwardDiff()
 
 function logp_from_uncons(y, dist)
     finv = Plaice.from_unconstrained_vec(dist)
@@ -37,6 +38,25 @@ if RUN_REACTANT
     include("reactant.jl")
 end
 
+# TODO(penelopeysm): use DIT.Scenario for this when the following is fixed:
+# https://github.com/JuliaDiff/DifferentiationInterface.jl/issues/1069
+struct ADTestCase{F,X,C,S}
+    f::F
+    x::X
+    contexts::C
+    skipped_adtypes::S
+end
+function test_ad(t::ADTestCase)
+    ref_prep = DI.prepare_gradient(t.f, REF_ADTYPE, t.x, t.contexts...)
+    g_ref = DI.gradient(t.f, ref_prep, REF_ADTYPE, t.x, t.contexts...)
+    @testset "$adtype_name" for (adtype_name, adtype) in TESTED_ADTYPES
+        adtype == REF_ADTYPE || adtype_name in t.skipped_adtypes && continue
+        prep = DI.prepare_gradient(t.f, adtype, t.x, t.contexts...)
+        g = DI.gradient(t.f, prep, adtype, t.x, t.contexts...)
+        @test isapprox(g, g_ref; rtol=1e-6, atol=1e-6)
+    end
+end
+
 function test_dist(
     name,
     d_wd,
@@ -44,6 +64,7 @@ function test_dist(
     plaice_zero_allocs=(),
     test_batched=true,
     skipped_adtypes=(),
+    other_ad_testcases=(),
 )
     @testset "$name" begin
         rng = Xoshiro(468)
@@ -60,33 +81,15 @@ function test_dist(
                 d_wd isa WrenDists.DiscreteUnivariateDist ||
                 d_wd isa WrenDists.DiscreteMultivariateDist
             )
-                ref_adtype = DI.AutoForwardDiff()
-                y = randn(rng, Plaice.unconstrained_vec_length(d_wd))
-                ref_prep =
-                    DI.prepare_gradient(logp_from_uncons, ref_adtype, y, DI.Constant(d_wd))
-                @testset "$adtype_name" for (adtype_name, adtype) in TESTED_ADTYPES
-                    adtype == ref_adtype || adtype_name in skipped_adtypes && continue
-                    prep =
-                        DI.prepare_gradient(logp_from_uncons, adtype, y, DI.Constant(d_wd))
-                    for _ in 1:10
-                        y = rand(rng, Plaice.unconstrained_vec_length(d_wd))
-                        g_ref = DI.gradient(
-                            logp_from_uncons,
-                            ref_prep,
-                            ref_adtype,
-                            y,
-                            DI.Constant(d_wd),
-                        )
-                        g = DI.gradient(
-                            logp_from_uncons,
-                            prep,
-                            adtype,
-                            y,
-                            DI.Constant(d_wd),
-                        )
-                        @test isapprox(g, g_ref; rtol=1e-6, atol=1e-6)
-                    end
-                end
+                f = logp_from_uncons
+                x = rand(rng, Plaice.unconstrained_vec_length(d_wd))
+                test_ad(ADTestCase(f, x, (DI.Constant(d_wd),), skipped_adtypes))
+            end
+        end
+
+        @testset "logdensityof is differentiable wrt params" begin
+            for t in other_ad_testcases
+                test_ad(t)
             end
         end
 
@@ -153,6 +156,9 @@ const DIRICHLET_PLAICE = (to_vec, from_vec)
         WrenDists.Normal(1.0, 2.0),
         Distributions.Normal(1.0, 2.0);
         plaice_zero_allocs=UNIVARIATE_PLAICE,
+        other_ad_testcases=(let f(x) = logdensityof(WrenDists.Normal(x[1], x[2]), 1.0)
+            ADTestCase(f, [1.0, 2.0], (), ())
+        end,),
     )
     test_dist(
         "Laplace",
