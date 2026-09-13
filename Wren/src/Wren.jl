@@ -3,6 +3,7 @@ module Wren
 using WrenCore
 
 # Samplers
+include("samplers/progress.jl")
 include("samplers/prior.jl")
 include("samplers/nuts.jl")
 export prior, nuts

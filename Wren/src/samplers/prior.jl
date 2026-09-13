@@ -3,7 +3,7 @@ using FlexiChains: VNChain
 
 # only for from_samples... could we remove this as a dep in FlexiChains?
 using AbstractMCMC: AbstractMCMC
-using Term.Progress: ProgressBar, addjob!, update!, start!, stop!, render
+using MCMCProgress: Determinate, advance!, chain, closephase!, openphase!
 
 """
     prior(
@@ -31,47 +31,13 @@ function prior(
     nchains::Integer=1;
     progress::Bool=true,
 )
-    if progress
-        t = time()
-    end
-
     copy!(Random.TaskLocalRNG(), rng)
 
-    if progress
-        pbar = ProgressBar(; columns=:default, transient=false)
-        jobs = [addjob!(pbar; N=niters, description="Chain $j/$nchains") for j in 1:nchains]
-        progress_channel = Channel{Tuple{Int,Int}}(nchains * 2)
-        update_every = max(1, niters ÷ 100)
-    end
-
-    tasks = [
-        Threads.@spawn begin
-            chain_draws = Vector{Draw}(undef, niters)
-            for i in 1:niters
-                chain_draws[i] = Draw(FromPrior(Random.TaskLocalRNG()), model)
-                if progress && i % update_every == 0
-                    put!(progress_channel, (j, i))
-                end
-            end
-            if progress && niters % update_every != 0
-                put!(progress_channel, (j, niters))
-            end
-            chain_draws
-        end for j in 1:nchains
-    ]
-
-    if progress
-        start!(pbar)
-        chains_done = 0
-        while chains_done < nchains
-            (j, i) = take!(progress_channel)
-            update!(jobs[j]; i=i)
-            render(pbar)
-            if i == niters
-                chains_done += 1
-            end
-        end
-        stop!(pbar)
+    t = time()
+    label = "Sampling $(model.name) from the prior"
+    draws = withprogress(progress, label, nchains) do run
+        tasks = [Threads.@spawn _prior_chain(model, niters, run, j) for j in 1:nchains]
+        reduce(hcat, fetch.(tasks))
     end
 
     if progress
@@ -79,10 +45,26 @@ function prior(
         t = time()
         print("Constructing chain... ")
     end
-    draws = reduce(hcat, fetch.(tasks))
     chn = AbstractMCMC.from_samples(VNChain, draws)
     if progress
         println("took $(round(time() - t, digits=2)) seconds")
     end
     return chn
+end
+
+# Draw one chain, reporting it as chain `j` of `run`. A `nothing` run means no
+# display was asked for, so nothing is reported.
+function _prior_chain(model::WrenCore.Model, niters::Integer, run, j::Integer)
+    phase = if run === nothing
+        nothing
+    else
+        openphase!(chain(run, j), "Sampling", Determinate(niters))
+    end
+    chain_draws = Vector{Draw}(undef, niters)
+    for i in 1:niters
+        chain_draws[i] = Draw(FromPrior(Random.TaskLocalRNG()), model)
+        phase === nothing || advance!(phase, i)
+    end
+    phase === nothing || closephase!(phase)
+    return chain_draws
 end
