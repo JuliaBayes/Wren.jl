@@ -22,6 +22,12 @@ SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 Wren = "bcabdda7-19af-429b-97ac-a6b557ca0f6c"
 WrenCore = "008b59e7-bbda-4991-901b-b08f5cfc584d"
+WrenDists = "2ad4af40-d7c9-42b2-92b0-e09d37d1e75a"
+
+[sources]
+Wren = {path = "../Wren"}
+WrenCore = {path = "../WrenCore"}
+WrenDists = {path = "../WrenDists"}
 
 [compat]
 ADTypes = "1.24"

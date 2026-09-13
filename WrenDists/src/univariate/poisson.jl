@@ -75,3 +75,18 @@ end
     T = noisetype(d)
     return _poisson_quantile(T, d, rand(rng, T))
 end
+
+# --- Batched Poisson ---
+
+struct BatchedPoisson{L<:AbstractArray} <: DiscreteBatchedUnivariate
+    λ::L
+end
+Base.size(d::BatchedPoisson) = size(d.λ)
+Base.rand(rng::AbstractRNG, d::BatchedPoisson) = rand.(Ref(rng), Poisson.(d.λ))
+function DensityInterface.logdensityof(d::BatchedPoisson, x)
+    s = _zero_logdensity(d, x)
+    @inbounds for i in eachindex(x, d.λ)
+        s += xlogy(x[i], d.λ[i]) - d.λ[i] - loggamma(x[i] + one(x[i]))
+    end
+    return s
+end

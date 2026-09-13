@@ -39,3 +39,21 @@ end
     end
     return s
 end
+
+# --- Batched Binomial ---
+
+struct BatchedBinomial{N<:AbstractArray,P<:AbstractArray} <: DiscreteBatchedUnivariate
+    n::N
+    p::P
+end
+Base.size(d::BatchedBinomial) = size(d.p)
+Base.rand(rng::AbstractRNG, d::BatchedBinomial) = rand.(Ref(rng), Binomial.(d.n, d.p))
+function DensityInterface.logdensityof(d::BatchedBinomial, x)
+    s = _zero_logdensity(d, x)
+    T = typeof(s)
+    @inbounds for i in eachindex(x, d.n, d.p)
+        n, k, p = convert(T, d.n[i]), convert(T, x[i]), convert(T, d.p[i])
+        s += logbinom(n, k) + xlogy(k, p) + xlogy(n - k, one(T) - p)
+    end
+    return s
+end

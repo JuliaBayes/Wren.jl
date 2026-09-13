@@ -495,4 +495,75 @@ const DIRICHLET_PLAICE = (to_vec, from_vec)
             end,
         ),
     )
+    # Specialized: batched univariate distributions
+    test_dist(
+        "BatchedBernoulli",
+        WrenDists.BatchedBernoulli([0.2, 0.5, 0.8]),
+        Distributions.product_distribution(Distributions.Bernoulli.([0.2, 0.5, 0.8]));
+        test_batched=false,
+        other_ad_testcases=(
+            let
+                f(x) = logdensityof(WrenDists.BatchedBernoulli(x), [1.0, 0.0, 1.0])
+                ADTestCase(f, [0.2, 0.5, 0.8], (), ())
+            end,
+        ),
+    )
+    test_dist(
+        "BatchedBinomial",
+        WrenDists.BatchedBinomial([5, 10, 20], [0.2, 0.5, 0.8]),
+        Distributions.product_distribution(
+            Distributions.Binomial.([5, 10, 20], [0.2, 0.5, 0.8]),
+        );
+        test_batched=false,
+        other_ad_testcases=(
+            let
+                f(x) = logdensityof(
+                    WrenDists.BatchedBinomial([5, 10, 20], x),
+                    [1.0, 4.0, 15.0],
+                )
+                ADTestCase(f, [0.2, 0.5, 0.8], (), ())
+            end,
+        ),
+    )
+    test_dist(
+        "BatchedPoisson",
+        WrenDists.BatchedPoisson([1.0, 3.0, 7.0]),
+        Distributions.product_distribution(Distributions.Poisson.([1.0, 3.0, 7.0]));
+        test_batched=false,
+        other_ad_testcases=(
+            let
+                f(x) = logdensityof(WrenDists.BatchedPoisson(x), [1.0, 2.0, 8.0])
+                ADTestCase(f, [1.0, 3.0, 7.0], (), ())
+            end,
+        ),
+    )
+    test_dist(
+        "BatchedExponential",
+        WrenDists.BatchedExponential([0.5, 1.0, 2.0]),
+        Distributions.product_distribution(Distributions.Exponential.([0.5, 1.0, 2.0]));
+        test_batched=false,
+        other_ad_testcases=(
+            let
+                f(x) = logdensityof(WrenDists.BatchedExponential(x), [0.5, 0.5, 0.5])
+                ADTestCase(f, [0.5, 1.0, 2.0], (), ())
+            end,
+        ),
+    )
+    test_dist(
+        "BatchedLogNormal",
+        WrenDists.BatchedLogNormal([0.1, 0.5, 1.0], [0.3, 0.7, 1.2]),
+        Distributions.product_distribution(
+            Distributions.LogNormal.([0.1, 0.5, 1.0], [0.3, 0.7, 1.2]),
+        );
+        test_batched=false,
+        other_ad_testcases=(
+            let
+                f(x) = logdensityof(
+                    WrenDists.BatchedLogNormal(x[1:3], x[4:6]),
+                    [1.5, 1.5, 1.5],
+                )
+                ADTestCase(f, [0.1, 0.5, 1.0, 0.3, 0.7, 1.2], (), ())
+            end,
+        ),
+    )
 end

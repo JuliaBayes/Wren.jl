@@ -21,6 +21,7 @@ abstract type DiscreteMultivariateDist <: MultivariateDist end
 
 # Independent products (needs abstract types above)
 include("independent.jl")
+include("batched.jl")
 
 # Univariate continuous
 include("univariate/normal.jl")

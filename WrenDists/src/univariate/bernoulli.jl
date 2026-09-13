@@ -28,3 +28,24 @@ end
     u = rand(rng, noisetype(d))
     return select(u < d.p, () -> one(T), () -> zero(T))
 end
+
+# --- Batched Bernoulli ---
+
+struct BatchedBernoulli{P<:AbstractArray} <: DiscreteBatchedUnivariate
+    p::P
+end
+Base.size(d::BatchedBernoulli) = size(d.p)
+function Base.rand(rng::AbstractRNG, d::BatchedBernoulli)
+    T = float(eltype(d.p))
+    return T.(rand(rng, noisetype(d), size(d)) .< d.p)
+end
+function DensityInterface.logdensityof(d::BatchedBernoulli, x)
+    s = _zero_logdensity(d, x)
+    T = typeof(s)
+    @inbounds for i in eachindex(x, d.p)
+        xi = convert(T, x[i])
+        p = convert(T, d.p[i])
+        s += ifelse(xi == one(T), log(p), ifelse(xi == zero(T), log1p(-p), T(-Inf)))
+    end
+    return s
+end

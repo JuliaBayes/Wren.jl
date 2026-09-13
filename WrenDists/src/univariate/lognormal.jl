@@ -29,3 +29,24 @@ end
 
 # Apply `μ` and `σ` after drawing noise so automatic differentiation can follow them.
 @inline Base.rand(rng::AbstractRNG, d::LogNormal) = xval(d, randn(rng, noisetype(d)))
+
+# --- Batched LogNormal ---
+
+struct BatchedLogNormal{M<:AbstractArray,S<:AbstractArray} <: BatchedUnivariate
+    μ::M
+    σ::S
+end
+Base.size(d::BatchedLogNormal) = size(d.μ)
+function Base.rand(rng::AbstractRNG, d::BatchedLogNormal)
+    return exp.(randn(rng, noisetype(d), size(d)) .* d.σ .+ d.μ)
+end
+function DensityInterface.logdensityof(d::BatchedLogNormal, x)
+    s = _zero_logdensity(d, x)
+    @inbounds for i in eachindex(x, d.μ, d.σ)
+        lx = log(x[i])
+        z = (lx - d.μ[i]) / d.σ[i]
+        s -= abs2(z) / 2 + log(d.σ[i]) + lx
+    end
+    return s - length(x) * log2π / 2
+end
+Plaice.scalar_to_scalar_bijector(::BatchedLogNormal) = Plaice.Log(0.0, 1)
