@@ -19,6 +19,7 @@
 # formulation, but it matches what a sampler currently pays.
 #
 # `WREN_BENCH_NS` is a comma-separated list of N values (default 100,1000,10000,100000,1000000).
+# `WREN_BENCH_ELTYPE` is `Float64` (default) or `Float32`.
 # `WREN_BENCH_BACKENDS` is a comma-separated subset of `enzyme,reactant`. By default both
 # run, unless Reactant has a GPU, in which case only `reactant` runs so that GPU time is
 # not spent on CPU benchmarks.
@@ -32,6 +33,9 @@ using Reactant: Reactant, @trace
 using Statistics: median
 
 const NS = parse.(Int, split(get(ENV, "WREN_BENCH_NS", "100,1000,10000,100000,1000000"), ","))
+const ELTYPE = Dict("Float64" => Float64, "Float32" => Float32)[get(ENV, "WREN_BENCH_ELTYPE", "Float64")]
+# Sums over up to 1e6 elements in Float32 differ noticeably between reduction orders.
+const RTOL = max(1e-6, 1000 * eps(ELTYPE))
 
 _on_gpu() = any(d -> Reactant.XLA.device_kind(d) != "cpu", Reactant.devices())
 const BACKENDS = split(
@@ -71,10 +75,10 @@ _host(x::Reactant.ConcreteRNumber{T}) where {T} = T(x)
 _host(x::Number) = x
 
 function _check(name, N, backend, val, grad, ref_val, ref_grad)
-    isapprox(_host(val), ref_val; rtol=1e-6) ||
+    isapprox(_host(val), ref_val; rtol=RTOL) ||
         @warn "value mismatch" backend name N _host(val) ref_val
     for (g, rg) in zip(grad, ref_grad)
-        isapprox(Array(g), rg; rtol=1e-5) || @warn "gradient mismatch" backend name N
+        isapprox(Array(g), rg; rtol=RTOL) || @warn "gradient mismatch" backend name N
     end
 end
 
@@ -108,7 +112,8 @@ end
 
 const TIMERS = Dict("enzyme" => time_enzyme, "reactant" => time_reactant)
 
-# `make_inputs(rng, N)` returns `(params::Tuple, x)` for size `N`. `reference` is the
+# `make_inputs(rng, T, N)` returns `(params::Tuple, x)` of element type `T` for size `N`.
+# `reference` is the
 # variant that is run under plain Enzyme on the CPU to check the others against.
 function print_status()
     deps = Pkg.dependencies()
@@ -127,6 +132,7 @@ function print_status()
     end
     println("Backends:         ", join(BACKENDS, ", "))
     println("Sizes:            ", join(NS, ", "))
+    println("Element type:     ", ELTYPE)
     if "reactant" in BACKENDS
         # Fixed per-call costs on this device: dispatching a trivial compiled function,
         # and additionally reading one scalar back to the host.
@@ -148,7 +154,7 @@ function run_variants(variants, make_inputs, reference)
     end
     println()
     for N in NS
-        params, x = make_inputs(Xoshiro(468), N)
+        params, x = make_inputs(Xoshiro(468), ELTYPE, N)
         ref_val, ref_grad = ValueAndGrad(reference)(params, x)
         for (name, variant) in variants
             @printf("%-20s %9d", name, N)
