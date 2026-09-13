@@ -153,8 +153,6 @@ const MULTIVARIATE_PLAICE = (to_vec, from_vec, to_unconstrained_vec, from_uncons
 const DIRICHLET_PLAICE = (to_vec, from_vec)
 
 @testset "WrenDists" begin
-    #=
-
     # Continuous unconstrained
     test_dist(
         "Normal",
@@ -382,7 +380,6 @@ const DIRICHLET_PLAICE = (to_vec, from_vec)
             ADTestCase(f, [0.2, 0.3, 0.5], (), ("ReverseDiff", "ReverseDiffCpl"))
         end,),
     )
-    =#
 
     # --- Batched distributions ---
 
