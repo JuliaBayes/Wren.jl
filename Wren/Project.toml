@@ -23,7 +23,7 @@ WrenDists = "2ad4af40-d7c9-42b2-92b0-e09d37d1e75a"
 
 [sources]
 FlexiChains = {rev = "v0.7", url = "https://github.com/JuliaBayes/FlexiChains.jl"}
-MCMCProgress = {path = "/Users/simonsteiger/.julia/dev/MCMCProgress.jl"}
+MCMCProgress = {rev = "main", url = "https://github.com/simonsteiger/MCMCProgress.jl"}
 WrenCore = {path = "../WrenCore"}
 WrenDists = {path = "../WrenDists"}
 
@@ -36,6 +36,7 @@ Enzyme = "0.13"
 EnzymeCore = "0.6 - 0.8"
 FlexiChains = "0.7"
 LinearAlgebra = "1"
+MCMCProgress = "1.0.0"
 Random = "1"
 Reexport = "1"
 StatsAPI = "1"
