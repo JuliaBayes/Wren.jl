@@ -20,12 +20,8 @@ Plaice.to_unconstrained_vec(d::DiagNormal) = Plaice.Vec(size(d.mu))
 Base.rand(rng::Random.AbstractRNG, d::DiagNormal) =
     randn(rng, size(d.mu)) .* d.sigma .+ d.mu
 @inline function WrenCore.logdensityof(d::DiagNormal, x)
-    s = zero(eltype(x))
-    @inbounds for i in eachindex(x, d.mu, d.sigma)
-        z = (x[i] - d.mu[i]) / d.sigma[i]
-        s += z * z + 2 * log(d.sigma[i])
-    end
-    return -0.5 * s - 0.5 * length(d.mu) * log(2π)
+    z = (x .- d.mu) ./ d.sigma
+    return -0.5 * sum(abs2, z) - sum(log, d.sigma) - 0.5 * length(d.mu) * log(2π)
 end
 function WrenCore.batched(
     iters,
@@ -38,15 +34,19 @@ function WrenCore.batched(
     return DiagNormal(indexed_mu.data, indexed_sigma.data)
 end
 
-struct IsoNormal{M<:AbstractArray}
+struct IsoNormal{M<:AbstractArray,S<:Number}
     mu::M
+    sigma::S
 end
+IsoNormal(mu::AbstractArray) = IsoNormal(mu, one(eltype(mu)))
 Plaice.from_unconstrained_vec(d::IsoNormal) = Plaice.Reshape(size(d.mu))
 Plaice.to_unconstrained_vec(d::IsoNormal) = Plaice.Vec(size(d.mu))
-Base.rand(rng::Random.AbstractRNG, d::IsoNormal) = randn(rng, size(d.mu)) .+ d.mu
+Base.rand(rng::Random.AbstractRNG, d::IsoNormal) = randn(rng, size(d.mu)) .* d.sigma .+ d.mu
 function WrenCore.logdensityof(d::IsoNormal, x)
-    dist = sum(abs2, x .- d.mu)
-    return -0.5 * dist - 0.5 * length(d.mu) * log(2π)
+    inv_sigma = inv(d.sigma)
+    dist = sum(abs2, (x .- d.mu) .* inv_sigma)
+    N = length(d.mu)
+    return -0.5 * dist - N * log(d.sigma) - 0.5 * N * log(2π)
 end
 function WrenCore.batched(iters, ::Val{Normal}, indexed_mu::WrenCore.Indexed; _kwargs...)
     # e.g. batched(1:10, Val(Normal), Indexed(x[1:10]))

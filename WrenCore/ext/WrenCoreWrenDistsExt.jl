@@ -12,6 +12,7 @@ using WrenDists:
     DiagNormal,
     IsoNormal
 
+# Generic fallbacks
 WrenCore.iid(dist::WrenDist, dims::Dims) = Independent(Repeated(dist, dims))
 WrenCore.independent(dists::AbstractArray{<:UnivariateDist}) = Independent(dists)
 function WrenCore.independent(dists::AbstractArray{<:MultivariateDist})
@@ -23,8 +24,7 @@ function WrenCore.independent(dists::AbstractArray{<:MultivariateDist})
     )
 end
 
-WrenCore.batched(iters, dist::WrenDist; _kwargs...) = WrenCore.iid(dist, size(iters))
-WrenCore.batched(iters, n::Normal; _kwargs...) = IIDNormal(size(iters), n.μ, n.σ)
+WrenCore.iid(dist::Normal, size::Dims) = IIDNormal(size, dist.μ, dist.σ)
 function WrenCore.batched(
     iters,
     ::Val{Normal},

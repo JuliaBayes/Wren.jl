@@ -42,22 +42,22 @@ Base.size(d::DiagNormal) = size(d.mu)
 Base.rand(rng::Random.AbstractRNG, d::DiagNormal) =
     randn(rng, size(d.mu)) .* d.sigma .+ d.mu
 @inline function DensityInterface.logdensityof(d::DiagNormal, x)
-    s = zero(eltype(x))
-    @inbounds for i in eachindex(x, d.mu, d.sigma)
-        z = (x[i] - d.mu[i]) / d.sigma[i]
-        s += z * z + 2 * log(d.sigma[i])
-    end
-    return -0.5 * s - 0.5 * length(d.mu) * log2π
+    z = (x .- d.mu) ./ d.sigma
+    return -0.5 * sum(abs2, z) - sum(log, d.sigma) - 0.5 * length(d.mu) * log2π
 end
 
-struct IsoNormal{M<:AbstractArray} <: AbstractBatchedNormal
+struct IsoNormal{M<:AbstractArray,S<:Number} <: AbstractBatchedNormal
     mu::M
+    sigma::S
 end
-Base.rand(rng::Random.AbstractRNG, d::IsoNormal) = randn(rng, size(d.mu)) .+ d.mu
+IsoNormal(mu::AbstractArray) = IsoNormal(mu, one(eltype(mu)))
+Base.rand(rng::Random.AbstractRNG, d::IsoNormal) = randn(rng, size(d.mu)) .* d.sigma .+ d.mu
 Base.size(d::IsoNormal) = size(d.mu)
 function DensityInterface.logdensityof(d::IsoNormal, x)
-    dist = sum(abs2, x .- d.mu)
-    return -0.5 * dist - 0.5 * length(d.mu) * log2π
+    inv_sigma = inv(d.sigma)
+    dist = sum(abs2, (x .- d.mu) .* inv_sigma)
+    N = length(d.mu)
+    return -0.5 * dist - N * log(d.sigma) - 0.5 * N * log2π
 end
 
 struct IIDNormal{T<:Tuple,M<:Number,S<:Number} <: AbstractBatchedNormal
