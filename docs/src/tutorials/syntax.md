@@ -208,7 +208,7 @@ loglikelihood(accs) ≈ sum(logdensityof.(Normal(parameters(accs)[@vn(mu)]), y))
 
 `@iid` and `@observe` can be combined in either order. Because the shape is taken from the current value of the left-hand side, that value must already exist when the statement runs: a model argument, or a value computed earlier in the model.
 
-## Batched tilde-statements
+## [Batched tilde-statements](@id batched)
 
 One of Wren's unique features is syntax-level batching of tilde-statements.
 This is done using the `@batch` macro:
@@ -287,7 +287,7 @@ which guarantees correctness, but might not be as efficient as the vectorised fo
 
       - Batches will increase allocations and will almost certainly cause slowdowns on small loops.
 
-## Manual log-likelihood addition
+## [Manual log-likelihood addition](@id addloglike)
 
 Wren provides a macro, `@addloglikelihood [name=:name] expr`, which allows you to manually add `expr` to the model's log-likelihood.
 

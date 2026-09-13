@@ -1,30 +1,43 @@
 using ADTypes: NoAutoDiff # DI doesn't export
+using EnzymeCore: Reverse
 
-const AUTO_RUNTIME_ACTIVITY = Ref(true)
+const AUTO_RUNTIME_ACTIVITY = Ref{Union{Nothing,Bool}}(nothing)
+
+const DEFAULT_AD = DI.AutoEnzyme(; mode=Reverse)
 
 """
-    WrenCore.set_auto_runtime_activity!(val::Bool)
+    WrenCore.set_auto_runtime_activity!(val::Union{Bool,Nothing})
 
 Set Wren's automatic runtime activity behaviour.
 
 When using Enzyme as the AD backend, depending on how the model is constructed, it may be
-necessary to enable runtime activity. (Wren-specific docs will follow soon, but for more
-information please see the [Enzyme
-docs](https://enzyme.mit.edu/julia/stable/faq/#faq-runtime-activity).) This can often allow
-more expressive models to be differentiated, but comes at a performance cost.
+necessary to enable runtime activity. This can often allow more expressive models to be
+differentiated, but comes at a performance cost.
 
 Wren recommends using reverse-mode Enzyme, i.e., `AutoEnzyme(; mode=Reverse)` as the AD
 backend, which does not enable runtime activity. **By default, Wren will automatically
-enable runtime activity if Enzyme requires it.**
+enable runtime activity if Enzyme requires it, but will issue an info message.**
 
-This behaviour can be disabled by calling
+If you would rather have Wren raise an error, set
 
 ```julia
-WrenCore.set_auto_runtime_activity!(false)`
+WrenCore.set_auto_runtime_activity!(false)
+```
 
-This will cause Wren to throw an error instead if runtime activity is required.
+Conversely, if you are happy with this and want to suppress the info message, set
+
+```julia
+WrenCore.set_auto_runtime_activity!(true)
+```
+
+To restore the default behaviour (automatic enabling of runtime activity but with an info
+message), set
+
+```julia
+WrenCore.set_auto_runtime_activity!(nothing)
+```
 """
-function set_auto_runtime_activity!(val::Bool)
+function set_auto_runtime_activity!(val::Union{Bool,Nothing})
     AUTO_RUNTIME_ACTIVITY[] = val
     return nothing
 end
