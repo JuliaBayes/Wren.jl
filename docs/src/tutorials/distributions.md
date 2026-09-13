@@ -14,8 +14,12 @@ This page will cover a couple of choices.
 
 Wren ships with its own set of distributions, which is currently very small.
 (Help with expanding this set is **very** welcome!)
+You can see a full list of the built-in distributions [on this page](@id reference-distributions).
 
-In the first instance we very much recommend trying these first.
+To access these, you need to add `using Wren.Dists` to your code.
+(The reason Wren doesn't automatically re-export them is to avoid name clashes if you want to load e.g. Distributions.jl.)
+
+**In the first instance we very much recommend trying these first.**
 Their constructors are designed to be as close as possible to the equivalent constructors in Distributions.jl.
 The reason for this is because Wren's built-in distributions are intended to:
 

@@ -1,3 +1,8 @@
+"""
+    Multinomial(n, p)
+
+Multinomial distribution for `n` trials with category probability vector `p`.
+"""
 struct Multinomial{N<:Integer,V<:AbstractVector{<:Number}} <: DiscreteMultivariateDist
     n::N
     p::V

@@ -1,3 +1,10 @@
+"""
+    Geometric(p)
+    Geometric()
+
+Geometric distribution with success probability `p` (default 0.5), counting the number of
+failures before the first success.
+"""
 struct Geometric{P<:Number} <: DiscreteUnivariateDist
     p::P
 end

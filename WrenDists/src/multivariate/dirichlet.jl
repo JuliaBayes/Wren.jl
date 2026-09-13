@@ -1,3 +1,8 @@
+"""
+    Dirichlet(α)
+
+Dirichlet distribution with concentration parameter vector `α`.
+"""
 struct Dirichlet{V<:AbstractVector{<:Number}} <: MultivariateDist
     α::V
 end

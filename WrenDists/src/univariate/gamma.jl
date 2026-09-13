@@ -1,3 +1,10 @@
+"""
+    Gamma(α, θ)
+    Gamma(α)
+    Gamma()
+
+Gamma distribution with shape `α` (default 1.0) and scale `θ` (default 1.0).
+"""
 struct Gamma{A<:Number,T<:Number} <: PositiveUnivariateDist
     α::A
     θ::T

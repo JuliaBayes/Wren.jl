@@ -1,3 +1,9 @@
+"""
+    Laplace(μ, b)
+    Laplace()
+
+Laplace distribution with location `μ` (default 0.0) and scale `b` (default 1.0).
+"""
 struct Laplace{M<:Number,B<:Number} <: UnconstrainedUnivariateDist
     μ::M
     b::B

@@ -1,3 +1,9 @@
+"""
+    Bernoulli(p)
+    Bernoulli()
+
+Bernoulli distribution with success probability `p` (default 0.5).
+"""
 struct Bernoulli{P<:Number} <: DiscreteUnivariateDist
     p::P
 end

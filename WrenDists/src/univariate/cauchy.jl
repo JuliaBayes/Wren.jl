@@ -1,3 +1,9 @@
+"""
+    Cauchy(μ, σ)
+    Cauchy()
+
+Cauchy distribution with location `μ` (default 0.0) and scale `σ` (default 1.0).
+"""
 struct Cauchy{M<:Number,S<:Number} <: UnconstrainedUnivariateDist
     μ::M
     σ::S

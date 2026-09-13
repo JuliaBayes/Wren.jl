@@ -7,6 +7,12 @@ include("samplers/prior.jl")
 include("samplers/nuts.jl")
 export prior, nuts
 
+# Distributions
+module Dists
+    using Reexport: @reexport
+    @reexport using WrenDists
+end
+
 # Re-exports
 using WrenCore:
     WrenCore,

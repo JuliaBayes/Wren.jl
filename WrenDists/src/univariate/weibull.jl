@@ -1,3 +1,9 @@
+"""
+    Weibull(α, θ)
+    Weibull()
+
+Weibull distribution with shape `α` (default 1.0) and scale `θ` (default 1.0).
+"""
 struct Weibull{A<:Number,T<:Number} <: PositiveUnivariateDist
     α::A
     θ::T

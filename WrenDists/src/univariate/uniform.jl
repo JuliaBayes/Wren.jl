@@ -1,3 +1,9 @@
+"""
+    Uniform(a, b)
+    Uniform()
+
+Continuous uniform distribution on the interval `[a, b]` (defaults to `[0.0, 1.0]`).
+"""
 struct Uniform{A<:Number,B<:Number} <: UnivariateDist
     a::A
     b::B

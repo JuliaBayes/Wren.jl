@@ -1,6 +1,8 @@
-# [Distributions](@id reference-distribution)
+# [Distributions](@id reference-distributions)
 
 This page lists [Wren's built-in distributions](@ref wrendists).
+
+## Univariate
 
 ```@docs
 WrenDists.Normal
@@ -17,7 +19,12 @@ WrenDists.Binomial
 WrenDists.Categorical
 WrenDists.Geometric
 WrenDists.Poisson
-WrenDists.MvNormal
+```
+
+## Multivariate
+
+```@docs
+WrenDists.MvNormalScale
 WrenDists.Dirichlet
 WrenDists.Multinomial
 ```

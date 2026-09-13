@@ -4,15 +4,15 @@
 Plaice.from_vec(::MultivariateDist) = Plaice.TypedIdentity()
 Plaice.to_vec(::MultivariateDist) = Plaice.TypedIdentity()
 
-# MvNormal: already unconstrained
-Plaice.from_unconstrained_vec(::MvNormal) = Plaice.TypedIdentity()
-Plaice.to_unconstrained_vec(::MvNormal) = Plaice.TypedIdentity()
-Plaice.vec_length(d::MvNormal) = length(d.μ)
-Plaice.unconstrained_vec_length(d::MvNormal) = length(d.μ)
-function Plaice.optic_vec(d::MvNormal)
+# MvNormalScale: already unconstrained
+Plaice.from_unconstrained_vec(::MvNormalScale) = Plaice.TypedIdentity()
+Plaice.to_unconstrained_vec(::MvNormalScale) = Plaice.TypedIdentity()
+Plaice.vec_length(d::MvNormalScale) = length(d.μ)
+Plaice.unconstrained_vec_length(d::MvNormalScale) = length(d.μ)
+function Plaice.optic_vec(d::MvNormalScale)
     return [VarNames.@opticof(_[i]) for i in eachindex(d.μ)]
 end
-Plaice.unconstrained_optic_vec(d::MvNormal) = Plaice.optic_vec(d)
+Plaice.unconstrained_optic_vec(d::MvNormalScale) = Plaice.optic_vec(d)
 
 # Discrete multivariate distributions: can't transform the support
 Plaice.from_unconstrained_vec(::DiscreteMultivariateDist) = Plaice.TypedIdentity()

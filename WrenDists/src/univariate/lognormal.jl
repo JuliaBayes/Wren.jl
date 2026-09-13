@@ -1,3 +1,10 @@
+"""
+    LogNormal(μ, σ)
+    LogNormal()
+
+Log-normal distribution with log-scale mean `μ` (default 0.0) and log-scale standard
+deviation `σ` (default 1.0).
+"""
 struct LogNormal{M<:Number,S<:Number} <: PositiveUnivariateDist
     μ::M
     σ::S

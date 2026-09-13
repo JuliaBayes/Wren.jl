@@ -1,3 +1,9 @@
+"""
+    Beta(α, β)
+    Beta()
+
+Beta distribution with shape parameters `α` (default 1.0) and `β` (default 1.0).
+"""
 struct Beta{A<:Number,B<:Number} <: UnivariateDist
     α::A
     β::B

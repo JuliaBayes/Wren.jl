@@ -1,3 +1,9 @@
+"""
+    Exponential(θ)
+    Exponential()
+
+Exponential distribution with scale `θ` (default 1.0).
+"""
 struct Exponential{R<:Number} <: PositiveUnivariateDist
     θ::R
 end

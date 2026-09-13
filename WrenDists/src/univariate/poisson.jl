@@ -1,3 +1,8 @@
+"""
+    Poisson(λ)
+
+Poisson distribution with rate `λ`.
+"""
 struct Poisson{L<:Number} <: DiscreteUnivariateDist
     λ::L
 end

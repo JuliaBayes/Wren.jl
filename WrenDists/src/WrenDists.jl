@@ -44,7 +44,7 @@ include("univariate/poisson.jl")
 include("univariate/plaice.jl")
 
 # Multivariate
-include("multivariate/mvnormal.jl")
+include("multivariate/mvnormalscale.jl")
 include("multivariate/dirichlet.jl")
 include("multivariate/multinomial.jl")
 
@@ -55,6 +55,6 @@ export logdensityof
 
 export Normal, LogNormal, Exponential, Weibull, Uniform, Laplace, Cauchy, Gamma, Beta
 export Bernoulli, Binomial, Categorical, Geometric, Poisson
-export MvNormal, Dirichlet, Multinomial
+export MvNormalScale, Dirichlet, Multinomial
 
 end # module WrenDists

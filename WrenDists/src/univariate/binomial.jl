@@ -1,3 +1,8 @@
+"""
+    Binomial(n, p)
+
+Binomial distribution for `n` trials with success probability `p`.
+"""
 struct Binomial{N<:Integer,P<:Number} <: DiscreteUnivariateDist
     n::N
     p::P
