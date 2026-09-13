@@ -1,18 +1,8 @@
 using AbstractMCMC: AbstractMCMC
-using FlexiChains: VNChain
+using FlexiChains: FlexiChains, VNChain
 using Random: AbstractRNG, default_rng
 using StatsAPI: StatsAPI
-using VarNames: VarNames, Draw, VarNamedTuple, parameters
-
-_chain_params(chain::VNChain) = AbstractMCMC.to_samples(VarNamedTuple, chain)
-
-"""
-Return the variables in `new_params` that are absent from `old_params`.
-"""
-function _newly_sampled(new_params::VarNamedTuple, old_params::VarNamedTuple)
-    fresh = [vn for (vn, _) in pairs(new_params) if !haskey(old_params, vn)]
-    return VarNames.subset(new_params, fresh)
-end
+using VarNames: VarNames, Draw, extras, parameters
 
 """
     predict(
@@ -24,15 +14,17 @@ end
 
 Draw predictions from `model` for every iteration of `chain`.
 
-`model` is re-evaluated once per iteration, taking each variable's value from that iteration
-of `chain` and sampling from the prior any variable that `chain` does not contain. The
-variables to be predicted are therefore the ones `model` leaves unconditioned; use
-[`decondition`](@ref) to release the variables that were conditioned on for sampling.
+The returned `FlexiChain` by default will contain all the predicted variables, as well as the
+variables already present in the input `chain`. If you only want the predicted variables,
+set `include_all=false`.
 
-The returned chain holds the predicted variables alongside those already in `chain`; pass
-`include_all=false` for the predicted variables only. It also carries `logprior`,
-`loglikelihood` and `logjoint` extras from the re-evaluation, in which the predicted
-variables count as prior terms. `include_all` does not affect these.
+The returned chain will also contain log-probabilities corresponding to the re-evaluation of
+the model. In particular, the log probability for the newly predicted variables are
+now considered as prior terms. However, note that the log-prior of the returned chain will
+also contain the log-prior terms of the parameters already present in the input `chain`.
+Thus, if you want to obtain the log-probability of the predicted variables only, you can
+subtract the two log-prior terms. The `include_all` keyword argument has no effect on the
+log-probability fields.
 """
 function predict(
     rng::AbstractRNG,
@@ -45,29 +37,30 @@ function predict(
         WrenCore.LogPriorAccumulator(),
         WrenCore.LogLikelihoodAccumulator(),
     )
-    params = _chain_params(chain)
-    results = WrenCore.reevaluate(model, params, accs, WrenCore.FromPrior(rng))
-    new_draws = map(params, results) do old_params, (_, new_accs)
-        new_params = parameters(new_accs)
-        lprior = WrenCore.logprior(new_accs)
-        llik = WrenCore.loglikelihood(new_accs)
-        Draw(
-            include_all ? new_params : _newly_sampled(new_params, old_params),
-            (; logprior=lprior, loglikelihood=llik, logjoint=lprior + llik),
-        )
+    param_values = FlexiChains.parameters_at(chain)
+    existing_vns = Set(parameters(chain))
+    fallback = WrenCore.FromPrior(rng)
+    results = WrenCore.reevaluate(model, param_values, accs, fallback)
+    draws = map(results) do retval_and_accs
+        draw = Draw(last(retval_and_accs))
+        include_all && return draw
+        reeval_params = parameters(draw)
+        pred_vns = [vn for (vn, _) in pairs(reeval_params) if !(vn in existing_vns)]
+        return Draw(VarNames.subset(reeval_params, pred_vns), extras(draw))
     end
-    return AbstractMCMC.from_samples(VNChain, new_draws)
+    preds = AbstractMCMC.from_samples(VNChain, draws)
+    preds_n = FlexiChains.renumber_iters(preds, FlexiChains.iter_indices(chain))
+    preds_nc = FlexiChains.renumber_chains(preds_n, FlexiChains.chain_indices(chain))
+    return merge(FlexiChains.subset_extras(chain), preds_nc)
 end
 function predict(model::WrenCore.Model, chain::VNChain; include_all::Bool=true)
     return predict(default_rng(), model, chain; include_all)
 end
 
-"""
-Re-evaluate `model` over `chain` with `accs`, and read one log-probability off each result.
-"""
+# Internal helper function
 function _pointwise_logp(get_logp, model::WrenCore.Model, chain::VNChain, accs)
-    results = WrenCore.reevaluate(model, _chain_params(chain), accs)
-    return map(result -> get_logp(last(result)), results)
+    results = WrenCore.reevaluate(model, FlexiChains.parameters_at(chain), accs)
+    return map(retval_and_accs -> get_logp(last(retval_and_accs)), results)
 end
 
 """
@@ -99,11 +92,8 @@ end
 """
     logjoint(model::WrenCore.Model, chain::FlexiChains.VNChain) -> DimMatrix
 
-Return the log-joint density of `model` at each iteration of `chain`, in original
-coordinates.
-
-Unlike [`predict`](@ref), this errors on a variable that `model` requires and `chain` does
-not hold, rather than sampling it.
+Returns a `DimMatrix` of the log-joint probabilities, re-evaluated using the parameters at
+each iteration of the chain.
 """
 function WrenCore.logjoint(model::WrenCore.Model, chain::VNChain)
     accs = WrenCore.AccumulatorTuple(
