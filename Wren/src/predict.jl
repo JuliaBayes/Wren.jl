@@ -49,9 +49,9 @@ function predict(
         return Draw(VarNames.subset(reeval_params, pred_vns), extras(draw))
     end
     preds = AbstractMCMC.from_samples(VNChain, draws)
-    preds_n = FlexiChains.renumber_iters(preds, FlexiChains.iter_indices(chain))
-    preds_nc = FlexiChains.renumber_chains(preds_n, FlexiChains.chain_indices(chain))
-    return merge(FlexiChains.subset_extras(chain), preds_nc)
+    preds = FlexiChains.renumber_iters(preds, FlexiChains.iter_indices(chain))
+    preds = FlexiChains.renumber_chains(preds, FlexiChains.chain_indices(chain))
+    return merge(FlexiChains.subset_extras(chain), preds)
 end
 function predict(model::WrenCore.Model, chain::VNChain; include_all::Bool=true)
     return predict(default_rng(), model, chain; include_all)
