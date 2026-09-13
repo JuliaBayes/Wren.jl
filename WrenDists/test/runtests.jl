@@ -111,7 +111,11 @@ function test_dist(
         end
 
         @testset "Reactant" begin
-            if RUN_REACTANT && test_reactant
+            if !test_reactant
+                # Marker so that disabled Reactant tests show up as broken rather than
+                # silently passing.
+                @test_broken false
+            elseif RUN_REACTANT
                 points = [rand(rng, d_ref) for _ in 1:10]
                 test_dist_reactant(d_wd, points)
             end
@@ -452,6 +456,7 @@ const DIRICHLET_PLAICE = (to_vec, from_vec)
         WrenDists.IIDNormal((3, 4), 1.0, 2.0),
         Distributions.product_distribution(fill(Distributions.Normal(1.0, 2.0), 3, 4));
         test_batched=false,
+        test_reactant=false, # loop-based logdensityof is not traceable yet
         other_ad_testcases=(
             let
                 f(x) = logdensityof(WrenDists.IIDNormal((3, 4), x[1], x[2]), ones(3, 4))
@@ -470,6 +475,7 @@ const DIRICHLET_PLAICE = (to_vec, from_vec)
             Distributions.Normal(3.0, 1.0),
         ]);
         test_batched=false,
+        test_reactant=false, # loop-based logdensityof is not traceable yet
         other_ad_testcases=(
             let
                 f(x) = logdensityof(WrenDists.DiagNormal(x[1:3], x[4:6]), [0.5, 0.5, 0.5])
@@ -488,6 +494,7 @@ const DIRICHLET_PLAICE = (to_vec, from_vec)
             Distributions.Normal(3.0, 1.0),
         ]);
         test_batched=false,
+        test_reactant=false, # loop-based logdensityof is not traceable yet
         other_ad_testcases=(
             let
                 f(x) = logdensityof(WrenDists.IsoNormal(x[1:3], x[4]), [0.5, 0.5, 0.5])
@@ -501,6 +508,7 @@ const DIRICHLET_PLAICE = (to_vec, from_vec)
         WrenDists.BatchedBernoulli([0.2, 0.5, 0.8]),
         Distributions.product_distribution(Distributions.Bernoulli.([0.2, 0.5, 0.8]));
         test_batched=false,
+        test_reactant=false, # loop-based logdensityof is not traceable yet
         other_ad_testcases=(
             let
                 f(x) = logdensityof(WrenDists.BatchedBernoulli(x), [1.0, 0.0, 1.0])
@@ -515,6 +523,7 @@ const DIRICHLET_PLAICE = (to_vec, from_vec)
             Distributions.Binomial.([5, 10, 20], [0.2, 0.5, 0.8]),
         );
         test_batched=false,
+        test_reactant=false, # loop-based logdensityof is not traceable yet
         other_ad_testcases=(
             let
                 f(x) = logdensityof(
@@ -530,6 +539,7 @@ const DIRICHLET_PLAICE = (to_vec, from_vec)
         WrenDists.BatchedPoisson([1.0, 3.0, 7.0]),
         Distributions.product_distribution(Distributions.Poisson.([1.0, 3.0, 7.0]));
         test_batched=false,
+        test_reactant=false, # loop-based logdensityof is not traceable yet
         other_ad_testcases=(
             let
                 f(x) = logdensityof(WrenDists.BatchedPoisson(x), [1.0, 2.0, 8.0])
@@ -542,6 +552,7 @@ const DIRICHLET_PLAICE = (to_vec, from_vec)
         WrenDists.BatchedExponential([0.5, 1.0, 2.0]),
         Distributions.product_distribution(Distributions.Exponential.([0.5, 1.0, 2.0]));
         test_batched=false,
+        test_reactant=false, # loop-based logdensityof is not traceable yet
         other_ad_testcases=(
             let
                 f(x) = logdensityof(WrenDists.BatchedExponential(x), [0.5, 0.5, 0.5])
@@ -556,6 +567,7 @@ const DIRICHLET_PLAICE = (to_vec, from_vec)
             Distributions.LogNormal.([0.1, 0.5, 1.0], [0.3, 0.7, 1.2]),
         );
         test_batched=false,
+        test_reactant=false, # loop-based logdensityof is not traceable yet
         other_ad_testcases=(
             let
                 f(x) = logdensityof(
