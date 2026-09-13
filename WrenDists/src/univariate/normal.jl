@@ -46,6 +46,9 @@ Base.rand(rng::Random.AbstractRNG, d::DiagNormal) =
     return -0.5 * sum(abs2, z) - sum(log, d.sigma) - 0.5 * length(d.mu) * log2π
 end
 
+# TODO(penelopeysm): Some preliminary benchmarks on this show that there's no meaningful
+# difference vs. DiagNormal with a FillArray for `sigma`. We should verify this more
+# scientifically, and if true, remove this type to make life simpler.
 struct IsoNormal{M<:AbstractArray,S<:Number} <: AbstractBatchedNormal
     mu::M
     sigma::S
