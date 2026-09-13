@@ -3,6 +3,7 @@ struct Normal{M<:Number,S<:Number} <: UnconstrainedUnivariateDist
     σ::S
 end
 
+Normal(μ) = Normal(μ, one(μ))
 Normal() = Normal(0.0, 1.0)
 
 @inline zval(d::Normal, x::Number) = (x - d.μ) / d.σ

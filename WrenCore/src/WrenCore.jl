@@ -62,6 +62,7 @@ include("vecmodel.jl")
 include("interface.jl")
 include("draw.jl")
 include("test_ad.jl")
+include("test_utils.jl")
 
 export @wren,
     @addloglikelihood,
