@@ -40,7 +40,7 @@ function _iid_logdensityof(dist::Normal, x::AbstractArray)
     return length(x) * lognorm - z2 / 2
 end
 
-abstract type AbstractBatchedNormal <: MultivariateDist end
+abstract type AbstractBatchedNormal <: BatchedUnivariate end
 
 struct DiagNormal{M<:AbstractArray,S<:AbstractArray} <: AbstractBatchedNormal
     mu::M
@@ -49,9 +49,13 @@ end
 Base.size(d::DiagNormal) = size(d.mu)
 Base.rand(rng::Random.AbstractRNG, d::DiagNormal) =
     randn(rng, size(d.mu)) .* d.sigma .+ d.mu
-@inline function DensityInterface.logdensityof(d::DiagNormal, x)
-    z = (x .- d.mu) ./ d.sigma
-    return -0.5 * sum(abs2, z) - sum(log, d.sigma) - 0.5 * length(d.mu) * log2π
+function DensityInterface.logdensityof(d::DiagNormal, x)
+    s = _zero_logdensity(d, x)
+    @inbounds for i in eachindex(x, d.mu, d.sigma)
+        z = (x[i] - d.mu[i]) / d.sigma[i]
+        s -= abs2(z) / 2 + log(d.sigma[i])
+    end
+    return s - length(x) * log2π / 2
 end
 
 # TODO(penelopeysm): Some preliminary benchmarks on this show that there's no meaningful
@@ -64,10 +68,12 @@ end
 Base.rand(rng::Random.AbstractRNG, d::IsoNormal) = randn(rng, size(d.mu)) .* d.sigma .+ d.mu
 Base.size(d::IsoNormal) = size(d.mu)
 function DensityInterface.logdensityof(d::IsoNormal, x)
-    inv_sigma = inv(d.sigma)
-    dist = sum(abs2, (x .- d.mu) .* inv_sigma)
-    N = length(d.mu)
-    return -0.5 * dist - N * log(d.sigma) - 0.5 * N * log2π
+    dist = _zero_logdensity(d, x)
+    @inbounds for i in eachindex(x, d.mu)
+        dist += abs2(x[i] - d.mu[i])
+    end
+    N = length(x)
+    return -0.5 * dist / abs2(d.sigma) - N * log(d.sigma) - 0.5 * N * log2π
 end
 
 struct IIDNormal{T<:Tuple,M<:Number,S<:Number} <: AbstractBatchedNormal
@@ -78,22 +84,12 @@ end
 Base.rand(rng::Random.AbstractRNG, d::IIDNormal) = randn(rng, d.size) .* d.sigma .+ d.mu
 Base.size(d::IIDNormal) = d.size
 function DensityInterface.logdensityof(d::IIDNormal, x)
-    inv_sigma = inv(d.sigma)
-    # dist = sum(xi -> abs2((xi - d.mu) * inv_sigma), x)
-    # ^ This is faster, but creates lots of allocs
-    dist = sum(abs2, (x .- d.mu) .* inv_sigma)
+    dist = _zero_logdensity(d, x)
+    @inbounds for i in eachindex(x)
+        dist += abs2(x[i] - d.mu)
+    end
     N = length(x)
-    return -0.5 * dist - N * log(d.sigma) - 0.5 * N * log(2π)
+    return -0.5 * dist / abs2(d.sigma) - N * log(d.sigma) - 0.5 * N * log2π
 end
 
-
-Plaice.from_unconstrained_vec(d::AbstractBatchedNormal) = Plaice.Reshape(size(d))
-Plaice.to_unconstrained_vec(d::AbstractBatchedNormal) = Plaice.Vec(size(d))
-Plaice.unconstrained_vec_length(d::AbstractBatchedNormal) = prod(size(d))
-Plaice.vec_length(d::AbstractBatchedNormal) = prod(size(d))
-Plaice.is_continuous(::AbstractBatchedNormal) = true
-function _optics(d::AbstractBatchedNormal)
-    return map(c -> VarNames.Index(c.I, (;)), vec(CartesianIndices(size(d))))
-end
-Plaice.optic_vec(d::AbstractBatchedNormal) = _optics(d)
-Plaice.unconstrained_optic_vec(d::AbstractBatchedNormal) = _optics(d)
+# The Plaice interface is shared with the other batched distributions; see batched.jl.

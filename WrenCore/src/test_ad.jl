@@ -232,7 +232,6 @@ function benchmark_and_test(
     benchmark_model::Bool=true,
     benchmark_primal::Bool=true,
     benchmark_ad::Bool=(adtype !== nothing),
-    benchmark_seconds::Real=1.0,
     test_correctness::Union{AbstractADCorrectnessTestSetting,Bool}=NoTest(),
     atol::Real=100 * eps(),
     rtol::Real=sqrt(eps()),
@@ -259,9 +258,9 @@ function benchmark_and_test(
     rand_bench, logjoint_bench = if benchmark_model
         rng = Xoshiro(468) # avoid mutating global RNG
         rand(rng, model) # warmup
-        rb = median(@be rand($rng, $model) seconds = benchmark_seconds)
+        rb = median(@be rand($rng, $model))
         logjoint(model, vnt_params) # warmup
-        ljb = median(@be logjoint($model, $vnt_params) seconds = benchmark_seconds)
+        ljb = median(@be logjoint($model, $vnt_params))
         rb, ljb
     else
         nothing, nothing
@@ -305,7 +304,7 @@ function benchmark_and_test(
     end
     primal_bench = if benchmark_primal
         lp(vecmodel, vec_params) # warm up
-        median(@be lp($vecmodel, $vec_params) seconds = benchmark_seconds)
+        median(@be lp($vecmodel, $vec_params))
     else
         nothing
     end
@@ -360,9 +359,9 @@ function benchmark_and_test(
         end
     end
 
-    grad_bench = if benchmark_model
+    grad_bench = if benchmark_ad
         lp_and_grad(vecmodel, vec_params)
-        median(@be lp_and_grad($vecmodel, $vec_params) seconds = benchmark_seconds)
+        median(@be lp_and_grad($vecmodel, $vec_params))
     else
         nothing
     end

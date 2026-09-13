@@ -10,6 +10,7 @@ To run the benchmarks, run the following from the `bench` directory:
 ```sh
 julia --project=. ./basic/run.jl
 julia --project=. ./posteriordb/run.jl
+julia --project=. ./batch/run.jl
 ```
 
 `basic` compares three different models:
@@ -19,3 +20,6 @@ julia --project=. ./posteriordb/run.jl
   - a multinomial logistic regression model on MNIST data.
 
 `posteriordb` compares 10 PosteriorDB models.
+
+`batch` compares `@batch` loops against plain `for` loops for the likelihoods in
+WrenDists that have specialised `batched` methods.
