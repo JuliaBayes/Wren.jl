@@ -32,12 +32,13 @@ function _iid_logdensityof(dist::Normal, x::AbstractArray)
     return length(x) * lognorm - z2 / 2
 end
 
-struct DiagNormal{M<:AbstractArray,S<:AbstractArray}
+abstract type AbstractBatchedNormal <: MultivariateDist end
+
+struct DiagNormal{M<:AbstractArray,S<:AbstractArray} <: AbstractBatchedNormal
     mu::M
     sigma::S
 end
-Plaice.from_unconstrained_vec(d::DiagNormal) = Plaice.Reshape(size(d.mu))
-Plaice.to_unconstrained_vec(d::DiagNormal) = Plaice.Vec(size(d.mu))
+Base.size(d::DiagNormal) = size(d.mu)
 Base.rand(rng::Random.AbstractRNG, d::DiagNormal) =
     randn(rng, size(d.mu)) .* d.sigma .+ d.mu
 @inline function DensityInterface.logdensityof(d::DiagNormal, x)
@@ -46,26 +47,26 @@ Base.rand(rng::Random.AbstractRNG, d::DiagNormal) =
         z = (x[i] - d.mu[i]) / d.sigma[i]
         s += z * z + 2 * log(d.sigma[i])
     end
-    return -0.5 * s - 0.5 * length(d.mu) * log(2π)
+    return -0.5 * s - 0.5 * length(d.mu) * log2π
 end
-struct IsoNormal{M<:AbstractArray}
+
+struct IsoNormal{M<:AbstractArray} <: AbstractBatchedNormal
     mu::M
 end
-Plaice.from_unconstrained_vec(d::IsoNormal) = Plaice.Reshape(size(d.mu))
-Plaice.to_unconstrained_vec(d::IsoNormal) = Plaice.Vec(size(d.mu))
 Base.rand(rng::Random.AbstractRNG, d::IsoNormal) = randn(rng, size(d.mu)) .+ d.mu
+Base.size(d::IsoNormal) = size(d.mu)
 function DensityInterface.logdensityof(d::IsoNormal, x)
     dist = sum(abs2, x .- d.mu)
-    return -0.5 * dist - 0.5 * length(d.mu) * log(2π)
+    return -0.5 * dist - 0.5 * length(d.mu) * log2π
 end
-struct IIDNormal{T<:Tuple,M<:Number,S<:Number}
+
+struct IIDNormal{T<:Tuple,M<:Number,S<:Number} <: AbstractBatchedNormal
     size::T
     mu::M
     sigma::S
 end
 Base.rand(rng::Random.AbstractRNG, d::IIDNormal) = randn(rng, d.size) .* d.sigma .+ d.mu
-Plaice.from_unconstrained_vec(d::IIDNormal) = Plaice.Reshape(d.size)
-Plaice.to_unconstrained_vec(d::IIDNormal) = Plaice.Vec(d.size)
+Base.size(d::IIDNormal) = d.size
 function DensityInterface.logdensityof(d::IIDNormal, x)
     inv_sigma = inv(d.sigma)
     # dist = sum(xi -> abs2((xi - d.mu) * inv_sigma), x)
@@ -74,3 +75,15 @@ function DensityInterface.logdensityof(d::IIDNormal, x)
     N = length(x)
     return -0.5 * dist - N * log(d.sigma) - 0.5 * N * log(2π)
 end
+
+
+Plaice.from_unconstrained_vec(d::AbstractBatchedNormal) = Plaice.Reshape(size(d))
+Plaice.to_unconstrained_vec(d::AbstractBatchedNormal) = Plaice.Vec(size(d))
+Plaice.unconstrained_vec_length(d::AbstractBatchedNormal) = prod(size(d))
+Plaice.vec_length(d::AbstractBatchedNormal) = prod(size(d))
+Plaice.is_continuous(::AbstractBatchedNormal) = true
+function _optics(d::AbstractBatchedNormal)
+    return map(c -> VarNames.Index(c.I, (;)), vec(CartesianIndices(size(d))))
+end
+Plaice.optic_vec(d::AbstractBatchedNormal) = _optics(d)
+Plaice.unconstrained_optic_vec(d::AbstractBatchedNormal) = _optics(d)

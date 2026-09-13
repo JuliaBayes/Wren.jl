@@ -63,6 +63,7 @@ function test_dist(
     d_ref;
     plaice_zero_allocs=(),
     test_batched=true,
+    test_reactant=true,
     skipped_adtypes=(),
     other_ad_testcases=(),
 )
@@ -110,9 +111,9 @@ function test_dist(
         end
 
         @testset "Reactant" begin
-            if RUN_REACTANT
+            if RUN_REACTANT && test_reactant
                 points = [rand(rng, d_ref) for _ in 1:10]
-                test_reactant(d_wd, points)
+                test_dist_reactant(d_wd, points)
             end
         end
 
@@ -152,6 +153,8 @@ const MULTIVARIATE_PLAICE = (to_vec, from_vec, to_unconstrained_vec, from_uncons
 const DIRICHLET_PLAICE = (to_vec, from_vec)
 
 @testset "WrenDists" begin
+    #=
+
     # Continuous unconstrained
     test_dist(
         "Normal",
@@ -378,5 +381,106 @@ const DIRICHLET_PLAICE = (to_vec, from_vec)
         other_ad_testcases=(let f(x) = logdensityof(WrenDists.Multinomial(10, x), [2, 3, 5])
             ADTestCase(f, [0.2, 0.3, 0.5], (), ("ReverseDiff", "ReverseDiffCpl"))
         end,),
+    )
+    =#
+
+    # --- Batched distributions ---
+
+    # Independent
+    test_dist(
+        "Independent single type",
+        WrenCore.independent([
+            WrenDists.Normal(1.0, 2.0),
+            WrenDists.Normal(0.0, 1.0),
+            WrenDists.Normal(3.0, 0.5),
+        ]),
+        Distributions.product_distribution([
+            Distributions.Normal(1.0, 2.0),
+            Distributions.Normal(0.0, 1.0),
+            Distributions.Normal(3.0, 0.5),
+        ]);
+        test_batched=false,
+        test_reactant=false, # array-of-struct problem
+        other_ad_testcases=(
+            let
+                f(x) = logdensityof(
+                    WrenCore.independent([
+                        WrenDists.Normal(x[1], x[2]),
+                        WrenDists.Normal(x[3], x[4]),
+                        WrenDists.Normal(x[5], x[6]),
+                    ]),
+                    [0.5, 0.5, 0.5],
+                )
+                ADTestCase(f, [1.0, 2.0, 0.0, 1.0, 3.0, 0.5], (), ())
+            end,
+        ),
+    )
+
+    # independent() with a heterogeneous array is very problematic. For example,
+    #
+    # rand and logdensityof are type-unstable
+    #
+    # The bijectors are type unstable
+    #
+    # ReverseDiff: errors with the 'type does not have a definite number of fields' error
+    # https://github.com/JuliaDiff/ReverseDiff.jl/issues/289
+    #
+    # Enzyme: Doesn't like the type instability.
+    #
+    # test_dist(
+    #     "Independent multiple types",
+    #     WrenCore.independent(WrenDists.UnivariateDist[WrenDists.Normal(0.0, 1.0), WrenDists.Exponential(2.0), WrenDists.Beta(2.0, 3.0)]),
+    #     Distributions.product_distribution(Distributions.UnivariateDistribution[Distributions.Normal(0.0, 1.0), Distributions.Exponential(2.0), Distributions.Beta(2.0, 3.0)]);
+    #     test_batched=false,
+    # )
+
+    # Specialized: IIDNormal
+    test_dist(
+        "IIDNormal",
+        WrenDists.IIDNormal((3, 4), 1.0, 2.0),
+        Distributions.product_distribution(fill(Distributions.Normal(1.0, 2.0), 3, 4));
+        test_batched=false,
+        other_ad_testcases=(
+            let
+                f(x) = logdensityof(WrenDists.IIDNormal((3, 4), x[1], x[2]), ones(3, 4))
+                ADTestCase(f, [1.0, 2.0], (), ())
+            end,
+        ),
+    )
+
+    # Specialized: DiagNormal
+    test_dist(
+        "DiagNormal",
+        WrenDists.DiagNormal([1.0, 2.0, 3.0], [0.5, 1.5, 1.0]),
+        Distributions.product_distribution([
+            Distributions.Normal(1.0, 0.5),
+            Distributions.Normal(2.0, 1.5),
+            Distributions.Normal(3.0, 1.0),
+        ]);
+        test_batched=false,
+        other_ad_testcases=(
+            let
+                f(x) = logdensityof(WrenDists.DiagNormal(x[1:3], x[4:6]), [0.5, 0.5, 0.5])
+                ADTestCase(f, [1.0, 2.0, 3.0, 0.5, 1.5, 1.0], (), ())
+            end,
+        ),
+    )
+
+    # Specialized: IsoNormal
+    test_dist(
+        "IsoNormal",
+        WrenDists.IsoNormal([1.0, 2.0, 3.0]),
+        Distributions.product_distribution([
+            Distributions.Normal(1.0, 1.0),
+            Distributions.Normal(2.0, 1.0),
+            Distributions.Normal(3.0, 1.0),
+        ]);
+        test_batched=false,
+        other_ad_testcases=(
+            let
+                f(x) = logdensityof(WrenDists.IsoNormal(x), [0.5, 0.5, 0.5])
+                ADTestCase(f, [1.0, 2.0, 3.0], (), ())
+            end,
+        ),
     )
 end

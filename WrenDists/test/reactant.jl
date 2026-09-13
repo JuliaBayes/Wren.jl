@@ -2,7 +2,7 @@ using Pkg
 Pkg.add("Reactant")
 using Reactant
 
-function test_reactant(d, points)
+function test_dist_reactant(d, points)
     x_ra = Reactant.to_rarray(first(points); track_numbers=true)
     f = Reactant.@compile logdensityof(d, x_ra)
     for x in points
