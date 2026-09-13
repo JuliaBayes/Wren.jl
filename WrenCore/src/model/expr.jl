@@ -339,16 +339,17 @@ function lower_to_wren(expr::Expr, mod::Module, statement_position::Bool=false)
 end
 
 """
-    _wren_expr_to_expr(expr)
+    _wren_expr_to_display_expr(expr)
 
-Unlower a Wren expression back into the way it was written in the model.
+Unlower a Wren expression back into the way it was written in the model,
+for display purposes.
 """
-_wren_expr_to_model_expr(expr) = expr
-function _wren_expr_to_model_expr(stmt::WrenExpr)
-    return Expr(stmt.head, map(_wren_expr_to_model_expr, stmt.args)...)
+_wren_expr_to_display_expr(expr) = expr
+function _wren_expr_to_display_expr(stmt::WrenExpr)
+    return Expr(stmt.head, map(_wren_expr_to_display_expr, stmt.args)...)
 end
-function _wren_expr_to_model_expr(stmt::Batch)
-    body = _wren_expr_to_model_expr(stmt.body)
+function _wren_expr_to_display_expr(stmt::Batch)
+    body = _wren_expr_to_display_expr(stmt.body)
     for_expr = Expr(:for, Expr(:(=), stmt.loop_idx, stmt.loop_iters), body)
     args = Any[Symbol("@batch"), nothing]
     push!(args, Expr(:(=), :name, QuoteNode(stmt.name)))
@@ -359,15 +360,15 @@ function _wren_expr_to_model_expr(stmt::Batch)
     return Expr(:macrocall, args...)
 end
 _tilde_expr(stmt::Union{Sample,Observe}) =
-    Expr(:call, :~, stmt.lhs, _wren_expr_to_model_expr(stmt.rhs))
+    Expr(:call, :~, stmt.lhs, _wren_expr_to_display_expr(stmt.rhs))
 
-function _wren_expr_to_model_expr(stmt::Sample)
+function _wren_expr_to_display_expr(stmt::Sample)
     return _tilde_expr(stmt)
 end
-function _wren_expr_to_model_expr(stmt::Observe)
+function _wren_expr_to_display_expr(stmt::Observe)
     return Expr(:macrocall, Symbol("@observe"), nothing, _tilde_expr(stmt))
 end
-function _wren_expr_to_model_expr(stmt::IID)
+function _wren_expr_to_display_expr(stmt::IID)
     args = Any[Symbol("@iid"), nothing, _tilde_expr(stmt.tilde)]
     if stmt.size !== nothing
         push!(args, Expr(:(=), :size, stmt.size))
@@ -379,19 +380,19 @@ function _wren_expr_to_model_expr(stmt::IID)
     stmt.tilde isa Observe || return iid_expr
     return Expr(:macrocall, Symbol("@observe"), nothing, iid_expr)
 end
-function _wren_expr_to_model_expr(stmt::AddLogLikelihood)
+function _wren_expr_to_display_expr(stmt::AddLogLikelihood)
     args = Any[Symbol("@addloglikelihood"), nothing]
     if !startswith(string(stmt.name), "##addloglikelihood#")
         push!(args, Expr(:(=), :name, QuoteNode(stmt.name)))
     end
-    push!(args, _wren_expr_to_model_expr(stmt.expr))
+    push!(args, _wren_expr_to_display_expr(stmt.expr))
     return Expr(:macrocall, args...)
 end
-function _wren_expr_to_model_expr(stmt::ReturnStatement)
-    value = stmt.expr === nothing ? nothing : _wren_expr_to_model_expr(stmt.expr)
+function _wren_expr_to_display_expr(stmt::ReturnStatement)
+    value = stmt.expr === nothing ? nothing : _wren_expr_to_display_expr(stmt.expr)
     return Expr(:return, value)
 end
-_wren_expr_to_model_expr(stmt::OtherStatement) = stmt.expr
+_wren_expr_to_display_expr(stmt::OtherStatement) = stmt.expr
 
 function _show_wren_exprs(io::IO, stmts, indent::Int=0; max_exprs::Int=typemax(Int))
     return _show_wren_exprs(io, stmts, ' '^indent; max_exprs)
@@ -415,7 +416,7 @@ function _show_wren_exprs(io::IO, stmts, prefix::String; max_exprs::Int=typemax(
     return nothing
 end
 function _show_wren_expr(io::IO, stmt::AbstractWrenExpr, indent::Int=0)
-    expr = deepcopy(_wren_expr_to_model_expr(stmt))
+    expr = deepcopy(_wren_expr_to_display_expr(stmt))
     expr isa Expr && Base.remove_linenums!(expr)
     return Base.show_unquoted(io, expr, indent, 0)
 end

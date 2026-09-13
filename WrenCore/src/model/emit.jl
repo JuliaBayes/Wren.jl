@@ -408,7 +408,7 @@ function vectorise_batch_stmt(
     parameter_space,
 )
     new_lhs, _ = replace_loop_idx_with_iters(stmt.lhs, loop_idx, loop_iters)
-    rhs_expr = _wren_expr_to_model_expr(stmt.rhs)
+    rhs_expr = emit_model_expr(stmt.rhs, accs, conditioned, latent_source, parameter_space)
     new_rhs = batch_expr(rhs_expr, loop_idx, loop_iters, loop_iters_size)
     return emit_model_expr(
         Sample(stmt.name, new_lhs, new_rhs),
@@ -430,7 +430,7 @@ function vectorise_batch_stmt(
     parameter_space,
 )
     new_lhs, _ = replace_loop_idx_with_iters(stmt.lhs, loop_idx, loop_iters)
-    rhs_expr = _wren_expr_to_model_expr(stmt.rhs)
+    rhs_expr = emit_model_expr(stmt.rhs, accs, conditioned, latent_source, parameter_space)
     new_rhs = batch_expr(rhs_expr, loop_idx, loop_iters, loop_iters_size)
     return emit_model_expr(
         Observe(stmt.name, new_lhs, new_rhs),

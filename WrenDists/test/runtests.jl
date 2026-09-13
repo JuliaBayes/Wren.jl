@@ -333,9 +333,14 @@ const DIRICHLET_PLAICE = (to_vec, from_vec)
         plaice_zero_allocs=MULTIVARIATE_PLAICE,
         # https://github.com/EnzymeAD/Enzyme.jl/issues/1991
         skipped_adtypes=["EnzymeFwd"],
-        other_ad_testcases=(let f(x) = logdensityof(WrenDists.MvNormalScale(x[1:2], [x[3] 0.0; x[4] x[5]]), [0.5, 0.5])
-            ADTestCase(f, [1.0, 2.0, 1.0, 0.5, 1.0], (), ("EnzymeFwd",))
-        end,),
+        other_ad_testcases=(
+            let f(x) = logdensityof(
+                    WrenDists.MvNormalScale(x[1:2], [x[3] 0.0; x[4] x[5]]),
+                    [0.5, 0.5],
+                )
+                ADTestCase(f, [1.0, 2.0, 1.0, 0.5, 1.0], (), ("EnzymeFwd",))
+            end,
+        ),
     )
     σ = [1.0, 2.0]
     test_dist(
@@ -343,18 +348,25 @@ const DIRICHLET_PLAICE = (to_vec, from_vec)
         WrenDists.MvNormalScale(μ, Diagonal(σ)),
         Distributions.MvNormal(μ, Diagonal(σ .^ 2));
         plaice_zero_allocs=MULTIVARIATE_PLAICE,
-        other_ad_testcases=(let f(x) = logdensityof(WrenDists.MvNormalScale(x[1:2], Diagonal(x[3:4])), [0.5, 0.5])
-            ADTestCase(f, [1.0, 2.0, 1.0, 2.0], (), ())
-        end,),
+        other_ad_testcases=(
+            let f(x) = logdensityof(
+                    WrenDists.MvNormalScale(x[1:2], Diagonal(x[3:4])),
+                    [0.5, 0.5],
+                )
+                ADTestCase(f, [1.0, 2.0, 1.0, 2.0], (), ())
+            end,
+        ),
     )
     test_dist(
         "MvNormalScale (isotropic)",
         WrenDists.MvNormalScale(μ, 2.0 * I),
         Distributions.MvNormal(μ, 4.0 * I);
         plaice_zero_allocs=MULTIVARIATE_PLAICE,
-        other_ad_testcases=(let f(x) = logdensityof(WrenDists.MvNormalScale(x[1:2], x[3] * I), [0.5, 0.5])
-            ADTestCase(f, [1.0, 2.0, 2.0], (), ())
-        end,),
+        other_ad_testcases=(
+            let f(x) = logdensityof(WrenDists.MvNormalScale(x[1:2], x[3] * I), [0.5, 0.5])
+                ADTestCase(f, [1.0, 2.0, 2.0], (), ())
+            end,
+        ),
     )
     test_dist(
         "Dirichlet",
@@ -364,9 +376,11 @@ const DIRICHLET_PLAICE = (to_vec, from_vec)
         # https://github.com/JuliaDiff/ReverseDiff.jl/issues/289
         skipped_adtypes=["ReverseDiff", "ReverseDiffCpl"],
         # α != 1 to avoid xlogy(0, x) gradient disagreement across AD backends
-        other_ad_testcases=(let f(x) = logdensityof(WrenDists.Dirichlet(x), [0.3, 0.5, 0.2])
-            ADTestCase(f, [2.0, 3.0, 1.5], (), ("ReverseDiff", "ReverseDiffCpl"))
-        end,),
+        other_ad_testcases=(
+            let f(x) = logdensityof(WrenDists.Dirichlet(x), [0.3, 0.5, 0.2])
+                ADTestCase(f, [2.0, 3.0, 1.5], (), ("ReverseDiff", "ReverseDiffCpl"))
+            end,
+        ),
     )
     test_dist(
         "Multinomial",
@@ -375,9 +389,11 @@ const DIRICHLET_PLAICE = (to_vec, from_vec)
         plaice_zero_allocs=MULTIVARIATE_PLAICE,
         # https://github.com/JuliaDiff/ReverseDiff.jl/issues/289
         skipped_adtypes=["ReverseDiff", "ReverseDiffCpl"],
-        other_ad_testcases=(let f(x) = logdensityof(WrenDists.Multinomial(10, x), [2, 3, 5])
-            ADTestCase(f, [0.2, 0.3, 0.5], (), ("ReverseDiff", "ReverseDiffCpl"))
-        end,),
+        other_ad_testcases=(
+            let f(x) = logdensityof(WrenDists.Multinomial(10, x), [2, 3, 5])
+                ADTestCase(f, [0.2, 0.3, 0.5], (), ("ReverseDiff", "ReverseDiffCpl"))
+            end,
+        ),
     )
 
     # --- Batched distributions ---
