@@ -14,8 +14,9 @@
 # across a range of sizes.
 #
 # Under Reactant, the compiled gradient function returns the value and the gradients.
-# Timing reads the scalar value back to the host, which waits for the whole computation to
-# finish without copying the gradient arrays.
+# Timing reads the scalar value back to the host, as Wren's Reactant extension does on
+# every call. This adds a fixed device-to-host round trip that is unrelated to the
+# formulation, but it matches what a sampler currently pays.
 #
 # `WREN_BENCH_NS` is a comma-separated list of N values (default 100,1000,10000,100000,1000000).
 # `WREN_BENCH_BACKENDS` is a comma-separated subset of `enzyme,reactant`. By default both
@@ -126,6 +127,15 @@ function print_status()
     end
     println("Backends:         ", join(BACKENDS, ", "))
     println("Sizes:            ", join(NS, ", "))
+    if "reactant" in BACKENDS
+        # Fixed per-call costs on this device: dispatching a trivial compiled function,
+        # and additionally reading one scalar back to the host.
+        one = Reactant.to_rarray([1.0])
+        trivial = Reactant.@compile sync = true sum(one)
+        t_call = median(@be trivial(one)).time
+        t_host = median(@be _host(trivial(one))).time
+        println("Reactant floor:   ", pretty_time(t_call), " per call, ", pretty_time(t_host), " with host readback")
+    end
     println()
 end
 
