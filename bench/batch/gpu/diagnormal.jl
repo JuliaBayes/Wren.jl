@@ -42,19 +42,11 @@ function lp_invsigma((mu, sigma), x)
     return -sum(abs2, z) / 2 + sum(log, inv_sigma) - length(x) * log2π / 2
 end
 
-# 5. A three-argument `mapreduce`, which may lower to a different reduction than a
-#    broadcast followed by `sum`.
-function lp_mapreduce((mu, sigma), x)
-    s = mapreduce((xi, mi, si) -> -abs2((xi - mi) / si) / 2 - log(si), +, x, mu, sigma)
-    return s - length(x) * log2π / 2
-end
-
 const VARIANTS = [
     "loop" => ScalarIndexed(lp_loop),
     "broadcast" => lp_broadcast,
     "split" => lp_split,
     "invsigma" => lp_invsigma,
-    "mapreduce" => lp_mapreduce,
 ]
 
 function make_inputs(rng, N)
