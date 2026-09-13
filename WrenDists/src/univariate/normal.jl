@@ -1,3 +1,10 @@
+"""
+    Normal(μ, σ)
+    Normal(μ)
+    Normal()
+
+Normal distribution with mean `μ` (default zero) and standard deviation `σ` (default one).
+"""
 struct Normal{M<:Number,S<:Number} <: UnconstrainedUnivariateDist
     μ::M
     σ::S

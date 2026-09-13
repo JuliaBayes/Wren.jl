@@ -123,7 +123,6 @@ function test_dist(
                 dims = is_univariate ? (3, 4) : (3,)
                 m = WrenCore.iid(d_wd, dims)
                 @test size(m) == (size(d_wd)..., dims...)
-                @test length(m) == prod(size(m))
                 x = rand(rng, m)
                 @test size(x) == size(m)
                 if is_univariate
@@ -466,7 +465,7 @@ const DIRICHLET_PLAICE = (to_vec, from_vec)
     # Specialized: IsoNormal
     test_dist(
         "IsoNormal",
-        WrenDists.IsoNormal([1.0, 2.0, 3.0]),
+        WrenDists.IsoNormal([1.0, 2.0, 3.0], 1.0),
         Distributions.product_distribution([
             Distributions.Normal(1.0, 1.0),
             Distributions.Normal(2.0, 1.0),
@@ -475,8 +474,8 @@ const DIRICHLET_PLAICE = (to_vec, from_vec)
         test_batched=false,
         other_ad_testcases=(
             let
-                f(x) = logdensityof(WrenDists.IsoNormal(x), [0.5, 0.5, 0.5])
-                ADTestCase(f, [1.0, 2.0, 3.0], (), ())
+                f(x) = logdensityof(WrenDists.IsoNormal(x[1:3], x[4]), [0.5, 0.5, 0.5])
+                ADTestCase(f, [1.0, 2.0, 3.0, 1.0], (), ())
             end,
         ),
     )

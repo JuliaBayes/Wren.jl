@@ -28,14 +28,12 @@ const IndependentArray = Independent{<:AbstractArray{<:UnivariateDist}}
 
 _dist(d::IID) = d.components.dist
 _dims(d::IID) = d.components.dims
+Base.show(io::IO, d::IID) = print(io, "iid(", _dist(d), ", ", _dims(d), ")")
 
 Base.size(::UnivariateDist) = ()
 Base.eltype(::Type{D}) where {D<:UnivariateDist} = basefloat(_promoted_paramtype(D))
 Base.size(d::Independent) = size(d.components)
-Base.length(d::Independent) = prod(size(d))
-Base.broadcastable(d::Independent) = Ref(d)
 Base.:(==)(a::Independent, b::Independent) = a.components == b.components
-Base.show(io::IO, d::IID) = print(io, "iid(", _dist(d), ", ", _dims(d), ")")
 Base.show(io::IO, d::Independent) = print(io, "independent(", d.components, ")")
 
 Base.rand(rng::Random.AbstractRNG, d::IIDUnivariate) = rand(rng, _dist(d), _dims(d))
@@ -161,6 +159,9 @@ end
 
 Plaice.from_vec(d::Independent) = Plaice.Reshape(size(d))
 Plaice.to_vec(d::Independent) = Plaice.Vec(size(d))
+
+# TODO(penelopeysm): this doesn't look correct, except for univariates.
+Base.length(d::Independent) = prod(size(d))
 Plaice.vec_length(d::Independent) = length(d)
 Plaice.unconstrained_vec_length(d::Independent) = length(d)
 
