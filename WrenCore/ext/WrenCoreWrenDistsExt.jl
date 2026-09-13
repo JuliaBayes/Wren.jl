@@ -1,6 +1,7 @@
 module WrenCoreWrenDistsExt
 
 using WrenCore: WrenCore
+using FillArrays: Fill
 using WrenDists:
     WrenDist,
     UnivariateDist,
@@ -47,6 +48,17 @@ function WrenCore.batched(
     _kwargs...,
 )
     return IsoNormal(indexed_mu.data, sigma)
+end
+
+# Normal(const_mu, sigma[i]) -> DiagNormal(Fill(const_mu, ...), sigma)
+function WrenCore.batched(
+    iters,
+    ::Val{Normal},
+    mu::Number,
+    indexed_sigma::WrenCore.Indexed;
+    _kwargs...,
+)
+    return DiagNormal(Fill(mu, size(indexed_sigma.data)), indexed_sigma.data)
 end
 
 # Normal(x[i]) --> IsoNormal(x, 1.0)
