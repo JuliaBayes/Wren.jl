@@ -206,7 +206,20 @@ accs = rand_with_logp(iid_obs(y))
 loglikelihood(accs) ≈ sum(logdensityof.(Normal(parameters(accs)[@vn(mu)]), y))
 ```
 
-`@iid` and `@observe` can be combined in either order. Because the shape is taken from the current value of the left-hand side, that value must already exist when the statement runs: a model argument, or a value computed earlier in the model.
+When specifying priors for independent groups `@iid mu ~ dist`, there is typically no way for `@iid` to derive `size(mu)` because `mu` is not yet defined. You can instead specify `size` via an argument:
+
+```@example model
+@wren function iid_prior(y, group)
+    n_groups = maximum(group)
+    @iid mu ~ Normal() size=n_groups
+    @observe @iid y ~ Normal(mu)
+end
+```
+
+!!! warning
+
+    Should you need to combine `@observe` with `@iid` _and_ the `size` argument, it'll be necessary to pass `@iid` as the inner macro to ensure that `size` is picked up correctly.
+    Otherwise, you can combine these macros in either order.
 
 ## [Batched tilde-statements](@id batched)
 
