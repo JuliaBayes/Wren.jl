@@ -86,7 +86,7 @@ not hold, rather than sampling it.
 """
 function StatsAPI.loglikelihood(model::WrenCore.Model, chain::VNChain)
     accs = WrenCore.AccumulatorTuple(WrenCore.LogLikelihoodAccumulator())
-    return _pointwise_logp(WrenCore.loglikelihood, model, chain, accs)
+    return _pointwise_logp(StatsAPI.loglikelihood, model, chain, accs)
 end
 
 """
