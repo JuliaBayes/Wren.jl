@@ -1,20 +1,10 @@
-module WrenCoreProbabilityMeasuresExt
-
-using WrenCore: WrenCore
-using Plaice: Plaice
-using Random: Random
-using LinearAlgebra: Diagonal, LowerTriangular, UniformScaling, diag
-using DensityInterface: DensityInterface, logdensityof
-using ProbabilityMeasures: ProbabilityMeasures as PM
-using VarNames: VarNames
-
 """
     Repeated{D,N}
 
 A single measure `dist` repeated over `N` extra dimensions `dims`. Used as the component
 collection of an [`Independent`](@ref) built by `WrenCore.iid`.
 """
-struct Repeated{D<:PM.AbstractProbabilityMeasure,N}
+struct Repeated{D<:WrenDist,N}
     dist::D
     dims::Dims{N}
 end
@@ -32,37 +22,25 @@ struct Independent{C}
 end
 
 const IID{D,N} = Independent{Repeated{D,N}}
-const IIDUnivariate = Independent{<:Repeated{<:PM.UnivariateMeasure}}
-const IIDMultivariate = Independent{<:Repeated{<:PM.MultivariateMeasure}}
-const IndependentArray = Independent{<:AbstractArray{<:PM.UnivariateMeasure}}
-
-WrenCore.iid(dist::PM.AbstractProbabilityMeasure, dims::Dims) =
-    Independent(Repeated(dist, dims))
-WrenCore.independent(dists::AbstractArray{<:PM.UnivariateMeasure}) = Independent(dists)
-function WrenCore.independent(dists::AbstractArray{<:PM.MultivariateMeasure})
-    throw(
-        ArgumentError(
-            "independent products of multivariate ProbabilityMeasures are not supported; " *
-            "use `iid` for identically distributed draws or a single multivariate measure.",
-        ),
-    )
-end
+const IIDUnivariate = Independent{<:Repeated{<:UnivariateDist}}
+const IIDMultivariate = Independent{<:Repeated{<:MultivariateDist}}
+const IndependentArray = Independent{<:AbstractArray{<:UnivariateDist}}
 
 _dist(d::IID) = d.components.dist
 _dims(d::IID) = d.components.dims
-
-Base.size(d::Independent) = size(d.components)
-Base.length(d::Independent) = prod(size(d))
-Base.broadcastable(d::Independent) = Ref(d)
-Base.:(==)(a::Independent, b::Independent) = a.components == b.components
 Base.show(io::IO, d::IID) = print(io, "iid(", _dist(d), ", ", _dims(d), ")")
+
+Base.size(::UnivariateDist) = ()
+Base.eltype(::Type{D}) where {D<:UnivariateDist} = basefloat(_promoted_paramtype(D))
+Base.size(d::Independent) = size(d.components)
+Base.:(==)(a::Independent, b::Independent) = a.components == b.components
 Base.show(io::IO, d::Independent) = print(io, "independent(", d.components, ")")
 
 Base.rand(rng::Random.AbstractRNG, d::IIDUnivariate) = rand(rng, _dist(d), _dims(d))
 # Stack vector draws along the trailing dimensions.
 function Base.rand(rng::Random.AbstractRNG, d::IIDMultivariate)
     draws = rand(rng, _dist(d), _dims(d))
-    isempty(draws) && return Array{eltype(eltype(_dist(d)))}(undef, size(d))
+    isempty(draws) && return Array{noisetype(_dist(d))}(undef, size(d))
     return stack(draws)
 end
 Base.rand(rng::Random.AbstractRNG, d::IndependentArray) =
@@ -90,53 +68,21 @@ end
 Sum of `logdensityof(dist, xᵢ)` over every draw `xᵢ` stored in `x`. Add methods to this
 function to provide closed-form expressions for specific measures.
 """
-function _iid_logdensityof(dist::PM.UnivariateMeasure, x::AbstractArray)
+function _iid_logdensityof(dist::UnivariateDist, x::AbstractArray)
     return sum(Base.Fix1(logdensityof, dist), x; init=_zero_logdensity(dist, x))
 end
 
-# Follows ProbabilityMeasures' result-type rule so empty arrays sum to a typed zero.
-_draw_eltype(dist::PM.UnivariateMeasure) = eltype(dist)
-_draw_eltype(dist::PM.MultivariateMeasure) = eltype(eltype(dist))
-function _zero_logdensity(dist::PM.AbstractProbabilityMeasure, x::AbstractArray)
-    return zero(float(promote_type(eltype(x), _draw_eltype(dist))))
+function _zero_logdensity(dist::WrenDist, x::AbstractArray)
+    return zero(float(promote_type(eltype(x), noisetype(dist))))
 end
 
 # Each slice is one draw. This fallback is CPU-only.
-function _iid_logdensityof(
-    dist::PM.MultivariateMeasure,
-    x::AbstractArray{<:Any,M},
-) where {M}
+function _iid_logdensityof(dist::MultivariateDist, x::AbstractArray{<:Any,M}) where {M}
     slices = eachslice(x; dims=ntuple(i -> i + 1, Val(M - 1)))
     return sum(Base.Fix1(logdensityof, dist), slices; init=_zero_logdensity(dist, x))
 end
 
-# Compute the shared normalising constant once.
-function _iid_logdensityof(dist::PM.Normal, x::AbstractArray)
-    μ = dist.μ
-    _, _, σ = promote(zero(eltype(x)), μ, dist.σ)
-    inv_σ = inv(float(σ))
-    z2 = sum(xi -> abs2((xi - μ) * inv_σ), x; init=zero(inv_σ))
-    lognorm = logdensityof(dist, oftype(z2, μ))
-    return length(x) * lognorm - z2 / 2
-end
-
-# Whiten all draws together. Reduce the diagonal to avoid scalar indexing in PM.logdet.
-_whiten(L::UniformScaling, X::AbstractMatrix) = X ./ L.λ
-_whiten(::UniformScaling{Bool}, X::AbstractMatrix) = X
-_whiten(L::Diagonal, X::AbstractMatrix) = X ./ L.diag
-_whiten(L::AbstractMatrix, X::AbstractMatrix) = LowerTriangular(L) \ X
-_logdet_factor(L::UniformScaling, n, ::Type{T}) where {T} = n * PM.logt(T(L.λ))
-_logdet_factor(L::Diagonal, n, ::Type{T}) where {T} = sum(x -> PM.logt(T(x)), L.diag)
-_logdet_factor(L::AbstractMatrix, n, ::Type{T}) where {T} = sum(x -> PM.logt(T(x)), diag(L))
-_centered(X::AbstractMatrix, μ::AbstractVector) = X .- μ
-function _iid_logdensityof(dist::PM.MvNormal, x::AbstractArray)
-    n = length(dist.μ)
-    X = reshape(x, n, :)
-    z2 = sum(abs2, _whiten(dist.L, _centered(X, dist.μ)))
-    T = float(typeof(z2))
-    lognorm = -(n * T(PM.log2π)) / 2 - _logdet_factor(dist.L, n, T)
-    return size(X, 2) * lognorm - z2 / 2
-end
+# --- ElementwiseLink / ElementwiseInvLink ---
 
 # Apply one bijector or an array of bijectors, flattening on link and reshaping on inverse.
 struct ElementwiseLink{B,N} <: Plaice.AbstractBijector
@@ -209,8 +155,13 @@ function Plaice.with_logabsdet_jacobian(
     return _apply.(Ref(t.bijector), yr), sum(y)
 end
 
+# --- Plaice interface for Independent ---
+
 Plaice.from_vec(d::Independent) = Plaice.Reshape(size(d))
 Plaice.to_vec(d::Independent) = Plaice.Vec(size(d))
+
+# TODO(penelopeysm): this doesn't look correct, except for univariates.
+Base.length(d::Independent) = prod(size(d))
 Plaice.vec_length(d::Independent) = length(d)
 Plaice.unconstrained_vec_length(d::Independent) = length(d)
 
@@ -258,68 +209,3 @@ end
 function Plaice.to_unconstrained_vec(d::IndependentArray)
     return ElementwiseLink(Plaice.scalar_to_scalar_bijector.(d.components), size(d))
 end
-
-WrenCore.batched(iters, dist::PM.AbstractProbabilityMeasure; _kwargs...) =
-    WrenCore.iid(dist, size(iters))
-
-struct DiagNormal{M<:AbstractArray,S<:AbstractArray}
-    mu::M
-    sigma::S
-end
-Plaice.from_unconstrained_vec(d::DiagNormal) = Plaice.Reshape(size(d.mu))
-Plaice.to_unconstrained_vec(d::DiagNormal) = Plaice.Vec(size(d.mu))
-Base.rand(rng::Random.AbstractRNG, d::DiagNormal) =
-    randn(rng, size(d.mu)) .* d.sigma .+ d.mu
-@inline function WrenCore.logdensityof(d::DiagNormal, x)
-    s = zero(eltype(x))
-    @inbounds for i in eachindex(x, d.mu, d.sigma)
-        z = (x[i] - d.mu[i]) / d.sigma[i]
-        s += z * z + 2 * log(d.sigma[i])
-    end
-    return -0.5 * s - 0.5 * length(d.mu) * log(2π)
-end
-function WrenCore.batched(
-    iters,
-    ::Val{PM.Normal},
-    indexed_mu::WrenCore.Indexed,
-    indexed_sigma::WrenCore.Indexed;
-    _kwargs...,
-)
-    # e.g. batched(1:10, Val(PM.Normal), Indexed(x[1:10]), Indexed(y[1:10]))
-    return DiagNormal(indexed_mu.data, indexed_sigma.data)
-end
-
-struct IsoNormal{M<:AbstractArray}
-    mu::M
-end
-Plaice.from_unconstrained_vec(d::IsoNormal) = Plaice.Reshape(size(d.mu))
-Plaice.to_unconstrained_vec(d::IsoNormal) = Plaice.Vec(size(d.mu))
-Base.rand(rng::Random.AbstractRNG, d::IsoNormal) = randn(rng, size(d.mu)) .+ d.mu
-function WrenCore.logdensityof(d::IsoNormal, x)
-    dist = sum(abs2, x .- d.mu)
-    return -0.5 * dist - 0.5 * length(d.mu) * log(2π)
-end
-function WrenCore.batched(iters, ::Val{PM.Normal}, indexed_mu::WrenCore.Indexed; _kwargs...)
-    # e.g. batched(1:10, Val(PM.Normal), Indexed(x[1:10]))
-    return IsoNormal(indexed_mu.data)
-end
-
-struct IIDNormal{T<:Tuple,M<:Number,S<:Number}
-    size::T
-    mu::M
-    sigma::S
-end
-Base.rand(rng::Random.AbstractRNG, d::IIDNormal) = randn(rng, d.size) .* d.sigma .+ d.mu
-Plaice.from_unconstrained_vec(d::IIDNormal) = Plaice.Reshape(d.size)
-Plaice.to_unconstrained_vec(d::IIDNormal) = Plaice.Vec(d.size)
-function WrenCore.logdensityof(d::IIDNormal, x)
-    inv_sigma = inv(d.sigma)
-    # dist = sum(xi -> abs2((xi - d.mu) * inv_sigma), x)
-    # ^ This is faster, but creates lots of allocs
-    dist = sum(abs2, (x .- d.mu) .* inv_sigma)
-    N = length(x)
-    return -0.5 * dist - N * log(d.sigma) - 0.5 * N * log(2π)
-end
-WrenCore.batched(iters, n::PM.Normal; _kwargs...) = IIDNormal(size(iters), n.μ, n.σ)
-
-end # module WrenCoreProbabilityMeasuresExt
