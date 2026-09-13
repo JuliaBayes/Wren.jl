@@ -198,10 +198,6 @@ function Base.show(io::IO, ::MIME"text/plain", result::ModelRunResult)
     return nothing
 end
 
-# Median benchmark of `f()`. If `seconds` is `nothing`, Chairmarks picks its own default.
-_median_be(f, ::Nothing) = median(@be f)
-_median_be(f, seconds::Real) = median(@be f seconds = seconds)
-
 """
     benchmark_and_test(
         model::WrenCore.Model,
@@ -236,7 +232,6 @@ function benchmark_and_test(
     benchmark_model::Bool=true,
     benchmark_primal::Bool=true,
     benchmark_ad::Bool=(adtype !== nothing),
-    benchmark_seconds::Union{Real,Nothing}=nothing,
     test_correctness::Union{AbstractADCorrectnessTestSetting,Bool}=NoTest(),
     atol::Real=100 * eps(),
     rtol::Real=sqrt(eps()),
@@ -263,9 +258,9 @@ function benchmark_and_test(
     rand_bench, logjoint_bench = if benchmark_model
         rng = Xoshiro(468) # avoid mutating global RNG
         rand(rng, model) # warmup
-        rb = _median_be(() -> rand(rng, model), benchmark_seconds)
+        rb = median(@be rand($rng, $model))
         logjoint(model, vnt_params) # warmup
-        ljb = _median_be(() -> logjoint(model, vnt_params), benchmark_seconds)
+        ljb = median(@be logjoint($model, $vnt_params))
         rb, ljb
     else
         nothing, nothing
@@ -309,7 +304,7 @@ function benchmark_and_test(
     end
     primal_bench = if benchmark_primal
         lp(vecmodel, vec_params) # warm up
-        _median_be(() -> lp(vecmodel, vec_params), benchmark_seconds)
+        median(@be lp($vecmodel, $vec_params))
     else
         nothing
     end
@@ -366,7 +361,7 @@ function benchmark_and_test(
 
     grad_bench = if benchmark_ad
         lp_and_grad(vecmodel, vec_params)
-        _median_be(() -> lp_and_grad(vecmodel, vec_params), benchmark_seconds)
+        median(@be lp_and_grad($vecmodel, $vec_params))
     else
         nothing
     end
