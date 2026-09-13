@@ -102,14 +102,11 @@ function emit_model_expr(stmt::Sample, accs, conditioned, latent_source, paramet
     end
 end
 
-# `@iid lhs ~ rhs` (or the `@observe` variants) means `lhs ~ iid(rhs, size(lhs))`: one
-# array-valued distribution of independent draws from `rhs`, with the same shape as the
-# current value of `lhs`. We rewrite the wrapped tilde-statement's right-hand side and then
-# emit it exactly as we would a plain `Sample` or `Observe`.
 function emit_model_expr(stmt::IID, accs, conditioned, latent_source, parameter_space)
     tilde = stmt.tilde
     rhs_expr = emit_model_expr(tilde.rhs, accs, conditioned, latent_source, parameter_space)
-    iid_rhs = :($(iid)($rhs_expr, $(Base.size)($(tilde.lhs))))
+    dims_expr = stmt.size === nothing ? :($(Base.size)($(tilde.lhs))) : stmt.size
+    iid_rhs = :($(iid)($rhs_expr, $dims_expr))
     return emit_model_expr(
         _with_rhs(tilde, iid_rhs),
         accs,
@@ -121,37 +118,30 @@ end
 _with_rhs(stmt::Sample, rhs) = Sample(stmt.name, stmt.lhs, rhs)
 _with_rhs(stmt::Observe, rhs) = Observe(stmt.name, stmt.lhs, rhs)
 
-# @plate for i in 1:N
-#    y[i] ~ Normal(x[i])
-# end
-#
-# CURRENTLY gets lowered to something like:
-#
-# y[1:N] ~ independent([Normal(x[i]) for i in 1:N])
-#
-# This can be improved! https://github.com/JuliaBayes/ProbabilityMeasures.jl/issues/15
-function emit_model_expr(stmt::Plate, accs, conditioned, latent_source, parameter_space)
+function emit_model_expr(stmt::Batch, accs, conditioned, latent_source, parameter_space)
     # stmt.body isa block expr
-    @gensym loop_iters
+    @gensym loop_iters loop_iters_size
     initialise_iter_expr = :($loop_iters = $(stmt.loop_iters))
+    initialise_size_expr = :($loop_iters_size = $(Base.size)($loop_iters))
     body_exprs = [
-        vectorise_plate_stmt(
+        vectorise_batch_stmt(
             s,
             stmt.loop_idx,
             loop_iters,
+            loop_iters_size,
             accs,
             conditioned,
             latent_source,
             parameter_space,
         ) for s in stmt.body.args
     ]
-    return Expr(:block, initialise_iter_expr, body_exprs...)
+    return Expr(:block, initialise_iter_expr, initialise_size_expr, body_exprs...)
 end
 
 """
     Indexed
 
-Marker struct to indicate that the argument is an object indexed by the plate loop index.
+Marker struct to indicate that the argument is an object indexed by the batch loop index.
 """
 struct Indexed{T}
     data::T
@@ -163,7 +153,7 @@ end
 Return a distribution over arrays with the same shape as `dists`, where each entry
 is independently drawn from `dists[i]`.
 
-Used by `@plate` for indexed distributions without a specialised `batched` method.
+Used by `@batch` for indexed distributions without a specialised `batched` method.
 Backends (e.g. the Distributions and ProbabilityMeasures extensions) add methods for
 their own distribution types.
 """
@@ -173,7 +163,7 @@ function independent end
     iid(dist, dims::Dims)
 
 Return independent draws from `dist` in an array of shape `(size(dist)..., dims...)`.
-The distribution is stored once. `@plate` uses this when the distribution does not
+The distribution is stored once. `@batch` uses this when the distribution does not
 depend on the loop index.
 
 ```julia
@@ -185,9 +175,14 @@ end
 
 Inside `@wren`, `@iid y ~ dist` is shorthand for `y ~ iid(dist, size(y))`.
 
+When the lhs is undefined, as is typically the case when setting up priors, use the
+`size` keyword to set its shape `@iid mu ~ dist size=k` where k may be either a tuple
+or an integer.
+
 The fallback is `independent(Fill(dist, dims))`; backends may add specialised methods.
 """
 iid(dist, dims::Dims) = independent(FillArrays.Fill(dist, dims))
+iid(dist, n::Integer) = iid(dist, (n,))
 
 # TODO(penelopeysm): I'm unsure about type stability here because of the vararg
 # specialisation thing. We might need the fallback on generated functions with enumerated
@@ -220,20 +215,17 @@ function occurs_in_kwargs(parameters::Expr, loop_idx::Symbol)
             # f(...; kw = val_expr)
             occurs_in_expr(kw.args[2], loop_idx) && return true
         else
-            error("@plate: encountered unexpected kwarg expression $(kw)")
+            error("@batch: encountered unexpected kwarg expression $(kw)")
         end
     end
     return false
 end
 
-function batch_expr(expr, loop_idx, loop_iters)
+function batch_expr(expr, loop_idx, loop_iters, loop_iters_size)
     # Check if the expr contains the loop index anywhere.
     return if !occurs_in_expr(expr, loop_idx)
         # If not, it's a constant wrt the loop.
-        #
-        # TODO(penelopeysm): Use `iid(rhs, size(loop_iters))` here once it's in main,
-        # instead of `batched`. https://github.com/JuliaBayes/Wren.jl/pull/71
-        Expr(:call, WrenCore.batched, loop_iters, expr)
+        Expr(:call, WrenCore.iid, expr, loop_iters_size)
     else
         if expr isa Expr && expr.head == :call
             # First we'll check if the call has kwargs and if the loop index is referenced
@@ -325,6 +317,12 @@ function batch_expr(expr, loop_idx, loop_iters)
     end
 end
 
+occurs_in_expr(expr::Symbol, loop_idx::Symbol) = expr == loop_idx
+occurs_in_expr(expr::QuoteNode, loop_idx::Symbol) = false
+occurs_in_expr(expr::Expr, loop_idx::Symbol) =
+    any(arg -> occurs_in_expr(arg, loop_idx), expr.args)
+occurs_in_expr(expr, loop_idx) = false
+
 """
     replace_loop_idx_with_iters(expr, loop_idx::Symbol, loop_iters)
 
@@ -366,7 +364,15 @@ function replace_loop_idx_with_iters(expr, loop_idx::Symbol, loop_iters)
             elseif expr.head == :ref
                 # e.g. x[i + 1] -> x[@. (1:J) + 1] also causes the overall indexing
                 # expression to be batched
-                new_expr = Expr(expr.head, new_args...)
+                new_expr = if count(last, new_args_and_is_batched) > 1
+                    # Preserve paired indices, e.g. x[i, i], rather than a Cartesian product.
+                    args = map(new_args_and_is_batched) do (arg, is_batched)
+                        is_batched ? arg : Expr(:call, Base.Ref, arg)
+                    end
+                    Expr(:., Base.getindex, Expr(:tuple, args...))
+                else
+                    Expr(expr.head, new_args...)
+                end
                 new_expr, any_arg_was_batched
             else
                 # e.g. x[const] -> x[const]
@@ -374,7 +380,7 @@ function replace_loop_idx_with_iters(expr, loop_idx::Symbol, loop_iters)
                 new_expr, false
             end
         else
-            error("@plate: unsupported expression $(expr) with head $(expr.head)")
+            error("@batch: unsupported expression $(expr) with head $(expr.head)")
         end
     else
         # e.g. literals
@@ -382,24 +388,23 @@ function replace_loop_idx_with_iters(expr, loop_idx::Symbol, loop_iters)
     end
 end
 
-vectorise_plate_stmt(lnn::LineNumberNode, idx, iters, ax, cond, ls, ps) = lnn
-function vectorise_plate_stmt(::IID, idx, iters, ax, cond, ls, ps)
-    # `@iid` already produces one array-valued statement; batching it over a plate has no
-    # defined semantics yet.
-    return error("@iid is not supported inside @plate")
+vectorise_batch_stmt(lnn::LineNumberNode, idx, iters, size, ax, cond, ls, ps) = lnn
+function vectorise_batch_stmt(::IID, idx, iters, size, ax, cond, ls, ps)
+    return error("@iid is not supported inside @batch")
 end
-function vectorise_plate_stmt(
+function vectorise_batch_stmt(
     stmt::Sample,
     loop_idx,
     loop_iters,
+    loop_iters_size,
     accs,
     conditioned,
     latent_source,
     parameter_space,
 )
     new_lhs, _ = replace_loop_idx_with_iters(stmt.lhs, loop_idx, loop_iters)
-    rhs_expr = _wren_expr_to_model_expr(stmt.rhs)
-    new_rhs = batch_expr(rhs_expr, loop_idx, loop_iters)
+    rhs_expr = emit_model_expr(stmt.rhs, accs, conditioned, latent_source, parameter_space)
+    new_rhs = batch_expr(rhs_expr, loop_idx, loop_iters, loop_iters_size)
     return emit_model_expr(
         Sample(stmt.name, new_lhs, new_rhs),
         accs,
@@ -409,24 +414,19 @@ function vectorise_plate_stmt(
     )
 end
 
-occurs_in_expr(expr::Symbol, loop_idx::Symbol) = expr == loop_idx
-occurs_in_expr(expr::QuoteNode, loop_idx::Symbol) = false
-occurs_in_expr(expr::Expr, loop_idx::Symbol) =
-    any(arg -> occurs_in_expr(arg, loop_idx), expr.args)
-occurs_in_expr(expr, loop_idx) = false
-
-function vectorise_plate_stmt(
+function vectorise_batch_stmt(
     stmt::Observe,
     loop_idx,
     loop_iters,
+    loop_iters_size,
     accs,
     conditioned,
     latent_source,
     parameter_space,
 )
     new_lhs, _ = replace_loop_idx_with_iters(stmt.lhs, loop_idx, loop_iters)
-    rhs_expr = _wren_expr_to_model_expr(stmt.rhs)
-    new_rhs = batch_expr(rhs_expr, loop_idx, loop_iters)
+    rhs_expr = emit_model_expr(stmt.rhs, accs, conditioned, latent_source, parameter_space)
+    new_rhs = batch_expr(rhs_expr, loop_idx, loop_iters, loop_iters_size)
     return emit_model_expr(
         Observe(stmt.name, new_lhs, new_rhs),
         accs,

@@ -1,60 +1,22 @@
-module WrenBatchTests
+module WrenBatchGeneralTests
 
-@info "testing batch.jl"
+@info "testing batch/general.jl"
 
 using Test
 using WrenCore
-using Enzyme
+using WrenCore.TestUtils: test_model_equivalence
 using Distributions
-using DifferentiationInterface: AbstractADType
+using Enzyme
 
-function get_lp_components(model::WrenCore.Model, params)
-    _, accs = evaluate(
-        model,
-        FromParams(params),
-        OriginalSpace(),
-        AccumulatorTuple(LogPriorAccumulator(), LogLikelihoodAccumulator()),
-    )
-    return logprior(accs), loglikelihood(accs)
-end
+adtype = AutoEnzyme(; mode=Reverse)
 
-function test_model_equivalence(
-    model1::WrenCore.Model,
-    model2::WrenCore.Model,
-    adtype::Union{AbstractADType,Nothing}=AutoEnzyme(; mode=Reverse),
-)
-    # Shouldn't matter which model we use to generate params, since they are equivalent
-    params = rand(model1)
-
-    lpr1, llk1 = get_lp_components(model1, params)
-    lpr2, llk2 = get_lp_components(model2, params)
-    @test lpr1 ≈ lpr2
-    @test llk1 ≈ llk2
-
-    # Test vectorisation
-    vm1 = VecModel(model1, adtype)
-    vm2 = VecModel(model2, adtype)
-    @test vm1.dimension == vm2.dimension
-    vparams = vectorise_latents(FromParams(params), vm1)
-    if adtype === nothing
-        lp1 = lp(vm1, vparams)
-        lp2 = lp(vm2, vparams)
-        @test lp1 ≈ lp2
-    else
-        lp1, grad1 = lp_and_grad(vm1, vparams)
-        lp2, grad2 = lp_and_grad(vm2, vparams)
-        @test lp1 ≈ lp2
-        @test grad1 ≈ grad2
-    end
-end
-
-@testset "batch.jl" begin
+@testset "general @batch properties" begin
     @testset "semantic invariance" begin
-        # `@plate for ... end` should *always* have the same behaviour as `for ... end`
+        # `@batch for ... end` should *always* have the same behaviour as `for ... end`
 
         @testset "sample" begin
             @wren function sample1(x)
-                @plate for i in 1:3
+                @batch for i in 1:3
                     x[i] ~ Normal()
                 end
             end
@@ -63,13 +25,13 @@ end
                     x[i] ~ Normal()
                 end
             end
-            test_model_equivalence(sample1(zeros(3)), sample2(zeros(3)))
+            test_model_equivalence(sample1(zeros(3)), sample2(zeros(3)), adtype)
         end
 
         @testset "observe" begin
             @wren function observe1(x)
                 a ~ Normal()
-                @plate for i in 1:3
+                @batch for i in 1:3
                     @observe x[i] ~ Normal(a)
                 end
             end
@@ -79,13 +41,13 @@ end
                     @observe x[i] ~ Normal(a)
                 end
             end
-            test_model_equivalence(observe1(zeros(3)), observe2(zeros(3)))
+            test_model_equivalence(observe1(zeros(3)), observe2(zeros(3)), adtype)
         end
 
         @testset "conditioned" begin
             @wren function conditioned1(x)
                 a ~ Normal()
-                @plate for i in 1:3
+                @batch for i in 1:3
                     x[i] ~ Normal(a)
                 end
             end
@@ -97,12 +59,12 @@ end
             end
             model1 = conditioned1(zeros(3)) | VarNamedTuple(x=ones(3))
             model2 = conditioned2(zeros(3)) | VarNamedTuple(x=ones(3))
-            test_model_equivalence(model1, model2)
+            test_model_equivalence(model1, model2, adtype)
         end
 
         @testset "sample + observe" begin
             @wren function sample_observe1(x, y)
-                @plate for i in 1:3
+                @batch for i in 1:3
                     x[i] ~ Normal()
                     @observe y[i] ~ Normal(x[i])
                 end
@@ -116,24 +78,25 @@ end
             test_model_equivalence(
                 sample_observe1(zeros(3), ones(3)),
                 sample_observe2(zeros(3), ones(3)),
+                adtype,
             )
         end
     end
 
     @testset "keyword arguments" begin
-        @wren function plate_kwargs(y, p)
-            @plate for i in eachindex(y)
+        @wren function batch_kwargs(y, p)
+            @batch for i in eachindex(y)
                 y[i] ~ NegativeBinomial(2.0, p[i]; check_args=false)
             end
         end
-        @wren function noplate_kwargs(y, p)
-            @plate for i in eachindex(y)
+        @wren function nobatch_kwargs(y, p)
+            @batch for i in eachindex(y)
                 y[i] ~ NegativeBinomial(2.0, p[i]; check_args=false)
             end
         end
         test_model_equivalence(
-            plate_kwargs(ones(3), [0.1, 0.2, 0.3]),
-            noplate_kwargs(ones(3), [0.1, 0.2, 0.3]),
+            batch_kwargs(ones(3), [0.1, 0.2, 0.3]),
+            nobatch_kwargs(ones(3), [0.1, 0.2, 0.3]),
             nothing,
         )
     end
@@ -141,16 +104,36 @@ end
     @testset "different examples of batchable syntax" begin
         # could really do with more examples here
 
+        @testset "issue #79" begin
+            # https://github.com/JuliaBayes/Wren.jl/issues/79
+            @wren function batch_diagonal(x, y)
+                @batch for i in 1:2
+                    x[i] ~ Normal(y[i, i])
+                end
+            end
+            @wren function nobatch_diagonal(x, y)
+                for i in 1:2
+                    x[i] ~ Normal(y[i, i])
+                end
+            end
+            y = [1.0 10.0; 20.0 2.0]
+            test_model_equivalence(
+                batch_diagonal(zeros(2), y),
+                nobatch_diagonal(zeros(2), y),
+                adtype,
+            )
+        end
+
         @testset "issue #72" begin
             # https://github.com/JuliaBayes/Wren.jl/issues/72
-            @wren function plate_subtraction(y, n)
+            @wren function batch_subtraction(y, n)
                 μ ~ Normal(0, 1)
                 m = fill(μ, n)
-                @plate for k in eachindex(y)
+                @batch for k in eachindex(y)
                     @observe y[k] ~ Normal(1 - m[k], 1.0)
                 end
             end
-            @wren function noplate_subtraction(y, n)
+            @wren function nobatch_subtraction(y, n)
                 μ ~ Normal(0, 1)
                 m = fill(μ, n)
                 for k in eachindex(y)
@@ -160,12 +143,12 @@ end
             n = 5
             y = randn(n)
             test_model_equivalence(
-                plate_subtraction(y, n),
-                noplate_subtraction(y, n),
+                batch_subtraction(y, n),
+                nobatch_subtraction(y, n),
                 nothing,
             )
         end
     end
 end
 
-end # module WrenBatchTests
+end # module WrenBatchGeneralTests

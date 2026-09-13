@@ -57,9 +57,11 @@ This functionality depends on [RuntimeGeneratedFunctions.jl](https://github.com/
     GG is supposedly more powerful than RGF, but I haven't yet come across a use case where GG was necessary.
     Furthermore, RGF is actually maintained (for example it is used in ModelingToolkit.jl), and so it seems like a better choice for a dependency.
 
-Since the AST is in principle capable of capturing all Julia code, this approach is no less flexible than DynamicPPL, but additionally allows for several things (which are not yet implemented, but are planned):
+Since the AST is in principle capable of capturing all Julia code, this approach is no less flexible than DynamicPPL, but additionally allows for several things.
 
-  - Higher-level probabilistic primitives, such as a `plate` construct which is used to mark conditionally independent loop iterations. See [issue #1](https://github.com/JuliaBayes/Wren.jl/issues/1) for a motivation of this.
+  - Higher-level probabilistic primitives, such as a `batch` construct which is used to mark conditionally independent loop iterations. See [issue #1](https://github.com/JuliaBayes/Wren.jl/issues/1) for a motivation of this. Macros like `@iid` and `@batch` have already been implemented to some degree in Wren, although it requires more custom overloads for individual distributions to be widely useful.
+
+(None of the following have been implemented yet, although they are planned.)
 
   - Programmatic construction of models. A user can, instead of writing Julia code, manually build up a Wren AST and generate a model with it.
 

@@ -8,14 +8,21 @@ include("samplers/prior.jl")
 include("samplers/nuts.jl")
 export prior, nuts
 
+# Distributions
+module Dists
+using Reexport: @reexport
+@reexport using WrenDists
+end
+
 # Re-exports
 using WrenCore:
-    @wren,
+    WrenCore,
     # DSL
+    @wren,
     @addloglikelihood,
     @iid,
     @observe,
-    @plate,
+    @batch,
     # Models
     Model,
     condition,
@@ -40,12 +47,13 @@ using WrenCore:
     FromPrior,
     FromParams
 
-export @wren,
+export WrenCore,
     # DSL
+    @wren,
     @addloglikelihood,
     @iid,
     @observe,
-    @plate,
+    @batch,
     # Models
     Model,
     condition,

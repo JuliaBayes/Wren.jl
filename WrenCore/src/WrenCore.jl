@@ -40,12 +40,12 @@ using .Expressions:
     IID,
     Observe,
     OtherStatement,
-    Plate,
+    Batch,
     ReturnStatement,
     Sample,
     WrenExpr,
     _show_wren_exprs,
-    _wren_expr_to_model_expr,
+    _wren_expr_to_display_expr,
     to_wren_exprs
 
 include("model/model.jl")
@@ -62,12 +62,13 @@ include("vecmodel.jl")
 include("interface.jl")
 include("draw.jl")
 include("test_ad.jl")
+include("test_utils.jl")
 
 export @wren,
     @addloglikelihood,
     @iid,
     @observe,
-    @plate,
+    @batch,
     AbstractLatentSource,
     AbstractTransform,
     AbstractParameterSpace,
@@ -91,6 +92,7 @@ export @wren,
     AsOriginal,
     TransformedValue,
     VecModel,
+    DEFAULT_AD,
     VectorisedParamsAccumulator,
     vectorise_latents,
     WithBackend,

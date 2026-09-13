@@ -5,7 +5,7 @@ module Expressions
 
 Wren's probabilistic intermediate representation. This is for the most part a copy of
 Julia's `Expr` type, but with a few additional node types for probabilistic statements,
-namely [`Sample`](@ref), [`Observe`](@ref), [`IID`](@ref), and [`Plate`](@ref).
+namely [`Sample`](@ref), [`Observe`](@ref), [`IID`](@ref), and [`Batch`](@ref).
 
 The [`ReturnStatement`](@ref) type is used as a convenient wrapper around `Expr(:return,
 ...)` to allow for dispatch, but has the same meaning.
@@ -50,17 +50,18 @@ Representation of `@iid lhs ~ rhs` (wrapping a [`Sample`](@ref)), or of
 The wrapped tilde-statement is stored as written; the meaning `lhs ~ iid(rhs, size(lhs))`
 is only given to it at the second stage of lowering, in `emit_model_expr`.
 """
-struct IID{T<:Union{Sample,Observe}} <: AbstractWrenExpr
+struct IID{T<:Union{Sample,Observe},S} <: AbstractWrenExpr
     tilde::T
+    size::S
 end
 
 """
-    Plate
+    Batch
 
 Representation of
 
 ```julia
-@plate [name=NAME] [size=SIZE] for LOOP_IDX in LOOP_ITERS
+@batch [name=NAME] [size=SIZE] for LOOP_IDX in LOOP_ITERS
     BODY
 end
 ```
@@ -68,7 +69,7 @@ end
 `name` must be a single Symbol. If not specified, a gensym'd name is used.
 If `size` is not specified, it will be `nothing`.
 """
-struct Plate{I,S,B} <: AbstractWrenExpr
+struct Batch{I,S,B} <: AbstractWrenExpr
     name::Symbol
     loop_idx::Symbol
     loop_iters::I
@@ -163,6 +164,21 @@ lower_to_wren(expr, ::Module, ::Bool=false) = expr
 _is_macrocall(expr, name::Symbol) = Meta.isexpr(expr, :macrocall) && expr.args[1] == name
 _macro_args(expr::Expr) = filter(a -> !(a isa LineNumberNode), expr.args[2:end])
 
+# Error if `@observe`'s own macro arguments hold more than the single `lhs ~ rhs`
+# expression -- typically a `size=...` that ends up bound to `@observe` because
+# `@iid` isn't the innermost macro, e.g. `@iid @observe lhs ~ rhs size=N`.
+function _check_observe_args(expr::Expr)
+    args = _macro_args(expr)
+    length(args) <= 1 && return nothing
+    for arg in args
+        arg isa Expr &&
+            arg.head == :(=) &&
+            arg.args[1] == :size &&
+            error("@observe: invalid `size` argument, use `@iid` as the innermost macro")
+    end
+    error("@observe: unexpected argument(s) `$(args[2:end])`")
+end
+
 # Lower the `lhs ~ rhs` inside `@observe lhs ~ rhs` into an `Observe` node.
 function _lower_observe(observed_expr, mod::Module)
     if !(
@@ -177,12 +193,22 @@ function _lower_observe(observed_expr, mod::Module)
     return Observe(Symbol(lhs), lhs, lower_to_wren(rhs, mod))
 end
 
-# Extract the single argument of `@iid ...`.
-function _iid_arg(expr::Expr)
-    iid_args = _macro_args(expr)
-    length(iid_args) == 1 ||
+# Extract the optional `size=...` argument and the tilde-statement of `@iid ...`.
+function _iid_args(expr::Expr)
+    size_expr = nothing
+    inner = nothing
+    for arg in _macro_args(expr)
+        if arg isa Expr && arg.head == :(=) && arg.args[1] == :size
+            size_expr = arg.args[2]
+        elseif inner === nothing
+            inner = arg
+        else
+            error("@iid: unexpected argument `$arg`")
+        end
+    end
+    inner === nothing &&
         error("@iid: expected a single expression of the form `value ~ distribution`")
-    return only(iid_args)
+    return size_expr, inner
 end
 
 function lower_to_wren(expr::Expr, mod::Module, statement_position::Bool=false)
@@ -191,27 +217,30 @@ function lower_to_wren(expr::Expr, mod::Module, statement_position::Bool=false)
         observed_expr = last(expr.args)
         if _is_macrocall(observed_expr, Symbol("@iid"))
             # @observe @iid lhs ~ rhs
-            return IID(_lower_observe(_iid_arg(observed_expr), mod))
+            size_expr, inner = _iid_args(observed_expr)
+            return IID(_lower_observe(inner, mod), size_expr)
         end
+        _check_observe_args(expr)
         return _lower_observe(observed_expr, mod)
     end
 
     if expr.head == :macrocall && expr.args[1] == Symbol("@iid")
         statement_position || error("@iid must be used as a statement")
-        inner = _iid_arg(expr)
+        size_expr, inner = _iid_args(expr)
         if _is_macrocall(inner, Symbol("@observe"))
             # @iid @observe lhs ~ rhs
-            return IID(_lower_observe(last(inner.args), mod))
+            _check_observe_args(inner)
+            return IID(_lower_observe(last(inner.args), mod), size_expr)
         end
         # @iid lhs ~ rhs
         lowered = lower_to_wren(inner, mod, true)
         lowered isa Sample ||
             error("@iid: expected an expression of the form `value ~ distribution`")
-        return IID(lowered)
+        return IID(lowered, size_expr)
     end
 
-    if expr.head == :macrocall && expr.args[1] == Symbol("@plate")
-        statement_position || error("@plate must be used as a statement")
+    if expr.head == :macrocall && expr.args[1] == Symbol("@batch")
+        statement_position || error("@batch must be used as a statement")
         plate_args = filter(a -> !(a isa LineNumberNode), expr.args[2:end])
         size_expr = nothing
         name_expr = nothing
@@ -222,24 +251,24 @@ function lower_to_wren(expr::Expr, mod::Module, statement_position::Bool=false)
             elseif arg isa Expr && arg.head == :(=) && arg.args[1] == :name
                 name_val = arg.args[2]
                 name_val isa QuoteNode && name_val.value isa Symbol ||
-                    error("@plate: `name` must be a single Symbol (e.g. `name=:obs`)")
+                    error("@batch: `name` must be a single Symbol (e.g. `name=:obs`)")
                 name_expr = name_val.value
             elseif arg isa Expr && arg.head == :for
                 for_expr = arg
             else
-                error("@plate: unexpected argument `$arg`")
+                error("@batch: unexpected argument `$arg`")
             end
         end
-        for_expr !== nothing || error("@plate: expected a for loop")
+        for_expr !== nothing || error("@batch: expected a for loop")
         loop_spec = for_expr.args[1]
         loop_spec isa Expr && loop_spec.head == :(=) ||
-            error("@plate: expected `for VAR in ITER`")
+            error("@batch: expected `for VAR in ITER`")
         loop_idx = loop_spec.args[1]
-        loop_idx isa Symbol || error("@plate: loop variable must be a single identifier")
+        loop_idx isa Symbol || error("@batch: loop variable must be a single identifier")
         loop_iters = loop_spec.args[2]
         body = lower_to_wren(for_expr.args[2], mod, true)
-        plate_name = name_expr === nothing ? gensym(:plate) : name_expr
-        return Plate(plate_name, loop_idx, loop_iters, size_expr, body)
+        plate_name = name_expr === nothing ? gensym(:batch) : name_expr
+        return Batch(plate_name, loop_idx, loop_iters, size_expr, body)
     end
 
     if expr.head == :macrocall && expr.args[1] == Symbol("@addloglikelihood")
@@ -310,18 +339,19 @@ function lower_to_wren(expr::Expr, mod::Module, statement_position::Bool=false)
 end
 
 """
-    _wren_expr_to_expr(expr)
+    _wren_expr_to_display_expr(expr)
 
-Unlower a Wren expression back into the way it was written in the model.
+Unlower a Wren expression back into the way it was written in the model,
+for display purposes.
 """
-_wren_expr_to_model_expr(expr) = expr
-function _wren_expr_to_model_expr(stmt::WrenExpr)
-    return Expr(stmt.head, map(_wren_expr_to_model_expr, stmt.args)...)
+_wren_expr_to_display_expr(expr) = expr
+function _wren_expr_to_display_expr(stmt::WrenExpr)
+    return Expr(stmt.head, map(_wren_expr_to_display_expr, stmt.args)...)
 end
-function _wren_expr_to_model_expr(stmt::Plate)
-    body = _wren_expr_to_model_expr(stmt.body)
+function _wren_expr_to_display_expr(stmt::Batch)
+    body = _wren_expr_to_display_expr(stmt.body)
     for_expr = Expr(:for, Expr(:(=), stmt.loop_idx, stmt.loop_iters), body)
-    args = Any[Symbol("@plate"), nothing]
+    args = Any[Symbol("@batch"), nothing]
     push!(args, Expr(:(=), :name, QuoteNode(stmt.name)))
     if stmt.size !== nothing
         push!(args, Expr(:(=), :size, stmt.size))
@@ -329,29 +359,40 @@ function _wren_expr_to_model_expr(stmt::Plate)
     push!(args, for_expr)
     return Expr(:macrocall, args...)
 end
-function _wren_expr_to_model_expr(stmt::Sample)
-    return Expr(:call, :~, stmt.lhs, _wren_expr_to_model_expr(stmt.rhs))
+_tilde_expr(stmt::Union{Sample,Observe}) =
+    Expr(:call, :~, stmt.lhs, _wren_expr_to_display_expr(stmt.rhs))
+
+function _wren_expr_to_display_expr(stmt::Sample)
+    return _tilde_expr(stmt)
 end
-function _wren_expr_to_model_expr(stmt::Observe)
-    tilde = Expr(:call, :~, stmt.lhs, _wren_expr_to_model_expr(stmt.rhs))
-    return Expr(:macrocall, Symbol("@observe"), nothing, tilde)
+function _wren_expr_to_display_expr(stmt::Observe)
+    return Expr(:macrocall, Symbol("@observe"), nothing, _tilde_expr(stmt))
 end
-function _wren_expr_to_model_expr(stmt::IID)
-    return Expr(:macrocall, Symbol("@iid"), nothing, _wren_expr_to_model_expr(stmt.tilde))
+function _wren_expr_to_display_expr(stmt::IID)
+    args = Any[Symbol("@iid"), nothing, _tilde_expr(stmt.tilde)]
+    if stmt.size !== nothing
+        push!(args, Expr(:(=), :size, stmt.size))
+    end
+    iid_expr = Expr(:macrocall, args...)
+    # An observed statement prints as `@observe @iid lhs ~ rhs size=dims`, with `@observe`
+    # outermost: written the other way round, the inner `@observe` macrocall absorbs the
+    # trailing `size=dims`, so the printed code no longer parses back to this node.
+    stmt.tilde isa Observe || return iid_expr
+    return Expr(:macrocall, Symbol("@observe"), nothing, iid_expr)
 end
-function _wren_expr_to_model_expr(stmt::AddLogLikelihood)
+function _wren_expr_to_display_expr(stmt::AddLogLikelihood)
     args = Any[Symbol("@addloglikelihood"), nothing]
     if !startswith(string(stmt.name), "##addloglikelihood#")
         push!(args, Expr(:(=), :name, QuoteNode(stmt.name)))
     end
-    push!(args, _wren_expr_to_model_expr(stmt.expr))
+    push!(args, _wren_expr_to_display_expr(stmt.expr))
     return Expr(:macrocall, args...)
 end
-function _wren_expr_to_model_expr(stmt::ReturnStatement)
-    value = stmt.expr === nothing ? nothing : _wren_expr_to_model_expr(stmt.expr)
+function _wren_expr_to_display_expr(stmt::ReturnStatement)
+    value = stmt.expr === nothing ? nothing : _wren_expr_to_display_expr(stmt.expr)
     return Expr(:return, value)
 end
-_wren_expr_to_model_expr(stmt::OtherStatement) = stmt.expr
+_wren_expr_to_display_expr(stmt::OtherStatement) = stmt.expr
 
 function _show_wren_exprs(io::IO, stmts, indent::Int=0; max_exprs::Int=typemax(Int))
     return _show_wren_exprs(io, stmts, ' '^indent; max_exprs)
@@ -375,7 +416,7 @@ function _show_wren_exprs(io::IO, stmts, prefix::String; max_exprs::Int=typemax(
     return nothing
 end
 function _show_wren_expr(io::IO, stmt::AbstractWrenExpr, indent::Int=0)
-    expr = deepcopy(_wren_expr_to_model_expr(stmt))
+    expr = deepcopy(_wren_expr_to_display_expr(stmt))
     expr isa Expr && Base.remove_linenums!(expr)
     return Base.show_unquoted(io, expr, indent, 0)
 end

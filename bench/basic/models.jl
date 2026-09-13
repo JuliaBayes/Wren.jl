@@ -27,7 +27,7 @@ WrenCore.@wren function wren_eight_schools(y, sigma, J)
     mu ~ PM.Normal(0, 5)
     tau ~ PM.Exponential() # no cauchy yet
     theta ~ PM.MvNormal(fill(mu, J), tau * I)
-    @plate for i in 1:J
+    @batch for i in 1:J
         @observe y[i] ~ PM.Normal(theta[i], sigma[i])
     end
     return (mu=mu, tau=tau)

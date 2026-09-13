@@ -129,6 +129,6 @@ overhead; for those, the raw times say more than the ratios.
   - `posteriordb_models.jl` — the ten Wren models and their PosteriorDB data
     adapters.
   - `pmproducts.jl` — products of independent ProbabilityMeasures observations.
-    ProbabilityMeasures has no product measure, and Wren's `@plate` lowers to a
+    ProbabilityMeasures has no product measure, and Wren's `@batch` lowers to a
     measure that reads its arguments one element at a time, which Reactant
     rejects. These measures evaluate as array arithmetic and a reduction instead.
