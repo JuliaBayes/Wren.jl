@@ -50,7 +50,6 @@ struct IsoNormal{M<:AbstractArray,S<:Number} <: AbstractBatchedNormal
     mu::M
     sigma::S
 end
-IsoNormal(mu::AbstractArray) = IsoNormal(mu, one(eltype(mu)))
 Base.rand(rng::Random.AbstractRNG, d::IsoNormal) = randn(rng, size(d.mu)) .* d.sigma .+ d.mu
 Base.size(d::IsoNormal) = size(d.mu)
 function DensityInterface.logdensityof(d::IsoNormal, x)

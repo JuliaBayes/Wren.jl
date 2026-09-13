@@ -24,7 +24,10 @@ function WrenCore.independent(dists::AbstractArray{<:MultivariateDist})
     )
 end
 
+# Normal(consts...)
 WrenCore.iid(dist::Normal, size::Dims) = IIDNormal(size, dist.μ, dist.σ)
+
+# Normal(x[i], sigma[i]) -> DiagNormal(x, sigma)
 function WrenCore.batched(
     iters,
     ::Val{Normal},
@@ -34,8 +37,21 @@ function WrenCore.batched(
 )
     return DiagNormal(indexed_mu.data, indexed_sigma.data)
 end
+
+# Normal(x[i], const_sigma) -> IsoNormal(x, const_sigma)
+function WrenCore.batched(
+    iters,
+    ::Val{Normal},
+    indexed_mu::WrenCore.Indexed,
+    sigma::Number;
+    _kwargs...,
+)
+    return IsoNormal(indexed_mu.data, sigma)
+end
+
+# Normal(x[i]) --> IsoNormal(x, 1.0)
 function WrenCore.batched(iters, ::Val{Normal}, indexed_mu::WrenCore.Indexed; _kwargs...)
-    return IsoNormal(indexed_mu.data)
+    return IsoNormal(indexed_mu.data, one(eltype(indexed_mu.data)))
 end
 
 end # module WrenCoreWrenDistsExt
