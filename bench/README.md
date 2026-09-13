@@ -23,3 +23,8 @@ julia --project=. ./batch/run.jl
 
 `batch` compares `@batch` loops against plain `for` loops for the likelihoods in
 WrenDists that have specialised `batched` methods.
+
+`batch/gpu` benchmarks alternative formulations of each batched log density under
+Reactant, one script per distribution, e.g. `julia --project=. ./batch/gpu/diagnormal.jl`.
+It runs on whatever device Reactant picks, so it can be smoke-tested on a CPU and then
+run for real on a GPU.
