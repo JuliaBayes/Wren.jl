@@ -9,8 +9,8 @@ export prior, nuts
 
 # Distributions
 module Dists
-    using Reexport: @reexport
-    @reexport using WrenDists
+using Reexport: @reexport
+@reexport using WrenDists
 end
 
 # Re-exports

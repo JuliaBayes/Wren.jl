@@ -102,11 +102,6 @@ function emit_model_expr(stmt::Sample, accs, conditioned, latent_source, paramet
     end
 end
 
-# `@iid lhs ~ rhs` (or the `@observe` variants) means `lhs ~ iid(rhs, size(lhs))`: one
-# array-valued distribution of independent draws from `rhs`, with the same shape as the
-# current value of `lhs`. If `lhs` is undefined, `@iid lhs ~ rhs size=dims` can be used
-# to set `dims`. We rewrite the wrapped tilde-statement's right-hand side and then emit
-# it exactly as we would a plain `Sample` or `Observe`.
 function emit_model_expr(stmt::IID, accs, conditioned, latent_source, parameter_space)
     tilde = stmt.tilde
     rhs_expr = emit_model_expr(tilde.rhs, accs, conditioned, latent_source, parameter_space)
@@ -408,7 +403,7 @@ function vectorise_batch_stmt(
     parameter_space,
 )
     new_lhs, _ = replace_loop_idx_with_iters(stmt.lhs, loop_idx, loop_iters)
-    rhs_expr = _wren_expr_to_model_expr(stmt.rhs)
+    rhs_expr = emit_model_expr(stmt.rhs, accs, conditioned, latent_source, parameter_space)
     new_rhs = batch_expr(rhs_expr, loop_idx, loop_iters, loop_iters_size)
     return emit_model_expr(
         Sample(stmt.name, new_lhs, new_rhs),
@@ -430,7 +425,7 @@ function vectorise_batch_stmt(
     parameter_space,
 )
     new_lhs, _ = replace_loop_idx_with_iters(stmt.lhs, loop_idx, loop_iters)
-    rhs_expr = _wren_expr_to_model_expr(stmt.rhs)
+    rhs_expr = emit_model_expr(stmt.rhs, accs, conditioned, latent_source, parameter_space)
     new_rhs = batch_expr(rhs_expr, loop_idx, loop_iters, loop_iters_size)
     return emit_model_expr(
         Observe(stmt.name, new_lhs, new_rhs),

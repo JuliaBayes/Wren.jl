@@ -37,10 +37,7 @@ using WrenDists
             end
         end
         mu = [1.0, 2.0, 3.0]
-        test_model_equivalence(
-            mu_only_batch(zeros(3), mu),
-            mu_only_nobatch(zeros(3), mu),
-        )
+        test_model_equivalence(mu_only_batch(zeros(3), mu), mu_only_nobatch(zeros(3), mu))
     end
 
     @testset "batched: Normal(mu[i], const_sigma) -> IsoNormal" begin
@@ -55,10 +52,7 @@ using WrenDists
             end
         end
         mu = [1.0, 2.0, 3.0]
-        test_model_equivalence(
-            iso_batch(zeros(3), mu),
-            iso_nobatch(zeros(3), mu),
-        )
+        test_model_equivalence(iso_batch(zeros(3), mu), iso_nobatch(zeros(3), mu))
     end
 
     @testset "batched: Normal(const_mu, sigma[i]) -> DiagNormal" begin

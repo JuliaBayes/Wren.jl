@@ -45,7 +45,7 @@ using .Expressions:
     Sample,
     WrenExpr,
     _show_wren_exprs,
-    _wren_expr_to_model_expr,
+    _wren_expr_to_display_expr,
     to_wren_exprs
 
 include("model/model.jl")

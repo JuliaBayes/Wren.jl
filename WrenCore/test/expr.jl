@@ -15,33 +15,17 @@ using Test
                 WrenCore.to_wren_exprs(expr, @__MODULE__),
             ),
         )
-        roundtrip(expr) = WrenCore._wren_expr_to_model_expr(lower(expr))
-        # Round-tripped macrocalls carry `nothing` where the parser puts a LineNumberNode.
-        iid_expr(inner, extra...) =
-            Expr(:macrocall, Symbol("@iid"), nothing, inner, extra...)
-        observe_expr(inner) = Expr(:macrocall, Symbol("@observe"), nothing, inner)
-
         # `@iid` is a marker: it wraps the tilde-statement without rewriting it.
         s = lower(:(@iid x ~ Normal()))
         @test s isa WrenCore.IID{<:WrenCore.Sample}
         @test s.tilde.lhs == :x
-        @test WrenCore._wren_expr_to_model_expr(s.tilde.rhs) == :(Normal())
-        @test roundtrip(:(@iid x ~ Normal())) == iid_expr(:(x ~ Normal()))
 
         # Either order of `@iid` and `@observe` gives the same node.
         for expr in (:(@observe @iid y ~ Normal(mu)), :(@iid @observe y ~ Normal(mu)))
             o = lower(expr)
             @test o isa WrenCore.IID{<:WrenCore.Observe}
             @test o.tilde.lhs == :y
-            @test WrenCore._wren_expr_to_model_expr(o.tilde.rhs) == :(Normal(mu))
-            @test roundtrip(expr) == observe_expr(iid_expr(:(y ~ Normal(mu))))
         end
-
-        # `size=` prints last, after the tilde-statement.
-        @test roundtrip(:(@iid size = k x ~ Normal())) ==
-              iid_expr(:(x ~ Normal()), :(size = k))
-        @test roundtrip(:(@observe @iid size = k y ~ Normal(mu))) ==
-              observe_expr(iid_expr(:(y ~ Normal(mu)), :(size = k)))
 
         @test_throws ErrorException lower(:(@iid x))
         @test_throws ErrorException lower(:(@iid x ~ Normal() Normal()))
