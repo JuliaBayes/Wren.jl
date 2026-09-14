@@ -31,7 +31,7 @@ end
 
 # 2. Broadcast using xlogy.
 function lp_broadcast_xlogy((n, p), x)
-    return sum(@. logbinom(n, x) + xlogy(x, p) + xlogy(n - x, one(eltype(x)) - p))
+    return sum(@. logbinom(n, x) + xlogy(x, p) + xlogy(n - x, one(x) - p))
 end
 
 # 3. Branch-free: k * log(p) + (n-k) * log1p(-p) directly instead of xlogy.
