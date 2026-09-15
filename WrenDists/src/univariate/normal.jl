@@ -55,7 +55,8 @@ function DensityInterface.logdensityof(d::DiagNormal, x::AbstractArray{T}) where
     mu, sigma = d.mu, d.sigma
     lognorm = length(x) * convert(T, log2π) / 2
     return if within_compile()
-        sum(@. -abs2((x - mu) / sigma) / 2 - log(sigma)) - lognorm
+        z = (x .- mu) ./ sigma
+        -sum(abs2, z) / 2 - sum(log, sigma) - lognorm
     else
         s = zero(T)
         for i in eachindex(x)

@@ -50,11 +50,11 @@ function lp_impl((mu, sigma), x)
 end
 
 const VARIANTS = [
-    "impl" => lp_impl,
     "loop" => ScalarIndexed(lp_loop),
     "broadcast" => lp_broadcast,
     "split" => lp_split,
     "invsigma" => lp_invsigma,
+    "impl" => lp_impl,
 ]
 
 function make_inputs(rng, T, N)
