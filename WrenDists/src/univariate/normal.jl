@@ -49,13 +49,21 @@ end
 Base.size(d::DiagNormal) = size(d.mu)
 Base.rand(rng::Random.AbstractRNG, d::DiagNormal) =
     randn(rng, size(d.mu)) .* d.sigma .+ d.mu
-function DensityInterface.logdensityof(d::DiagNormal, x)
-    s = _zero_logdensity(d, x)
-    @inbounds for i in eachindex(x, d.mu, d.sigma)
-        z = (x[i] - d.mu[i]) / d.sigma[i]
-        s -= abs2(z) / 2 + log(d.sigma[i])
+
+function DensityInterface.logdensityof(d::DiagNormal, x::AbstractArray{T}) where {T<:Number}
+    # Benchmarks @ https://github.com/JuliaBayes/Wren.jl/issues/99
+    mu, sigma = d.mu, d.sigma
+    lognorm = length(x) * convert(T, log2π) / 2
+    return if within_compile()
+        sum(@. -abs2((x - mu) / sigma) / 2 - log(sigma)) - lognorm
+    else
+        s = zero(T)
+        for i in eachindex(x)
+            z = (x[i] - mu[i]) / sigma[i]
+            s -= abs2(z) / 2 + log(sigma[i])
+        end
+        s - lognorm
     end
-    return s - length(x) * log2π / 2
 end
 
 # TODO(penelopeysm): Some preliminary benchmarks on this show that there's no meaningful

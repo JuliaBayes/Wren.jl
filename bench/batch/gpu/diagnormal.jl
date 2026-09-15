@@ -9,7 +9,8 @@
 
 include("common.jl")
 
-using WrenDists: WrenDists
+using WrenDists: WrenDists, DiagNormal
+using DensityInterface: logdensityof
 
 _lognorm(x) = length(x) * eltype(x)(WrenDists.log2π) / 2
 
@@ -44,7 +45,12 @@ function lp_invsigma((mu, sigma), x)
     return -sum(abs2, z) / 2 + sum(log, inv_sigma) - _lognorm(x)
 end
 
+function lp_impl((mu, sigma), x)
+    logdensityof(DiagNormal(mu, sigma), x)
+end
+
 const VARIANTS = [
+    "impl" => lp_impl,
     "loop" => ScalarIndexed(lp_loop),
     "broadcast" => lp_broadcast,
     "split" => lp_split,

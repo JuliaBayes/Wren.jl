@@ -3,7 +3,7 @@ module WrenDistsReactantExt
 using WrenDists: WrenDists, GAMMAINC_TERMS, GAMMAQUANTILE_STEPS
 using WrenDists: basefloat, floortiny, select
 using WrenDists: gammaquantile_start, gammaquantile_step
-using Reactant: Reactant, TracedRNumber, @trace
+using Reactant: Reactant, TracedRNumber, TracedRArray, @trace
 using SpecialFunctions: SpecialFunctions, loggamma
 
 WrenDists.basefloat(::Type{TracedRNumber{T}}) where {T} = WrenDists.basefloat(T)
