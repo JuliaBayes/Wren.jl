@@ -32,17 +32,21 @@ using Random: Xoshiro
 using Reactant: Reactant, @trace
 using Statistics: median
 
-const NS = parse.(Int, split(get(ENV, "WREN_BENCH_NS", "100,1000,10000,100000,1000000"), ","))
-const ELTYPE = Dict("Float64" => Float64, "Float32" => Float32)[get(ENV, "WREN_BENCH_ELTYPE", "Float64")]
+const NS =
+    parse.(Int, split(get(ENV, "WREN_BENCH_NS", "100,1000,10000,100000,1000000"), ","))
+const ELTYPE = Dict("Float64" => Float64, "Float32" => Float32)[get(
+    ENV,
+    "WREN_BENCH_ELTYPE",
+    "Float64",
+)]
 # Sums over up to 1e6 elements in Float32 differ noticeably between reduction orders.
 const RTOL = max(1e-6, 1000 * eps(ELTYPE))
 
 const SECONDS = 5.0
 
 _on_gpu() = any(d -> Reactant.XLA.device_kind(d) != "cpu", Reactant.devices())
-const BACKENDS = split(
-    get(ENV, "WREN_BENCH_BACKENDS", _on_gpu() ? "reactant" : "enzyme,reactant"), ","
-)
+const BACKENDS =
+    split(get(ENV, "WREN_BENCH_BACKENDS", _on_gpu() ? "reactant" : "enzyme,reactant"), ",")
 
 function pretty_time(seconds)
     return if seconds < 1e-6
@@ -106,9 +110,17 @@ function time_reactant(name, N, variant, params, x, ref_val, ref_grad)
     grad_fn = scope() do
         Reactant.@compile sync = true vg(params_ra, x_ra)
     end
-    _check(name, N, "reactant", primal(params_ra, x_ra), last(grad_fn(params_ra, x_ra)), ref_val, ref_grad)
+    _check(
+        name,
+        N,
+        "reactant",
+        primal(params_ra, x_ra),
+        last(grad_fn(params_ra, x_ra)),
+        ref_val,
+        ref_grad,
+    )
     primal_bench = @be _host(primal(params_ra, x_ra)) seconds=SECONDS
-        grad_bench = @be _host(first(grad_fn(params_ra, x_ra))) seconds=SECONDS
+    grad_bench = @be _host(first(grad_fn(params_ra, x_ra))) seconds=SECONDS
     return median(primal_bench).time, median(grad_bench).time
 end
 
@@ -123,14 +135,26 @@ function print_status()
     println("Julia:            ", VERSION, " (", Threads.nthreads(), " threads)")
     println("CPU:              ", Sys.cpu_info()[1].model)
     println("Enzyme:           ", version_of("Enzyme"))
-    println("Reactant:         ", version_of("Reactant"), " (Reactant_jll ", version_of("Reactant_jll"), ")")
-    println("XLA platform:     ", Reactant.XLA.platform_name(Reactant.XLA.default_backend()))
+    println(
+        "Reactant:         ",
+        version_of("Reactant"),
+        " (Reactant_jll ",
+        version_of("Reactant_jll"),
+        ")",
+    )
+    println(
+        "XLA platform:     ",
+        Reactant.XLA.platform_name(Reactant.XLA.default_backend()),
+    )
     println("Reactant devices: ", join(Reactant.XLA.device_kind.(Reactant.devices()), ", "))
     # Reactant bundles its own CUDA, so the driver is the only host-side CUDA component.
     nvidia_smi = Sys.which("nvidia-smi")
     if !isnothing(nvidia_smi)
         query = "--query-gpu=name,driver_version,memory.total"
-        println("nvidia-smi:       ", strip(read(`$nvidia_smi $query --format=csv,noheader`, String)))
+        println(
+            "nvidia-smi:       ",
+            strip(read(`$nvidia_smi $query --format=csv,noheader`, String)),
+        )
     end
     println("Backends:         ", join(BACKENDS, ", "))
     println("Sizes:            ", join(NS, ", "))
@@ -142,7 +166,13 @@ function print_status()
         trivial = Reactant.@compile sync = true sum(one)
         t_call = median(@be trivial(one) seconds=SECONDS).time
         t_host = median(@be _host(trivial(one)) seconds=SECONDS).time
-        println("Reactant floor:   ", pretty_time(t_call), " per call, ", pretty_time(t_host), " with host readback")
+        println(
+            "Reactant floor:   ",
+            pretty_time(t_call),
+            " per call, ",
+            pretty_time(t_host),
+            " with host readback",
+        )
     end
     println()
 end

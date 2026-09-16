@@ -92,7 +92,9 @@ function DensityInterface.logdensityof(d::BatchedPoisson, x)
         T = float(promote_type(eltype(x), eltype(λ)))
         s = zero(T)
         for i in eachindex(x, λ)
-            s += convert(T, x[i]) * log(convert(T, λ[i])) - convert(T, λ[i]) - loggamma(convert(T, x[i]) + one(T))
+            s +=
+                convert(T, x[i]) * log(convert(T, λ[i])) - convert(T, λ[i]) -
+                loggamma(convert(T, x[i]) + one(T))
         end
         s
     end

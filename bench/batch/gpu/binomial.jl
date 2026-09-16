@@ -70,7 +70,13 @@ const VARIANTS = [
 function make_inputs(rng, T, N)
     n = T.(rand(rng, 5:50, N))
     p = T(0.1) .+ T(0.8) .* rand(rng, T, N)
-    x = T.(clamp.(round.(Int, n .* p .+ sqrt.(n .* p .* (1 .- p)) .* randn(rng, T, N)), 0, 100))
+    x = T.(
+        clamp.(
+            round.(Int, n .* p .+ sqrt.(n .* p .* (1 .- p)) .* randn(rng, T, N)),
+            0,
+            100,
+        ),
+    )
     x = min.(x, n)
     return (n, p), x
 end

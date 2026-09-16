@@ -2,7 +2,10 @@ using WrenDists, Enzyme, Chairmarks
 using WrenDists: logdensityof, BatchedLogNormal, log2π
 using Statistics: median
 
-struct BroadcastLogNormal{M,S}; mu::M; sigma::S; end
+struct BroadcastLogNormal{M,S}
+    mu::M
+    sigma::S
+end
 function logdensityof_broadcast(d::BroadcastLogNormal, x)
     mu, sigma = d.mu, d.sigma
     lognorm = length(x) * convert(float(eltype(x)), log2π) / 2
@@ -10,7 +13,8 @@ function logdensityof_broadcast(d::BroadcastLogNormal, x)
 end
 
 N = 1_000_000
-mu = randn(N); sigma = exp.(0.3 .* randn(N))
+mu = randn(N);
+sigma = exp.(0.3 .* randn(N))
 x = exp.(mu .+ sigma .* randn(N))
 
 d_wd = BatchedLogNormal(mu, sigma)

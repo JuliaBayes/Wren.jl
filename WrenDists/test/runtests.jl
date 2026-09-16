@@ -495,8 +495,11 @@ const DIRICHLET_PLAICE = (to_vec, from_vec)
                 Tx in (Const, Duplicated)
 
                 test_reverse(
-                    WrenDists._lognormal_loop, Active,
-                    (mu, Tmu), (sigma, Tsigma), (x, Tx),
+                    WrenDists._lognormal_loop,
+                    Active,
+                    (mu, Tmu),
+                    (sigma, Tsigma),
+                    (x, Tx),
                 )
             end
         end
@@ -507,8 +510,11 @@ const DIRICHLET_PLAICE = (to_vec, from_vec)
                 Tx in (Const, Duplicated)
 
                 test_forward(
-                    WrenDists._lognormal_loop, RT,
-                    (mu, Tmu), (sigma, Tsigma), (x, Tx),
+                    WrenDists._lognormal_loop,
+                    RT,
+                    (mu, Tmu),
+                    (sigma, Tsigma),
+                    (x, Tx),
                 )
             end
         end

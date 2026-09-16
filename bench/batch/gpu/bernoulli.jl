@@ -16,14 +16,20 @@ function lp_loop((p,), x)
     @trace for i in 1:length(x)
         xi = x[i]
         prob = p[i]
-        s += ifelse(xi == one(xi), log(prob), ifelse(xi == zero(xi), log1p(-prob), oftype(prob, -Inf)))
+        s += ifelse(
+            xi == one(xi),
+            log(prob),
+            ifelse(xi == zero(xi), log1p(-prob), oftype(prob, -Inf)),
+        )
     end
     return s
 end
 
 # 2. Same ifelse arithmetic, but as a broadcast + sum.
 function lp_broadcast_ifelse((p,), x)
-    return sum(@. ifelse(x == one(x), log(p), ifelse(x == zero(x), log1p(-p), oftype(p, -Inf))))
+    return sum(
+        @. ifelse(x == one(x), log(p), ifelse(x == zero(x), log1p(-p), oftype(p, -Inf)))
+    )
 end
 
 # 3. Branch-free: x * log(p) + (1 - x) * log1p(-p). Always computes both terms,
