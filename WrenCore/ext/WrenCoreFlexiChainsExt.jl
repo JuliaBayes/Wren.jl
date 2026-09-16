@@ -1,8 +1,11 @@
+module WrenCoreFlexiChainsExt
+
 using AbstractMCMC: AbstractMCMC
 using FlexiChains: FlexiChains, VNChain
 using Random: AbstractRNG, default_rng
 using StatsAPI: StatsAPI
 using VarNames: VarNames, Draw, extras, parameters
+using WrenCore: WrenCore
 
 """
     predict(
@@ -26,7 +29,7 @@ Thus, if you want to obtain the log-probability of the predicted variables only,
 subtract the two log-prior terms. The `include_all` keyword argument has no effect on the
 log-probability fields.
 """
-function predict(
+function StatsAPI.predict(
     rng::AbstractRNG,
     model::WrenCore.Model,
     chain::VNChain;
@@ -53,11 +56,10 @@ function predict(
     preds = FlexiChains.renumber_chains(preds, FlexiChains.chain_indices(chain))
     return merge(FlexiChains.subset_extras(chain), preds)
 end
-function predict(model::WrenCore.Model, chain::VNChain; include_all::Bool=true)
-    return predict(default_rng(), model, chain; include_all)
+function StatsAPI.predict(model::WrenCore.Model, chain::VNChain; include_all::Bool=true)
+    return StatsAPI.predict(default_rng(), model, chain; include_all)
 end
 
-# Internal helper function
 function _pointwise_logp(get_logp, model::WrenCore.Model, chain::VNChain, accs)
     results = WrenCore.reevaluate(model, FlexiChains.parameters_at(chain), accs)
     return map(retval_and_accs -> get_logp(last(retval_and_accs)), results)
@@ -102,3 +104,5 @@ function WrenCore.logjoint(model::WrenCore.Model, chain::VNChain)
     )
     return _pointwise_logp(WrenCore.logjoint, model, chain, accs)
 end
+
+end # module WrenCoreFlexiChainsExt

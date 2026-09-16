@@ -1,17 +1,29 @@
-module WrenPredictTests
+module WrenCorePredictTests
 
-@info "testing predict.jl"
+@info "testing predict"
 
+using AbstractMCMC: AbstractMCMC
 using Distributions
-using FlexiChains: FlexiChains, Extra, Parameter
+using FlexiChains: FlexiChains, Extra, Parameter, VNChain
 using LinearAlgebra
 using OffsetArrays: OffsetArray
 using Random
 using StableRNGs
 using Test
-using Wren
+using WrenCore
 
-import Enzyme # the AD backend that `nuts` uses by default
+"""
+Build a `niters × nchains` chain of exact posterior draws. `posterior_model` must sample
+from the posterior of `cond_model`; each draw is re-evaluated in `cond_model` so that the
+chain holds the same log-probabilities an MCMC sampler would record.
+"""
+function exact_posterior_chain(rng, posterior_model, cond_model, niters, nchains)
+    draws = map(Iterators.product(1:niters, 1:nchains)) do _
+        posterior_params = rand(rng, posterior_model)
+        Draw(FromParams(posterior_params), cond_model, (acceptance_rate=1.0,))
+    end
+    return AbstractMCMC.from_samples(VNChain, draws)
+end
 
 @testset "predict" begin
     # `m` is stored in the chain as a single variable. `p` is sampled element by element,
@@ -25,10 +37,18 @@ import Enzyme # the AD backend that `nuts` uses by default
         x ~ Normal()
         y ~ Normal(x)
     end
+    # With y = 4.0 observed, the posterior of x is Normal(2, √0.5).
+    @wren function f_posterior(p)
+        m ~ MvNormal(zeros(2), I)
+        for i in eachindex(p)
+            p[i] ~ Normal()
+        end
+        x ~ Normal(2.0, sqrt(0.5))
+    end
     model = f(zeros(2)) | VarNamedTuple(y=4.0)
+    chn = exact_posterior_chain(StableRNG(468), f_posterior(zeros(2)), model, 1000, 2)
 
     # Sanity check
-    chn = nuts(Xoshiro(468), model, 2000; progress=false)
     @test isapprox(mean(chn[@vn(x)]), 2.0; atol=0.1)
     @test isapprox(mean(chn[@vn(m[1])]), 0.0; atol=0.1)
     @test isapprox(mean(chn[@vn(m[2])]), 0.0; atol=0.1)
@@ -76,8 +96,8 @@ import Enzyme # the AD backend that `nuts` uses by default
     end
 
     @testset "indices are preserved" begin
-        pdns = predict(f(zeros(2)), chn[iter=1001:2000])
-        @test FlexiChains.iter_indices(pdns) == 1001:2000
+        pdns = predict(f(zeros(2)), chn[iter=501:1000])
+        @test FlexiChains.iter_indices(pdns) == 501:1000
         @test FlexiChains.chain_indices(pdns) == FlexiChains.chain_indices(chn)
     end
 
@@ -105,9 +125,19 @@ import Enzyme # the AD backend that `nuts` uses by default
             x[-2] ~ Normal()
             y ~ Normal(x[-2])
         end
+        # With y = 2.0 observed, the posterior of x[-2] is Normal(1, √0.5).
+        @wren function offset2_posterior(x)
+            x[-2] ~ Normal(1.0, sqrt(0.5))
+        end
         offset_arg() = OffsetArray(zeros(2), -2:-1)
         cond_model = offset2(offset_arg()) | VarNamedTuple(y=2.0)
-        chn = nuts(Xoshiro(468), cond_model, 2000; progress=false)
+        chn = exact_posterior_chain(
+            StableRNG(468),
+            offset2_posterior(offset_arg()),
+            cond_model,
+            2000,
+            1,
+        )
         @test mean(chn[@vn(x[-2])]) ≈ 1.0 atol = 0.05
         pdns = predict(StableRNG(468), offset2(offset_arg()), chn)
         @test pdns[@vn(x[-2])] == chn[@vn(x[-2])]
@@ -115,4 +145,4 @@ import Enzyme # the AD backend that `nuts` uses by default
     end
 end
 
-end # module WrenPredictTests
+end # module WrenCorePredictTests

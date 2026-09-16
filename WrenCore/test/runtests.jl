@@ -12,6 +12,7 @@ using Test
     include("draw.jl")
     include("iid.jl")
     include("ad.jl")
+    include("predict.jl")
 
     if !Sys.iswindows()
         # problematic on windows CI, idk why

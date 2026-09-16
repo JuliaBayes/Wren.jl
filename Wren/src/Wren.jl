@@ -7,10 +7,6 @@ include("samplers/prior.jl")
 include("samplers/nuts.jl")
 export prior, nuts
 
-# Post-processing
-include("predict.jl")
-export predict
-
 # Re-exports
 using WrenCore:
     WrenCore,
@@ -83,8 +79,8 @@ export @vn, @vnt, VarNamedTuple, VarName, Draw, parameters, extras
 using DensityInterface: logdensityof
 export logdensityof
 
-using StatsAPI: loglikelihood
-export loglikelihood
+using StatsAPI: loglikelihood, predict
+export loglikelihood, predict
 
 using DifferentiationInterface: AutoForwardDiff, AutoReverseDiff, AutoMooncake, AutoEnzyme
 export AutoForwardDiff, AutoReverseDiff, AutoMooncake, AutoEnzyme

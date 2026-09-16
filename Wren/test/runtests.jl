@@ -2,8 +2,6 @@ module WrenTests
 
 using Test
 
-@testset verbose=true "Wren.jl" begin
-    include("predict.jl")
-end
+@testset verbose=true "Wren.jl" begin end
 
 end # module WrenTests

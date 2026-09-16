@@ -19,7 +19,7 @@ makedocs(;
     # automatically detect the inventory version from the git tag. See
     # https://github.com/JuliaDocs/Documenter.jl/pull/2449
     format=Documenter.HTML(; inventory_version=""),
-    modules=[Wren, WrenCore],
+    modules=[Wren, WrenCore, Base.get_extension(WrenCore, :WrenCoreFlexiChainsExt)],
     pages=[
         "index.md",
         "Tutorials" => [

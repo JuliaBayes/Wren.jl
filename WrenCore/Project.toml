@@ -23,25 +23,30 @@ StatsAPI = "82ae8749-77ed-4fe6-ae5f-f523153014b0"
 VarNames = "09a315b2-63fc-4165-8d7f-d59368e770cc"
 
 [weakdeps]
+AbstractMCMC = "80f14c24-f653-4e6a-9b94-39d6b0f70001"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
+FlexiChains = "4a37a8b9-6e57-4b92-8664-298d46e639f7"
 Mooncake = "da2b9cff-9c12-43a0-ae48-6db2b0edb7d6"
 ProbabilityMeasures = "d96443b0-2461-4412-bb6f-797ac5201ef9"
 Reactant = "3c362404-f566-11ee-1572-e11a4b42c853"
 
 [sources]
+FlexiChains = {rev = "v0.7", url = "https://github.com/JuliaBayes/FlexiChains.jl"}
 Plaice = {rev = "pm", url = "https://github.com/JuliaBayes/Plaice.jl"}
 ProbabilityMeasures = {rev = "main", url = "https://github.com/JuliaBayes/ProbabilityMeasures.jl"}
 
 [extensions]
 WrenCoreDistributionsExt = ["Distributions", "FillArrays", "Plaice"]
 WrenCoreEnzymeExt = ["Enzyme", "DifferentiationInterface"]
+WrenCoreFlexiChainsExt = ["AbstractMCMC", "FlexiChains"]
 WrenCoreMooncakeExt = ["Mooncake"]
 WrenCoreProbabilityMeasuresExt = ["ProbabilityMeasures", "Plaice"]
 WrenCoreReactantExt = ["ADTypes", "Enzyme", "Reactant"]
 
 [compat]
 ADTypes = "1"
+AbstractMCMC = "5"
 Accessors = "0.1"
 Chairmarks = "1"
 DensityInterface = "0.4"
@@ -50,6 +55,7 @@ DocStringExtensions = "0.9"
 EnzymeCore = "0.6 - 0.8"
 Enzyme = "0.13"
 FillArrays = "1"
+FlexiChains = "0.7"
 LinearAlgebra = "1"
 LogDensityProblems = "2"
 Mooncake = "0.4, 0.5"
@@ -62,4 +68,5 @@ StatsAPI = "1"
 VarNames = "0.1.4"
 
 [extras]
+FlexiChains = "4a37a8b9-6e57-4b92-8664-298d46e639f7"
 ProbabilityMeasures = "d96443b0-2461-4412-bb6f-797ac5201ef9"

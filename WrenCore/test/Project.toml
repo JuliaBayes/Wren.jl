@@ -1,16 +1,19 @@
 [deps]
 ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
+AbstractMCMC = "80f14c24-f653-4e6a-9b94-39d6b0f70001"
 Chairmarks = "0ca39b1e-fe0b-4e98-acfc-b1656634c4de"
 DensityInterface = "b429d917-457f-4dbc-8f4c-0cc954292b1d"
 DifferentiationInterface = "a0c0ee7d-e4b9-4e03-894e-1c5f64a51d63"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
+FlexiChains = "4a37a8b9-6e57-4b92-8664-298d46e639f7"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 GPUArraysCore = "46192b85-c4d5-4398-a991-12ede77f4527"
 JLArrays = "27aeb0d3-9eb9-45fb-866b-73c2ecf80fcb"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 LogDensityProblems = "6fdf6af0-433a-55f7-b3ed-c6c6e0b8df7c"
 Mooncake = "da2b9cff-9c12-43a0-ae48-6db2b0edb7d6"
+OffsetArrays = "6fe1bfb0-de20-5000-8ca7-80f57d26f881"
 Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 Plaice = "55802ec2-189d-45e6-a786-b4d97e4775f1"
 ProbabilityMeasures = "d96443b0-2461-4412-bb6f-797ac5201ef9"
@@ -22,13 +25,17 @@ VarNames = "09a315b2-63fc-4165-8d7f-d59368e770cc"
 WrenCore = "008b59e7-bbda-4991-901b-b08f5cfc584d"
 
 [sources]
+FlexiChains = {rev = "v0.7", url = "https://github.com/JuliaBayes/FlexiChains.jl"}
 Plaice = {rev = "pm", url = "https://github.com/JuliaBayes/Plaice.jl"}
 ProbabilityMeasures = {rev = "main", url = "https://github.com/JuliaBayes/ProbabilityMeasures.jl"}
 WrenCore = {path = ".."}
 
 [compat]
 ADTypes = "1"
+AbstractMCMC = "5"
 DifferentiationInterface = "0.7"
 Enzyme = "0.13"
+FlexiChains = "0.7"
 ForwardDiff = "1"
 LogDensityProblems = "2"
+OffsetArrays = "1"
