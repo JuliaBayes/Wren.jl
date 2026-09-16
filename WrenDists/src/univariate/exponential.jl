@@ -3,6 +3,8 @@
     Exponential()
 
 Exponential distribution with scale `θ` (default 1.0).
+
+**Customised batched implementations**: Yes
 """
 struct Exponential{R<:Number} <: PositiveUnivariateDist
     θ::R

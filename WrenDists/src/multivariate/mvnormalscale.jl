@@ -6,6 +6,9 @@ const MvNormalScaleFactor = Union{AbstractMatrix{<:Number},UniformScaling{<:Numb
 Multivariate normal distribution with mean vector `μ` and scale factor `L`, where `L` can be
 a lower-triangular matrix, a `Diagonal`, or a `UniformScaling`.
 
+**Customised batched implementations**: Not yet (will fall back to a product of scalar
+distributions)
+
 !!! warning
 
     This differs from Distributions.jl which uses the covariance matrix `Σ` instead of the

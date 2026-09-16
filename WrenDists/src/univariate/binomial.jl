@@ -2,6 +2,8 @@
     Binomial(n, p)
 
 Binomial distribution for `n` trials with success probability `p`.
+
+**Customised batched implementations**: Yes
 """
 struct Binomial{N<:Integer,P<:Number} <: DiscreteUnivariateDist
     n::N

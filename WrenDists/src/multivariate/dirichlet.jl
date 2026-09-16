@@ -2,6 +2,9 @@
     Dirichlet(α)
 
 Dirichlet distribution with concentration parameter vector `α`.
+
+**Customised batched implementations**: Not yet (will fall back to a product of scalar
+distributions)
 """
 struct Dirichlet{V<:AbstractVector{<:Number}} <: MultivariateDist
     α::V
