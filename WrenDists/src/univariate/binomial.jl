@@ -49,11 +49,17 @@ end
 Base.size(d::BatchedBinomial) = size(d.p)
 Base.rand(rng::AbstractRNG, d::BatchedBinomial) = rand.(Ref(rng), Binomial.(d.n, d.p))
 function DensityInterface.logdensityof(d::BatchedBinomial, x)
-    s = _zero_logdensity(d, x)
-    T = typeof(s)
-    @inbounds for i in eachindex(x, d.n, d.p)
-        n, k, p = convert(T, d.n[i]), convert(T, x[i]), convert(T, d.p[i])
-        s += logbinom(n, k) + xlogy(k, p) + xlogy(n - k, one(T) - p)
+    # Benchmarks @ https://github.com/JuliaBayes/Wren.jl/issues/103
+    n, p = d.n, d.p
+    return if within_compile()
+        sum(@. logbinom(n, x) + xlogy(x, p) + xlogy(n - x, one(x) - p))
+    else
+        T = float(promote_type(eltype(x), eltype(n), eltype(p)))
+        s = zero(T)
+        for i in eachindex(x)
+            ni, ki, pi = convert(T, n[i]), convert(T, x[i]), convert(T, p[i])
+            s += logbinom(ni, ki) + xlogy(ki, pi) + xlogy(ni - ki, one(T) - pi)
+        end
+        s
     end
-    return s
 end
