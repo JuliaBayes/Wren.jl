@@ -41,12 +41,20 @@ function Base.rand(rng::AbstractRNG, d::BatchedLogNormal)
     return exp.(randn(rng, noisetype(d), size(d)) .* d.σ .+ d.μ)
 end
 function DensityInterface.logdensityof(d::BatchedLogNormal, x)
-    s = _zero_logdensity(d, x)
-    @inbounds for i in eachindex(x, d.μ, d.σ)
-        lx = log(x[i])
-        z = (lx - d.μ[i]) / d.σ[i]
-        s -= abs2(z) / 2 + log(d.σ[i]) + lx
+    # Benchmarks @ https://github.com/JuliaBayes/Wren.jl/issues/106
+    mu, sigma = d.μ, d.σ
+    lognorm = length(x) * convert(float(eltype(x)), log2π) / 2
+    return if within_compile()
+        sum(@. -(abs2((log(x) - mu) / sigma)) / 2 - log(sigma) - log(x)) - lognorm
+    else
+        T = float(promote_type(eltype(x), eltype(mu), eltype(sigma)))
+        s = zero(T)
+        for i in eachindex(x, mu, sigma)
+            lx = log(x[i])
+            z = (lx - mu[i]) / sigma[i]
+            s -= abs2(z) / 2 + log(sigma[i]) + lx
+        end
+        s - lognorm
     end
-    return s - length(x) * log2π / 2
 end
 Plaice.scalar_to_scalar_bijector(::BatchedLogNormal) = Plaice.Log(0.0, 1)
