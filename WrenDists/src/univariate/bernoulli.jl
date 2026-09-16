@@ -40,12 +40,7 @@ function Base.rand(rng::AbstractRNG, d::BatchedBernoulli)
     return T.(rand(rng, noisetype(d), size(d)) .< d.p)
 end
 function DensityInterface.logdensityof(d::BatchedBernoulli, x)
-    s = _zero_logdensity(d, x)
-    T = typeof(s)
-    @inbounds for i in eachindex(x, d.p)
-        xi = convert(T, x[i])
-        p = convert(T, d.p[i])
-        s += ifelse(xi == one(T), log(p), ifelse(xi == zero(T), log1p(-p), T(-Inf)))
-    end
-    return s
+    # Benchmarks @ https://github.com/JuliaBayes/Wren.jl/issues/102
+    p = d.p
+    return sum(@. x * log(p) + (one(x) - x) * log1p(-p))
 end
