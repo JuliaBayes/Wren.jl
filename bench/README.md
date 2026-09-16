@@ -23,3 +23,10 @@ julia --project=. ./batch/run.jl
 
 `batch` compares `@batch` loops against plain `for` loops for the likelihoods in
 WrenDists that have specialised `batched` methods.
+
+`batch/gpu` benchmarks alternative formulations of each batched log density, one script
+per distribution, e.g. `julia --project=. ./batch/gpu/diagnormal.jl`. Each variant is
+timed under plain Enzyme on the CPU and under Reactant on whatever device it picks. On a
+machine with a GPU only the Reactant backend runs by default; set `WREN_BENCH_BACKENDS`
+to `enzyme`, `reactant` or `enzyme,reactant` to override, and `WREN_BENCH_NS` to choose
+the sizes.

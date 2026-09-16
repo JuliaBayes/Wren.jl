@@ -4,6 +4,9 @@
     This avoids adding deps into Wren itself.
     For example, Distributions is not a dependency of Wren and should not be added as such.
 
+  - Sometimes you will need to add new dependencies. **ALWAYS DO THIS BY CALLING Pkg.jl**; do NOT
+    edit the `Project.toml` manually as you will often insert the wrong UUID!
+
   - `DensityInterface.logdensityof`, most relevant ADTypes, and `Enzyme.Reverse` are re-exported by WrenCore.
     No need to import them.
 

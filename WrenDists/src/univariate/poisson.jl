@@ -84,9 +84,18 @@ end
 Base.size(d::BatchedPoisson) = size(d.λ)
 Base.rand(rng::AbstractRNG, d::BatchedPoisson) = rand.(Ref(rng), Poisson.(d.λ))
 function DensityInterface.logdensityof(d::BatchedPoisson, x)
-    s = _zero_logdensity(d, x)
-    @inbounds for i in eachindex(x, d.λ)
-        s += xlogy(x[i], d.λ[i]) - d.λ[i] - loggamma(x[i] + one(x[i]))
+    # Benchmarks @ https://github.com/JuliaBayes/Wren.jl/issues/104
+    λ = d.λ
+    return if within_compile()
+        sum(@. x * log(λ) - λ - loggamma(x + one(x)))
+    else
+        T = float(promote_type(eltype(x), eltype(λ)))
+        s = zero(T)
+        for i in eachindex(x, λ)
+            s +=
+                convert(T, x[i]) * log(convert(T, λ[i])) - convert(T, λ[i]) -
+                loggamma(convert(T, x[i]) + one(T))
+        end
+        s
     end
-    return s
 end

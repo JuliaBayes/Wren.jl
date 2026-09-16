@@ -34,10 +34,17 @@ function Base.rand(rng::AbstractRNG, d::BatchedExponential)
     return -log.(rand(rng, noisetype(d), size(d))) .* d.θ
 end
 function DensityInterface.logdensityof(d::BatchedExponential, x)
-    s = _zero_logdensity(d, x)
-    @inbounds for i in eachindex(x, d.θ)
-        s -= x[i] / d.θ[i] + log(d.θ[i])
+    # Benchmarks @ https://github.com/JuliaBayes/Wren.jl/issues/105
+    θ = d.θ
+    return if within_compile()
+        sum(@. -(x / θ) - log(θ))
+    else
+        T = float(promote_type(eltype(x), eltype(θ)))
+        s = zero(T)
+        for i in eachindex(x, θ)
+            s -= convert(T, x[i]) / convert(T, θ[i]) + log(convert(T, θ[i]))
+        end
+        s
     end
-    return s
 end
 Plaice.scalar_to_scalar_bijector(::BatchedExponential) = Plaice.Log(0.0, 1)

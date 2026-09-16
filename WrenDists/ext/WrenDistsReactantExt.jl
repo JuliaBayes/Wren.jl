@@ -3,12 +3,10 @@ module WrenDistsReactantExt
 using WrenDists: WrenDists, GAMMAINC_TERMS, GAMMAQUANTILE_STEPS
 using WrenDists: basefloat, floortiny, select
 using WrenDists: gammaquantile_start, gammaquantile_step
-using Reactant: Reactant, TracedRNumber, @trace
+using Reactant: Reactant, TracedRNumber, TracedRArray, @trace
 using SpecialFunctions: SpecialFunctions, loggamma
 
 WrenDists.basefloat(::Type{TracedRNumber{T}}) where {T} = WrenDists.basefloat(T)
-
-Base.float(::Type{TracedRNumber{T}}) where {T} = TracedRNumber{float(T)}
 
 @inline function WrenDists.select(cond::TracedRNumber{Bool}, iftrue, iffalse)
     return ifelse(cond, iftrue(), iffalse())
@@ -55,10 +53,12 @@ function WrenDists.gammalogquantile_fixed(a::T, p::T) where {T<:TracedRNumber}
     return u
 end
 
+# TODO(penelopeysm) This is piracy!! These were upstreamed in
+# https://github.com/EnzymeAD/Reactant.jl/pull/3273 but not yet released.
+# Remove this ASAP after the next Reactant release
 function SpecialFunctions.erfcinv(x::TracedRNumber{T}) where {T<:Base.IEEEFloat}
     return Reactant.Ops.erf_inv(one(x) - x)
 end
-
 function SpecialFunctions.erfinv(x::TracedRNumber{T}) where {T<:Base.IEEEFloat}
     return Reactant.Ops.erf_inv(x)
 end

@@ -1,10 +1,12 @@
 module WrenDists
 
 using DensityInterface: DensityInterface, logdensityof
+using EnzymeCore: EnzymeCore, EnzymeRules, Annotation, Const
 using IrrationalConstants: log2π, logπ, sqrt2
 using LogExpFunctions: log1mexp, xlogy
 using LinearAlgebra: Diagonal, LowerTriangular, UniformScaling, diag
 using Random: Random, AbstractRNG
+using ReactantCore: within_compile
 using SpecialFunctions: erfcinv, gamma_inc, logbeta, loggamma
 using Plaice: Plaice
 using VarNames: VarNames
