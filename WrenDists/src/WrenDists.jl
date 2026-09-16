@@ -1,6 +1,7 @@
 module WrenDists
 
 using DensityInterface: DensityInterface, logdensityof
+using EnzymeCore: EnzymeCore, EnzymeRules, Annotation, Const
 using IrrationalConstants: log2π, logπ, sqrt2
 using LogExpFunctions: log1mexp, xlogy
 using LinearAlgebra: Diagonal, LowerTriangular, UniformScaling, diag

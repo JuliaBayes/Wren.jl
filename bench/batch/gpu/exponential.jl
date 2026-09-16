@@ -28,10 +28,18 @@ function lp_split((θ,), x)
     return -sum(x .* inv_θ) - sum(log, θ)
 end
 
+using WrenDists: BatchedExponential
+using DensityInterface: logdensityof
+
+function lp_impl((θ,), x)
+    @inline logdensityof(BatchedExponential(θ), x)
+end
+
 const VARIANTS = [
     "loop" => ScalarIndexed(lp_loop),
     "broadcast" => lp_broadcast,
     "split" => lp_split,
+    "impl" => lp_impl,
 ]
 
 function make_inputs(rng, T, N)

@@ -42,11 +42,19 @@ function lp_broadcast_mul((λ,), x)
     return sum(@. x * log(λ) - λ - loggamma(x + one(x)))
 end
 
+using WrenDists: BatchedPoisson
+using DensityInterface: logdensityof
+
+function lp_impl((λ,), x)
+    @inline logdensityof(BatchedPoisson(λ), x)
+end
+
 const VARIANTS = [
     "loop_xlogy" => ScalarIndexed(lp_loop_xlogy),
     "loop_mul" => ScalarIndexed(lp_loop_mul),
     "broadcast_xlogy" => lp_broadcast_xlogy,
     "broadcast_mul" => lp_broadcast_mul,
+    "impl" => lp_impl,
 ]
 
 function make_inputs(rng, T, N)

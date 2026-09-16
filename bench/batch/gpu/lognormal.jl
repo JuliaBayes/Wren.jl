@@ -36,10 +36,18 @@ function lp_split((mu, sigma), x)
     return -sum(abs2, z) / 2 - sum(log, sigma) - sum(lx) - _lognorm(x)
 end
 
+using WrenDists: BatchedLogNormal
+using DensityInterface: logdensityof
+
+function lp_impl((mu, sigma), x)
+    @inline logdensityof(BatchedLogNormal(mu, sigma), x)
+end
+
 const VARIANTS = [
     "loop" => ScalarIndexed(lp_loop),
     "broadcast" => lp_broadcast,
     "split" => lp_split,
+    "impl" => lp_impl,
 ]
 
 function make_inputs(rng, T, N)

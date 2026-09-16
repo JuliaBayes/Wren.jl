@@ -52,11 +52,19 @@ function lp_broadcast_mul((n, p), x)
     return sum(@. logbinom(n, x) + x * log(p) + (n - x) * log1p(-p))
 end
 
+using WrenDists: BatchedBinomial
+using DensityInterface: logdensityof
+
+function lp_impl((n, p), x)
+    @inline logdensityof(BatchedBinomial(n, p), x)
+end
+
 const VARIANTS = [
     "loop_xlogy" => ScalarIndexed(lp_loop_xlogy),
     "loop_mul" => ScalarIndexed(lp_loop_mul),
     "broadcast_xlogy" => lp_broadcast_xlogy,
     "broadcast_mul" => lp_broadcast_mul,
+    "impl" => lp_impl,
 ]
 
 function make_inputs(rng, T, N)

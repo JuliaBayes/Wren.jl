@@ -37,6 +37,8 @@ const ELTYPE = Dict("Float64" => Float64, "Float32" => Float32)[get(ENV, "WREN_B
 # Sums over up to 1e6 elements in Float32 differ noticeably between reduction orders.
 const RTOL = max(1e-6, 1000 * eps(ELTYPE))
 
+const SECONDS = 5.0
+
 _on_gpu() = any(d -> Reactant.XLA.device_kind(d) != "cpu", Reactant.devices())
 const BACKENDS = split(
     get(ENV, "WREN_BENCH_BACKENDS", _on_gpu() ? "reactant" : "enzyme,reactant"), ","
@@ -87,8 +89,8 @@ function time_enzyme(name, N, variant, params, x, ref_val, ref_grad)
     f = _unwrap(variant)
     vg = ValueAndGrad(f)
     _check(name, N, "enzyme", f(params, x), last(vg(params, x)), ref_val, ref_grad)
-    primal_bench = @be f(params, x)
-    grad_bench = @be vg(params, x)
+    primal_bench = @be f(params, x) seconds=SECONDS
+    grad_bench = @be vg(params, x) seconds=SECONDS
     return median(primal_bench).time, median(grad_bench).time
 end
 
@@ -105,8 +107,8 @@ function time_reactant(name, N, variant, params, x, ref_val, ref_grad)
         Reactant.@compile sync = true vg(params_ra, x_ra)
     end
     _check(name, N, "reactant", primal(params_ra, x_ra), last(grad_fn(params_ra, x_ra)), ref_val, ref_grad)
-    primal_bench = @be _host(primal(params_ra, x_ra))
-    grad_bench = @be _host(first(grad_fn(params_ra, x_ra)))
+    primal_bench = @be _host(primal(params_ra, x_ra)) seconds=SECONDS
+        grad_bench = @be _host(first(grad_fn(params_ra, x_ra))) seconds=SECONDS
     return median(primal_bench).time, median(grad_bench).time
 end
 
@@ -138,8 +140,8 @@ function print_status()
         # and additionally reading one scalar back to the host.
         one = Reactant.to_rarray([1.0])
         trivial = Reactant.@compile sync = true sum(one)
-        t_call = median(@be trivial(one)).time
-        t_host = median(@be _host(trivial(one))).time
+        t_call = median(@be trivial(one) seconds=SECONDS).time
+        t_host = median(@be _host(trivial(one)) seconds=SECONDS).time
         println("Reactant floor:   ", pretty_time(t_call), " per call, ", pretty_time(t_host), " with host readback")
     end
     println()

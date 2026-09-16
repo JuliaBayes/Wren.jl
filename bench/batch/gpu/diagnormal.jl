@@ -46,7 +46,7 @@ function lp_invsigma((mu, sigma), x)
 end
 
 function lp_impl((mu, sigma), x)
-    logdensityof(DiagNormal(mu, sigma), x)
+    @inline logdensityof(DiagNormal(mu, sigma), x)
 end
 
 const VARIANTS = [

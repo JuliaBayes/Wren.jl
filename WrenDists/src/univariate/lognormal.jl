@@ -40,6 +40,24 @@ Base.size(d::BatchedLogNormal) = size(d.μ)
 function Base.rand(rng::AbstractRNG, d::BatchedLogNormal)
     return exp.(randn(rng, noisetype(d), size(d)) .* d.σ .+ d.μ)
 end
+
+function _lognormal_loop(mu, sigma, x)
+    T = float(promote_type(eltype(x), eltype(mu), eltype(sigma)))
+    s = zero(T)
+    for i in eachindex(x, mu, sigma)
+        lx = log(x[i])
+        z = (lx - mu[i]) / sigma[i]
+        s -= abs2(z) / 2 + log(sigma[i]) + lx
+    end
+    s
+end
+
+EnzymeRules.@easy_rule(
+    _lognormal_loop(mu, sigma, x),
+    @setup(z = (log.(x) .- mu) ./ sigma),
+    (z ./ sigma, (abs2.(z) .- 1) ./ sigma, -(z ./ (x .* sigma) .+ inv.(x))),
+)
+
 function DensityInterface.logdensityof(d::BatchedLogNormal, x)
     # Benchmarks @ https://github.com/JuliaBayes/Wren.jl/issues/106
     mu, sigma = d.μ, d.σ
@@ -47,14 +65,7 @@ function DensityInterface.logdensityof(d::BatchedLogNormal, x)
     return if within_compile()
         sum(@. -(abs2((log(x) - mu) / sigma)) / 2 - log(sigma) - log(x)) - lognorm
     else
-        T = float(promote_type(eltype(x), eltype(mu), eltype(sigma)))
-        s = zero(T)
-        for i in eachindex(x, mu, sigma)
-            lx = log(x[i])
-            z = (lx - mu[i]) / sigma[i]
-            s -= abs2(z) / 2 + log(sigma[i]) + lx
-        end
-        s - lognorm
+        _lognormal_loop(mu, sigma, x) - lognorm
     end
 end
 Plaice.scalar_to_scalar_bijector(::BatchedLogNormal) = Plaice.Log(0.0, 1)

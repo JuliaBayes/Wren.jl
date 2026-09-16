@@ -43,11 +43,19 @@ function lp_loop_mul((p,), x)
     return s
 end
 
+using WrenDists: BatchedBernoulli
+using DensityInterface: logdensityof
+
+function lp_impl((p,), x)
+    @inline logdensityof(BatchedBernoulli(p), x)
+end
+
 const VARIANTS = [
     "loop_ifelse" => ScalarIndexed(lp_loop),
     "loop_mul" => ScalarIndexed(lp_loop_mul),
     "broadcast_ifelse" => lp_broadcast_ifelse,
     "broadcast_mul" => lp_broadcast_mul,
+    "impl" => lp_impl,
 ]
 
 function make_inputs(rng, T, N)

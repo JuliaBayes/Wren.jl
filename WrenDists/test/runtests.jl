@@ -484,6 +484,36 @@ const DIRICHLET_PLAICE = (to_vec, from_vec)
         ),
     )
 
+    @testset "BatchedLogNormal Enzyme rule" begin
+        using EnzymeTestUtils
+        mu = [0.1, 0.5, 1.0]
+        sigma = [0.3, 0.7, 1.2]
+        x = [1.5, 2.0, 3.0]
+        @testset "reverse" begin
+            @testset for Tmu in (Const, Duplicated),
+                Tsigma in (Const, Duplicated),
+                Tx in (Const, Duplicated)
+
+                test_reverse(
+                    WrenDists._lognormal_loop, Active,
+                    (mu, Tmu), (sigma, Tsigma), (x, Tx),
+                )
+            end
+        end
+        @testset "forward" begin
+            @testset for RT in (Const, DuplicatedNoNeed, Duplicated),
+                Tmu in (Const, Duplicated),
+                Tsigma in (Const, Duplicated),
+                Tx in (Const, Duplicated)
+
+                test_forward(
+                    WrenDists._lognormal_loop, RT,
+                    (mu, Tmu), (sigma, Tsigma), (x, Tx),
+                )
+            end
+        end
+    end
+
     # # Specialized: IsoNormal
     # test_dist(
     #     "IsoNormal",
