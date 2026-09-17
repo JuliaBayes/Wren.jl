@@ -30,7 +30,11 @@ makedocs(;
             "tutorials/submodels.md",
             "tutorials/mcmc.md",
         ],
-        "Explanations" => ["explanations/enzyme.md", "explanations/motivation.md"],
+        "Explanations" => [
+            "explanations/enzyme.md",
+            "explanations/batch.md",
+            "explanations/motivation.md",
+        ],
         "Reference" => ["reference/distributions.md", "reference/api.md"],
     ],
     checkdocs=:exports,

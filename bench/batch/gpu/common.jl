@@ -182,7 +182,8 @@ function run_variants(variants, make_inputs, reference)
     println("Times are for one evaluation of the primal, and one of value-and-gradient\n")
     @printf("%-20s %9s", "variant", "N")
     for backend in BACKENDS
-        @printf(" %16s %16s", backend * " primal", backend * " grad")
+        primal_str = backend == "enzyme" ? "primal" : "$backend primal"
+        @printf(" %16s %16s", primal_str, backend * " grad")
     end
     println()
     for N in NS
