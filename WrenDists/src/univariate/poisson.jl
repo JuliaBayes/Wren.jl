@@ -2,6 +2,8 @@
     Poisson(λ)
 
 Poisson distribution with rate `λ`.
+
+**Customised batched implementations**: Yes
 """
 struct Poisson{L<:Number} <: DiscreteUnivariateDist
     λ::L

@@ -3,6 +3,9 @@
     Cauchy()
 
 Cauchy distribution with location `μ` (default 0.0) and scale `σ` (default 1.0).
+
+**Customised batched implementations**: Not yet (will fall back to a product of scalar
+distributions)
 """
 struct Cauchy{M<:Number,S<:Number} <: UnconstrainedUnivariateDist
     μ::M

@@ -3,6 +3,8 @@
     Bernoulli()
 
 Bernoulli distribution with success probability `p` (default 0.5).
+
+**Customised batched implementations**: Yes
 """
 struct Bernoulli{P<:Number} <: DiscreteUnivariateDist
     p::P

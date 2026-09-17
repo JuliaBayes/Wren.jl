@@ -3,6 +3,9 @@
     Beta()
 
 Beta distribution with shape parameters `α` (default 1.0) and `β` (default 1.0).
+
+**Customised batched implementations**: Not yet (will fall back to a product of scalar
+distributions)
 """
 struct Beta{A<:Number,B<:Number} <: UnivariateDist
     α::A

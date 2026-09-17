@@ -2,6 +2,9 @@
     Categorical(p)
 
 Categorical distribution over `1:length(p)` with probability vector `p`.
+
+**Customised batched implementations**: Not yet (will fall back to a product of scalar
+distributions)
 """
 struct Categorical{V<:AbstractVector{<:Number}} <: DiscreteUnivariateDist
     p::V
