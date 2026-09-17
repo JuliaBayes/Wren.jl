@@ -139,12 +139,17 @@ function emit_model_expr(stmt::Batch, accs, conditioned, latent_source, paramete
 end
 
 """
-    Indexed
+    Indexed{Dim,T}
 
 Marker struct to indicate that the argument is an object indexed by the batch loop index.
+`Dim` is the dimension that contains the loop index.
 """
-struct Indexed{T}
+struct Indexed{Dim,T}
     data::T
+
+    function Indexed{Dim}(data::T) where {Dim,T}
+        new{Dim,T}(data)
+    end
 end
 
 """
@@ -239,7 +244,7 @@ function batch_expr(expr, loop_idx, loop_iters, loop_iters_size)
                 make_product_expr(expr, loop_idx, loop_iters)
             else
                 # batch the call e.g. f(x[i], y[i])
-                #   --> batched(1:J, Val{f}(), (Indexed(x[1:J]), Indexed(y[1:J])))
+                #   --> batched(1:J, Val{f}(), (Indexed{1}(x[1:J]), Indexed{1}(y[1:J])))
                 #
                 # Note that we have to use `Val` here because `f` is often a type constructor
                 # e.g. `Normal`, which prevents us from dispatching on `::typeof(f)` (since
@@ -328,9 +333,12 @@ occurs_in_expr(expr, loop_idx) = false
 
 Replace all occurrences of `loop_idx` in `expr` with `loop_iters` and broadcast where necessary.
 
-Returns a tuple of `(new_expr, is_batched)` where `new_expr` is the modified expression and
-`is_batched` indicates whether or not the expression was batched (i.e., it used to refer to
-a loop index but now refers to the iteration range).
+Returns a tuple of `(new_expr, is_batched, dim)` where:
+
+- `new_expr` is the modified expression
+- `is_batched` indicates whether or not the expression was batched (i.e., it used to refer
+  to a loop index but now refers to the iteration range).
+- `dim` is the dimension along which the batching occurs
 """
 function replace_loop_idx_with_iters(expr, loop_idx::Symbol, loop_iters)
     return if expr isa Symbol
@@ -343,8 +351,10 @@ function replace_loop_idx_with_iters(expr, loop_idx::Symbol, loop_iters)
                 arg -> replace_loop_idx_with_iters(arg, loop_idx, loop_iters),
                 expr.args,
             )
-            new_args = first.(new_args_and_is_batched)
-            any_arg_was_batched = any(last.(new_args_and_is_batched))
+            new_args = map(x -> x[1], new_args_and_is_batched)
+            is_batched = map(x -> x[2], new_args_and_is_batched)
+            batched_arg_indices = (1:length(new_args))[is_batched]
+            any_arg_was_batched = any(is_batched)
             if expr.head == :call && any_arg_was_batched
                 # e.g. i + 1 --> apart from just replacing i, we also need to broadcast the
                 # operation `i .+ 1`.
@@ -360,12 +370,15 @@ function replace_loop_idx_with_iters(expr, loop_idx::Symbol, loop_iters)
                     func_args = new_args[2:end]
                     Expr(Symbol("."), func_sym, Expr(:tuple, func_args...))
                 end
-                return new_expr, true
+                new_expr, true, batched_arg_indices
             elseif expr.head == :ref
                 # e.g. x[i + 1] -> x[@. (1:J) + 1] also causes the overall indexing
                 # expression to be batched
-                new_expr = if count(last, new_args_and_is_batched) > 1
-                    # Preserve paired indices, e.g. x[i, i], rather than a Cartesian product.
+                new_expr = if length(batched_arg_indices) > 1
+                    # e.g. x[i, i] -> getindex.(x, Ref(1:J), Ref(1:J))
+                    #
+                    # The alternative, `x[i, i] for i in 1:J`, creates a closure inside an
+                    # RGF which makes Enzyme very angry.
                     args = map(new_args_and_is_batched) do (arg, is_batched)
                         is_batched ? arg : Expr(:call, Base.Ref, arg)
                     end
@@ -373,11 +386,11 @@ function replace_loop_idx_with_iters(expr, loop_idx::Symbol, loop_iters)
                 else
                     Expr(expr.head, new_args...)
                 end
-                new_expr, any_arg_was_batched
+                new_expr, any_arg_was_batched, batched_arg_indices
             else
                 # e.g. x[const] -> x[const]
                 new_expr = Expr(expr.head, new_args...)
-                new_expr, false
+                new_expr, false, nothing
             end
         else
             error("@batch: unsupported expression $(expr) with head $(expr.head)")

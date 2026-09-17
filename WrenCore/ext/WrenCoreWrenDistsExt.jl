@@ -16,6 +16,8 @@ using WrenDists:
     BatchedBernoulli,
     Binomial,
     BatchedBinomial,
+    Categorical,
+    BatchedCategorical,
     Poisson,
     BatchedPoisson,
     Exponential,
@@ -85,6 +87,12 @@ for (D, B) in (
     @eval function WrenCore.batched(iters, ::Val{$D}, indexed::WrenCore.Indexed; _kwargs...)
         return $B(indexed.data)
     end
+end
+
+# Categorical(probs[:, i]) -> BatchedCategorical(probs)
+# The Indexed data is the full K×N probability matrix.
+function WrenCore.batched(iters, ::Val{Categorical}, indexed::WrenCore.Indexed; _kwargs...)
+    return BatchedCategorical(indexed.data)
 end
 
 # Two-parameter distributions: Binomial(n, p) and LogNormal(mu, sigma). Constant arguments

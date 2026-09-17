@@ -3,8 +3,7 @@
 
 Categorical distribution over `1:length(p)` with probability vector `p`.
 
-**Customised batched implementations**: Not yet (will fall back to a product of scalar
-distributions)
+**Customised batched implementations**: Yes
 """
 struct Categorical{V<:AbstractVector{<:Number}} <: DiscreteUnivariateDist
     p::V
@@ -41,4 +40,36 @@ end
 # almost everywhere.
 @inline function Base.rand(rng::AbstractRNG, d::Categorical)
     return _categorical_quantile(d, rand(rng, noisetype(d)))
+end
+
+# --- Batched Categorical ---
+# P is a (K, N) matrix: K categories × N batch elements, each column a probability vector.
+
+struct BatchedCategorical{P<:AbstractMatrix} <: DiscreteBatchedUnivariate
+    P::P
+end
+Base.size(d::BatchedCategorical) = (size(d.P, 2),)
+function Base.rand(rng::AbstractRNG, d::BatchedCategorical)
+    K, N = size(d.P)
+    x = Vector{Int}(undef, N)
+    for i in 1:N
+        x[i] = _categorical_quantile(Categorical(@view(d.P[:, i])), rand(rng, Float64))
+    end
+    return x
+end
+function DensityInterface.logdensityof(d::BatchedCategorical, x)
+    P = d.P
+    return if within_compile()
+        K = size(P, 1)
+        T = eltype(P)
+        H = T.(1:K) .== reshape(x, 1, :)
+        sum(log.(P) .* H)
+    else
+        T = float(eltype(P))
+        s = zero(T)
+        for i in eachindex(x)
+            s += log(convert(T, P[x[i], i]))
+        end
+        s
+    end
 end
