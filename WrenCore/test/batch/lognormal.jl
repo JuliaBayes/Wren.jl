@@ -42,6 +42,20 @@ using WrenDists
         test_model_equivalence(mu_batch(ones(3), mu), mu_nobatch(ones(3), mu))
     end
 
+    @testset "batched: LogNormal(mu[i]) -> BatchedLogNormal" begin
+        @wren function mu_only_batch(x, mu)
+            @batch for i in 1:3
+                x[i] ~ WrenDists.LogNormal(mu[i])
+            end
+        end
+        @wren function mu_only_nobatch(x, mu)
+            for i in 1:3
+                x[i] ~ WrenDists.LogNormal(mu[i])
+            end
+        end
+        test_model_equivalence(mu_only_batch(ones(3), mu), mu_only_nobatch(ones(3), mu))
+    end
+
     @testset "batched: LogNormal(const_mu, sigma[i]) -> BatchedLogNormal" begin
         @wren function sigma_batch(x, sigma)
             @batch for i in 1:3
