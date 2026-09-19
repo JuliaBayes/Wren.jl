@@ -1,5 +1,6 @@
 """
     Laplace(μ, b)
+    Laplace(μ)
     Laplace()
 
 Laplace distribution with location `μ` (default 0.0) and scale `b` (default 1.0).
@@ -12,6 +13,7 @@ struct Laplace{M<:Number,B<:Number} <: UnconstrainedUnivariateDist
     b::B
 end
 
+Laplace(μ) = Laplace(μ, one(μ))
 Laplace() = Laplace(0.0, 1.0)
 
 @inline zval(d::Laplace, x::Number) = (x - d.μ) / d.b

@@ -1,13 +1,16 @@
 """
     Poisson(λ)
+    Poisson()
 
-Poisson distribution with rate `λ`.
+Poisson distribution with rate `λ` (default 1.0).
 
 **Customised batched implementations**: Yes
 """
 struct Poisson{L<:Number} <: DiscreteUnivariateDist
     λ::L
 end
+
+Poisson() = Poisson(1.0)
 
 Base.eltype(::Type{Poisson{L}}) where {L} = float(L)
 

@@ -1,5 +1,6 @@
 """
     LogNormal(μ, σ)
+    LogNormal(μ)
     LogNormal()
 
 Log-normal distribution with log-scale mean `μ` (default 0.0) and log-scale standard
@@ -12,6 +13,7 @@ struct LogNormal{M<:Number,S<:Number} <: PositiveUnivariateDist
     σ::S
 end
 
+LogNormal(μ) = LogNormal(μ, one(μ))
 LogNormal() = LogNormal(0.0, 1.0)
 
 @inline zval(d::LogNormal, x::Number) = (log(x) - d.μ) / d.σ

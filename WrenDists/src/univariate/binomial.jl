@@ -1,7 +1,9 @@
 """
     Binomial(n, p)
+    Binomial(n)
+    Binomial()
 
-Binomial distribution for `n` trials with success probability `p`.
+Binomial distribution for `n` (default 1) trials with success probability `p` (default 0.5).
 
 **Customised batched implementations**: Yes
 """
@@ -9,6 +11,9 @@ struct Binomial{N<:Integer,P<:Number} <: DiscreteUnivariateDist
     n::N
     p::P
 end
+
+Binomial(n::Integer) = Binomial(n, 0.5)
+Binomial() = Binomial(1, 0.5)
 
 Base.eltype(::Type{Binomial{N,P}}) where {N,P} = float(P)
 
