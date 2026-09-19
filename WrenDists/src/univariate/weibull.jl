@@ -1,5 +1,6 @@
 """
     Weibull(α, θ)
+    Weibull(α)
     Weibull()
 
 Weibull distribution with shape `α` (default 1.0) and scale `θ` (default 1.0).
@@ -12,6 +13,7 @@ struct Weibull{A<:Number,T<:Number} <: PositiveUnivariateDist
     θ::T
 end
 
+Weibull(α) = Weibull(α, one(α))
 Weibull() = Weibull(1.0, 1.0)
 
 @inline sval(d::Weibull, x::Number) = x / d.θ

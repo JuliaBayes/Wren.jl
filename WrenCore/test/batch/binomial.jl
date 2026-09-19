@@ -43,6 +43,20 @@ using WrenDists
         test_model_equivalence(n_batch(y, n), n_nobatch(y, n))
     end
 
+    @testset "batched: Binomial(n[i]) -> BatchedBinomial" begin
+        @wren function n_only_batch(y, n)
+            @batch for i in 1:3
+                @observe y[i] ~ WrenDists.Binomial(n[i])
+            end
+        end
+        @wren function n_only_nobatch(y, n)
+            for i in 1:3
+                @observe y[i] ~ WrenDists.Binomial(n[i])
+            end
+        end
+        test_model_equivalence(n_only_batch(y, n), n_only_nobatch(y, n))
+    end
+
     @testset "batched: Binomial(const_n, p[i]) -> BatchedBinomial" begin
         @wren function p_batch(y)
             p ~ WrenCore.iid(WrenDists.Beta(2.0, 2.0), 3)
