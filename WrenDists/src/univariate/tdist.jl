@@ -134,3 +134,35 @@ function DensityInterface.logdensityof(d::BatchedTDist{<:AbstractArray}, x)
     end
     return s + _tlognorm_sum(ν)
 end
+
+# --- IID TDist ---
+
+struct IIDTDist{T<:Tuple,N<:Number,M<:Number,S<:Number} <: BatchedUnivariate
+    size::T
+    ν::N
+    μ::M
+    σ::S
+end
+Base.size(d::IIDTDist) = d.size
+
+function Base.rand(rng::AbstractRNG, d::IIDTDist)
+    F = noisetype(d)
+    ν = convert(F, d.ν)
+    z = randn(rng, F, d.size)
+    u = rand(rng, F, d.size)
+    logv = gammalogquantile.(ν / 2, u)
+    t = z ./ sqrt.(exp.(logv) ./ (ν / 2))
+    return d.μ .+ d.σ .* t
+end
+
+function DensityInterface.logdensityof(d::IIDTDist, x)
+    T = _valuetype(TDist(d.ν, d.μ, d.σ), zero(eltype(x)))
+    ν = convert(T, d.ν)
+    σ = convert(T, d.σ)
+    μ = convert(T, d.μ)
+    half = (ν + one(T)) / 2
+    N = length(x)
+    lognorm = N * (loggamma(half) - loggamma(ν / 2) - (log(ν) + T(logπ)) / 2)
+    one_T = one(T)
+    return -N * log(σ) - half * sum(t -> log(one_T + ((t - μ) / σ)^2 / ν), x) + lognorm
+end

@@ -167,6 +167,21 @@ using WrenDists
         test_model_equivalence(onearg_batch(zeros(3), nu), onearg_nobatch(zeros(3), nu))
     end
 
+    # iid
+    @testset "iid tdist" begin
+        @wren function iid_batch(x)
+            @batch for i in 1:3
+                x[i] ~ WrenDists.TDist(4.0)
+            end
+        end
+        @wren function iid_nobatch(x)
+            for i in 1:3
+                x[i] ~ WrenDists.TDist(4.0)
+            end
+        end
+        test_model_equivalence(iid_batch(zeros(3)), iid_nobatch(zeros(3)))
+    end
+
     # Observe
     @testset "observe with batched TDist" begin
         @wren function obs_batch(x)

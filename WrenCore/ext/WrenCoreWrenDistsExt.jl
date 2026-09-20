@@ -25,7 +25,8 @@ using WrenDists:
     LogNormal,
     BatchedLogNormal,
     TDist,
-    BatchedTDist
+    BatchedTDist,
+    IIDTDist
 
 # Generic fallbacks
 WrenCore.iid(dist::WrenDist, dims::Dims) = Independent(Repeated(dist, dims))
@@ -41,6 +42,9 @@ end
 
 # Normal(consts...)
 WrenCore.iid(dist::Normal, size::Dims) = IIDNormal(size, dist.μ, dist.σ)
+
+# TDist(consts...)
+WrenCore.iid(dist::TDist, size::Dims) = IIDTDist(size, dist.ν, dist.μ, dist.σ)
 
 # Normal(x[i], sigma[i]) -> DiagNormal(x, sigma)
 function WrenCore.batched(
