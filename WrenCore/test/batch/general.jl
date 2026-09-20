@@ -3,6 +3,7 @@ module WrenBatchGeneralTests
 @info "testing batch/general.jl"
 
 using Test
+using Distributions: NegativeBinomial
 using WrenCore
 using WrenCore.TestUtils: test_model_equivalence
 using WrenDists
@@ -210,6 +211,31 @@ fcategorical(ps) = Categorical(ps)
                 nobatch_subtraction(y, n),
                 nothing,
             )
+        end
+    end
+
+    @testset "failure modes" begin
+        @testset "runtime batched fallback when arrays are sliced"
+            @wren function fail_batch_slice(x, y)
+                a ~ Normal()
+                @batch for i in 1:2
+                    @observe x[i] ~ fcategorical(y[i, :, 1])
+                end
+            end
+            @wren function fail_nobatch_slice(x, y)
+                a ~ Normal()
+                for i in 1:2
+                    @observe x[i] ~ fcategorical(y[i, :, 1])
+                end
+            end
+            ps = [0.1 0.9; 0.8 0.2]
+            ps = reshape(ps, 2, 2, 1)
+            # Without batching it should be fine
+            model = fail_nobatch_slice([1, 2], ps)
+            @test rand(model) isa Any
+            # With batching this should throw
+            model = fail_batch_slice([1, 2], ps)
+            @test_throws "cannot safely unindex" rand(model)
         end
     end
 end
