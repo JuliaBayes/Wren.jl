@@ -7,6 +7,8 @@
 # observation, and returns the summed log density of independent `TDist(ν[i], μ[i], σ[i])`.
 # ν is a Fill array (shared across all elements), so the loggamma normalising terms
 # are computed once.
+#
+# See https://github.com/JuliaBayes/Wren.jl/issues/117
 
 include("common.jl")
 

@@ -108,6 +108,7 @@ function _tlognorm_sum(ν::AbstractArray)
 end
 
 # Benchmarks @ bench/batch/gpu/tdist.jl — split reductions are fastest.
+# See https://github.com/JuliaBayes/Wren.jl/issues/117
 function DensityInterface.logdensityof(d::BatchedTDist{<:AbstractFill}, x)
     ν, μ, σ = d.ν, d.μ, d.σ
     T = float(promote_type(eltype(x), eltype(ν), eltype(μ), eltype(σ)))
@@ -118,16 +119,18 @@ function DensityInterface.logdensityof(d::BatchedTDist{<:AbstractFill}, x)
     return -sum(log, σ) - half * sum(t -> log(one_T + t^2 / ν1), z) + _tlognorm_sum(ν)
 end
 
+# Benchmarks @ bench/batch/gpu/tdist_variable_nu.jl — loop is fastest.
+# See https://github.com/JuliaBayes/Wren.jl/issues/117
 function DensityInterface.logdensityof(d::BatchedTDist{<:AbstractArray}, x)
     ν, μ, σ = d.ν, d.μ, d.σ
     T = float(promote_type(eltype(x), eltype(ν), eltype(μ), eltype(σ)))
     one_T = one(T)
-    z = @. (x - μ) / σ
-    s = -sum(log, σ)
-    for i in eachindex(z, ν)
+    s = zero(T)
+    for i in eachindex(x, μ, σ, ν)
         νi = convert(T, ν[i])
         half = (νi + one_T) / 2
-        s -= half * log(one_T + z[i]^2 / νi)
+        z = (convert(T, x[i]) - convert(T, μ[i])) / convert(T, σ[i])
+        s -= log(convert(T, σ[i])) + half * log(one_T + z^2 / νi)
     end
     return s + _tlognorm_sum(ν)
 end
