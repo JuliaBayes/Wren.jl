@@ -215,7 +215,7 @@ fcategorical(ps) = Categorical(ps)
     end
 
     @testset "failure modes" begin
-        @testset "runtime batched fallback when arrays are sliced"
+        @testset "runtime batched fallback when arrays are sliced" begin
             @wren function fail_batch_slice(x, y)
                 a ~ Normal()
                 @batch for i in 1:2
