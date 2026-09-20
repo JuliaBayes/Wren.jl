@@ -16,6 +16,8 @@ using WrenDists:
     BatchedBernoulli,
     Binomial,
     BatchedBinomial,
+    Categorical,
+    BatchedCategorical,
     Poisson,
     BatchedPoisson,
     Exponential,
@@ -132,6 +134,36 @@ for (D, B) in ((:Binomial, :BatchedBinomial), (:LogNormal, :BatchedLogNormal))
             return $B(Fill(a, size(b.data)), b.data)
         end
     end
+end
+
+# Categorical
+function WrenCore.batched(
+    iters,
+    ::Val{Categorical},
+    indexed::WrenCore.Indexed{1,1,<:AbstractVector{<:AbstractVector}};
+    _kwargs...,
+)
+    # indexed.data[i] is a vector of probabilities, so indexed.data is a vector (batch_size)
+    # of vectors (categories), and stack(indexed.data) will be categories x batch_size
+    return BatchedCategorical(stack(indexed.data))
+end
+function WrenCore.batched(
+    iters,
+    ::Val{Categorical},
+    indexed::WrenCore.Indexed{1,2,<:AbstractMatrix};
+    _kwargs...,
+)
+    # indexed.data has dimensions (batch_size, categories), so we need to transpose
+    return BatchedCategorical(permutedims(indexed.data))
+end
+function WrenCore.batched(
+    iters,
+    ::Val{Categorical},
+    indexed::WrenCore.Indexed{2,2,<:AbstractMatrix};
+    _kwargs...,
+)
+    # indexed.data has dimensions (categories, batch_size), so we are good
+    return BatchedCategorical(indexed.data)
 end
 
 end # module WrenCoreWrenDistsExt

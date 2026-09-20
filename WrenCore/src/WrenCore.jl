@@ -12,7 +12,7 @@ using StatsAPI: StatsAPI
 
 function _issue_error(str)
     error(
-        "$str. Please report this issue at https://github.com/JuliaBayes/Wren.jl/issues. Thank you!",
+        "$str.\n\nPlease report this issue at https://github.com/JuliaBayes/Wren.jl/issues. Thank you!\n",
     )
 end
 
