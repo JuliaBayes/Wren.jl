@@ -189,7 +189,7 @@ const DIRICHLET_PLAICE = (to_vec, from_vec)
     test_dist(
         "TDist",
         WrenDists.TDist(4.0, 1.0, 2.0),
-        Distributions.LocationScale(1.0, 2.0, Distributions.TDist(4.0));
+        1.0 + 2.0 * Distributions.TDist(4.0);
         plaice_zero_allocs=UNIVARIATE_PLAICE,
         other_ad_testcases=(
             let f(x) = logdensityof(WrenDists.TDist(x[1], x[2], x[3]), 1.0)
