@@ -25,6 +25,7 @@ WrenDists.Binomial
 WrenDists.Categorical
 WrenDists.Geometric
 WrenDists.Poisson
+WrenDists.TDist
 ```
 
 ## Multivariate
