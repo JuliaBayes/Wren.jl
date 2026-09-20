@@ -53,7 +53,7 @@ function Base.rand(rng::AbstractRNG, d::BatchedCategorical)
     K, N = size(d.P)
     x = Vector{Int}(undef, N)
     for i in 1:N
-        x[i] = _categorical_quantile(Categorical(@view(d.P[:, i])), rand(rng, Float64))
+        x[i] = _categorical_quantile(Categorical(@view(d.P[:, i])), rand(rng, noisetype(d)))
     end
     return x
 end
