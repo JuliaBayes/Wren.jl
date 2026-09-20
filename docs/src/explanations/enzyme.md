@@ -11,17 +11,16 @@ Thus, we consider it a disservice to choose any other backend as the default, as
 
 At the same time, we recognise that Enzyme can be difficult to use and still has a number of edge cases.
 Wren does its best to make this experience as seamless as possible for users.
-However, it is **greatly** appreciated if you help us report cases where Enzyme fails to work, so that we can improve the experience for everyone.
-We can (usually) help with minimising bugs and filing issues upstream.
-Thank you in advance!
+However, it is **greatly** appreciated if you [help us by reporting cases](https://github.com/JuliaBayes/Wren.jl/issues) where Enzyme fails to work.
+We can (usually) help with minimising bugs and filing issues upstream, which will not only help you but also everyone else who uses Enzyme!
 
 ## Runtime activity
 
 Wren does not _generally_ require you to enable runtime activity when using Enzyme.
 Thus, you can simply use `AutoEnzyme(; mode=Reverse)` as the adtype when e.g. [sampling with NUTS](@ref nuts), or [constructing a `VecModel`](@ref vectorisation).
 
-However, depending on how the model is written, sometimes it is necessary for Enzyme to use runtime activity.
-Usually this situation causes an error to be thrown.
+However, depending on how the model is written, sometimes Enzyme detects that it is necessary to use runtime activity.
+If you are familiar with Enzyme, you will know that this usually causes an error to be thrown.
 **However, Wren will, by default, detect such situations and automatically enable runtime activity for you**, issuing a warning in the process.
 Note that even with runtime activity enabled, Enzyme still tends to be the fastest AD backend, so you do not really need to be concerned about this message.
 
@@ -33,8 +32,8 @@ WrenCore.set_auto_runtime_activity!
 
 ### When exactly is runtime activity required?
 
-The easiest situation where runtime activity will be required is when differentiable and non-differentiable data are bundled into the same struct.
-Often there is not much you can do as a user to avoid this situation, which is why we intentionally catch the error for you.
+The easiest way to trigger a need for runtime activity is to bundle differentiable and non-differentiable data into the same struct.
+Often there is not much you can do as a user to avoid this situation, which is precisely why Wren intentionally catches the error for you.
 
 Differentiable data, in the context of Wren, refers to the actual parameters of the model (i.e., the things we want to know gradients with respect to).
 For example, if you have `x ~ MvNormal(...)`, then `x` contains differentiable data during model evaluation.
@@ -79,10 +78,11 @@ If the offending struct is only used as an observation distribution, then you ca
 
     You should not need to read this unless you are actively developing Wren.
 
-When originally written, Wren did not copy any model arguments during model evaluation (it would copy them when _creating_ the mode, but not when _evaluating_ it, since the latter is usually done many more times).
-This had to be changed because it could silently cause incorrect results with Enzyme.
+When originally written, Wren did not copy any model arguments during model evaluation (it would copy them when _creating_ the model, but not when _evaluating_ it, since the latter is usually done many more times).
 
-The failure mode is when differentiable data is written into a model argument, and then read out again.
+This had to be changed because it could silently cause incorrect results with Enzyme.
+Specifically, this could happen if differentiable data was written into a model argument, and then read out again.
+
 Consider the following model, which is only slightly modified from the previous section's to get rid of `sigma`:
 
 ```julia
