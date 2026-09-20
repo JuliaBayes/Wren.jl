@@ -103,6 +103,9 @@ end
             @test f(:(x[1, 2, 3, i, 5, 6])) == BE(:(x[1, 2, 3, 1:J, 5, 6]), true, 4, 6)
             @test f(:(x[j, k])) == BE(:(x[j, k]), false, nothing, nothing)
 
+            # TODO(penelopeysm): We should think very hard about whether this is correct.
+            @test f(:(x[y[i]])) == BE(:(x[y[1:J]]), true, 1, 1)
+
             @test f(:(x.a)) == BE(:(x.a), false, nothing, nothing)
             @test f(:(x.i)) == BE(:(x.i), false, nothing, nothing) # NOTE: don't expand a field called `i`!
             @test f(:(x.a[i])) == BE(:(x.a[1:J]), true, 1, 1)
