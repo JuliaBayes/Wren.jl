@@ -11,50 +11,60 @@
 include("common.jl")
 
 using WrenDists: loggamma, logπ
-using FillArrays: Fill
+using FillArrays: Fill, getindex_value
 
 # --- Helper: normalising constant ---
 # For shared ν (Fill), compute once; for varying ν, compute per element.
 
-function _tlognorm_sum(ν::Fill, N)
+function _tlognorm_sum(ν::Fill)
     T = float(eltype(ν))
-    ν1 = convert(T, ν[1])
+    ν1 = convert(T, getindex_value(ν))
     half = (ν1 + one(T)) / 2
-    return N * (loggamma(half) - loggamma(ν1 / 2) - (log(ν1) + T(logπ)) / 2)
+    return length(ν) * (loggamma(half) - loggamma(ν1 / 2) - (log(ν1) + T(logπ)) / 2)
+end
+
+function _tlognorm_sum(ν::AbstractArray)
+    T = float(eltype(ν))
+    return sum(ν) do νi
+        νi = convert(T, νi)
+        half = (νi + one(T)) / 2
+        loggamma(half) - loggamma(νi / 2) - (log(νi) + T(logπ)) / 2
+    end
 end
 
 # 1. Scalar-accumulator loop.
-function lp_loop((ν, μ, σ), x)
+function lp_loop((ν, μ, σ)::Tuple{Fill,Any,Any}, x)
     T = float(promote_type(eltype(x), eltype(ν), eltype(μ), eltype(σ)))
-    ν1 = convert(T, ν[1])
+    N = length(x)
+    ν1 = convert(T, getindex_value(ν))
     half = (ν1 + one(T)) / 2
-    lognorm = loggamma(half) - loggamma(ν1 / 2) - (log(ν1) + T(logπ)) / 2
     s = zero(T)
-    @trace for i in 1:length(x)
+    @trace for i in 1:N
         z = (x[i] - μ[i]) / σ[i]
         s -= log(σ[i]) + half * log(one(T) + z^2 / ν1)
     end
-    return s + length(x) * lognorm
+    return s + _tlognorm_sum(ν)
 end
 
 # 2. Broadcast.
-function lp_broadcast((ν, μ, σ), x)
+function lp_broadcast((ν, μ, σ)::Tuple{Fill,Any,Any}, x)
     T = float(promote_type(eltype(x), eltype(ν), eltype(μ), eltype(σ)))
-    ν1 = convert(T, ν[1])
+    N = length(x)
+    ν1 = convert(T, getindex_value(ν))
     half = (ν1 + one(T)) / 2
-    lognorm = loggamma(half) - loggamma(ν1 / 2) - (log(ν1) + T(logπ)) / 2
     z = @. (x - μ) / σ
-    return sum(@. -log(σ) - half * log(one(T) + z^2 / ν1)) + length(x) * lognorm
+    return sum(@. -log(σ) - half * log(one(T) + z^2 / ν1)) + _tlognorm_sum(ν)
 end
 
 # 3. Split reductions.
-function lp_split((ν, μ, σ), x)
+function lp_split((ν, μ, σ)::Tuple{Fill,Any,Any}, x)
     T = float(promote_type(eltype(x), eltype(ν), eltype(μ), eltype(σ)))
-    ν1 = convert(T, ν[1])
+    N = length(x)
+    ν1 = convert(T, getindex_value(ν))
     half = (ν1 + one(T)) / 2
-    lognorm = loggamma(half) - loggamma(ν1 / 2) - (log(ν1) + T(logπ)) / 2
     z = @. (x - μ) / σ
-    return -sum(log, σ) - half * sum(t -> log(one(T) + t^2 / ν1), z) + length(x) * lognorm
+    one_T = one(T)
+    return -sum(log, σ) - half * sum(t -> log(one_T + t^2 / ν1), z) + _tlognorm_sum(ν)
 end
 
 const VARIANTS =

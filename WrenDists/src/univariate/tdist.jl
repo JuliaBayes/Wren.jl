@@ -88,15 +88,15 @@ function Base.rand(rng::AbstractRNG, d::BatchedTDist)
 end
 
 # When ν is shared (AbstractFill), compute the loggamma normalising terms once.
-function _tlognorm_sum(ν::AbstractFill, N::Int)
+function _tlognorm_sum(ν::AbstractFill)
     T = float(eltype(ν))
     ν1 = convert(T, getindex_value(ν))
     half = (ν1 + one(T)) / 2
-    return N * (loggamma(half) - loggamma(ν1 / 2) - (log(ν1) + T(logπ)) / 2)
+    return length(ν) * (loggamma(half) - loggamma(ν1 / 2) - (log(ν1) + T(logπ)) / 2)
 end
 
 # When ν varies, sum the per-element normalising terms.
-function _tlognorm_sum(ν::AbstractArray, N::Int)
+function _tlognorm_sum(ν::AbstractArray)
     T = float(eltype(ν))
     s = zero(T)
     for i in eachindex(ν)
@@ -107,30 +107,27 @@ function _tlognorm_sum(ν::AbstractArray, N::Int)
     return s
 end
 
-function _tdist_half(ν::AbstractFill)
-    T = float(eltype(ν))
-    return Fill((convert(T, getindex_value(ν)) + one(T)) / 2, size(ν))
-end
-_tdist_half(ν::AbstractArray) = (float.(ν) .+ one(float(eltype(ν)))) ./ 2
-
-function DensityInterface.logdensityof(d::BatchedTDist, x)
-    # Benchmarks @ bench/batch/gpu/tdist.jl
+# Benchmarks @ bench/batch/gpu/tdist.jl — split reductions are fastest.
+function DensityInterface.logdensityof(d::BatchedTDist{<:AbstractFill}, x)
     ν, μ, σ = d.ν, d.μ, d.σ
-    lognorm = _tlognorm_sum(ν, length(x))
-    return if within_compile()
-        half = _tdist_half(ν)
-        z = @. (x - μ) / σ
-        sum(@. -log(σ) - half * log(one(eltype(x)) + z^2 / ν)) + lognorm
-    else
-        T = float(promote_type(eltype(x), eltype(ν), eltype(μ), eltype(σ)))
-        half = _tdist_half(ν)
-        s = zero(T)
-        for i in eachindex(x, μ, σ, half)
-            z = (convert(T, x[i]) - convert(T, μ[i])) / convert(T, σ[i])
-            s -=
-                log(convert(T, σ[i])) +
-                convert(T, half[i]) * log(one(T) + z^2 / convert(T, ν[i]))
-        end
-        s + lognorm
+    T = float(promote_type(eltype(x), eltype(ν), eltype(μ), eltype(σ)))
+    ν1 = convert(T, getindex_value(ν))
+    half = (ν1 + one(T)) / 2
+    one_T = one(T)
+    z = @. (x - μ) / σ
+    return -sum(log, σ) - half * sum(t -> log(one_T + t^2 / ν1), z) + _tlognorm_sum(ν)
+end
+
+function DensityInterface.logdensityof(d::BatchedTDist{<:AbstractArray}, x)
+    ν, μ, σ = d.ν, d.μ, d.σ
+    T = float(promote_type(eltype(x), eltype(ν), eltype(μ), eltype(σ)))
+    one_T = one(T)
+    z = @. (x - μ) / σ
+    s = -sum(log, σ)
+    for i in eachindex(z, ν)
+        νi = convert(T, ν[i])
+        half = (νi + one_T) / 2
+        s -= half * log(one_T + z[i]^2 / νi)
     end
+    return s + _tlognorm_sum(ν)
 end
