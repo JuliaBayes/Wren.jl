@@ -13,7 +13,7 @@ using Test
     include("batch/exponential.jl")
     include("batch/lognormal.jl")
     include("batch/categorical.jl")
-    # more distributions to come...
+    include("batch/typestability.jl")
     include("aliasing.jl")
     include("submodel.jl")
     include("vecmodel.jl")
