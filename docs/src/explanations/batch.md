@@ -9,7 +9,7 @@ This page will try to explain the reasons behind this design, and how to work ar
 
     It is also intended for the `@batch` macro to be a way to implement minibatches / subsampling in Wren.
     This has not yet been implemented, but should not be overly difficult to add.
-    
+
     When this is done, it will be slightly unfortunate that the `@batch` macro will have overloaded semantics.
     At the present moment we don't anticipate that this should be a problem.
     However, if this proves to be a blocker for you, please do [open an issue](https://github.com/JuliaBayes/Wren.jl/issues)!
@@ -22,78 +22,79 @@ In other words, why should we go through all the trouble of implementing vectori
 
 Here are a few motivations:
 
-1. We can perform (some) detection of common subexpressions.
-   One of the simplest examples of this is:
+ 1. We can perform (some) detection of common subexpressions.
+    One of the simplest examples of this is:
 
-   ```@example batch
-   using WrenDists, Chairmarks, LinearAlgebra, Statistics
+    ```@example batch
+    using WrenDists, Chairmarks, LinearAlgebra, Statistics
+    
+    function f_loop(y, mu, sigma)
+        s = 0.0
+        for i in eachindex(y, mu)
+            s += logdensityof(Normal(mu[i], sigma), y[i])
+        end
+    end
+    
+    function f_vect(y, mu, sigma)
+        return logdensityof(MvNormalScale(mu, sigma * I), y)
+    end
+    
+    function compare(N)
+        y, mu, sigma = randn(N), randn(N), 1.0
+        loop = median(@be f_loop($y, $mu, $sigma)).time
+        println("loop: $loop")
+        vect = median(@be f_vect($y, $mu, $sigma)).time
+        print("vect: $vect")
+    end
+    
+    compare(10_000)
+    ```
 
-   function f_loop(y, mu, sigma)
-       s = 0.0
-       for i in eachindex(y, mu)
-           s += logdensityof(Normal(mu[i], sigma), y[i])
-       end
-   end
+    Here, the `MvNormalScale` distribution avoids re-calculating `log(sigma)` for each element of the vector, and is therefore substantially faster than the loop version.
 
-   function f_vect(y, mu, sigma)
-       return logdensityof(MvNormalScale(mu, sigma * I), y)
-   end
+ 2. Sometimes, even without common subexpression elimination, vectorised operations are faster than loops.
+    In the following example, Wren does not perform any common subexpression elimination, but the vectorised version is still faster than the loop version:
 
-   function compare(N)
-       y, mu, sigma = randn(N), randn(N), 1.0
-       loop = median(@be f_loop($y, $mu, $sigma)).time
-       println("loop: $loop")
-       vect = median(@be f_vect($y, $mu, $sigma)).time
-       print("vect: $vect")
-   end
+    ```@example batch
+    using WrenCore, WrenDists, Enzyme
+    
+    N = 10_000
+    y = rand(1:5, N);
+    lambda = zeros(N);
+    
+    @wren function f_poisson_loop(y, lambda)
+        for i in eachindex(y)
+            lambda[i] ~ Exponential(1.0)
+            @observe y[i] ~ Poisson(lambda[i])
+        end
+    end
+    
+    @bmodel f_poisson_loop(y, lambda) AutoEnzyme(; mode=Reverse)
+    ```
 
-   compare(10_000)
-   ```
+    ```@example batch
+    @wren function f_poisson_vect(y, lambda)
+        @batch for i in eachindex(y)
+            lambda[i] ~ Exponential(1.0)
+            @observe y[i] ~ Poisson(lambda[i])
+        end
+    end
+    
+    @bmodel f_poisson_vect(y, lambda) AutoEnzyme(; mode=Reverse)
+    ```
 
-   Here, the `MvNormalScale` distribution avoids re-calculating `log(sigma)` for each element of the vector, and is therefore substantially faster than the loop version.
+ 3. Finally, a large part of the motivation for vectorisation is that it generates code that is more friendly for Reactant.
 
-2. Sometimes, even without common subexpression elimination, vectorised operations are faster than loops.
-   In the following example, Wren does not perform any common subexpression elimination, but the vectorised version is still faster than the loop version:
+    In general, naive `for` loops are problematic for Reactant because they are _unrolled_, i.e., Reactant generates XLA code that has one copy of the loop body for each iteration of the loop.
+    This can lead to massive blow-ups in compilation time.
+    The general way around this is to either vectorise the code yourself, or use Reactant's `@trace for ... end` macro, which lowers instead to StableHLO control flow operations.
+    Unfortunately, the implementation of `@trace` generates a closure inside the model body, which is disallowed by RuntimeGeneratedFunctions.jl, and so cannot be used in Wren models.
 
-   ```@example batch
-   using WrenCore, WrenDists, Enzyme
+!!! note
 
-   N = 10_000
-   y = rand(1:5, N); lambda = zeros(N);
+        It's okay to use `@trace` in the definition of a function that Wren calls; you just can't use `@trace` at top-level in the model body itself.
 
-   @wren function f_poisson_loop(y, lambda)
-       for i in eachindex(y)
-           lambda[i] ~ Exponential(1.0)
-           @observe y[i] ~ Poisson(lambda[i])
-       end
-   end
-
-   @bmodel f_poisson_loop(y, lambda) AutoEnzyme(; mode=Reverse)
-   ```
-
-   ```@example batch
-   @wren function f_poisson_vect(y, lambda)
-       @batch for i in eachindex(y)
-           lambda[i] ~ Exponential(1.0)
-           @observe y[i] ~ Poisson(lambda[i])
-       end
-   end
-   
-   @bmodel f_poisson_vect(y, lambda) AutoEnzyme(; mode=Reverse)
-   ```
-
-3. Finally, a large part of the motivation for vectorisation is that it generates code that is more friendly for Reactant.
-
-   In general, naive `for` loops are problematic for Reactant because they are _unrolled_, i.e., Reactant generates XLA code that has one copy of the loop body for each iteration of the loop.
-   This can lead to massive blow-ups in compilation time.
-   The general way around this is to either vectorise the code yourself, or use Reactant's `@trace for ... end` macro, which lowers instead to StableHLO control flow operations.
-   Unfortunately, the implementation of `@trace` generates a closure inside the model body, which is disallowed by RuntimeGeneratedFunctions.jl, and so cannot be used in Wren models.
-
-   !!! note
-       
-       It's okay to use `@trace` in the definition of a function that Wren calls; you just can't use `@trace` at top-level in the model body itself.
-
-   Thus, part of the intent of `@batch` is to abstract away this problem from users: instead of having to figure out `@trace` and all its friends, users can just write `@batch` and have it work (ideally).
+    Thus, part of the intent of `@batch` is to abstract away this problem from users: instead of having to figure out `@trace` and all its friends, users can just write `@batch` and have it work (ideally).
 
 It's worth noting that a skilled user could of course implement all of these themselves.
 In fact, a skilled user could simply define a log-density function themselves and circumvent the PPL entirely!
@@ -196,13 +197,14 @@ end
 Here, `args` have already been batched by the macro, so `args[1]` would be a vector (`mu`) and `args[2]` a scalar (`sigma`).
 For this to work correctly, we need to modify our setup with a couple of things:
 
-- We need to pass in `iters` into `batched`.
-- We need a function `_unindex` which 'reverts' the batching.
-  Note that this is all done at runtime and `x[1:N]` has already been executed and stored as a vector (or view thereof).
-  We don't have the original `Expr` to work with, and we can't just replace `1:N` with `i` any more; we have to undo the batching by indexing into the vector.
+  - We need to pass in `iters` into `batched`.
 
-  This in turn means that we need to remember which arguments were batched!
-  Wren achieves this by making the macro wrap each batched argument in a `WrenCore.Indexed` struct, so `args[1]` is _really_ `Indexed(x[1:N])`, and `args[2]` is just a plain `sigma`.
+  - We need a function `_unindex` which 'reverts' the batching.
+    Note that this is all done at runtime and `x[1:N]` has already been executed and stored as a vector (or view thereof).
+    We don't have the original `Expr` to work with, and we can't just replace `1:N` with `i` any more; we have to undo the batching by indexing into the vector.
+
+    This in turn means that we need to remember which arguments were batched!
+    Wren achieves this by making the macro wrap each batched argument in a `WrenCore.Indexed` struct, so `args[1]` is _really_ `Indexed(x[1:N])`, and `args[2]` is just a plain `sigma`.
 
 Putting this all together, that means that the correct overload for `batched` is as follows:
 
@@ -334,9 +336,9 @@ Thus, the only safe thing to do is to throw an error.
 
 This can happen if there is an indexing expression which:
 
-- includes the loop variable;
-- extracts a single row along a different dimension;
-- and results in an array with 2 or more dimensions.
+  - includes the loop variable;
+  - extracts a single row along a different dimension;
+  - and results in an array with 2 or more dimensions.
 
 A concrete example of this is with a 3-D array `s` which has shape `(A, N, B)` and a loop variable `i` which is the first index:
 
@@ -367,9 +369,9 @@ In general, the value `2` in the `Indexed{2,3}` type only tells us that the seco
 
 We can only safely determine the latter when:
 
-- the resulting array has only one dimension (i.e., it is a vector);
-- the resulting array and the original array have the same number of dimensions.
-  In this case the batch dimension is just the first type parameter of `Indexed` (i.e., the `2` in `Indexed{2,3}`).
+  - the resulting array has only one dimension (i.e., it is a vector);
+  - the resulting array and the original array have the same number of dimensions.
+    In this case the batch dimension is just the first type parameter of `Indexed` (i.e., the `2` in `Indexed{2,3}`).
 
 When we can't determine this, Wren will throw an error.
 Thankfully, these cases are quite pathological and should be easy to avoid.
