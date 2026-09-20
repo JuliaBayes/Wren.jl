@@ -89,6 +89,19 @@ for (D, B) in (
     end
 end
 
+# LogNormal(mu[i]) -> BatchedLogNormal(mu, Fill(1, ...))
+function WrenCore.batched(iters, ::Val{LogNormal}, indexed_mu::WrenCore.Indexed; _kwargs...)
+    return BatchedLogNormal(
+        indexed_mu.data,
+        Fill(one(eltype(indexed_mu.data)), size(indexed_mu.data)),
+    )
+end
+
+# Binomial(n[i]) -> BatchedBinomial(n, Fill(0.5, ...))
+function WrenCore.batched(iters, ::Val{Binomial}, indexed_n::WrenCore.Indexed; _kwargs...)
+    return BatchedBinomial(indexed_n.data, Fill(0.5, size(indexed_n.data)))
+end
+
 # Two-parameter distributions: Binomial(n, p) and LogNormal(mu, sigma). Constant arguments
 # are stored as `Fill` arrays matching the shape of the indexed argument.
 for (D, B) in ((:Binomial, :BatchedBinomial), (:LogNormal, :BatchedLogNormal))
