@@ -16,8 +16,7 @@ p(x) = \\frac{\\Gamma\\!\\left(\\frac{\\nu+1}{2}\\right)}
 `σ` is a scale parameter, not a standard deviation: the variance is
 ``σ^2 ν / (ν - 2)`` and exists only for ``ν > 2``.
 
-**Customised batched implementations**: Not yet (will fall back to a product of scalar
-distributions)
+**Customised batched implementations**: Yes
 """
 struct TDist{N<:Number,M<:Number,S<:Number} <: UnconstrainedUnivariateDist
     ν::N
@@ -65,4 +64,73 @@ end
     logv = gammalogquantile(ν / 2, u)
     t = z / sqrt(exp(logv) / (ν / 2))
     return xval(d, t)
+end
+
+# --- Batched TDist ---
+
+using FillArrays: Fill, AbstractFill, getindex_value
+
+struct BatchedTDist{V<:AbstractArray,M<:AbstractArray,S<:AbstractArray} <: BatchedUnivariate
+    ν::V
+    μ::M
+    σ::S
+end
+Base.size(d::BatchedTDist) = size(d.μ)
+
+function Base.rand(rng::AbstractRNG, d::BatchedTDist)
+    F = noisetype(d)
+    N = length(d.μ)
+    z = randn(rng, F, N)
+    u = rand(rng, F, N)
+    logv = gammalogquantile.(d.ν ./ 2, u)
+    t = z ./ sqrt.(exp.(logv) ./ (d.ν ./ 2))
+    return d.μ .+ d.σ .* t
+end
+
+# When ν is shared (AbstractFill), compute the loggamma normalising terms once.
+function _tlognorm_sum(ν::AbstractFill, N::Int)
+    T = float(eltype(ν))
+    ν1 = convert(T, getindex_value(ν))
+    half = (ν1 + one(T)) / 2
+    return N * (loggamma(half) - loggamma(ν1 / 2) - (log(ν1) + T(logπ)) / 2)
+end
+
+# When ν varies, sum the per-element normalising terms.
+function _tlognorm_sum(ν::AbstractArray, N::Int)
+    T = float(eltype(ν))
+    s = zero(T)
+    for i in eachindex(ν)
+        νi = convert(T, ν[i])
+        half = (νi + one(T)) / 2
+        s += loggamma(half) - loggamma(νi / 2) - (log(νi) + T(logπ)) / 2
+    end
+    return s
+end
+
+function _tdist_half(ν::AbstractFill)
+    T = float(eltype(ν))
+    return Fill((convert(T, getindex_value(ν)) + one(T)) / 2, size(ν))
+end
+_tdist_half(ν::AbstractArray) = (float.(ν) .+ one(float(eltype(ν)))) ./ 2
+
+function DensityInterface.logdensityof(d::BatchedTDist, x)
+    # Benchmarks @ bench/batch/gpu/tdist.jl
+    ν, μ, σ = d.ν, d.μ, d.σ
+    lognorm = _tlognorm_sum(ν, length(x))
+    return if within_compile()
+        half = _tdist_half(ν)
+        z = @. (x - μ) / σ
+        sum(@. -log(σ) - half * log(one(eltype(x)) + z^2 / ν)) + lognorm
+    else
+        T = float(promote_type(eltype(x), eltype(ν), eltype(μ), eltype(σ)))
+        half = _tdist_half(ν)
+        s = zero(T)
+        for i in eachindex(x, μ, σ, half)
+            z = (convert(T, x[i]) - convert(T, μ[i])) / convert(T, σ[i])
+            s -=
+                log(convert(T, σ[i])) +
+                convert(T, half[i]) * log(one(T) + z^2 / convert(T, ν[i]))
+        end
+        s + lognorm
+    end
 end

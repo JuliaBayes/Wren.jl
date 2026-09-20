@@ -23,7 +23,9 @@ using WrenDists:
     Exponential,
     BatchedExponential,
     LogNormal,
-    BatchedLogNormal
+    BatchedLogNormal,
+    TDist,
+    BatchedTDist
 
 # Generic fallbacks
 WrenCore.iid(dist::WrenDist, dims::Dims) = Independent(Repeated(dist, dims))
@@ -134,6 +136,106 @@ for (D, B) in ((:Binomial, :BatchedBinomial), (:LogNormal, :BatchedLogNormal))
             return $B(Fill(a, size(b.data)), b.data)
         end
     end
+end
+
+# TDist: three parameters (ν, μ, σ). Constant arguments become Fill arrays.
+# TDist(ν, μ[i], σ[i])
+function WrenCore.batched(
+    iters,
+    ::Val{TDist},
+    ν::Number,
+    μ::WrenCore.Indexed,
+    σ::WrenCore.Indexed;
+    _kwargs...,
+)
+    return BatchedTDist(Fill(ν, size(μ.data)), μ.data, σ.data)
+end
+# TDist(ν, μ[i], σ)
+function WrenCore.batched(
+    iters,
+    ::Val{TDist},
+    ν::Number,
+    μ::WrenCore.Indexed,
+    σ::Number;
+    _kwargs...,
+)
+    return BatchedTDist(Fill(ν, size(μ.data)), μ.data, Fill(σ, size(μ.data)))
+end
+# TDist(ν, μ, σ[i])
+function WrenCore.batched(
+    iters,
+    ::Val{TDist},
+    ν::Number,
+    μ::Number,
+    σ::WrenCore.Indexed;
+    _kwargs...,
+)
+    return BatchedTDist(Fill(ν, size(σ.data)), Fill(μ, size(σ.data)), σ.data)
+end
+# TDist(ν[i], μ[i], σ[i])
+function WrenCore.batched(
+    iters,
+    ::Val{TDist},
+    ν::WrenCore.Indexed,
+    μ::WrenCore.Indexed,
+    σ::WrenCore.Indexed;
+    _kwargs...,
+)
+    return BatchedTDist(ν.data, μ.data, σ.data)
+end
+# TDist(ν[i], μ[i], σ)
+function WrenCore.batched(
+    iters,
+    ::Val{TDist},
+    ν::WrenCore.Indexed,
+    μ::WrenCore.Indexed,
+    σ::Number;
+    _kwargs...,
+)
+    return BatchedTDist(ν.data, μ.data, Fill(σ, size(μ.data)))
+end
+# TDist(ν[i], μ, σ[i])
+function WrenCore.batched(
+    iters,
+    ::Val{TDist},
+    ν::WrenCore.Indexed,
+    μ::Number,
+    σ::WrenCore.Indexed;
+    _kwargs...,
+)
+    return BatchedTDist(ν.data, Fill(μ, size(ν.data)), σ.data)
+end
+# TDist(ν[i], μ, σ)
+function WrenCore.batched(
+    iters,
+    ::Val{TDist},
+    ν::WrenCore.Indexed,
+    μ::Number,
+    σ::Number;
+    _kwargs...,
+)
+    return BatchedTDist(ν.data, Fill(μ, size(ν.data)), Fill(σ, size(ν.data)))
+end
+# TDist(ν, μ[i]) -> σ defaults to 1
+function WrenCore.batched(iters, ::Val{TDist}, ν::Number, μ::WrenCore.Indexed; _kwargs...)
+    T = eltype(μ.data)
+    return BatchedTDist(Fill(ν, size(μ.data)), μ.data, Fill(one(T), size(μ.data)))
+end
+# TDist(ν[i], μ[i])
+function WrenCore.batched(
+    iters,
+    ::Val{TDist},
+    ν::WrenCore.Indexed,
+    μ::WrenCore.Indexed;
+    _kwargs...,
+)
+    T = eltype(μ.data)
+    return BatchedTDist(ν.data, μ.data, Fill(one(T), size(μ.data)))
+end
+# TDist(ν[i]) -> μ=0, σ=1
+function WrenCore.batched(iters, ::Val{TDist}, ν::WrenCore.Indexed; _kwargs...)
+    T = float(eltype(ν.data))
+    return BatchedTDist(ν.data, Fill(zero(T), size(ν.data)), Fill(one(T), size(ν.data)))
 end
 
 # Categorical
