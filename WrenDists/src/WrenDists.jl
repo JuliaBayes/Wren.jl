@@ -34,6 +34,7 @@ include("univariate/uniform.jl")
 include("univariate/laplace.jl")
 include("univariate/cauchy.jl")
 include("univariate/gamma.jl")
+include("univariate/tdist.jl")
 include("univariate/beta.jl")
 
 # Univariate discrete
@@ -56,7 +57,7 @@ include("multivariate/plaice.jl")
 
 export logdensityof
 
-export Normal, LogNormal, Exponential, Weibull, Uniform, Laplace, Cauchy, Gamma, Beta
+export Normal, LogNormal, Exponential, Weibull, Uniform, Laplace, Cauchy, TDist, Gamma, Beta
 export Bernoulli, Binomial, Categorical, Geometric, Poisson
 export MvNormalScale, Dirichlet, Multinomial
 
