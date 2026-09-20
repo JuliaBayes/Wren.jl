@@ -72,7 +72,7 @@ function WrenCore.batched(
     indexed_sigma::WrenCore.Indexed;
     _kwargs...,
 )
-    return DiagNormal(Fill(mu, size(indexed_sigma.data)), indexed_sigma.data)
+    return DiagNormal(Fill(mu, size(iters)), indexed_sigma.data)
 end
 
 # Normal(x[i]) --> IsoNormal(x, 1.0)
@@ -95,13 +95,13 @@ end
 function WrenCore.batched(iters, ::Val{LogNormal}, indexed_mu::WrenCore.Indexed; _kwargs...)
     return BatchedLogNormal(
         indexed_mu.data,
-        Fill(one(eltype(indexed_mu.data)), size(indexed_mu.data)),
+        Fill(one(eltype(indexed_mu.data)), size(iters)),
     )
 end
 
 # Binomial(n[i]) -> BatchedBinomial(n, Fill(0.5, ...))
 function WrenCore.batched(iters, ::Val{Binomial}, indexed_n::WrenCore.Indexed; _kwargs...)
-    return BatchedBinomial(indexed_n.data, Fill(0.5, size(indexed_n.data)))
+    return BatchedBinomial(indexed_n.data, Fill(0.5, size(iters)))
 end
 
 # Two-parameter distributions: Binomial(n, p) and LogNormal(mu, sigma). Constant arguments
@@ -124,7 +124,7 @@ for (D, B) in ((:Binomial, :BatchedBinomial), (:LogNormal, :BatchedLogNormal))
             b::Number;
             _kwargs...,
         )
-            return $B(a.data, Fill(b, size(a.data)))
+            return $B(a.data, Fill(b, size(iters)))
         end
         function WrenCore.batched(
             iters,
@@ -133,109 +133,43 @@ for (D, B) in ((:Binomial, :BatchedBinomial), (:LogNormal, :BatchedLogNormal))
             b::WrenCore.Indexed;
             _kwargs...,
         )
-            return $B(Fill(a, size(b.data)), b.data)
+            return $B(Fill(a, size(iters)), b.data)
         end
     end
 end
 
 # TDist: three parameters (ν, μ, σ). Constant arguments become Fill arrays.
-# TDist(ν, μ[i], σ[i])
+const _TDistArg = Union{WrenCore.Indexed,Number}
+_to_array(x::WrenCore.Indexed, s) = x.data
+_to_array(x::Number, s) = Fill(x, s)
 function WrenCore.batched(
     iters,
     ::Val{TDist},
-    ν::Number,
-    μ::WrenCore.Indexed,
-    σ::WrenCore.Indexed;
+    ν::Tν,
+    μ::Tμ,
+    σ::Tσ;
     _kwargs...,
-)
-    return BatchedTDist(Fill(ν, size(μ.data)), μ.data, σ.data)
+) where {Tν<:_TDistArg,Tμ<:_TDistArg,Tσ<:_TDistArg}
+    s = size(iters)
+    return BatchedTDist(_to_array(ν, s), _to_array(μ, s), _to_array(σ, s))
 end
-# TDist(ν, μ[i], σ)
+
 function WrenCore.batched(
     iters,
     ::Val{TDist},
-    ν::Number,
-    μ::WrenCore.Indexed,
-    σ::Number;
+    ν::Tν,
+    μ::Tμ;
     _kwargs...,
-)
-    return BatchedTDist(Fill(ν, size(μ.data)), μ.data, Fill(σ, size(μ.data)))
+) where {Tν<:_TDistArg,Tμ<:_TDistArg}
+    s = size(iters)
+    T = eltype(_to_array(μ, s))
+    return BatchedTDist(_to_array(ν, s), _to_array(μ, s), Fill(one(T), s))
 end
-# TDist(ν, μ, σ[i])
-function WrenCore.batched(
-    iters,
-    ::Val{TDist},
-    ν::Number,
-    μ::Number,
-    σ::WrenCore.Indexed;
-    _kwargs...,
-)
-    return BatchedTDist(Fill(ν, size(σ.data)), Fill(μ, size(σ.data)), σ.data)
-end
-# TDist(ν[i], μ[i], σ[i])
-function WrenCore.batched(
-    iters,
-    ::Val{TDist},
-    ν::WrenCore.Indexed,
-    μ::WrenCore.Indexed,
-    σ::WrenCore.Indexed;
-    _kwargs...,
-)
-    return BatchedTDist(ν.data, μ.data, σ.data)
-end
-# TDist(ν[i], μ[i], σ)
-function WrenCore.batched(
-    iters,
-    ::Val{TDist},
-    ν::WrenCore.Indexed,
-    μ::WrenCore.Indexed,
-    σ::Number;
-    _kwargs...,
-)
-    return BatchedTDist(ν.data, μ.data, Fill(σ, size(μ.data)))
-end
-# TDist(ν[i], μ, σ[i])
-function WrenCore.batched(
-    iters,
-    ::Val{TDist},
-    ν::WrenCore.Indexed,
-    μ::Number,
-    σ::WrenCore.Indexed;
-    _kwargs...,
-)
-    return BatchedTDist(ν.data, Fill(μ, size(ν.data)), σ.data)
-end
-# TDist(ν[i], μ, σ)
-function WrenCore.batched(
-    iters,
-    ::Val{TDist},
-    ν::WrenCore.Indexed,
-    μ::Number,
-    σ::Number;
-    _kwargs...,
-)
-    return BatchedTDist(ν.data, Fill(μ, size(ν.data)), Fill(σ, size(ν.data)))
-end
-# TDist(ν, μ[i]) -> σ defaults to 1
-function WrenCore.batched(iters, ::Val{TDist}, ν::Number, μ::WrenCore.Indexed; _kwargs...)
-    T = eltype(μ.data)
-    return BatchedTDist(Fill(ν, size(μ.data)), μ.data, Fill(one(T), size(μ.data)))
-end
-# TDist(ν[i], μ[i])
-function WrenCore.batched(
-    iters,
-    ::Val{TDist},
-    ν::WrenCore.Indexed,
-    μ::WrenCore.Indexed;
-    _kwargs...,
-)
-    T = eltype(μ.data)
-    return BatchedTDist(ν.data, μ.data, Fill(one(T), size(μ.data)))
-end
-# TDist(ν[i]) -> μ=0, σ=1
-function WrenCore.batched(iters, ::Val{TDist}, ν::WrenCore.Indexed; _kwargs...)
-    T = float(eltype(ν.data))
-    return BatchedTDist(ν.data, Fill(zero(T), size(ν.data)), Fill(one(T), size(ν.data)))
+
+function WrenCore.batched(iters, ::Val{TDist}, ν::Tν; _kwargs...) where {Tν<:_TDistArg}
+    s = size(iters)
+    T = float(eltype(_to_array(ν, s)))
+    return BatchedTDist(_to_array(ν, s), Fill(zero(T), s), Fill(one(T), s))
 end
 
 # Categorical
