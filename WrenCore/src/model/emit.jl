@@ -194,11 +194,21 @@ iid(dist, n::Integer) = iid(dist, (n,))
 # TODO(penelopeysm): I'm unsure about type stability here because of the vararg
 # specialisation thing. We might need the fallback on generated functions with enumerated
 # arguments
+_unindex(@nospecialize(x::Any), i) = x
+function _unindex(indexed::Indexed{D,N,<:AbstractVector}, i) where {D,N}
+    # Vectors are always safe to un-index, because the single dimension from the vector must
+    # have been constructed from the loop range.
+    return indexed.data[i]
+end
+function _unindex(indexed::Indexed{D,N,<:AbstractArray{T,N}}, i) where {D,N,T}
+    return selectdim(indexed.data, D, i)
+end
+function _unindex(indexed::Indexed, i)
+    _issue_error("cannot safely unindex $(indexed) of type $(typeof(indexed))")
+end
 function batched(iters::I, ::Val{F}, args...; kwargs...) where {I,F}
-    # Default fallback for batching-unaware calls: use independent instead
-    return independent([
-        F((a isa Indexed ? a.data[i] : a for a in args)...; kwargs...) for i in iters
-    ])
+    # Default fallback for batching-unaware calls
+    return independent([F((_unindex(a, i) for a in args)...; kwargs...) for i in iters])
 end
 
 # This returns `WrenCore.independent([$rhs for $loop_idx in $loop_iters])`.
