@@ -13,8 +13,8 @@ $(TYPEDFIELDS)
 struct Model{A<:NamedTuple,C<:VarNamedTuple,F}
     "Name of the function declared with @wren"
     name::Symbol
-    "Arguments passed to the model. TODO(penelopeysm): kwargs"
-    args::A
+    "Positional arguments passed to the model."
+    args::A # TODO(penelopeysm): kwargs.
     "The model's AST, stored as Wren's probabilistic IR"
     stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}}
     "Module that the model was defined in. Required to make RGF resolve globals / functions
@@ -245,18 +245,15 @@ function _wren(expr::Expr, mod::Module)
     signature, body = expr.args
 
     model_args = to_namedtuple(fargs_expr)
-    model_exprs = to_wren_exprs(body, mod)
+    model_exprs = run_dataflow_analysis(to_wren_exprs(body, mod))
 
     # At macro definition time, we generate a new symbol to store the evaluation function
     # corresponding to the AST *as defined in the macro*. It's possible that users can
     # instantiate a Model and modify it, thus necessitating a new evaluation function.
-    # That's handled separately. However, we don't want *every* call to `model()` to
+    # That can be handled separately. However, we don't want *every* call to `model()` to
     # generate a new RGF because it should always use the RGF that corresponds to the
-    # macro's contents.
-    #
-    # The cached RGF is stored as a module-level constant in order to ensure type stability.
-    # We could also store it in an IdDict or something like that. That avoids the cost of
-    # constructing the RGF, but is type unstable.
+    # macro's contents. This RGF is stored as a module-level constant in order to ensure
+    # type stability.
     #
     # TODO(penelopeysm): I wonder if it would be possible to store the RGF in an IdDict, and
     # make the model constructor, i.e., `model()`, a generated function, so that the type
@@ -264,16 +261,18 @@ function _wren(expr::Expr, mod::Module)
     # autodiff works: already-derived rules are stored in a cache and looked up at compile
     # time, which can be type unstable, but the resulting rule is type stable.
     evaluation_fn_name = gensym(Symbol(fname, :_evaluation_fn))
-    # These two `eval`s need to be separate because RGF.init() itself does the same
-    # trick that we do here by installing a new module-level const. See
+
+    # These two `eval`s need to be separate. The first `eval` calls `RGF.init()`, which
+    # itself does the same trick that we do here by installing a new module-level const. See
     #
     # https://github.com/SciML/RuntimeGeneratedFunctions.jl/blob/73411b2dad5e37815e678b7f6733fb9303600170/src/RuntimeGeneratedFunctions.jl#L387
     #
-    # That causes the world age to be incremented...
+    # That definition causes the world age to be incremented...
     mod.eval(:($(RuntimeGeneratedFunctions.init)($(QuoteNode(mod)))))
-    # ...and because `make_evaluation_fn` generates an RGF, which uses that const that RGF
-    # installed, we have to make sure to eval it in a newer world age so that we have access
-    # to the binding.
+
+    # ...and because `make_evaluation_fn` generates an RGF, which uses that exact const that
+    # `RGF.init` installed, we have to make sure to eval it in a newer world age so that we
+    # have access to that binding.
     mod.eval(
         quote
             const $evaluation_fn_name = $make_evaluation_fn(
@@ -296,4 +295,17 @@ function _wren(expr::Expr, mod::Module)
     function_expr = Expr(:function, esc(signature), function_body)
 
     return function_expr
+end
+
+# Parse into probabilistic IR. This is a helper macro meant for internal testing only.
+macro _as_ir(expr)
+    _macro_as_ir(expr, __module__)
+end
+function _macro_as_ir(expr::Expr, mod::Module)
+    # Sanity check
+    expr.head == :function || error("@wrenir: expected a function definition")
+    length(expr.args) == 2 || error("@wrenir: expected function expr with 2 expr-args")
+    _, body = expr.args
+    model_exprs = to_wren_exprs(body, mod)
+    return model_exprs
 end

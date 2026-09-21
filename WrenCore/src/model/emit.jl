@@ -1,14 +1,3 @@
-get_top_level_symbol(expr::Symbol) = expr
-function get_top_level_symbol(expr::Expr)
-    return if Meta.isexpr(expr, :ref)
-        get_top_level_symbol(expr.args[1])
-    elseif Meta.isexpr(expr, :.)
-        get_top_level_symbol(expr.args[1])
-    else
-        _issue_error("get_top_level_symbol: unhandled expression $(expr)")
-    end
-end
-
 # VarNames.varname(:(xs[i])) returns something like
 #     VarName{:xs}(Index((esc(i),), ...))
 # which gets `i` from the caller's scope. However, when we insert this expression into a
@@ -55,12 +44,20 @@ function emit_model_expr(stmt::Sample, accs, conditioned, latent_source, paramet
     rhs_expr = emit_model_expr(stmt.rhs, accs, conditioned, latent_source, parameter_space)
     vn_expr = remove_escapes(varname(stmt.lhs, false))
     template = get_top_level_symbol(stmt.lhs)
+    collect_submodel_params =
+        stmt.lhs_is_reused ? CollectSubmodelParams() : DiscardSubmodelParams()
     return quote
         $rhs = $rhs_expr
         $vn = $vn_expr
         if $(WrenCore.is_submodel)(typeof($rhs))
-            $val, $child_params, $child_accs =
-                $(evaluate_submodel)($rhs, $latent_source, $parameter_space, $accs, $vn)
+            $val, $child_params, $child_accs = $(evaluate_submodel)(
+                $rhs,
+                $latent_source,
+                $parameter_space,
+                $accs,
+                $vn,
+                $collect_submodel_params,
+            )
             $(assign_or_set!!(stmt.lhs, child_params, vn))
             $accs = $(combine_with_namespace)(
                 $accs,
@@ -115,7 +112,8 @@ function emit_model_expr(stmt::IID, accs, conditioned, latent_source, parameter_
         parameter_space,
     )
 end
-_with_rhs(stmt::Sample, rhs) = Sample(stmt.name, stmt.lhs, rhs)
+_with_rhs(stmt::Sample, rhs) =
+    Sample(stmt.name, stmt.lhs, rhs, stmt.lhs_top_level_symbol, stmt.lhs_is_reused)
 _with_rhs(stmt::Observe, rhs) = Observe(stmt.name, stmt.lhs, rhs)
 
 function emit_model_expr(stmt::Batch, accs, conditioned, latent_source, parameter_space)
@@ -483,32 +481,49 @@ vectorise_batch_stmt(lnn::LineNumberNode, idx, iters, size, ax, cond, ls, ps) = 
 function vectorise_batch_stmt(::IID, idx, iters, size, ax, cond, ls, ps)
     return error("@iid is not supported inside @batch")
 end
-for stmt_type in (Sample, Observe)
-    @eval begin
-        function vectorise_batch_stmt(
-            stmt::$stmt_type,
-            loop_idx,
-            loop_iters,
-            loop_iters_size,
-            accs,
-            conditioned,
-            latent_source,
-            parameter_space,
-        )
-            new_lhs =
-                replace_loop_idx_with_iters(stmt.lhs, loop_idx, loop_iters, false).new_expr
-            rhs_expr =
-                emit_model_expr(stmt.rhs, accs, conditioned, latent_source, parameter_space)
-            new_rhs = batch_expr(rhs_expr, loop_idx, loop_iters, loop_iters_size)
-            return emit_model_expr(
-                $(stmt_type)(stmt.name, new_lhs, new_rhs),
-                accs,
-                conditioned,
-                latent_source,
-                parameter_space,
-            )
-        end
-    end
+
+function vectorise_batch_stmt(
+    stmt::Sample,
+    loop_idx,
+    loop_iters,
+    loop_iters_size,
+    accs,
+    conditioned,
+    latent_source,
+    parameter_space,
+)
+    new_lhs = replace_loop_idx_with_iters(stmt.lhs, loop_idx, loop_iters, false).new_expr
+    rhs_expr = emit_model_expr(stmt.rhs, accs, conditioned, latent_source, parameter_space)
+    new_rhs = batch_expr(rhs_expr, loop_idx, loop_iters, loop_iters_size)
+    return emit_model_expr(
+        Sample(stmt.name, new_lhs, new_rhs, stmt.lhs_top_level_symbol, stmt.lhs_is_reused),
+        accs,
+        conditioned,
+        latent_source,
+        parameter_space,
+    )
+end
+
+function vectorise_batch_stmt(
+    stmt::Observe,
+    loop_idx,
+    loop_iters,
+    loop_iters_size,
+    accs,
+    conditioned,
+    latent_source,
+    parameter_space,
+)
+    new_lhs = replace_loop_idx_with_iters(stmt.lhs, loop_idx, loop_iters, false).new_expr
+    rhs_expr = emit_model_expr(stmt.rhs, accs, conditioned, latent_source, parameter_space)
+    new_rhs = batch_expr(rhs_expr, loop_idx, loop_iters, loop_iters_size)
+    return emit_model_expr(
+        Observe(stmt.name, new_lhs, new_rhs),
+        accs,
+        conditioned,
+        latent_source,
+        parameter_space,
+    )
 end
 
 function _maybe_view(v::AbstractArray, idxs...)

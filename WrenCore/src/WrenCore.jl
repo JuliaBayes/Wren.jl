@@ -46,8 +46,10 @@ using .Expressions:
     WrenExpr,
     _show_wren_exprs,
     _wren_expr_to_display_expr,
+    get_top_level_symbol,
     to_wren_exprs
 
+include("model/dataflow.jl")
 include("model/model.jl")
 include("model/submodel.jl")
 include("model/emit.jl")
