@@ -220,7 +220,7 @@ macro observe(expr)
     error("@observe must be used inside @wren")
 end
 
-macro iid(expr)
+macro iid(args...)
     error("@iid must be used inside @wren")
 end
 

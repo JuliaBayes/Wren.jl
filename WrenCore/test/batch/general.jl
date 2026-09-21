@@ -1,54 +1,19 @@
-module WrenBatchTests
+module WrenBatchGeneralTests
 
-@info "testing batch.jl"
+@info "testing batch/general.jl"
 
 using Test
+using Distributions: NegativeBinomial
 using WrenCore
+using WrenCore.TestUtils: test_model_equivalence
+using WrenDists
 using Enzyme
-using Distributions
-using DifferentiationInterface: AbstractADType
 
-function get_lp_components(model::WrenCore.Model, params)
-    _, accs = evaluate(
-        model,
-        FromParams(params),
-        OriginalSpace(),
-        AccumulatorTuple(LogPriorAccumulator(), LogLikelihoodAccumulator()),
-    )
-    return logprior(accs), loglikelihood(accs)
-end
+adtype = AutoEnzyme(; mode=Reverse)
+fnormal(x) = Normal(x)
+fcategorical(ps) = Categorical(ps)
 
-function test_model_equivalence(
-    model1::WrenCore.Model,
-    model2::WrenCore.Model,
-    adtype::Union{AbstractADType,Nothing}=AutoEnzyme(; mode=Reverse),
-)
-    # Shouldn't matter which model we use to generate params, since they are equivalent
-    params = rand(model1)
-
-    lpr1, llk1 = get_lp_components(model1, params)
-    lpr2, llk2 = get_lp_components(model2, params)
-    @test lpr1 ≈ lpr2
-    @test llk1 ≈ llk2
-
-    # Test vectorisation
-    vm1 = VecModel(model1, adtype)
-    vm2 = VecModel(model2, adtype)
-    @test vm1.dimension == vm2.dimension
-    vparams = vectorise_latents(FromParams(params), vm1)
-    if adtype === nothing
-        lp1 = lp(vm1, vparams)
-        lp2 = lp(vm2, vparams)
-        @test lp1 ≈ lp2
-    else
-        lp1, grad1 = lp_and_grad(vm1, vparams)
-        lp2, grad2 = lp_and_grad(vm2, vparams)
-        @test lp1 ≈ lp2
-        @test grad1 ≈ grad2
-    end
-end
-
-@testset "batch.jl" begin
+@testset "general @batch properties" begin
     @testset "semantic invariance" begin
         # `@batch for ... end` should *always* have the same behaviour as `for ... end`
 
@@ -63,7 +28,7 @@ end
                     x[i] ~ Normal()
                 end
             end
-            test_model_equivalence(sample1(zeros(3)), sample2(zeros(3)))
+            test_model_equivalence(sample1(zeros(3)), sample2(zeros(3)), adtype)
         end
 
         @testset "observe" begin
@@ -79,7 +44,7 @@ end
                     @observe x[i] ~ Normal(a)
                 end
             end
-            test_model_equivalence(observe1(zeros(3)), observe2(zeros(3)))
+            test_model_equivalence(observe1(zeros(3)), observe2(zeros(3)), adtype)
         end
 
         @testset "conditioned" begin
@@ -97,7 +62,7 @@ end
             end
             model1 = conditioned1(zeros(3)) | VarNamedTuple(x=ones(3))
             model2 = conditioned2(zeros(3)) | VarNamedTuple(x=ones(3))
-            test_model_equivalence(model1, model2)
+            test_model_equivalence(model1, model2, adtype)
         end
 
         @testset "sample + observe" begin
@@ -116,6 +81,7 @@ end
             test_model_equivalence(
                 sample_observe1(zeros(3), ones(3)),
                 sample_observe2(zeros(3), ones(3)),
+                adtype,
             )
         end
     end
@@ -141,6 +107,67 @@ end
     @testset "different examples of batchable syntax" begin
         # could really do with more examples here
 
+        @testset "runtime fallback" begin
+            # When `batched() sees a function it doesn't know how to batch, it will call the
+            # runtime fallback which uses `independent`. This exercises that code path.
+            @wren function batch_unknown(x, y)
+                @batch for i in 1:2
+                    x[i] ~ fnormal(y[i])
+                end
+            end
+            @wren function nobatch_unknown(x, y)
+                for i in 1:2
+                    x[i] ~ fnormal(y[i])
+                end
+            end
+            y = [1.0, 2.0]
+            test_model_equivalence(
+                batch_unknown(zeros(2), y),
+                nobatch_unknown(zeros(2), y),
+                adtype,
+            )
+
+            @wren function batch_unknown_vector(x, y)
+                @batch for i in 1:2
+                    x[i] ~ fnormal(y[i, 1])
+                end
+            end
+            @wren function nobatch_unknown_vector(x, y)
+                for i in 1:2
+                    x[i] ~ fnormal(y[i, 1])
+                end
+            end
+            y = [1.0 2.0; 3.0 4.0]
+            test_model_equivalence(
+                batch_unknown_vector(zeros(2), y),
+                nobatch_unknown_vector(zeros(2), y),
+                adtype,
+            )
+
+            # This test is a bit different, because Categorical is discrete, we have to make
+            # x[i] observed to not annoy AD, and then add a dummy latent to make the model
+            # non-empty.
+            @wren function batch_unknown_matrix(x, y)
+                a ~ Normal()
+                @batch for i in 1:2
+                    @observe x[i] ~ fcategorical(y[i, :])
+                end
+            end
+            @wren function nobatch_unknown_matrix(x, y)
+                a ~ Normal()
+                for i in 1:2
+                    @observe x[i] ~ fcategorical(y[i, :])
+                end
+            end
+            x = [1, 2]
+            y = [0.1 0.9; 0.8 0.2]
+            test_model_equivalence(
+                batch_unknown_matrix(x, y),
+                nobatch_unknown_matrix(x, y),
+                adtype,
+            )
+        end
+
         @testset "issue #79" begin
             # https://github.com/JuliaBayes/Wren.jl/issues/79
             @wren function batch_diagonal(x, y)
@@ -157,6 +184,7 @@ end
             test_model_equivalence(
                 batch_diagonal(zeros(2), y),
                 nobatch_diagonal(zeros(2), y),
+                adtype,
             )
         end
 
@@ -185,6 +213,31 @@ end
             )
         end
     end
+
+    @testset "failure modes" begin
+        @testset "runtime batched fallback when arrays are sliced" begin
+            @wren function fail_batch_slice(x, y)
+                a ~ Normal()
+                @batch for i in 1:2
+                    @observe x[i] ~ fcategorical(y[i, :, 1])
+                end
+            end
+            @wren function fail_nobatch_slice(x, y)
+                a ~ Normal()
+                for i in 1:2
+                    @observe x[i] ~ fcategorical(y[i, :, 1])
+                end
+            end
+            ps = [0.1 0.9; 0.8 0.2]
+            ps = reshape(ps, 2, 2, 1)
+            # Without batching it should be fine
+            model = fail_nobatch_slice([1, 2], ps)
+            @test rand(model) isa Any
+            # With batching this should throw
+            model = fail_batch_slice([1, 2], ps)
+            @test_throws "cannot safely unindex" rand(model)
+        end
+    end
 end
 
-end # module WrenBatchTests
+end # module WrenBatchGeneralTests

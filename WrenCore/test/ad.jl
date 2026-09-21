@@ -50,7 +50,6 @@ end
         result = benchmark_ad(
             ad_model(),
             AutoForwardDiff();
-            benchmark_seconds=0.01,
             latent_source=FromPrior(Xoshiro(474)),
             verbose=false,
         )
@@ -66,7 +65,6 @@ end
             ad_model(),
             AutoForwardDiff();
             test_correctness=WithBackend(AutoReverseDiff()),
-            benchmark_seconds=0.01,
             latent_source=FromPrior(Xoshiro(476)),
             verbose=false,
         )

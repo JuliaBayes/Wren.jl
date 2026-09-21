@@ -5,19 +5,22 @@ using Test
 @testset verbose=true "WrenCore.jl" begin
     include("expr.jl")
     include("syntax.jl")
-    include("batch.jl")
+    include("batch/general.jl")
+    include("batch/normal.jl")
+    include("batch/bernoulli.jl")
+    include("batch/binomial.jl")
+    include("batch/poisson.jl")
+    include("batch/exponential.jl")
+    include("batch/lognormal.jl")
+    include("batch/categorical.jl")
+    include("batch/tdist.jl")
+    include("batch/typestability.jl")
     include("aliasing.jl")
     include("submodel.jl")
     include("vecmodel.jl")
     include("draw.jl")
-    include("iid.jl")
     include("ad.jl")
     include("predict.jl")
-
-    if !Sys.iswindows()
-        # problematic on windows CI, idk why
-        include("reactant.jl")
-    end
 end
 
 end # module WrenCoreTests

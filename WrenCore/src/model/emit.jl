@@ -102,14 +102,11 @@ function emit_model_expr(stmt::Sample, accs, conditioned, latent_source, paramet
     end
 end
 
-# `@iid lhs ~ rhs` (or the `@observe` variants) means `lhs ~ iid(rhs, size(lhs))`: one
-# array-valued distribution of independent draws from `rhs`, with the same shape as the
-# current value of `lhs`. We rewrite the wrapped tilde-statement's right-hand side and then
-# emit it exactly as we would a plain `Sample` or `Observe`.
 function emit_model_expr(stmt::IID, accs, conditioned, latent_source, parameter_space)
     tilde = stmt.tilde
     rhs_expr = emit_model_expr(tilde.rhs, accs, conditioned, latent_source, parameter_space)
-    iid_rhs = :($(iid)($rhs_expr, $(Base.size)($(tilde.lhs))))
+    dims_expr = stmt.size === nothing ? :($(Base.size)($(tilde.lhs))) : stmt.size
+    iid_rhs = :($(iid)($rhs_expr, $dims_expr))
     return emit_model_expr(
         _with_rhs(tilde, iid_rhs),
         accs,
@@ -123,29 +120,38 @@ _with_rhs(stmt::Observe, rhs) = Observe(stmt.name, stmt.lhs, rhs)
 
 function emit_model_expr(stmt::Batch, accs, conditioned, latent_source, parameter_space)
     # stmt.body isa block expr
-    @gensym loop_iters
+    @gensym loop_iters loop_iters_size
     initialise_iter_expr = :($loop_iters = $(stmt.loop_iters))
+    initialise_size_expr = :($loop_iters_size = $(Base.size)($loop_iters))
     body_exprs = [
         vectorise_batch_stmt(
             s,
             stmt.loop_idx,
             loop_iters,
+            loop_iters_size,
             accs,
             conditioned,
             latent_source,
             parameter_space,
         ) for s in stmt.body.args
     ]
-    return Expr(:block, initialise_iter_expr, body_exprs...)
+    return Expr(:block, initialise_iter_expr, initialise_size_expr, body_exprs...)
 end
 
 """
-    Indexed
+    Indexed{D,N,T}
 
 Marker struct to indicate that the argument is an object indexed by the batch loop index.
+
+`D` is the dimension that contains the loop index, and `N` is the number of indices that
+was passed to the indexing expression.
 """
-struct Indexed{T}
+struct Indexed{D,N,T}
     data::T
+
+    function Indexed{D,N}(data::T) where {D,N,T}
+        new{D,N,T}(data)
+    end
 end
 
 """
@@ -176,28 +182,64 @@ end
 
 Inside `@wren`, `@iid y ~ dist` is shorthand for `y ~ iid(dist, size(y))`.
 
+When the lhs is undefined, as is typically the case when setting up priors, use the
+`size` keyword to set its shape `@iid mu ~ dist size=k` where k may be either a tuple
+or an integer.
+
 The fallback is `independent(Fill(dist, dims))`; backends may add specialised methods.
 """
 iid(dist, dims::Dims) = independent(FillArrays.Fill(dist, dims))
+iid(dist, n::Integer) = iid(dist, (n,))
 
 # TODO(penelopeysm): I'm unsure about type stability here because of the vararg
 # specialisation thing. We might need the fallback on generated functions with enumerated
 # arguments
+_unindex(@nospecialize(x::Any), i) = x
+function _unindex(indexed::Indexed{D,N,<:AbstractVector}, i) where {D,N}
+    # Vectors are always safe to un-index, because the single dimension from the vector must
+    # have been constructed from the loop range.
+    return indexed.data[i]
+end
+function _unindex(indexed::Indexed{D,N,<:AbstractArray{T,N}}, i) where {D,N,T}
+    return selectdim(indexed.data, D, i)
+end
+function _unindex(indexed::Indexed, i)
+    _issue_error("cannot safely unindex type $(typeof(indexed))")
+end
 function batched(iters::I, ::Val{F}, args...; kwargs...) where {I,F}
-    # Default fallback for batching-unaware calls: use independent instead
-    return independent([
-        F((a isa Indexed ? a.data[i] : a for a in args)...; kwargs...) for i in iters
-    ])
+    # Default fallback for batching-unaware calls
+    return independent([F((_unindex(a, i) for a in args)...; kwargs...) for i in iters])
 end
 
-function make_product_expr(rhs, loop_idx, loop_iters)
-    # This returns `WrenCore.independent([$rhs for $loop_idx in $loop_iters])`.
-    Expr(
-        :call,
-        WrenCore.independent,
-        Expr(:comprehension, Expr(:generator, rhs, Expr(:(=), loop_idx, loop_iters))),
-    )
+# This returns `WrenCore.independent([$rhs for $loop_idx in $loop_iters])`.
+abstract type BatchFallbackReason end
+info(rhs, ::Nothing) = nothing
+struct FunctionHasKwargs <: BatchFallbackReason
+    fname::Symbol
 end
+function info(rhs, r::FunctionHasKwargs)
+    @info "@batch: batching of `$(rhs)` disabled because the function `$(r.fname)` has keyword arguments that depend on the loop index"
+end
+struct NotFunctionCall <: BatchFallbackReason end
+function info(rhs, ::NotFunctionCall)
+    @info "@batch: batching of `$(rhs)` disabled because it is not a function call"
+end
+struct UnknownExprHead <: BatchFallbackReason
+    expr::Any
+    is_indexing_arg::Bool
+end
+function info(rhs, e::UnknownExprHead)
+    if e.is_indexing_arg
+        @info "@batch: batching of `$(rhs)` disabled because it contains an index `$(e.expr)` that is not the loop index"
+    else
+        @info "@batch: batching of `$(rhs)` disabled because it contains an argument `$(e.expr)` that is not a simple indexing expression"
+    end
+end
+struct CannotBatch{R<:BatchFallbackReason} <: Exception
+    rhs::Expr
+    reason::R
+end
+
 function occurs_in_kwargs(parameters::Expr, loop_idx::Symbol)
     for kw in parameters.args
         if kw isa Symbol
@@ -216,196 +258,130 @@ function occurs_in_kwargs(parameters::Expr, loop_idx::Symbol)
     end
     return false
 end
+function _make_indexed(D, N, expr)
+    return Expr(:call, Expr(:curly, Indexed, D, N), expr)
+end
 
-function batch_expr(expr, loop_idx, loop_iters)
-    # Check if the expr contains the loop index anywhere.
-    return if !occurs_in_expr(expr, loop_idx)
-        # If not, it's a constant wrt the loop.
-        #
-        # TODO(penelopeysm): Use `iid(rhs, size(loop_iters))` here once it's in main,
-        # instead of `batched`. https://github.com/JuliaBayes/Wren.jl/pull/71
-        Expr(:call, WrenCore.batched, loop_iters, expr)
-    else
-        if expr isa Expr && expr.head == :call
-            # First we'll check if the call has kwargs and if the loop index is referenced
-            # in any of them. If so, we'll fall back gracefully to the product distribution,
-            if (
-                length(expr.args) >= 2 &&
-                expr.args[2] isa Expr &&
-                expr.args[2].head == :parameters &&
-                occurs_in_kwargs(expr.args[2], loop_idx)
-            )
-                make_product_expr(expr, loop_idx, loop_iters)
-            else
-                # batch the call e.g. f(x[i], y[i])
-                #   --> batched(1:J, Val{f}(), (Indexed(x[1:J]), Indexed(y[1:J])))
-                #
-                # Note that we have to use `Val` here because `f` is often a type constructor
-                # e.g. `Normal`, which prevents us from dispatching on `::typeof(f)` (since
-                # typeof(Normal) is UnionAll). We use `Val{f}()` rather than `Val(f)` to make
-                # sure it's type stable.
-                fname = Expr(:call, Expr(:curly, Base.Val, expr.args[1]))
-
-                # Check if there are kwargs. If so, we extract them first.
-                kwargs_expr, positional_args =
-                    if length(expr.args) >= 2 &&
-                       expr.args[2] isa Expr &&
-                       expr.args[2].head == :parameters
-                        expr.args[2], expr.args[3:end]
-                    else
-                        nothing, expr.args[2:end]
-                    end
-
-                batched_positional_args = map(
-                    arg -> begin
-                        if arg isa Expr && arg.head == :parameters
-                            # Keyword arguments; we'll forward these directly into batched,
-                            # since we ascertained earlier that they don't contain the loop
-                            # index.
-                            arg
-                        else
-                            # Positional arguments.
-                            expanded, _ = replace_loop_idx_with_iters(
-                                arg,
-                                loop_idx,
-                                loop_iters,
-                            )
-                            # TODO(penelopeysm): Should we be using the second return value here to
-                            # determine whether or not to view???
-                            if occurs_in_expr(arg, loop_idx)
-                                viewed =
-                                    if expanded isa Expr && expanded.head == :ref
-                                        Expr(:macrocall, Symbol("@view"), nothing, expanded)
-                                    else
-                                        expanded
-                                    end
-                                Expr(:call, Indexed, viewed)
-                            else
-                                expanded
-                            end
-                        end
-                    end,
-                    positional_args,
+function batch_expr(expr, loop_idx, loop_iters, loop_iters_size)
+    try
+        # Check if the expr contains the loop index anywhere.
+        return if !occurs_in_expr(expr, loop_idx)
+            # If not, it's a constant wrt the loop.
+            Expr(:call, WrenCore.iid, expr, loop_iters_size)
+        else
+            if expr isa Expr && expr.head == :call
+                # First we'll check if the call has kwargs and if the loop index is referenced
+                # in any of them. If so, we'll fall back gracefully to the product distribution,
+                if (
+                    length(expr.args) >= 2 &&
+                    expr.args[2] isa Expr &&
+                    expr.args[2].head == :parameters &&
+                    occurs_in_kwargs(expr.args[2], loop_idx)
                 )
-
-                if kwargs_expr === nothing
-                    Expr(
-                        :call,
-                        WrenCore.batched,
-                        loop_iters,
-                        fname,
-                        batched_positional_args...,
-                    )
+                    throw(CannotBatch(expr, FunctionHasKwargs(expr.args[1])))
                 else
-                    Expr(
-                        :call,
-                        WrenCore.batched,
-                        kwargs_expr,
-                        loop_iters,
-                        fname,
-                        batched_positional_args...,
+                    # batch the call e.g. f(x[i], y[i])
+                    #   --> batched(1:J, Val{f}(), (Indexed{1,1}(x[1:J]), Indexed{1,1}(y[1:J])))
+                    #
+                    # Note that we have to use `Val` here because `f` is often a type constructor
+                    # e.g. `Normal`, which prevents us from dispatching on `::typeof(f)` (since
+                    # typeof(Normal) is UnionAll). We use `Val{f}()` rather than `Val(f)` to make
+                    # sure it's type stable.
+                    fname = Expr(:call, Expr(:curly, Base.Val, expr.args[1]))
+
+                    # Check if there are kwargs. If so, we extract them first.
+                    kwargs_expr, positional_args =
+                        if length(expr.args) >= 2 &&
+                           expr.args[2] isa Expr &&
+                           expr.args[2].head == :parameters
+                            expr.args[2], expr.args[3:end]
+                        else
+                            nothing, expr.args[2:end]
+                        end
+
+                    batched_positional_args = map(
+                        arg -> begin
+                            if arg isa Expr && arg.head == :parameters
+                                # Keyword arguments; we'll forward these directly into batched,
+                                # since we ascertained earlier that they don't contain the loop
+                                # index.
+                                arg
+                            else
+                                # Positional arguments.
+                                batched_expr = replace_loop_idx_with_iters(
+                                    arg,
+                                    loop_idx,
+                                    loop_iters,
+                                    false,
+                                )
+                                # TODO(penelopeysm): Should we be using the second return value here to
+                                # determine whether or not to view???
+                                if occurs_in_expr(arg, loop_idx)
+                                    expanded = batched_expr.new_expr
+                                    maybe_viewed =
+                                        if expanded isa Expr && expanded.head == :ref
+                                            Expr(
+                                                :macrocall,
+                                                Symbol("@view"),
+                                                nothing,
+                                                expanded,
+                                            )
+                                        else
+                                            expanded
+                                        end
+                                    _make_indexed(
+                                        batched_expr.D,
+                                        batched_expr.N,
+                                        maybe_viewed,
+                                    )
+                                else
+                                    batched_expr.new_expr
+                                end
+                            end
+                        end,
+                        positional_args,
                     )
 
-                end
-            end
-        else
-            # A form we don't know how to handle, but it does contain the loop index in some
-            # form. Just wrap in a product
-            make_product_expr(expr, loop_idx, loop_iters)
-        end
-    end
-end
+                    if kwargs_expr === nothing
+                        Expr(
+                            :call,
+                            WrenCore.batched,
+                            loop_iters,
+                            fname,
+                            batched_positional_args...,
+                        )
+                    else
+                        Expr(
+                            :call,
+                            WrenCore.batched,
+                            kwargs_expr,
+                            loop_iters,
+                            fname,
+                            batched_positional_args...,
+                        )
 
-"""
-    replace_loop_idx_with_iters(expr, loop_idx::Symbol, loop_iters)
-
-Replace all occurrences of `loop_idx` in `expr` with `loop_iters` and broadcast where necessary.
-
-Returns a tuple of `(new_expr, is_batched)` where `new_expr` is the modified expression and
-`is_batched` indicates whether or not the expression was batched (i.e., it used to refer to
-a loop index but now refers to the iteration range).
-"""
-function replace_loop_idx_with_iters(expr, loop_idx::Symbol, loop_iters)
-    return if expr isa Symbol
-        expr == loop_idx ? (loop_iters, true) : (expr, false)
-    elseif expr isa QuoteNode
-        expr, false
-    elseif expr isa Expr
-        if expr.head in (:ref, :., :call)
-            new_args_and_is_batched = map(
-                arg -> replace_loop_idx_with_iters(arg, loop_idx, loop_iters),
-                expr.args,
-            )
-            new_args = first.(new_args_and_is_batched)
-            any_arg_was_batched = any(last.(new_args_and_is_batched))
-            if expr.head == :call && any_arg_was_batched
-                # e.g. i + 1 --> apart from just replacing i, we also need to broadcast the
-                # operation `i .+ 1`.
-                new_expr = if Meta.isoperator(expr.args[1])
-                    # Operators like `x + y` need to become `.+(x, y)`
-                    broadcasted_op = Symbol(".", expr.args[1])
-                    Expr(expr.head, broadcasted_op, new_args[2:end]...)
-                else
-                    # Functions like `f(x, y)` need to become `f.(x, y)`. Annoyingly the
-                    # requisite Expr has a completely different form from the operator
-                    # case........
-                    func_sym = new_args[1]
-                    func_args = new_args[2:end]
-                    Expr(Symbol("."), func_sym, Expr(:tuple, func_args...))
-                end
-                return new_expr, true
-            elseif expr.head == :ref
-                # e.g. x[i + 1] -> x[@. (1:J) + 1] also causes the overall indexing
-                # expression to be batched
-                new_expr = if count(last, new_args_and_is_batched) > 1
-                    # Preserve paired indices, e.g. x[i, i], rather than a Cartesian product.
-                    args = map(new_args_and_is_batched) do (arg, is_batched)
-                        is_batched ? arg : Expr(:call, Base.Ref, arg)
                     end
-                    Expr(:., Base.getindex, Expr(:tuple, args...))
-                else
-                    Expr(expr.head, new_args...)
                 end
-                new_expr, any_arg_was_batched
             else
-                # e.g. x[const] -> x[const]
-                new_expr = Expr(expr.head, new_args...)
-                new_expr, false
+                throw(CannotBatch(expr, NotFunctionCall()))
             end
-        else
-            error("@batch: unsupported expression $(expr) with head $(expr.head)")
         end
-    else
-        # e.g. literals
-        expr, false
+    catch e
+        if e isa CannotBatch
+            # Fall back to product of independent distributions
+            info(expr, e.reason)
+            return Expr(
+                :call,
+                WrenCore.independent,
+                Expr(
+                    :comprehension,
+                    Expr(:generator, expr, Expr(:(=), loop_idx, loop_iters)),
+                ),
+            )
+        else
+            rethrow(e)
+        end
     end
-end
-
-vectorise_batch_stmt(lnn::LineNumberNode, idx, iters, ax, cond, ls, ps) = lnn
-function vectorise_batch_stmt(::IID, idx, iters, ax, cond, ls, ps)
-    # `@iid` already produces one array-valued statement; batching it over a batch has no
-    # defined semantics yet.
-    return error("@iid is not supported inside @batch")
-end
-function vectorise_batch_stmt(
-    stmt::Sample,
-    loop_idx,
-    loop_iters,
-    accs,
-    conditioned,
-    latent_source,
-    parameter_space,
-)
-    new_lhs, _ = replace_loop_idx_with_iters(stmt.lhs, loop_idx, loop_iters)
-    rhs_expr = _wren_expr_to_model_expr(stmt.rhs)
-    new_rhs = batch_expr(rhs_expr, loop_idx, loop_iters)
-    return emit_model_expr(
-        Sample(stmt.name, new_lhs, new_rhs),
-        accs,
-        conditioned,
-        latent_source,
-        parameter_space,
-    )
 end
 
 occurs_in_expr(expr::Symbol, loop_idx::Symbol) = expr == loop_idx
@@ -414,25 +390,125 @@ occurs_in_expr(expr::Expr, loop_idx::Symbol) =
     any(arg -> occurs_in_expr(arg, loop_idx), expr.args)
 occurs_in_expr(expr, loop_idx) = false
 
-function vectorise_batch_stmt(
-    stmt::Observe,
-    loop_idx,
+struct BatchedExpr
+    "The modified expression. Usually Symbol or Expr, but the type bound is `Any` because it might include literals"
+    new_expr::Any
+    "Whether or not the expression was batched (i.e., it used to refer to a loop index but now refers to the iteration range)"
+    is_batched::Bool
+    "The dimension along which the batching occurs"
+    D::Union{Nothing,Int}
+    "The total number of dimensions"
+    N::Union{Nothing,Int}
+end
+
+# Needed for unit testing.
+Base.:(==)(a::BatchedExpr, b::BatchedExpr) =
+    a.new_expr == b.new_expr && a.is_batched == b.is_batched && a.D == b.D && a.N == b.N
+
+"""
+    replace_loop_idx_with_iters(expr, loop_idx::Symbol, loop_iters, is_indexing_arg)::BatchedExpr
+
+Replace all occurrences of `loop_idx` in `expr` with `loop_iters` and broadcast where
+necessary.
+
+`is_indexing_arg` indicates whether `expr` is an argument to an indexing expression (i.e., `foo[expr]`).
+"""
+function replace_loop_idx_with_iters(
+    expr,
+    loop_idx::Symbol,
     loop_iters,
-    accs,
-    conditioned,
-    latent_source,
-    parameter_space,
+    is_indexing_arg::Bool,
 )
-    new_lhs, _ = replace_loop_idx_with_iters(stmt.lhs, loop_idx, loop_iters)
-    rhs_expr = _wren_expr_to_model_expr(stmt.rhs)
-    new_rhs = batch_expr(rhs_expr, loop_idx, loop_iters)
-    return emit_model_expr(
-        Observe(stmt.name, new_lhs, new_rhs),
-        accs,
-        conditioned,
-        latent_source,
-        parameter_space,
-    )
+    return if expr isa Symbol
+        expr == loop_idx ? BatchedExpr(loop_iters, true, nothing, nothing) :
+        BatchedExpr(expr, false, nothing, nothing)
+    elseif expr isa QuoteNode
+        BatchedExpr(expr, false, nothing, nothing)
+    elseif expr isa Expr
+        if expr.head === :ref
+            # expr.args[1] is the thing being indexed into, so we don't need to replace it
+            nargs = length(expr.args) - 1
+            new_args_and_is_batched = map(
+                arg -> replace_loop_idx_with_iters(arg, loop_idx, loop_iters, true),
+                expr.args[2:end],
+            )
+            new_args = map(x -> x.new_expr, new_args_and_is_batched)
+            is_batched = map(x -> x.is_batched, new_args_and_is_batched)
+            batched_arg_indices = (1:nargs)[is_batched]
+            n_batched_args = count(is_batched)
+
+            if n_batched_args == 0
+                # e.g. x[const] -> x[const]
+                BatchedExpr(
+                    Expr(expr.head, expr.args[1], new_args...),
+                    false,
+                    nothing,
+                    nothing,
+                )
+            elseif n_batched_args > 1
+                # e.g. x[i, i] -> getindex.(Ref(x), 1:J, 1:J)
+                #
+                # The alternative, `x[i, i] for i in 1:J`, creates a closure inside an
+                # RGF which makes Enzyme very angry.
+                args = map(new_args_and_is_batched) do batched_expr
+                    new_expr = batched_expr.new_expr
+                    batched_expr.is_batched ? new_expr : Expr(:call, Base.Ref, new_expr)
+                end
+                array_ref = Expr(:call, Base.Ref, expr.args[1])
+                BatchedExpr(
+                    Expr(:., Base.getindex, Expr(:tuple, array_ref, args...)),
+                    true,
+                    nothing,
+                    nothing,
+                )
+            else
+                D = only(batched_arg_indices)
+                N = length(new_args)
+                BatchedExpr(Expr(expr.head, expr.args[1], new_args...), true, D, N)
+            end
+        else
+            if occurs_in_expr(expr, loop_idx)
+                throw(CannotBatch(expr, UnknownExprHead(expr, is_indexing_arg)))
+            else
+                BatchedExpr(expr, false, nothing, nothing)
+            end
+        end
+    else
+        # e.g. literals
+        BatchedExpr(expr, false, nothing, nothing)
+    end
+end
+
+vectorise_batch_stmt(lnn::LineNumberNode, idx, iters, size, ax, cond, ls, ps) = lnn
+function vectorise_batch_stmt(::IID, idx, iters, size, ax, cond, ls, ps)
+    return error("@iid is not supported inside @batch")
+end
+for stmt_type in (Sample, Observe)
+    @eval begin
+        function vectorise_batch_stmt(
+            stmt::$stmt_type,
+            loop_idx,
+            loop_iters,
+            loop_iters_size,
+            accs,
+            conditioned,
+            latent_source,
+            parameter_space,
+        )
+            new_lhs =
+                replace_loop_idx_with_iters(stmt.lhs, loop_idx, loop_iters, false).new_expr
+            rhs_expr =
+                emit_model_expr(stmt.rhs, accs, conditioned, latent_source, parameter_space)
+            new_rhs = batch_expr(rhs_expr, loop_idx, loop_iters, loop_iters_size)
+            return emit_model_expr(
+                $(stmt_type)(stmt.name, new_lhs, new_rhs),
+                accs,
+                conditioned,
+                latent_source,
+                parameter_space,
+            )
+        end
+    end
 end
 
 function _maybe_view(v::AbstractArray, idxs...)
