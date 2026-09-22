@@ -10,6 +10,9 @@ distribution assigns to `[0, ∞)`, is computed on construction and stored in th
 That probability needs a regularized incomplete beta integral, so the saving is largest
 when one `HalfTDist` scores many values.
 
+Sampling inverts the distribution function with a Newton solve, so a draw takes one
+uniform noise value whatever `μ/σ` is.
+
 **Customised batched implementations**: Not yet (will fall back to a product of scalar
 distributions)
 """
@@ -93,17 +96,74 @@ end
     return select(x >= zero(x), () -> value, () -> oftype(value, -Inf))
 end
 
+const TDISTQUANTILE_MAXITER = 100
+const TDISTQUANTILE_STEPS = 8
+
 #=
-  Rejection from the untruncated distribution, drawn as a normal over the root of a
-  `Gamma(ν/2, 2/ν)` draw. The expected number of attempts is the reciprocal of the mass
-  above zero, which grows without bound as `μ/σ` falls.
+  The `t ≤ 0` with `log F(t) = logp`, for `logp ≤ -log 2`.
+
+  Newton runs on `w = asinh(t / √ν)`, in which `log F` is concave and close to linear
+  both near the centre and in the power-law tail. From the normal start below, `Float64`
+  settles within 6 steps for `ν` from `1e-2` to `1e4` and `logp` down to `-700`. Where
+  `|t|` exceeds about `1e154`, `t²` overflows inside `tdistlogcdf` and the result is `NaN`.
 =#
-function Base.rand(rng::AbstractRNG, d::HalfTDist)
-    ν = d.ν
-    while true
-        z = randn(rng, noisetype(d))
-        w = rand(rng, Gamma(ν / 2, 2 / ν))
-        x = muladd(d.σ, z / sqrt(w), d.μ)
-        x >= zero(x) && return x
+function tdistlowerquantile(ν::Number, logp::Number, logbeta_half::Number)
+    fixedlength(ν, logp) && return tdistlowerquantile_fixed(ν, logp, logbeta_half)
+    w = tdistquantile_start(ν, logp)
+    tol = sqrt(eps(basefloat(typeof(logp))))
+    for _ in 1:TDISTQUANTILE_MAXITER
+        step = tdistquantile_step(ν, w, logp, logbeta_half)
+        w = min(w - step, zero(w))
+        abs(step) <= tol * max(one(w), abs(w)) && break
     end
+    # As in `gammalogquantile`, one more step brings the derivative that automatic
+    # differentiation carries through the iteration to the accuracy of the value.
+    w = min(w - tdistquantile_step(ν, w, logp, logbeta_half), zero(w))
+    return sqrt(ν) * sinh(w)
+end
+
+function tdistlowerquantile_fixed(ν::Number, logp::Number, logbeta_half::Number)
+    w = tdistquantile_start(ν, logp)
+    for _ in 1:TDISTQUANTILE_STEPS
+        w = min(w - tdistquantile_step(ν, w, logp, logbeta_half), zero(w))
+    end
+    return sqrt(ν) * sinh(w)
+end
+
+@inline logcosh(w) = abs(w) + log1p(exp(-2 * abs(w))) - logtwo
+
+# With `t = √ν sinh(w)`, `d log F / dw = exp(-ν log cosh(w) - log B(1/2, ν/2) - log F)`.
+@inline function tdistquantile_step(ν, w, logp, logbeta_half)
+    logF = tdistlogcdf(ν, sqrt(ν) * sinh(w), logbeta_half)
+    return (logF - logp) * exp(logF + logbeta_half + ν * logcosh(w))
+end
+
+# The normal quantile with the first Cornish-Fisher correction for the t distribution.
+@inline function tdistquantile_start(ν, logp)
+    z = -(sqrt2 * erfcinvt(2 * exp(logp)))
+    t = z + (z^3 + z) / (4 * ν)
+    return min(asinh(t / sqrt(ν)), zero(t))
+end
+
+#=
+  Inverse-CDF draw through the upper tail. For a unit draw `u`, the standardised draw
+  `r = (x - μ)/σ` solves `P(T > r) = u m`, where `m = F(μ/σ)` is the mass above zero. By
+  symmetry `P(T > r) = F(-r)`, so `-r` is the lower quantile of `u m` when that is at most
+  one half, and the lower quantile of `1 - u m` is `r` otherwise. Rounding can land the
+  draw a hair below zero, so it is clamped there.
+=#
+function _halft_upper_quantile(d::HalfTDist, u::Number)
+    ν, μ, σ = d.ν, d.μ, d.σ
+    logbeta_half = tdist_logbeta(ν)
+    logmass = d.lognorm - log(σ) - log(ν) / 2 - logbeta_half
+    logp = log(u) + logmass
+    lower = logp <= -logtwo
+    target = select(lower, () -> logp, () -> log1mexp(logp))
+    t = tdistlowerquantile(ν, target, logbeta_half)
+    x = muladd(σ, select(lower, () -> -t, () -> t), μ)
+    return max(x, zero(x))
+end
+
+@inline function Base.rand(rng::AbstractRNG, d::HalfTDist)
+    return _halft_upper_quantile(d, one(noisetype(d)) - rand(rng, noisetype(d)))
 end

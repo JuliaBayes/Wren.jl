@@ -1,8 +1,9 @@
 module WrenDistsReactantExt
 
-using WrenDists: WrenDists, GAMMAINC_TERMS, GAMMAQUANTILE_STEPS
+using WrenDists: WrenDists, GAMMAINC_TERMS, GAMMAQUANTILE_STEPS, TDISTQUANTILE_STEPS
 using WrenDists: basefloat, floortiny, select
 using WrenDists: gammaquantile_start, gammaquantile_step
+using WrenDists: tdistquantile_start, tdistquantile_step
 using Reactant: Reactant, TracedRNumber, TracedRArray, @trace
 using SpecialFunctions: SpecialFunctions, loggamma
 
@@ -51,6 +52,18 @@ function WrenDists.gammalogquantile_fixed(a::T, p::T) where {T<:TracedRNumber}
         u = u - gammaquantile_step(a, lg, u, exp(u), lower, target)
     end
     return u
+end
+
+function WrenDists.tdistlowerquantile_fixed(
+    ν::Number,
+    logp::TracedRNumber,
+    logbeta_half::Number,
+)
+    w = tdistquantile_start(ν, logp)
+    @trace for k in 1:TDISTQUANTILE_STEPS
+        w = min(w - tdistquantile_step(ν, w, logp, logbeta_half), zero(w))
+    end
+    return sqrt(ν) * sinh(w)
 end
 
 # TODO(penelopeysm) This is piracy!! These were upstreamed in

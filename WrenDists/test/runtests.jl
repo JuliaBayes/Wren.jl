@@ -283,6 +283,57 @@ const DIRICHLET_PLAICE = (to_vec, from_vec)
         end
     end
 
+    @testset "t distribution quantile" begin
+        #=
+          The quantile is checked by feeding it back through the distribution function.
+          A `ν` below one reaches `1e154`, where `t^2` overflows, a few nats down, so its
+          targets stay shallow.
+        =#
+        shallow = (-log(2), log(0.3), log(0.1))
+        deep = (shallow..., log(1e-3), -20.0, -100.0, -300.0)
+        cases = (
+            (1e-2, shallow, 1e-12),
+            (1.0, deep, 1e-12),
+            (3.0, deep, 1e-12),
+            (1e2, deep, 1e-12),
+            (1e4, deep, 1e-10),
+        )
+        for (ν, logps, rtol) in cases
+            logbeta_half = WrenDists.tdist_logbeta(ν)
+            for logp in logps
+                t = WrenDists.tdistlowerquantile(ν, logp, logbeta_half)
+                @test t <= 0
+                @test WrenDists.tdistlogcdf(ν, t, logbeta_half) ≈ logp rtol = rtol
+                @test WrenDists.tdistlowerquantile_fixed(ν, logp, logbeta_half) ≈ t rtol =
+                    1e-10
+            end
+        end
+    end
+
+    @testset "HalfTDist sampling" begin
+        us = (0.01, 0.1, 0.3, 0.5, 0.9, 0.99)
+        for (ν, μ, σ) in (
+            (3.0, 0.0, 2.0),
+            (3.5, -1.5, 0.7),
+            (40.0, 1.0, 2.0),
+            (1.0, 0.0, 1.0),
+            (3.0, -8.0, 1.0),
+        )
+            d = WrenDists.HalfTDist(ν, μ, σ)
+            mass = ccdf(Distributions.TDist(ν), -μ / σ)
+            xs = [WrenDists._halft_upper_quantile(d, u) for u in us]
+            for (u, x) in zip(us, xs)
+                @test x >= 0
+                @test ccdf(Distributions.TDist(ν), (x - μ) / σ) / mass ≈ u rtol = 1e-8
+            end
+            @test issorted(xs; rev=true)
+            @test WrenDists._halft_upper_quantile(d, 1.0) == 0
+            if RUN_REACTANT
+                test_halft_quantile_reactant(d, us)
+            end
+        end
+    end
+
     # Continuous bounded
     test_dist(
         "Beta",
