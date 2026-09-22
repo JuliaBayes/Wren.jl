@@ -349,6 +349,33 @@ const DIRICHLET_PLAICE = (to_vec, from_vec)
             ADTestCase(f, [0.3], (), ())
         end,),
     )
+    test_dist(
+        "BernoulliLogit",
+        WrenDists.BernoulliLogit(-0.4),
+        Distributions.BernoulliLogit(-0.4);
+        plaice_zero_allocs=UNIVARIATE_PLAICE,
+        other_ad_testcases=(let f(x) = logdensityof(WrenDists.BernoulliLogit(x[1]), 1)
+            ADTestCase(f, [-0.4], (), ())
+        end,),
+    )
+    test_dist(
+        "BinomialLogit",
+        WrenDists.BinomialLogit(20, -0.4),
+        Distributions.Binomial(20, inv(1 + exp(0.4)));
+        plaice_zero_allocs=UNIVARIATE_PLAICE,
+        other_ad_testcases=(let f(x) = logdensityof(WrenDists.BinomialLogit(20, x[1]), 8)
+            ADTestCase(f, [-0.4], (), ())
+        end,),
+    )
+    test_dist(
+        "LogPoisson",
+        WrenDists.LogPoisson(log(7.0)),
+        Distributions.Poisson(7.0);
+        plaice_zero_allocs=UNIVARIATE_PLAICE,
+        other_ad_testcases=(let f(x) = logdensityof(WrenDists.LogPoisson(x[1]), 7)
+            ADTestCase(f, [log(7.0)], (), ())
+        end,),
+    )
 
     # Additional parameter combos
     test_dist(
@@ -639,6 +666,48 @@ const DIRICHLET_PLAICE = (to_vec, from_vec)
             let
                 f(x) = logdensityof(WrenDists.BatchedPoisson(x), [1.0, 2.0, 8.0])
                 ADTestCase(f, [1.0, 3.0, 7.0], (), ())
+            end,
+        ),
+    )
+    test_dist(
+        "BatchedBernoulliLogit",
+        WrenDists.BatchedBernoulliLogit([-1.4, 0.0, 1.4]),
+        Distributions.product_distribution(Distributions.BernoulliLogit.([-1.4, 0.0, 1.4]));
+        test_batched=false,
+        other_ad_testcases=(
+            let
+                f(x) = logdensityof(WrenDists.BatchedBernoulliLogit(x), [1.0, 0.0, 1.0])
+                ADTestCase(f, [-1.4, 0.0, 1.4], (), ())
+            end,
+        ),
+    )
+    test_dist(
+        "BatchedBinomialLogit",
+        WrenDists.BatchedBinomialLogit([5, 10, 20], [-1.4, 0.0, 1.4]),
+        Distributions.product_distribution(
+            Distributions.Binomial.([5, 10, 20], inv.(1 .+ exp.(-[-1.4, 0.0, 1.4]))),
+        );
+        test_batched=false,
+        test_reactant=false, # loop-based logdensityof is not traceable yet
+        other_ad_testcases=(
+            let
+                f(x) = logdensityof(
+                    WrenDists.BatchedBinomialLogit([5, 10, 20], x),
+                    [1.0, 4.0, 15.0],
+                )
+                ADTestCase(f, [-1.4, 0.0, 1.4], (), ())
+            end,
+        ),
+    )
+    test_dist(
+        "BatchedLogPoisson",
+        WrenDists.BatchedLogPoisson(log.([1.0, 3.0, 7.0])),
+        Distributions.product_distribution(Distributions.Poisson.([1.0, 3.0, 7.0]));
+        test_batched=false,
+        other_ad_testcases=(
+            let
+                f(x) = logdensityof(WrenDists.BatchedLogPoisson(x), [1.0, 2.0, 8.0])
+                ADTestCase(f, log.([1.0, 3.0, 7.0]), (), ())
             end,
         ),
     )

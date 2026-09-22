@@ -24,10 +24,13 @@ WrenDists.HalfNormal
 WrenDists.HalfCauchy
 WrenDists.HalfTDist
 WrenDists.Bernoulli
+WrenDists.BernoulliLogit
 WrenDists.Binomial
+WrenDists.BinomialLogit
 WrenDists.Categorical
 WrenDists.Geometric
 WrenDists.Poisson
+WrenDists.LogPoisson
 ```
 
 ## Multivariate

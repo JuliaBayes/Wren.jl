@@ -14,10 +14,16 @@ using WrenDists:
     IsoNormal,
     Bernoulli,
     BatchedBernoulli,
+    BernoulliLogit,
+    BatchedBernoulliLogit,
     Binomial,
     BatchedBinomial,
+    BinomialLogit,
+    BatchedBinomialLogit,
     Poisson,
     BatchedPoisson,
+    LogPoisson,
+    BatchedLogPoisson,
     Exponential,
     BatchedExponential,
     LogNormal,
@@ -76,10 +82,13 @@ function WrenCore.batched(iters, ::Val{Normal}, indexed_mu::WrenCore.Indexed; _k
     return IsoNormal(indexed_mu.data, one(eltype(indexed_mu.data)))
 end
 
-# Single-parameter distributions: Bernoulli(p[i]), Poisson(lambda[i]), Exponential(theta[i])
+# Single-parameter distributions: Bernoulli(p[i]), Poisson(lambda[i]), Exponential(theta[i]),
+# and the logit/log-rate forms BernoulliLogit(logitp[i]), LogPoisson(loglambda[i])
 for (D, B) in (
     (:Bernoulli, :BatchedBernoulli),
+    (:BernoulliLogit, :BatchedBernoulliLogit),
     (:Poisson, :BatchedPoisson),
+    (:LogPoisson, :BatchedLogPoisson),
     (:Exponential, :BatchedExponential),
 )
     @eval function WrenCore.batched(iters, ::Val{$D}, indexed::WrenCore.Indexed; _kwargs...)
@@ -100,9 +109,24 @@ function WrenCore.batched(iters, ::Val{Binomial}, indexed_n::WrenCore.Indexed; _
     return BatchedBinomial(indexed_n.data, Fill(0.5, size(indexed_n.data)))
 end
 
-# Two-parameter distributions: Binomial(n, p) and LogNormal(mu, sigma). Constant arguments
-# are stored as `Fill` arrays matching the shape of the indexed argument.
-for (D, B) in ((:Binomial, :BatchedBinomial), (:LogNormal, :BatchedLogNormal))
+# BinomialLogit(n[i]) -> BatchedBinomialLogit(n, Fill(0.0, ...))
+function WrenCore.batched(
+    iters,
+    ::Val{BinomialLogit},
+    indexed_n::WrenCore.Indexed;
+    _kwargs...,
+)
+    return BatchedBinomialLogit(indexed_n.data, Fill(0.0, size(indexed_n.data)))
+end
+
+# Two-parameter distributions: Binomial(n, p), BinomialLogit(n, logitp) and
+# LogNormal(mu, sigma). Constant arguments are stored as `Fill` arrays matching the shape
+# of the indexed argument.
+for (D, B) in (
+    (:Binomial, :BatchedBinomial),
+    (:BinomialLogit, :BatchedBinomialLogit),
+    (:LogNormal, :BatchedLogNormal),
+)
     @eval begin
         function WrenCore.batched(
             iters,

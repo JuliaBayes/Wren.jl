@@ -26,4 +26,23 @@ using WrenDists
     end
 end
 
+@testset "batch: WrenDists.LogPoisson" begin
+    @testset "batched: LogPoisson(mu[i]) -> BatchedLogPoisson" begin
+        @wren function lograte_batch(y)
+            mu ~ WrenCore.iid(WrenDists.Normal(), 3)
+            @batch for i in 1:3
+                @observe y[i] ~ WrenDists.LogPoisson(mu[i])
+            end
+        end
+        @wren function lograte_nobatch(y)
+            mu ~ WrenCore.iid(WrenDists.Normal(), 3)
+            for i in 1:3
+                @observe y[i] ~ WrenDists.LogPoisson(mu[i])
+            end
+        end
+        y = [1.0, 2.0, 3.0]
+        test_model_equivalence(lograte_batch(y), lograte_nobatch(y))
+    end
+end
+
 end # module WrenBatchPoissonTests
