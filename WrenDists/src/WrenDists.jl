@@ -2,16 +2,17 @@ module WrenDists
 
 using DensityInterface: DensityInterface, logdensityof
 using EnzymeCore: EnzymeCore, EnzymeRules, Annotation, Const
-using IrrationalConstants: log2π, logπ, sqrt2
+using IrrationalConstants: invsqrt2, log2π, logπ, logtwo, sqrt2
 using LogExpFunctions: log1mexp, xlogy
 using LinearAlgebra: Diagonal, LowerTriangular, UniformScaling, diag
 using Random: Random, AbstractRNG
 using ReactantCore: within_compile
-using SpecialFunctions: erfcinv, gamma_inc, logbeta, loggamma
+using SpecialFunctions: erfc, erfcinv, gamma_inc, logbeta, logerfc, loggamma
 using Plaice: Plaice
 using VarNames: VarNames
 include("common.jl")
 include("gammainc.jl")
+include("betainc.jl")
 
 # Abstract types exist solely for Plaice dispatch purposes, nothing else!
 abstract type UnivariateDist <: WrenDist end
@@ -35,6 +36,9 @@ include("univariate/laplace.jl")
 include("univariate/cauchy.jl")
 include("univariate/gamma.jl")
 include("univariate/beta.jl")
+include("univariate/halfnormal.jl")
+include("univariate/halfcauchy.jl")
+include("univariate/halftdist.jl")
 
 # Univariate discrete
 include("univariate/bernoulli.jl")
@@ -57,6 +61,7 @@ include("multivariate/plaice.jl")
 export logdensityof
 
 export Normal, LogNormal, Exponential, Weibull, Uniform, Laplace, Cauchy, Gamma, Beta
+export HalfNormal, HalfCauchy, HalfTDist
 export Bernoulli, Binomial, Categorical, Geometric, Poisson
 export MvNormalScale, Dirichlet, Multinomial
 

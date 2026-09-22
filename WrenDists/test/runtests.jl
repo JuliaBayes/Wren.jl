@@ -224,6 +224,65 @@ const DIRICHLET_PLAICE = (to_vec, from_vec)
         end,),
     )
 
+    # Continuous positive, truncated at zero
+    for (μ, σ) in ((0.0, 2.0), (-1.5, 0.7), (1.0, 2.0))
+        test_dist(
+            "HalfNormal($μ,$σ)",
+            WrenDists.HalfNormal(μ, σ),
+            truncated(Distributions.Normal(μ, σ); lower=0);
+            plaice_zero_allocs=UNIVARIATE_PLAICE,
+            other_ad_testcases=(
+                let f(x) = logdensityof(WrenDists.HalfNormal(x[1], x[2]), 1.0)
+                    ADTestCase(f, [μ, σ], (), ())
+                end,
+            ),
+        )
+        test_dist(
+            "HalfCauchy($μ,$σ)",
+            WrenDists.HalfCauchy(μ, σ),
+            truncated(Distributions.Cauchy(μ, σ); lower=0);
+            plaice_zero_allocs=UNIVARIATE_PLAICE,
+            other_ad_testcases=(
+                let f(x) = logdensityof(WrenDists.HalfCauchy(x[1], x[2]), 1.0)
+                    ADTestCase(f, [μ, σ], (), ())
+                end,
+            ),
+        )
+    end
+    for (ν, μ, σ) in ((3.0, 0.0, 2.0), (3.5, -1.5, 0.7), (40.0, 1.0, 2.0))
+        test_dist(
+            "HalfTDist($ν,$μ,$σ)",
+            WrenDists.HalfTDist(ν, μ, σ),
+            truncated(μ + σ * Distributions.TDist(ν); lower=0);
+            plaice_zero_allocs=UNIVARIATE_PLAICE,
+            other_ad_testcases=(
+                let f(x) = logdensityof(WrenDists.HalfTDist(x[1], x[2], x[3]), 1.0)
+                    ADTestCase(f, [ν, μ, σ], (), ())
+                end,
+            ),
+        )
+    end
+
+    @testset "t distribution function" begin
+        # At `t = -1000` Distributions' log CDF is off by about 3e-11 against a `BigFloat`
+        # evaluation, so the far tail is only checked between the two paths below.
+        ts = (-3.0, -0.8, -1e-3, 0.0, 1e-3, 0.8, 3.0, 50.0)
+        # `loggamma(ν/2) - loggamma((ν + 1)/2)` cancels, costing digits as ν grows.
+        for (ν, rtol) in
+            ((1e-2, 1e-12), (1.0, 1e-12), (3.0, 1e-12), (1e2, 1e-12), (1e4, 1e-11))
+            for t in ts
+                reference = logcdf(Distributions.TDist(ν), t)
+                @test WrenDists.tdistlogcdf(ν, t, WrenDists.tdist_logbeta(ν)) ≈ reference rtol =
+                    rtol
+            end
+        end
+        for ν in (1e-2, 1.0, 3.0, 1e2, 1e4, 1e6), t in (-1e3, ts...)
+            logbeta_half = WrenDists.tdist_logbeta(ν)
+            @test WrenDists.tdistlogcdf_fixed(ν, t, logbeta_half) ≈
+                  WrenDists.tdistlogcdf(ν, t, logbeta_half) rtol = 1e-10
+        end
+    end
+
     # Continuous bounded
     test_dist(
         "Beta",

@@ -20,6 +20,9 @@ WrenDists.Laplace
 WrenDists.Cauchy
 WrenDists.Gamma
 WrenDists.Beta
+WrenDists.HalfNormal
+WrenDists.HalfCauchy
+WrenDists.HalfTDist
 WrenDists.Bernoulli
 WrenDists.Binomial
 WrenDists.Categorical
