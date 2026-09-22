@@ -22,6 +22,7 @@ WrenDists.Gamma
 WrenDists.Beta
 WrenDists.Bernoulli
 WrenDists.Binomial
+WrenDists.NegativeBinomial
 WrenDists.Categorical
 WrenDists.Geometric
 WrenDists.Poisson
