@@ -327,7 +327,9 @@ const DIRICHLET_PLAICE = (to_vec, from_vec)
                 @test ccdf(Distributions.TDist(ν), (x - μ) / σ) / mass ≈ u rtol = 1e-8
             end
             @test issorted(xs; rev=true)
-            @test WrenDists._halft_upper_quantile(d, 1.0) == 0
+            # The whole mass lies above the draw at `u = 1`, which rounding can place
+            # either side of zero.
+            @test 0 <= WrenDists._halft_upper_quantile(d, 1.0) <= 1e-12 * σ
             if RUN_REACTANT
                 test_halft_quantile_reactant(d, us)
             end
