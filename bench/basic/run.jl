@@ -17,8 +17,9 @@ using Reactant
 using ReverseDiff
 using Statistics: median
 using WrenCore
+using WrenDists: WrenDists as WD
 
-include("pmtransforms.jl")
+# include("pmtransforms.jl")
 include("models.jl")
 # include("differ_rules.jl")
 

@@ -1,9 +1,12 @@
 """
     HalfTDist(ν, μ, σ)
+    HalfTDist(ν, μ)
     HalfTDist(ν)
 
 Student's t distribution with `ν` degrees of freedom, location `μ` (default 0) and scale
 `σ` (default 1), truncated to `[0, ∞)`.
+
+`σ` is a scale parameter, not a standard deviation.
 
 The log normalising constant, including the log probability that the untruncated
 distribution assigns to `[0, ∞)`, is computed on construction and stored in the struct.
@@ -28,6 +31,7 @@ struct HalfTDist{V<:Number,M<:Number,S<:Number,L<:Number} <: PositiveUnivariateD
     end
 end
 
+HalfTDist(ν::Number, μ::Number) = HalfTDist(ν, μ, one(μ))
 HalfTDist(ν::Number) = HalfTDist(ν, zero(ν), one(ν))
 
 # `log B(1/2, ν/2)`; the t density's normalising constant is `√ν B(1/2, ν/2)`.

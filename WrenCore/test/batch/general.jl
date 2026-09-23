@@ -3,12 +3,15 @@ module WrenBatchGeneralTests
 @info "testing batch/general.jl"
 
 using Test
+using Distributions: NegativeBinomial
 using WrenCore
 using WrenCore.TestUtils: test_model_equivalence
-using Distributions
+using WrenDists
 using Enzyme
 
 adtype = AutoEnzyme(; mode=Reverse)
+fnormal(x) = Normal(x)
+fcategorical(ps) = Categorical(ps)
 
 @testset "general @batch properties" begin
     @testset "semantic invariance" begin
@@ -104,6 +107,67 @@ adtype = AutoEnzyme(; mode=Reverse)
     @testset "different examples of batchable syntax" begin
         # could really do with more examples here
 
+        @testset "runtime fallback" begin
+            # When `batched() sees a function it doesn't know how to batch, it will call the
+            # runtime fallback which uses `independent`. This exercises that code path.
+            @wren function batch_unknown(x, y)
+                @batch for i in 1:2
+                    x[i] ~ fnormal(y[i])
+                end
+            end
+            @wren function nobatch_unknown(x, y)
+                for i in 1:2
+                    x[i] ~ fnormal(y[i])
+                end
+            end
+            y = [1.0, 2.0]
+            test_model_equivalence(
+                batch_unknown(zeros(2), y),
+                nobatch_unknown(zeros(2), y),
+                adtype,
+            )
+
+            @wren function batch_unknown_vector(x, y)
+                @batch for i in 1:2
+                    x[i] ~ fnormal(y[i, 1])
+                end
+            end
+            @wren function nobatch_unknown_vector(x, y)
+                for i in 1:2
+                    x[i] ~ fnormal(y[i, 1])
+                end
+            end
+            y = [1.0 2.0; 3.0 4.0]
+            test_model_equivalence(
+                batch_unknown_vector(zeros(2), y),
+                nobatch_unknown_vector(zeros(2), y),
+                adtype,
+            )
+
+            # This test is a bit different, because Categorical is discrete, we have to make
+            # x[i] observed to not annoy AD, and then add a dummy latent to make the model
+            # non-empty.
+            @wren function batch_unknown_matrix(x, y)
+                a ~ Normal()
+                @batch for i in 1:2
+                    @observe x[i] ~ fcategorical(y[i, :])
+                end
+            end
+            @wren function nobatch_unknown_matrix(x, y)
+                a ~ Normal()
+                for i in 1:2
+                    @observe x[i] ~ fcategorical(y[i, :])
+                end
+            end
+            x = [1, 2]
+            y = [0.1 0.9; 0.8 0.2]
+            test_model_equivalence(
+                batch_unknown_matrix(x, y),
+                nobatch_unknown_matrix(x, y),
+                adtype,
+            )
+        end
+
         @testset "issue #79" begin
             # https://github.com/JuliaBayes/Wren.jl/issues/79
             @wren function batch_diagonal(x, y)
@@ -147,6 +211,31 @@ adtype = AutoEnzyme(; mode=Reverse)
                 nobatch_subtraction(y, n),
                 nothing,
             )
+        end
+    end
+
+    @testset "failure modes" begin
+        @testset "runtime batched fallback when arrays are sliced" begin
+            @wren function fail_batch_slice(x, y)
+                a ~ Normal()
+                @batch for i in 1:2
+                    @observe x[i] ~ fcategorical(y[i, :, 1])
+                end
+            end
+            @wren function fail_nobatch_slice(x, y)
+                a ~ Normal()
+                for i in 1:2
+                    @observe x[i] ~ fcategorical(y[i, :, 1])
+                end
+            end
+            ps = [0.1 0.9; 0.8 0.2]
+            ps = reshape(ps, 2, 2, 1)
+            # Without batching it should be fine
+            model = fail_nobatch_slice([1, 2], ps)
+            @test rand(model) isa Any
+            # With batching this should throw
+            model = fail_batch_slice([1, 2], ps)
+            @test_throws "cannot safely unindex" rand(model)
         end
     end
 end

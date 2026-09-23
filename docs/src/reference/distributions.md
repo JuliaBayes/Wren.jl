@@ -18,6 +18,7 @@ WrenDists.Weibull
 WrenDists.Uniform
 WrenDists.Laplace
 WrenDists.Cauchy
+WrenDists.TDist
 WrenDists.Gamma
 WrenDists.Beta
 WrenDists.HalfNormal

@@ -35,6 +35,7 @@ include("univariate/uniform.jl")
 include("univariate/laplace.jl")
 include("univariate/cauchy.jl")
 include("univariate/gamma.jl")
+include("univariate/tdist.jl")
 include("univariate/beta.jl")
 include("univariate/halfnormal.jl")
 include("univariate/halfcauchy.jl")
@@ -63,7 +64,7 @@ include("multivariate/plaice.jl")
 
 export logdensityof
 
-export Normal, LogNormal, Exponential, Weibull, Uniform, Laplace, Cauchy, Gamma, Beta
+export Normal, LogNormal, Exponential, Weibull, Uniform, Laplace, Cauchy, TDist, Gamma, Beta
 export HalfNormal, HalfCauchy, HalfTDist
 export Bernoulli, BernoulliLogit, Binomial, BinomialLogit, Categorical, Geometric
 export Poisson, LogPoisson

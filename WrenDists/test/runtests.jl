@@ -1,6 +1,7 @@
 using WrenDists
 using WrenDists: logdensityof
 using WrenCore: WrenCore
+using FillArrays
 import DifferentiationInterface as DI
 using Distributions
 using ForwardDiff
@@ -184,6 +185,18 @@ const DIRICHLET_PLAICE = (to_vec, from_vec)
         other_ad_testcases=(let f(x) = logdensityof(WrenDists.Cauchy(x[1], x[2]), 1.0)
             ADTestCase(f, [1.0, 2.0], (), ())
         end,),
+    )
+
+    test_dist(
+        "TDist",
+        WrenDists.TDist(4.0, 1.0, 2.0),
+        1.0 + 2.0 * Distributions.TDist(4.0);
+        plaice_zero_allocs=UNIVARIATE_PLAICE,
+        other_ad_testcases=(
+            let f(x) = logdensityof(WrenDists.TDist(x[1], x[2], x[3]), 1.0)
+                ADTestCase(f, [4.0, 1.0, 2.0], (), ())
+            end,
+        ),
     )
 
     # Continuous positive
@@ -774,6 +787,24 @@ const DIRICHLET_PLAICE = (to_vec, from_vec)
             let
                 f(x) = logdensityof(WrenDists.BatchedExponential(x), [0.5, 0.5, 0.5])
                 ADTestCase(f, [0.5, 1.0, 2.0], (), ())
+            end,
+        ),
+    )
+    test_dist(
+        "BatchedTDist",
+        WrenDists.BatchedTDist(FillArrays.Fill(4.0, 3), [1.0, 2.0, 3.0], [0.5, 1.0, 2.0]),
+        Distributions.product_distribution(
+            [1.0, 2.0, 3.0] .+ [0.5, 1.0, 2.0] .* Distributions.TDist(4.0),
+        );
+        test_batched=false,
+        test_reactant=false, # loop-based logdensityof is not traceable yet
+        other_ad_testcases=(
+            let
+                f(x) = logdensityof(
+                    WrenDists.BatchedTDist(FillArrays.Fill(4.0, 3), x[1:3], x[4:6]),
+                    [1.5, 2.5, 3.5],
+                )
+                ADTestCase(f, [1.0, 2.0, 3.0, 0.5, 1.0, 2.0], (), ())
             end,
         ),
     )
