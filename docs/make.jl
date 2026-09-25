@@ -1,3 +1,6 @@
+# Accept PalmerPenguins download
+ENV["DATADEPS_ALWAYS_ACCEPT"] = "true"
+
 using Pkg: Pkg
 
 using Wren

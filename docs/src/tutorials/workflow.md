@@ -5,23 +5,41 @@ Wren provides several functions to enable the Bayesian workflow.
 <!-- once we have HalfNormal or HalfCauchy, we could switch this to WrenDists -->
 
 ```@example workflow
-using Wren
-using Distributions
+using Wren, PalmerPenguins, DataFrames, FlexiChains
+using WrenDists: Normal, Exponential
+using StatsBase: denserank, fit, ZScoreTransform, reconstruct
 
-y = [28, 8, -3, 7, -1, 1, 18, 12]
-sigma = [15, 10, 16, 11, 9, 11, 10, 18]
-J = 8
+# Load data
+penguins = DataFrame(PalmerPenguins.load())
 
-@wren function eight_schools(y, sigma, J)
-    mu ~ Normal(0, 5)
-    tau ~ truncated(Cauchy(0, 5); lower=0)
-    @iid theta ~ Normal(mu, tau) size=J
-    for i in eachindex(y)
-        y[i] ~ Normal(theta[i], sigma[i])
+# Drop missing values first (this ensures that standardisation doesn't trip over)
+dropmissing!(penguins)
+
+# Fit standardisation transforms so we can unstandardise predictions later
+bill_zs = fit(ZScoreTransform, Float64.(penguins.bill_length_mm))
+mass_zs = fit(ZScoreTransform, Float64.(penguins.body_mass_g))
+
+# Tidy up the data
+standardize(x) = (x .- mean(x)) ./ std(x)
+transform!(penguins, names(penguins, Real) .=> standardize => identity)
+transform!(penguins, :species => denserank => :species_idx)
+
+# Save the mapping from species index (integer) to species name (string)
+species_names = sort(unique(penguins[!, [:species, :species_idx]]), :species_idx).species
+
+# Define a model for penguin bill length as a function of species and body mass
+@wren function bill_model(bill_length, species, body_mass)
+    n_species = length(unique(species))
+    @iid beta1 ~ Normal(0, 1) size=n_species
+    beta2 ~ Normal(0, 1)
+    sigma ~ Exponential(1)
+    mu = beta1[species] .+ beta2 .* body_mass
+    @batch for i in eachindex(bill_length)
+        bill_length[i] ~ Normal(mu[i], sigma)
     end
 end
 
-model = eight_schools(y, sigma, J);
+model = bill_model(penguins.bill_length_mm, penguins.species_idx, penguins.body_mass_g)
 ```
 
 <!-- Should we make a note about not being able to use `@observe` in conjunction with `condition`? Or did I confuse myself again and we actually can... idk. I got an error just now. -->
