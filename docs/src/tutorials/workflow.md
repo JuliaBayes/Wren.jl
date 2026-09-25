@@ -55,6 +55,25 @@ rand(model)
 <!-- Sampling an entire chain from the prior, checking summary stats, plotting the result using hist with nested quantile -->
 
 ```@example workflow
+colors = Makie.wong_colors()
+fig = Figure()
+ax = Axis(fig[1, 1], xlabel="body mass", ylabel="bill length")
+
+xs_z = -3:0.1:3
+
+# Draw 20 prior predictions for the slope of body mass
+for _ in 1:20
+    vnt = rand(model)
+    ys_z = vnt[@vn(beta2)] * xs_z
+    ys = reconstruct(bill_zs, ys_z)
+    xs = reconstruct(mass_zs, xs_z)
+    lines!(xs, ys, color=(colors[1], 0.6))
+end
+
+fig
+```
+
+```@example workflow
 chain_prior = prior(model, 1000, 4; progress=false)
 summarystats(chain_prior)
 ```
