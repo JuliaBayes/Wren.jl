@@ -10,8 +10,7 @@ We'll z-standardise the variables because it usually improves sampling efficienc
 
 ```@example workflow
 using Wren, PalmerPenguins, DataFrames, FlexiChains
-using Distributions: Normal, MvNormal, Exponential
-using LinearAlgebra: I
+using WrenDists: Normal, Exponential
 using StatsBase: denserank, fit, ZScoreTransform, reconstruct
 
 # Load data
