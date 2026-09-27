@@ -27,10 +27,12 @@ mass_zs = fit(ZScoreTransform, Float64.(penguins.body_mass_g))
 # Tidy up the data
 standardize(x) = (x .- mean(x)) ./ std(x)
 transform!(penguins, names(penguins, Real) .=> standardize => identity)
-transform!(penguins, :species => denserank => :species_idx);
+transform!(penguins, :species => denserank => :species_idx)
+nothing # hide
 ```
 
-Let's say we're interested in learning if a penguin's bill length increases with body mass, while taking into account that bill lengths between species might differ, too: 
+Let's say we're interested in learning if a penguin's bill length increases with body mass, while taking into account that bill lengths between species might differ, too.
+The model below uses [`@iid`](@ref iid) for the per-species intercepts and a [`@batch`](@ref batched) loop for the likelihood:
 
 ```@example workflow
 # Define a model for penguin bill length as a function of species and body mass
@@ -48,7 +50,7 @@ end
 
 ## Prior predictions
 
-We can now instatiate the Wren model and use it with `rand(model)` to draw from the prior:
+We can now instatiate the Wren model and use it with `rand(model)` to draw from the prior (see [Working with models](@ref models)):
 
 ```@example workflow
 model = bill_model(penguins.bill_length_mm, penguins.species_idx, penguins.body_mass_g)
@@ -60,23 +62,21 @@ rand(model)
     This is because it would prevent `bill_length` from being included in the prior draw `rand(model)`.
     The rest of the workflow shown here is compatible with `@observe`.
 
-<!-- awkward note because we're never using `@observe`, so the docs wouldn't break even if this claim became false in a future version -->
-
-Alternatively, we can create a `FlexiChain` that contains as many prior draws as we specify.
+Alternatively, we can use [`prior`](@ref) to create a [`FlexiChain`](@extref FlexiChains.FlexiChain) that contains as many prior draws as we specify, and summarise it with [`summarystats`](@extref FlexiChains :jl:method:`StatsBase.summarystats-Tuple{FlexiChains.FlexiChain}`).
 
 ```@example workflow
 chain_prior = prior(model, 1000, 4; progress=false)
-summarystats(chain_prior)
+summarystats(chain_prior[[@vn(beta1), @vn(beta2), @vn(sigma)]])
 ```
 
-While we could technically continue working with the chain, the `rand(model)` syntax lends itself nicely towards visualising individual samples from the prior distribution:
+While we could technically continue working with the chain, the `rand(model)` syntax lends itself nicely towards visualising individual samples from the prior distribution.
 
 ```@example workflow
 using CairoMakie
 
 colors = Makie.wong_colors()
 fig = Figure()
-ax = Axis(fig[1, 1], xlabel="body mass", ylabel="bill length")
+ax = Axis(fig[1, 1], xlabel="body mass (g)", ylabel="bill length (mm)")
 
 xs_z = -3:0.1:3
 
@@ -91,9 +91,10 @@ end
 
 fig
 ```
+You can read more about working with [`VarName`](@extref VarNames.VarName) and [`VarNamedTuple`](@extref VarNames.VarNamedTuple) in the [VarNames.jl docs](https://github.com/JuliaBayes/VarNames.jl).
 
 We may also want to check if the prior distribution of `bill_length` looks reasonable, i.e., that it doesn't include impossible values such as negative `bill_length`.
-The nested quantile histogram provided by `pushforward_hist` helps us check this:
+FlexiChains provides helpful functions here – first, we reconstruct the draws on the millimeter scale with [`transform_values`](@extref FlexiChains.transform_values) and then visualise the prior predictive distribution with [`pushforward_hist`](@extref FlexiChains.Makie.pushforward_hist):
 
 ```@example workflow
 using FlexiChains: transform_values
@@ -105,14 +106,15 @@ FlexiChains.Makie.pushforward_hist(
     chain_prior,
     @vn(bill_length);
     observed=observed,
-    axis=(; xlabel="bill_length_mm")
+    axis=(; xlabel="bill_length_mm", limits=((0, 100), nothing))
 )
 ```
 
 ## Conditioning on data
 
 Having had a look at the prior, we're now ready to condition the model on the observed data and sample from the posterior.
-Wren's default autodiff backend is Enzyme, so we need to make sure to import that first.
+Wren's default autodiff backend is Enzyme (see [Working with Enzyme](@ref enzyme)), so we need to make sure to import that first.
+Then we condition with `|` (see [`condition`](@ref)) and sample with [`nuts`](@ref):
 
 ```@example workflow
 import Enzyme
@@ -131,11 +133,15 @@ A posterior predictive check uses the fitted parameters and values of the covari
 This can be done with either the same covariate values used to fit the model, or with a new set of covariate values.
 A new set could either represent a hypothetical new group of penguins that we want to predict for, or help us visualise how `bill_length` changes with `body_mass`, resulting in a plot similar to the prior slope visualisation above.
 
-We'll begin with the former and predict for the same covariates we fit the model with:
+We'll begin with the former and use [`predict`](@ref) to predict for the same covariates we fit the model with:
 
 ```@example workflow
+chain_pred = predict(model, chain_post)
+chain_pred = transform_values(
+    chain_pred, @vn(bill_length) => (v -> reconstruct(bill_zs, v))
+)
 FlexiChains.Makie.pushforward_hist(
-    predict(model, chain_post),
+    chain_pred,
     @vn(bill_length);
     observed=observed,
     axis=(; xlabel="bill length (mm)")
@@ -144,11 +150,11 @@ FlexiChains.Makie.pushforward_hist(
 
 The model seems to capture the overall data-generating process well!
 
-Now let's see what the model learned about how `body_mass` relates to `bill_length`.
+Now let's see what the model learned about how `body_mass` relates to `bill_length`, by drawing single samples from the chain and extracting them with [`parameters`](@extref VarNames.parameters).
 
 ```@example workflow
 fig = Figure()
-ax = Axis(fig[1, 1], xlabel="body mass", ylabel="bill length")
+ax = Axis(fig[1, 1], xlabel="body mass (g)", ylabel="bill length (mm)")
 
 xs_z = -3:0.1:3
 
@@ -165,6 +171,3 @@ fig
 ```
 
 As we may have expected, more penguin means more bill!
-
-<!-- TODO once have `fix`, that should also go here -->
-

@@ -12,6 +12,7 @@ using DocumenterInterLinks
 
 links = InterLinks(
     "DynamicHMC" => "https://www.tamaspapp.eu/DynamicHMC.jl/dev/",
+    "FlexiChains" => "https://juliabayes.org/FlexiChains.jl/stable/",
     "Plaice" => "https://juliabayes.org/Plaice.jl/dev/",
     "VarNames" => "https://juliabayes.org/VarNames.jl/stable/",
 )
@@ -37,6 +38,7 @@ makedocs(;
             "tutorials/distributions.md",
             "tutorials/submodels.md",
             "tutorials/mcmc.md",
+            "tutorials/workflow.md",
         ],
         "Explanations" => [
             "explanations/enzyme.md",
