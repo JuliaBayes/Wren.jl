@@ -1,0 +1,12 @@
+[deps]
+ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+Wren = "bcabdda7-19af-429b-97ac-a6b557ca0f6c"
+WrenCore = "008b59e7-bbda-4991-901b-b08f5cfc584d"
+WrenDists = "2ad4af40-d7c9-42b2-92b0-e09d37d1e75a"
+
+[sources]
+Wren = {path = ".."}
+WrenCore = {path = "../../WrenCore"}
+WrenDists = {path = "../../WrenDists"}

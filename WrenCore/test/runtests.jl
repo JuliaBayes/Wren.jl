@@ -5,6 +5,8 @@ using Test
 @testset verbose=true "WrenCore.jl" begin
     include("expr.jl")
     include("syntax.jl")
+    include("space.jl")
+    include("sitenames.jl")
     include("batch/general.jl")
     include("batch/normal.jl")
     include("batch/bernoulli.jl")

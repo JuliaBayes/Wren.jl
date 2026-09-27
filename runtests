@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# Usage: ./runtests [core|dists|all] [julia args...]
+# Usage: ./runtests [core|wren|dists|all] [julia args...]
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
 TARGET="${1:-all}"
@@ -9,13 +9,18 @@ run_wrencore() {
     julia "$@" --project="$SCRIPT_DIR/WrenCore" -e "using Pkg; Pkg.test()"
 }
 
+run_wren() {
+    julia "$@" --project="$SCRIPT_DIR/Wren" -e "using Pkg; Pkg.test()"
+}
+
 run_wrendists() {
     julia "$@" --project="$SCRIPT_DIR/WrenDists" -e "using Pkg; Pkg.test()"
 }
 
 case "$TARGET" in
     core) run_wrencore "$@" ;;
+    wren) run_wren "$@" ;;
     dists) run_wrendists "$@" ;;
-    all) run_wrencore "$@" && run_wrendists "$@" ;;
-    *) echo "Usage: $0 [core|dists|all] [julia args...]" >&2; exit 1 ;;
+    all) run_wrencore "$@" && run_wren "$@" && run_wrendists "$@" ;;
+    *) echo "Usage: $0 [core|wren|dists|all] [julia args...]" >&2; exit 1 ;;
 esac
