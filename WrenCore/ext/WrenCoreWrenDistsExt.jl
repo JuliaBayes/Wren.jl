@@ -3,36 +3,44 @@ module WrenCoreWrenDistsExt
 using WrenCore: WrenCore
 using FillArrays: Fill
 using WrenDists:
-    WrenDist,
-    UnivariateDist,
-    MultivariateDist,
-    Independent,
-    Repeated,
-    Normal,
-    IIDNormal,
-    DiagNormal,
-    IsoNormal,
-    Bernoulli,
     BatchedBernoulli,
-    BernoulliLogit,
     BatchedBernoulliLogit,
-    Binomial,
+    BatchedBeta,
     BatchedBinomial,
-    BinomialLogit,
     BatchedBinomialLogit,
-    Categorical,
     BatchedCategorical,
-    Poisson,
-    BatchedPoisson,
-    LogPoisson,
-    BatchedLogPoisson,
-    Exponential,
     BatchedExponential,
-    LogNormal,
+    BatchedGamma,
     BatchedLogNormal,
-    TDist,
+    BatchedLogPoisson,
+    BatchedNegativeBinomial,
+    BatchedPoisson,
     BatchedTDist,
-    IIDTDist
+    BatchedWeibull,
+    Bernoulli,
+    BernoulliLogit,
+    Beta,
+    Binomial,
+    BinomialLogit,
+    Categorical,
+    DiagNormal,
+    Exponential,
+    Gamma,
+    IIDNormal,
+    IIDTDist,
+    Independent,
+    IsoNormal,
+    LogNormal,
+    LogPoisson,
+    MultivariateDist,
+    NegativeBinomial,
+    Normal,
+    Poisson,
+    Repeated,
+    TDist,
+    UnivariateDist,
+    Weibull,
+    WrenDist
 
 # Generic fallbacks
 WrenCore.iid(dist::WrenDist, dims::Dims) = Independent(Repeated(dist, dims))
@@ -127,13 +135,32 @@ function WrenCore.batched(
     return BatchedBinomialLogit(indexed_n.data, Fill(0.0, size(iters)))
 end
 
-# Two-parameter distributions: Binomial(n, p), BinomialLogit(n, logitp) and
-# LogNormal(mu, sigma). Constant arguments are stored as `Fill` arrays matching the shape
-# of the indexed argument.
+function WrenCore.batched(
+    iters,
+    ::Val{NegativeBinomial},
+    indexed_r::WrenCore.Indexed;
+    _kwargs...,
+)
+    return BatchedNegativeBinomial(indexed_r.data, Fill(0.5, size(iters)))
+end
+
+# One-parameter calls with unit scale.
+for (D, B) in ((:Gamma, :BatchedGamma), (:Weibull, :BatchedWeibull))
+    @eval function WrenCore.batched(iters, ::Val{$D}, indexed::WrenCore.Indexed; _kwargs...)
+        return $B(indexed.data, Fill(one(eltype(indexed.data)), size(iters)))
+    end
+end
+
+# Two-parameter distributions store constant arguments as `Fill` arrays matching the
+# shape of the indexed argument.
 for (D, B) in (
     (:Binomial, :BatchedBinomial),
     (:BinomialLogit, :BatchedBinomialLogit),
     (:LogNormal, :BatchedLogNormal),
+    (:Gamma, :BatchedGamma),
+    (:Beta, :BatchedBeta),
+    (:Weibull, :BatchedWeibull),
+    (:NegativeBinomial, :BatchedNegativeBinomial),
 )
     @eval begin
         function WrenCore.batched(

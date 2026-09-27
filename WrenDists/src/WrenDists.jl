@@ -3,11 +3,11 @@ module WrenDists
 using DensityInterface: DensityInterface, logdensityof
 using EnzymeCore: EnzymeCore, EnzymeRules, Annotation, Const
 using IrrationalConstants: invsqrt2, log2π, logπ, logtwo, sqrt2
-using LogExpFunctions: log1mexp, log1pexp, logistic, xlogy
+using LogExpFunctions: log1mexp, log1pexp, logistic, xlogy, xlog1py
 using LinearAlgebra: Diagonal, LowerTriangular, UniformScaling, diag
 using Random: Random, AbstractRNG
 using ReactantCore: within_compile
-using SpecialFunctions: erfc, erfcinv, gamma_inc, logbeta, logerfc, loggamma
+using SpecialFunctions: erfc, erfcinv, gamma_inc, logbeta, logerfc, loggamma, digamma
 using Plaice: Plaice
 using VarNames: VarNames
 include("common.jl")
@@ -50,6 +50,7 @@ include("univariate/categorical.jl")
 include("univariate/geometric.jl")
 include("univariate/poisson.jl")
 include("univariate/logpoisson.jl")
+include("univariate/negativebinomial.jl")
 
 # Plaice interface for univariate distributions
 include("univariate/plaice.jl")
@@ -64,10 +65,30 @@ include("multivariate/plaice.jl")
 
 export logdensityof
 
-export Normal, LogNormal, Exponential, Weibull, Uniform, Laplace, Cauchy, TDist, Gamma, Beta
-export HalfNormal, HalfCauchy, HalfTDist
-export Bernoulli, BernoulliLogit, Binomial, BinomialLogit, Categorical, Geometric
-export Poisson, LogPoisson
-export MvNormalScale, Dirichlet, Multinomial
+export Bernoulli,
+    BernoulliLogit,
+    Beta,
+    Binomial,
+    BinomialLogit,
+    Categorical,
+    Cauchy,
+    Dirichlet,
+    Exponential,
+    Gamma,
+    Geometric,
+    HalfCauchy,
+    HalfNormal,
+    HalfTDist,
+    Laplace,
+    LogNormal,
+    LogPoisson,
+    Multinomial,
+    MvNormalScale,
+    NegativeBinomial,
+    Normal,
+    Poisson,
+    TDist,
+    Uniform,
+    Weibull
 
 end # module WrenDists

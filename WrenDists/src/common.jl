@@ -13,6 +13,14 @@ Base.rand(d::WrenDist) = rand(Random.default_rng(), d)
 
 @inline select(cond::Bool, iftrue, iffalse) = cond ? iftrue() : iffalse()
 
+# Differentiating logbeta's recursive implementation allocates a tape per sample.
+_logbeta(a, b) = logbeta(a, b)
+EnzymeRules.@easy_rule(
+    _logbeta(a, b),
+    @setup(ψ = digamma(a + b)),
+    (digamma(a) - ψ, digamma(b) - ψ),
+)
+
 wrappedconditions(::Type) = false
 
 
