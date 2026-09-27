@@ -436,11 +436,11 @@ include("two_parameter.jl")
         end,),
     )
     test_dist(
-        "LogPoisson",
-        WrenDists.LogPoisson(log(7.0)),
+        "PoissonLog",
+        WrenDists.PoissonLog(log(7.0)),
         Distributions.Poisson(7.0);
         plaice_zero_allocs=UNIVARIATE_PLAICE,
-        other_ad_testcases=(let f(x) = logdensityof(WrenDists.LogPoisson(x[1]), 7)
+        other_ad_testcases=(let f(x) = logdensityof(WrenDists.PoissonLog(x[1]), 7)
             ADTestCase(f, [log(7.0)], (), ())
         end,),
     )
@@ -768,13 +768,13 @@ include("two_parameter.jl")
         ),
     )
     test_dist(
-        "BatchedLogPoisson",
-        WrenDists.BatchedLogPoisson(log.([1.0, 3.0, 7.0])),
+        "BatchedPoissonLog",
+        WrenDists.BatchedPoissonLog(log.([1.0, 3.0, 7.0])),
         Distributions.product_distribution(Distributions.Poisson.([1.0, 3.0, 7.0]));
         test_batched=false,
         other_ad_testcases=(
             let
-                f(x) = logdensityof(WrenDists.BatchedLogPoisson(x), [1.0, 2.0, 8.0])
+                f(x) = logdensityof(WrenDists.BatchedPoissonLog(x), [1.0, 2.0, 8.0])
                 ADTestCase(f, log.([1.0, 3.0, 7.0]), (), ())
             end,
         ),

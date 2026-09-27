@@ -46,10 +46,10 @@ WrenDists.BernoulliLogit
 WrenDists.Binomial
 WrenDists.BinomialLogit
 WrenDists.NegativeBinomial
+WrenDists.Poisson
+WrenDists.PoissonLog
 WrenDists.Categorical
 WrenDists.Geometric
-WrenDists.Poisson
-WrenDists.LogPoisson
 ```
 
 ## Multivariate

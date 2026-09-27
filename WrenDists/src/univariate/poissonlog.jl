@@ -1,24 +1,24 @@
 """
-    LogPoisson(logλ)
-    LogPoisson()
+    PoissonLog(logλ)
+    PoissonLog()
 
 Poisson distribution with rate `exp(logλ)` (default `logλ = 0.0`, i.e. rate 1.0).
 
 **Customised batched implementations**: Yes
 """
-struct LogPoisson{L<:Number} <: DiscreteUnivariateDist
+struct PoissonLog{L<:Number} <: DiscreteUnivariateDist
     logλ::L
 end
 
-LogPoisson() = LogPoisson(0.0)
+PoissonLog() = PoissonLog(0.0)
 
-Base.eltype(::Type{LogPoisson{L}}) where {L} = float(L)
+Base.eltype(::Type{PoissonLog{L}}) where {L} = float(L)
 
-@inline function insupport(d::LogPoisson, x::Number)
+@inline function insupport(d::PoissonLog, x::Number)
     return isinteger(x) & (x >= zero(x))
 end
 
-@inline function DensityInterface.logdensityof(d::LogPoisson, x::Number)
+@inline function DensityInterface.logdensityof(d::PoissonLog, x::Number)
     T = masstype(d, x)
     logλ, k = convert(T, d.logλ), convert(T, x)
     # Define `0 * log(0)` as zero, so `logλ = -Inf` puts all mass on zero.
@@ -33,16 +33,16 @@ end
     )
 end
 
-@inline Base.rand(rng::AbstractRNG, d::LogPoisson) = rand(rng, Poisson(exp(d.logλ)))
+@inline Base.rand(rng::AbstractRNG, d::PoissonLog) = rand(rng, Poisson(exp(d.logλ)))
 
-# --- Batched LogPoisson ---
+# --- Batched PoissonLog ---
 
-struct BatchedLogPoisson{L<:AbstractArray} <: DiscreteBatchedUnivariate
+struct BatchedPoissonLog{L<:AbstractArray} <: DiscreteBatchedUnivariate
     logλ::L
 end
-Base.size(d::BatchedLogPoisson) = size(d.logλ)
-Base.rand(rng::AbstractRNG, d::BatchedLogPoisson) = rand.(Ref(rng), LogPoisson.(d.logλ))
-function DensityInterface.logdensityof(d::BatchedLogPoisson, x)
+Base.size(d::BatchedPoissonLog) = size(d.logλ)
+Base.rand(rng::AbstractRNG, d::BatchedPoissonLog) = rand.(Ref(rng), PoissonLog.(d.logλ))
+function DensityInterface.logdensityof(d::BatchedPoissonLog, x)
     logλ = d.logλ
     return if within_compile()
         sum(@. x * logλ - exp(logλ) - loggamma(x + one(x)))

@@ -46,11 +46,11 @@ include("univariate/bernoulli.jl")
 include("univariate/bernoullilogit.jl")
 include("univariate/binomial.jl")
 include("univariate/binomiallogit.jl")
+include("univariate/negativebinomial.jl")
+include("univariate/poisson.jl")
+include("univariate/poissonlog.jl")
 include("univariate/categorical.jl")
 include("univariate/geometric.jl")
-include("univariate/poisson.jl")
-include("univariate/logpoisson.jl")
-include("univariate/negativebinomial.jl")
 
 # Plaice interface for univariate distributions
 include("univariate/plaice.jl")
@@ -81,12 +81,12 @@ export Bernoulli,
     HalfTDist,
     Laplace,
     LogNormal,
-    LogPoisson,
     Multinomial,
     MvNormalScale,
     NegativeBinomial,
     Normal,
     Poisson,
+    PoissonLog,
     TDist,
     Uniform,
     Weibull

@@ -19,6 +19,9 @@ VarNames = "09a315b2-63fc-4165-8d7f-d59368e770cc"
 [weakdeps]
 Reactant = "3c362404-f566-11ee-1572-e11a4b42c853"
 
+[sources]
+Plaice = {rev = "main", url = "https://github.com/JuliaBayes/Plaice.jl"}
+
 [extensions]
 WrenDistsReactantExt = "Reactant"
 

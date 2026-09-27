@@ -12,9 +12,9 @@ using WrenDists:
     BatchedExponential,
     BatchedGamma,
     BatchedLogNormal,
-    BatchedLogPoisson,
     BatchedNegativeBinomial,
     BatchedPoisson,
+    BatchedPoissonLog,
     BatchedTDist,
     BatchedWeibull,
     Bernoulli,
@@ -31,11 +31,11 @@ using WrenDists:
     Independent,
     IsoNormal,
     LogNormal,
-    LogPoisson,
     MultivariateDist,
     NegativeBinomial,
     Normal,
     Poisson,
+    PoissonLog,
     Repeated,
     TDist,
     UnivariateDist,
@@ -99,12 +99,12 @@ function WrenCore.batched(iters, ::Val{Normal}, indexed_mu::WrenCore.Indexed; _k
 end
 
 # Single-parameter distributions: Bernoulli(p[i]), Poisson(lambda[i]), Exponential(theta[i]),
-# and the logit/log-rate forms BernoulliLogit(logitp[i]), LogPoisson(loglambda[i])
+# and the logit/log-rate forms BernoulliLogit(logitp[i]), PoissonLog(loglambda[i])
 for (D, B) in (
     (:Bernoulli, :BatchedBernoulli),
     (:BernoulliLogit, :BatchedBernoulliLogit),
     (:Poisson, :BatchedPoisson),
-    (:LogPoisson, :BatchedLogPoisson),
+    (:PoissonLog, :BatchedPoissonLog),
     (:Exponential, :BatchedExponential),
 )
     @eval function WrenCore.batched(iters, ::Val{$D}, indexed::WrenCore.Indexed; _kwargs...)
