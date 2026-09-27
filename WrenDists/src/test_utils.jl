@@ -1,9 +1,16 @@
-using LinearAlgebra
-using Plaice
-using Enzyme: Enzyme
-using ForwardDiff: ForwardDiff
-using Mooncake: Mooncake
-using ReverseDiff: ReverseDiff
+# TODO(penelopeysm): use DIT.Scenario for this when the following is fixed:
+# https://github.com/JuliaDiff/DifferentiationInterface.jl/issues/1069
+struct ADTestCase{F,X,C,S}
+    f::F
+    x::X
+    contexts::C
+    skipped_adtypes::S
+end
+
+# Overloaded in extension
+function test_dist end
+test_dist_reactant(d, points) = nothing
+test_halft_quantile_reactant(d, us) = nothing
 
 # Test utilities for Plaice.test_all
 Plaice.is_continuous(::WrenDists.UnivariateDist) = true

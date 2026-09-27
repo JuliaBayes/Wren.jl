@@ -46,20 +46,28 @@ end
 
 function logdetfactor(d::MvNormalScale, ::Type{T}) where {T}
     R = float(T)
-    acc = zero(R)
-    for i in 1:length(d.μ)
-        acc += log(convert(R, d.L[i, i]))
+    return if within_compile()
+        sum(x -> log(convert(R, x)), diag(d.L))
+    else
+        acc = zero(R)
+        for i in 1:length(d.μ)
+            acc += log(convert(R, d.L[i, i]))
+        end
+        acc
     end
-    return acc
 end
 
 function logdetfactor(d::DiagMvNormalScale, ::Type{T}) where {T}
     R = float(T)
-    acc = zero(R)
-    for σ in d.L.diag
-        acc += log(convert(R, σ))
+    return if within_compile()
+        sum(σ -> log(convert(R, σ)), d.L.diag)
+    else
+        acc = zero(R)
+        for σ in d.L.diag
+            acc += log(convert(R, σ))
+        end
+        acc
     end
-    return acc
 end
 
 function logdetfactor(d::IsoMvNormalScale, ::Type{T}) where {T}
