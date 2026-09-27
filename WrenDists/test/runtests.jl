@@ -156,6 +156,8 @@ const UNIVARIATE_PLAICE = (from_vec, from_unconstrained_vec)
 const MULTIVARIATE_PLAICE = (to_vec, from_vec, to_unconstrained_vec, from_unconstrained_vec)
 const DIRICHLET_PLAICE = (to_vec, from_vec)
 
+include("two_parameter.jl")
+
 @testset "WrenDists" begin
     # Continuous unconstrained
     test_dist(

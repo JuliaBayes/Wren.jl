@@ -26,7 +26,15 @@ using WrenDists:
     BatchedLogNormal,
     TDist,
     BatchedTDist,
-    IIDTDist
+    IIDTDist,
+    Gamma,
+    BatchedGamma,
+    Beta,
+    BatchedBeta,
+    Weibull,
+    BatchedWeibull,
+    NegativeBinomial,
+    BatchedNegativeBinomial
 
 # Generic fallbacks
 WrenCore.iid(dist::WrenDist, dims::Dims) = Independent(Repeated(dist, dims))
@@ -108,9 +116,32 @@ function WrenCore.batched(iters, ::Val{Binomial}, indexed_n::WrenCore.Indexed; _
     return BatchedBinomial(indexed_n.data, Fill(0.5, size(iters)))
 end
 
-# Two-parameter distributions: Binomial(n, p) and LogNormal(mu, sigma). Constant arguments
-# are stored as `Fill` arrays matching the shape of the indexed argument.
-for (D, B) in ((:Binomial, :BatchedBinomial), (:LogNormal, :BatchedLogNormal))
+function WrenCore.batched(
+    iters,
+    ::Val{NegativeBinomial},
+    indexed_r::WrenCore.Indexed;
+    _kwargs...,
+)
+    return BatchedNegativeBinomial(indexed_r.data, Fill(0.5, size(iters)))
+end
+
+# One-parameter calls with unit scale.
+for (D, B) in ((:Gamma, :BatchedGamma), (:Weibull, :BatchedWeibull))
+    @eval function WrenCore.batched(iters, ::Val{$D}, indexed::WrenCore.Indexed; _kwargs...)
+        return $B(indexed.data, Fill(one(eltype(indexed.data)), size(iters)))
+    end
+end
+
+# Two-parameter distributions store constant arguments as `Fill` arrays matching the
+# shape of the indexed argument.
+for (D, B) in (
+    (:Binomial, :BatchedBinomial),
+    (:LogNormal, :BatchedLogNormal),
+    (:Gamma, :BatchedGamma),
+    (:Beta, :BatchedBeta),
+    (:Weibull, :BatchedWeibull),
+    (:NegativeBinomial, :BatchedNegativeBinomial),
+)
     @eval begin
         function WrenCore.batched(
             iters,

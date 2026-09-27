@@ -14,6 +14,7 @@ using Test
     include("batch/lognormal.jl")
     include("batch/categorical.jl")
     include("batch/tdist.jl")
+    include("batch/two_parameter.jl")
     include("batch/typestability.jl")
     include("aliasing.jl")
     include("submodel.jl")
