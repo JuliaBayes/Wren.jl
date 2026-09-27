@@ -10,12 +10,3 @@ function test_halft_quantile_reactant(d, us)
         @test Float64(f(d, u_ra)) ≈ WrenDists._halft_upper_quantile(d, u) rtol = 1e-10
     end
 end
-
-function test_dist_reactant(d, points)
-    x_ra = Reactant.to_rarray(first(points); track_numbers=true)
-    f = Reactant.@compile logdensityof(d, x_ra)
-    for x in points
-        x_ra = Reactant.to_rarray(x; track_numbers=true)
-        @test Float64(f(d, x_ra)) ≈ logdensityof(d, x)
-    end
-end

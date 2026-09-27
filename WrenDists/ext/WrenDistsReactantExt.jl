@@ -6,6 +6,7 @@ using WrenDists: gammaquantile_start, gammaquantile_step
 using WrenDists: tdistquantile_start, tdistquantile_step
 using Reactant: Reactant, TracedRNumber, TracedRArray, @trace
 using SpecialFunctions: SpecialFunctions, loggamma
+using Test
 
 WrenDists.basefloat(::Type{TracedRNumber{T}}) where {T} = WrenDists.basefloat(T)
 
@@ -64,6 +65,15 @@ function WrenDists.tdistlowerquantile_fixed(
         w = min(w - tdistquantile_step(ν, w, logp, logbeta_half), zero(w))
     end
     return sqrt(ν) * sinh(w)
+end
+
+function WrenDists.test_dist_reactant(d, points::AbstractVector)
+    x_ra = Reactant.to_rarray(first(points); track_numbers=true)
+    f = Reactant.@compile WrenDists.logdensityof(d, x_ra)
+    for x in points
+        x_ra = Reactant.to_rarray(x; track_numbers=true)
+        @test Float64(f(d, x_ra)) ≈ WrenDists.logdensityof(d, x)
+    end
 end
 
 # TODO(penelopeysm) This is piracy!! These were upstreamed in
