@@ -40,7 +40,6 @@ test_dist(
 #
 # test_dist(
 #     "Independent multiple types",
-#     WrenCore.independent(WrenDists.UnivariateDist[WrenDists.Normal(0.0, 1.0), WrenDists.Exponential(2.0), WrenDists.Beta(2.0, 3.0)]),
+#     WrenDists.Independent(WrenDists.UnivariateDist[WrenDists.Normal(0.0, 1.0), WrenDists.Exponential(2.0), WrenDists.Beta(2.0, 3.0)]),
 #     Distributions.product_distribution(Distributions.UnivariateDistribution[Distributions.Normal(0.0, 1.0), Distributions.Exponential(2.0), Distributions.Beta(2.0, 3.0)]);
-#     test_batched=false,
 # )

@@ -9,6 +9,7 @@ using Random: Random, AbstractRNG
 using ReactantCore: within_compile
 using SpecialFunctions: erfc, erfcinv, gamma_inc, logbeta, logerfc, loggamma, digamma
 using Plaice: Plaice
+using Test: @test
 using VarNames: VarNames
 include("common.jl")
 include("gammainc.jl")
@@ -62,6 +63,8 @@ include("multivariate/multinomial.jl")
 
 # Plaice interface for multivariate distributions
 include("multivariate/plaice.jl")
+
+include("plaice.jl")
 
 include("test_utils.jl")
 

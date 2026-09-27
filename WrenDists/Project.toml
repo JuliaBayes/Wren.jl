@@ -25,7 +25,7 @@ Reactant = "3c362404-f566-11ee-1572-e11a4b42c853"
 
 [extensions]
 WrenDistsReactantExt = "Reactant"
-WrenDistsTestExt = ["DifferentiationInterface", "Distributions"]
+WrenDistsTestUtils = ["DifferentiationInterface", "Distributions"]
 
 [compat]
 DensityInterface = "0.4"
