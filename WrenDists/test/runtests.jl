@@ -239,6 +239,118 @@ include("two_parameter.jl")
         end,),
     )
 
+    # Continuous positive, truncated at zero
+    for (μ, σ) in ((0.0, 2.0), (-1.5, 0.7), (1.0, 2.0))
+        test_dist(
+            "HalfNormal($μ,$σ)",
+            WrenDists.HalfNormal(μ, σ),
+            truncated(Distributions.Normal(μ, σ); lower=0);
+            plaice_zero_allocs=UNIVARIATE_PLAICE,
+            other_ad_testcases=(
+                let f(x) = logdensityof(WrenDists.HalfNormal(x[1], x[2]), 1.0)
+                    ADTestCase(f, [μ, σ], (), ())
+                end,
+            ),
+        )
+        test_dist(
+            "HalfCauchy($μ,$σ)",
+            WrenDists.HalfCauchy(μ, σ),
+            truncated(Distributions.Cauchy(μ, σ); lower=0);
+            plaice_zero_allocs=UNIVARIATE_PLAICE,
+            other_ad_testcases=(
+                let f(x) = logdensityof(WrenDists.HalfCauchy(x[1], x[2]), 1.0)
+                    ADTestCase(f, [μ, σ], (), ())
+                end,
+            ),
+        )
+    end
+    for (ν, μ, σ) in ((3.0, 0.0, 2.0), (3.5, -1.5, 0.7), (40.0, 1.0, 2.0))
+        test_dist(
+            "HalfTDist($ν,$μ,$σ)",
+            WrenDists.HalfTDist(ν, μ, σ),
+            truncated(μ + σ * Distributions.TDist(ν); lower=0);
+            plaice_zero_allocs=UNIVARIATE_PLAICE,
+            other_ad_testcases=(
+                let f(x) = logdensityof(WrenDists.HalfTDist(x[1], x[2], x[3]), 1.0)
+                    ADTestCase(f, [ν, μ, σ], (), ())
+                end,
+            ),
+        )
+    end
+
+    @testset "t distribution function" begin
+        # At `t = -1000` Distributions' log CDF is off by about 3e-11 against a `BigFloat`
+        # evaluation, so the far tail is only checked between the two paths below.
+        ts = (-3.0, -0.8, -1e-3, 0.0, 1e-3, 0.8, 3.0, 50.0)
+        # `loggamma(ν/2) - loggamma((ν + 1)/2)` cancels, costing digits as ν grows.
+        for (ν, rtol) in
+            ((1e-2, 1e-12), (1.0, 1e-12), (3.0, 1e-12), (1e2, 1e-12), (1e4, 1e-11))
+            for t in ts
+                reference = logcdf(Distributions.TDist(ν), t)
+                @test WrenDists.tdistlogcdf(ν, t, WrenDists.tdist_logbeta(ν)) ≈ reference rtol =
+                    rtol
+            end
+        end
+        for ν in (1e-2, 1.0, 3.0, 1e2, 1e4, 1e6), t in (-1e3, ts...)
+            logbeta_half = WrenDists.tdist_logbeta(ν)
+            @test WrenDists.tdistlogcdf_fixed(ν, t, logbeta_half) ≈
+                  WrenDists.tdistlogcdf(ν, t, logbeta_half) rtol = 1e-10
+        end
+    end
+
+    @testset "t distribution quantile" begin
+        #=
+          The quantile is checked by feeding it back through the distribution function.
+          A `ν` below one reaches `1e154`, where `t^2` overflows, a few nats down, so its
+          targets stay shallow.
+        =#
+        shallow = (-log(2), log(0.3), log(0.1))
+        deep = (shallow..., log(1e-3), -20.0, -100.0, -300.0)
+        cases = (
+            (1e-2, shallow, 1e-12),
+            (1.0, deep, 1e-12),
+            (3.0, deep, 1e-12),
+            (1e2, deep, 1e-12),
+            (1e4, deep, 1e-10),
+        )
+        for (ν, logps, rtol) in cases
+            logbeta_half = WrenDists.tdist_logbeta(ν)
+            for logp in logps
+                t = WrenDists.tdistlowerquantile(ν, logp, logbeta_half)
+                @test t <= 0
+                @test WrenDists.tdistlogcdf(ν, t, logbeta_half) ≈ logp rtol = rtol
+                @test WrenDists.tdistlowerquantile_fixed(ν, logp, logbeta_half) ≈ t rtol =
+                    1e-10
+            end
+        end
+    end
+
+    @testset "HalfTDist sampling" begin
+        us = (0.01, 0.1, 0.3, 0.5, 0.9, 0.99)
+        for (ν, μ, σ) in (
+            (3.0, 0.0, 2.0),
+            (3.5, -1.5, 0.7),
+            (40.0, 1.0, 2.0),
+            (1.0, 0.0, 1.0),
+            (3.0, -8.0, 1.0),
+        )
+            d = WrenDists.HalfTDist(ν, μ, σ)
+            mass = ccdf(Distributions.TDist(ν), -μ / σ)
+            xs = [WrenDists._halft_upper_quantile(d, u) for u in us]
+            for (u, x) in zip(us, xs)
+                @test x >= 0
+                @test ccdf(Distributions.TDist(ν), (x - μ) / σ) / mass ≈ u rtol = 1e-8
+            end
+            @test issorted(xs; rev=true)
+            # The whole mass lies above the draw at `u = 1`, which rounding can place
+            # either side of zero.
+            @test 0 <= WrenDists._halft_upper_quantile(d, 1.0) <= 1e-12 * σ
+            if RUN_REACTANT
+                test_halft_quantile_reactant(d, us)
+            end
+        end
+    end
+
     # Continuous bounded
     test_dist(
         "Beta",
@@ -303,6 +415,33 @@ include("two_parameter.jl")
         plaice_zero_allocs=UNIVARIATE_PLAICE,
         other_ad_testcases=(let f(x) = logdensityof(WrenDists.Geometric(x[1]), 3)
             ADTestCase(f, [0.3], (), ())
+        end,),
+    )
+    test_dist(
+        "BernoulliLogit",
+        WrenDists.BernoulliLogit(-0.4),
+        Distributions.BernoulliLogit(-0.4);
+        plaice_zero_allocs=UNIVARIATE_PLAICE,
+        other_ad_testcases=(let f(x) = logdensityof(WrenDists.BernoulliLogit(x[1]), 1)
+            ADTestCase(f, [-0.4], (), ())
+        end,),
+    )
+    test_dist(
+        "BinomialLogit",
+        WrenDists.BinomialLogit(20, -0.4),
+        Distributions.Binomial(20, inv(1 + exp(0.4)));
+        plaice_zero_allocs=UNIVARIATE_PLAICE,
+        other_ad_testcases=(let f(x) = logdensityof(WrenDists.BinomialLogit(20, x[1]), 8)
+            ADTestCase(f, [-0.4], (), ())
+        end,),
+    )
+    test_dist(
+        "PoissonLog",
+        WrenDists.PoissonLog(log(7.0)),
+        Distributions.Poisson(7.0);
+        plaice_zero_allocs=UNIVARIATE_PLAICE,
+        other_ad_testcases=(let f(x) = logdensityof(WrenDists.PoissonLog(x[1]), 7)
+            ADTestCase(f, [log(7.0)], (), ())
         end,),
     )
 
@@ -595,6 +734,48 @@ include("two_parameter.jl")
             let
                 f(x) = logdensityof(WrenDists.BatchedPoisson(x), [1.0, 2.0, 8.0])
                 ADTestCase(f, [1.0, 3.0, 7.0], (), ())
+            end,
+        ),
+    )
+    test_dist(
+        "BatchedBernoulliLogit",
+        WrenDists.BatchedBernoulliLogit([-1.4, 0.0, 1.4]),
+        Distributions.product_distribution(Distributions.BernoulliLogit.([-1.4, 0.0, 1.4]));
+        test_batched=false,
+        other_ad_testcases=(
+            let
+                f(x) = logdensityof(WrenDists.BatchedBernoulliLogit(x), [1.0, 0.0, 1.0])
+                ADTestCase(f, [-1.4, 0.0, 1.4], (), ())
+            end,
+        ),
+    )
+    test_dist(
+        "BatchedBinomialLogit",
+        WrenDists.BatchedBinomialLogit([5, 10, 20], [-1.4, 0.0, 1.4]),
+        Distributions.product_distribution(
+            Distributions.Binomial.([5, 10, 20], inv.(1 .+ exp.(-[-1.4, 0.0, 1.4]))),
+        );
+        test_batched=false,
+        test_reactant=false, # loop-based logdensityof is not traceable yet
+        other_ad_testcases=(
+            let
+                f(x) = logdensityof(
+                    WrenDists.BatchedBinomialLogit([5, 10, 20], x),
+                    [1.0, 4.0, 15.0],
+                )
+                ADTestCase(f, [-1.4, 0.0, 1.4], (), ())
+            end,
+        ),
+    )
+    test_dist(
+        "BatchedPoissonLog",
+        WrenDists.BatchedPoissonLog(log.([1.0, 3.0, 7.0])),
+        Distributions.product_distribution(Distributions.Poisson.([1.0, 3.0, 7.0]));
+        test_batched=false,
+        other_ad_testcases=(
+            let
+                f(x) = logdensityof(WrenDists.BatchedPoissonLog(x), [1.0, 2.0, 8.0])
+                ADTestCase(f, log.([1.0, 3.0, 7.0]), (), ())
             end,
         ),
     )

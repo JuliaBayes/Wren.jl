@@ -10,23 +10,46 @@ New implementations of vectorised log-densities are very much welcome!
 
 ## Univariate
 
+### Continuous unbounded
+
 ```@docs
 WrenDists.Normal
-WrenDists.LogNormal
-WrenDists.Exponential
-WrenDists.Weibull
-WrenDists.Uniform
 WrenDists.Laplace
 WrenDists.Cauchy
+WrenDists.TDist
+```
+
+### Continuous $\mathbb{R}^+$
+
+```@docs
+WrenDists.LogNormal
+WrenDists.Exponential
 WrenDists.Gamma
+WrenDists.Weibull
+WrenDists.HalfNormal
+WrenDists.HalfCauchy
+WrenDists.HalfTDist
+```
+
+### Continuous bounded
+
+```@docs
+WrenDists.Uniform
 WrenDists.Beta
+```
+
+### Discrete
+
+```@docs
 WrenDists.Bernoulli
+WrenDists.BernoulliLogit
 WrenDists.Binomial
+WrenDists.BinomialLogit
 WrenDists.NegativeBinomial
+WrenDists.Poisson
+WrenDists.PoissonLog
 WrenDists.Categorical
 WrenDists.Geometric
-WrenDists.Poisson
-WrenDists.TDist
 ```
 
 ## Multivariate

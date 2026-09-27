@@ -74,4 +74,71 @@ using WrenDists
     end
 end
 
+@testset "batch: WrenDists.BinomialLogit" begin
+    y = [1.0, 4.0, 3.0]
+    n = [5, 6, 7]
+
+    @testset "batched: BinomialLogit(n[i], a[i]) -> BatchedBinomialLogit" begin
+        @wren function na_batch(y, n)
+            a ~ WrenCore.iid(WrenDists.Normal(), 3)
+            @batch for i in 1:3
+                @observe y[i] ~ WrenDists.BinomialLogit(n[i], a[i])
+            end
+        end
+        @wren function na_nobatch(y, n)
+            a ~ WrenCore.iid(WrenDists.Normal(), 3)
+            for i in 1:3
+                @observe y[i] ~ WrenDists.BinomialLogit(n[i], a[i])
+            end
+        end
+        test_model_equivalence(na_batch(y, n), na_nobatch(y, n))
+    end
+
+    @testset "batched: BinomialLogit(n[i], const_a) -> BatchedBinomialLogit" begin
+        @wren function n_batch(y, n)
+            a ~ WrenDists.Normal()
+            @batch for i in 1:3
+                @observe y[i] ~ WrenDists.BinomialLogit(n[i], a)
+            end
+        end
+        @wren function n_nobatch(y, n)
+            a ~ WrenDists.Normal()
+            for i in 1:3
+                @observe y[i] ~ WrenDists.BinomialLogit(n[i], a)
+            end
+        end
+        test_model_equivalence(n_batch(y, n), n_nobatch(y, n))
+    end
+
+    @testset "batched: BinomialLogit(n[i]) -> BatchedBinomialLogit" begin
+        @wren function n_only_batch(y, n)
+            @batch for i in 1:3
+                @observe y[i] ~ WrenDists.BinomialLogit(n[i])
+            end
+        end
+        @wren function n_only_nobatch(y, n)
+            for i in 1:3
+                @observe y[i] ~ WrenDists.BinomialLogit(n[i])
+            end
+        end
+        test_model_equivalence(n_only_batch(y, n), n_only_nobatch(y, n))
+    end
+
+    @testset "batched: BinomialLogit(const_n, a[i]) -> BatchedBinomialLogit" begin
+        @wren function a_batch(y)
+            a ~ WrenCore.iid(WrenDists.Normal(), 3)
+            @batch for i in 1:3
+                @observe y[i] ~ WrenDists.BinomialLogit(10, a[i])
+            end
+        end
+        @wren function a_nobatch(y)
+            a ~ WrenCore.iid(WrenDists.Normal(), 3)
+            for i in 1:3
+                @observe y[i] ~ WrenDists.BinomialLogit(10, a[i])
+            end
+        end
+        test_model_equivalence(a_batch(y), a_nobatch(y))
+    end
+end
+
 end # module WrenBatchBinomialTests

@@ -3,38 +3,44 @@ module WrenCoreWrenDistsExt
 using WrenCore: WrenCore
 using FillArrays: Fill
 using WrenDists:
-    WrenDist,
-    UnivariateDist,
-    MultivariateDist,
-    Independent,
-    Repeated,
-    Normal,
-    IIDNormal,
-    DiagNormal,
-    IsoNormal,
-    Bernoulli,
     BatchedBernoulli,
-    Binomial,
-    BatchedBinomial,
-    Categorical,
-    BatchedCategorical,
-    Poisson,
-    BatchedPoisson,
-    Exponential,
-    BatchedExponential,
-    LogNormal,
-    BatchedLogNormal,
-    TDist,
-    BatchedTDist,
-    IIDTDist,
-    Gamma,
-    BatchedGamma,
-    Beta,
+    BatchedBernoulliLogit,
     BatchedBeta,
-    Weibull,
+    BatchedBinomial,
+    BatchedBinomialLogit,
+    BatchedCategorical,
+    BatchedExponential,
+    BatchedGamma,
+    BatchedLogNormal,
+    BatchedNegativeBinomial,
+    BatchedPoisson,
+    BatchedPoissonLog,
+    BatchedTDist,
     BatchedWeibull,
+    Bernoulli,
+    BernoulliLogit,
+    Beta,
+    Binomial,
+    BinomialLogit,
+    Categorical,
+    DiagNormal,
+    Exponential,
+    Gamma,
+    IIDNormal,
+    IIDTDist,
+    Independent,
+    IsoNormal,
+    LogNormal,
+    MultivariateDist,
     NegativeBinomial,
-    BatchedNegativeBinomial
+    Normal,
+    Poisson,
+    PoissonLog,
+    Repeated,
+    TDist,
+    UnivariateDist,
+    Weibull,
+    WrenDist
 
 # Generic fallbacks
 WrenCore.iid(dist::WrenDist, dims::Dims) = Independent(Repeated(dist, dims))
@@ -92,10 +98,13 @@ function WrenCore.batched(iters, ::Val{Normal}, indexed_mu::WrenCore.Indexed; _k
     return IsoNormal(indexed_mu.data, one(eltype(indexed_mu.data)))
 end
 
-# Single-parameter distributions: Bernoulli(p[i]), Poisson(lambda[i]), Exponential(theta[i])
+# Single-parameter distributions: Bernoulli(p[i]), Poisson(lambda[i]), Exponential(theta[i]),
+# and the logit/log-rate forms BernoulliLogit(logitp[i]), PoissonLog(loglambda[i])
 for (D, B) in (
     (:Bernoulli, :BatchedBernoulli),
+    (:BernoulliLogit, :BatchedBernoulliLogit),
     (:Poisson, :BatchedPoisson),
+    (:PoissonLog, :BatchedPoissonLog),
     (:Exponential, :BatchedExponential),
 )
     @eval function WrenCore.batched(iters, ::Val{$D}, indexed::WrenCore.Indexed; _kwargs...)
@@ -112,8 +121,17 @@ function WrenCore.batched(iters, ::Val{LogNormal}, indexed_mu::WrenCore.Indexed;
 end
 
 # Binomial(n[i]) -> BatchedBinomial(n, Fill(0.5, ...))
-function WrenCore.batched(iters, ::Val{Binomial}, indexed_n::WrenCore.Indexed; _kwargs...)
-    return BatchedBinomial(indexed_n.data, Fill(0.5, size(iters)))
+# BinomialLogit(n[i]) -> BatchedBinomialLogit(n, Fill(0.0, ...))
+for (D, B, p) in
+    ((:Binomial, :BatchedBinomial, 0.5), (:BinomialLogit, :BatchedBinomialLogit, 0.0))
+    @eval function WrenCore.batched(
+        iters,
+        ::Val{$D},
+        indexed_n::WrenCore.Indexed;
+        _kwargs...,
+    )
+        return $B(indexed_n.data, Fill($p, size(iters)))
+    end
 end
 
 function WrenCore.batched(
@@ -136,6 +154,7 @@ end
 # shape of the indexed argument.
 for (D, B) in (
     (:Binomial, :BatchedBinomial),
+    (:BinomialLogit, :BatchedBinomialLogit),
     (:LogNormal, :BatchedLogNormal),
     (:Gamma, :BatchedGamma),
     (:Beta, :BatchedBeta),

@@ -2,16 +2,17 @@ module WrenDists
 
 using DensityInterface: DensityInterface, logdensityof
 using EnzymeCore: EnzymeCore, EnzymeRules, Annotation, Const
-using IrrationalConstants: log2π, logπ, sqrt2
-using LogExpFunctions: log1mexp, xlogy, xlog1py
+using IrrationalConstants: invsqrt2, log2π, logπ, logtwo, sqrt2
+using LogExpFunctions: log1mexp, log1pexp, logistic, xlogy, xlog1py
 using LinearAlgebra: Diagonal, LowerTriangular, UniformScaling, diag
 using Random: Random, AbstractRNG
 using ReactantCore: within_compile
-using SpecialFunctions: digamma, erfcinv, gamma_inc, logbeta, loggamma
+using SpecialFunctions: erfc, erfcinv, gamma_inc, logbeta, logerfc, loggamma, digamma
 using Plaice: Plaice
 using VarNames: VarNames
 include("common.jl")
 include("gammainc.jl")
+include("betainc.jl")
 
 # Abstract types exist solely for Plaice dispatch purposes, nothing else!
 abstract type UnivariateDist <: WrenDist end
@@ -36,14 +37,20 @@ include("univariate/cauchy.jl")
 include("univariate/gamma.jl")
 include("univariate/tdist.jl")
 include("univariate/beta.jl")
+include("univariate/halfnormal.jl")
+include("univariate/halfcauchy.jl")
+include("univariate/halftdist.jl")
 
 # Univariate discrete
 include("univariate/bernoulli.jl")
+include("univariate/bernoullilogit.jl")
 include("univariate/binomial.jl")
+include("univariate/binomiallogit.jl")
+include("univariate/negativebinomial.jl")
+include("univariate/poisson.jl")
+include("univariate/poissonlog.jl")
 include("univariate/categorical.jl")
 include("univariate/geometric.jl")
-include("univariate/poisson.jl")
-include("univariate/negativebinomial.jl")
 
 # Plaice interface for univariate distributions
 include("univariate/plaice.jl")
@@ -58,8 +65,30 @@ include("multivariate/plaice.jl")
 
 export logdensityof
 
-export Normal, LogNormal, Exponential, Weibull, Uniform, Laplace, Cauchy, TDist, Gamma, Beta
-export Bernoulli, Binomial, Categorical, Geometric, Poisson, NegativeBinomial
-export MvNormalScale, Dirichlet, Multinomial
+export Bernoulli,
+    BernoulliLogit,
+    Beta,
+    Binomial,
+    BinomialLogit,
+    Categorical,
+    Cauchy,
+    Dirichlet,
+    Exponential,
+    Gamma,
+    Geometric,
+    HalfCauchy,
+    HalfNormal,
+    HalfTDist,
+    Laplace,
+    LogNormal,
+    Multinomial,
+    MvNormalScale,
+    NegativeBinomial,
+    Normal,
+    Poisson,
+    PoissonLog,
+    TDist,
+    Uniform,
+    Weibull
 
 end # module WrenDists
