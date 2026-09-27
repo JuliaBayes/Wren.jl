@@ -121,18 +121,17 @@ function WrenCore.batched(iters, ::Val{LogNormal}, indexed_mu::WrenCore.Indexed;
 end
 
 # Binomial(n[i]) -> BatchedBinomial(n, Fill(0.5, ...))
-function WrenCore.batched(iters, ::Val{Binomial}, indexed_n::WrenCore.Indexed; _kwargs...)
-    return BatchedBinomial(indexed_n.data, Fill(0.5, size(iters)))
-end
-
 # BinomialLogit(n[i]) -> BatchedBinomialLogit(n, Fill(0.0, ...))
-function WrenCore.batched(
-    iters,
-    ::Val{BinomialLogit},
-    indexed_n::WrenCore.Indexed;
-    _kwargs...,
-)
-    return BatchedBinomialLogit(indexed_n.data, Fill(0.0, size(iters)))
+for (D, B, p) in
+    ((:Binomial, :BatchedBinomial, 0.5), (:BinomialLogit, :BatchedBinomialLogit, 0.0))
+    @eval function WrenCore.batched(
+        iters,
+        ::Val{$D},
+        indexed_n::WrenCore.Indexed;
+        _kwargs...,
+    )
+        return $B(indexed_n.data, Fill($p, size(iters)))
+    end
 end
 
 function WrenCore.batched(

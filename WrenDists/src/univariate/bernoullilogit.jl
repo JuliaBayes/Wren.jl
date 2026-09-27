@@ -26,11 +26,8 @@ Base.eltype(::Type{BernoulliLogit{P}}) where {P} = float(P)
     )
 end
 
-@inline function Base.rand(rng::AbstractRNG, d::BernoulliLogit)
-    T = eltype(d)
-    u = rand(rng, noisetype(d))
-    return select(u < logistic(d.logitp), () -> one(T), () -> zero(T))
-end
+@inline Base.rand(rng::AbstractRNG, d::BernoulliLogit) =
+    rand(rng, Bernoulli(logistic(d.logitp)))
 
 # --- Batched BernoulliLogit ---
 
@@ -39,8 +36,7 @@ struct BatchedBernoulliLogit{P<:AbstractArray} <: DiscreteBatchedUnivariate
 end
 Base.size(d::BatchedBernoulliLogit) = size(d.logitp)
 function Base.rand(rng::AbstractRNG, d::BatchedBernoulliLogit)
-    T = float(eltype(d.logitp))
-    return T.(rand(rng, noisetype(d), size(d)) .< logistic.(d.logitp))
+    return rand(rng, BatchedBernoulli(logistic.(d.logitp)))
 end
 function DensityInterface.logdensityof(d::BatchedBernoulliLogit, x)
     η = d.logitp

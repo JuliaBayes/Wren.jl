@@ -35,14 +35,7 @@ end
 end
 
 @inline function Base.rand(rng::AbstractRNG, d::BinomialLogit)
-    T = eltype(d)
-    p = logistic(d.logitp)
-    s = zero(T)
-    for _ in 1:(d.n)
-        u = rand(rng, noisetype(d))
-        s += select(u < p, () -> one(T), () -> zero(T))
-    end
-    return s
+    return rand(rng, Binomial(d.n, logistic(d.logitp)))
 end
 
 # --- Batched BinomialLogit ---

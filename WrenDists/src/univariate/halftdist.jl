@@ -19,15 +19,20 @@ uniform noise value whatever `μ/σ` is.
 **Customised batched implementations**: Not yet (will fall back to a product of scalar
 distributions)
 """
-struct HalfTDist{V<:Number,M<:Number,S<:Number,L<:Number} <: PositiveUnivariateDist
+struct HalfTDist{V<:Number,M<:Number,S<:Number,B<:Number,P<:Number,L<:Number} <:
+       PositiveUnivariateDist
     ν::V
     μ::M
     σ::S
+    logbeta_half::B
+    logmass::P
     lognorm::L
     function HalfTDist(ν::Number, μ::Number, σ::Number)
         logbeta_half = tdist_logbeta(ν)
-        lognorm = log(σ) + log(ν) / 2 + logbeta_half + tdistlogcdf(ν, μ / σ, logbeta_half)
-        return new{typeof(ν),typeof(μ),typeof(σ),typeof(lognorm)}(ν, μ, σ, lognorm)
+        logmass = tdistlogcdf(ν, μ / σ, logbeta_half)
+        lognorm = log(σ) + log(ν) / 2 + logbeta_half + logmass
+        fields = (ν, μ, σ, logbeta_half, logmass, lognorm)
+        return new{map(typeof, fields)...}(fields...)
     end
 end
 
@@ -157,10 +162,8 @@ end
   draw a hair below zero, so it is clamped there.
 =#
 function _halft_upper_quantile(d::HalfTDist, u::Number)
-    ν, μ, σ = d.ν, d.μ, d.σ
-    logbeta_half = tdist_logbeta(ν)
-    logmass = d.lognorm - log(σ) - log(ν) / 2 - logbeta_half
-    logp = log(u) + logmass
+    ν, μ, σ, logbeta_half = d.ν, d.μ, d.σ, d.logbeta_half
+    logp = log(u) + d.logmass
     lower = logp <= -logtwo
     target = select(lower, () -> logp, () -> log1mexp(logp))
     t = tdistlowerquantile(ν, target, logbeta_half)
