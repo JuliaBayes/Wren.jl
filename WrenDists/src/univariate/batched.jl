@@ -9,8 +9,7 @@
 # Log densities are written as loops with a scalar accumulator, which Enzyme differentiates
 # several times faster than a broadcast (see bench/batch). Loop bodies are written out
 # directly rather than calling the scalar `logdensityof`, since its support checks slow
-# Enzyme down. Tracing tools such as Reactant cannot handle these loops; a broadcast form
-# for traced arrays is left for a Reactant extension.
+# Enzyme down.
 
 abstract type BatchedUnivariate <: MultivariateDist end
 abstract type DiscreteBatchedUnivariate <: DiscreteMultivariateDist end

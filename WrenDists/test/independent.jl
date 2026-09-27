@@ -1,3 +1,22 @@
+using WrenDists
+using WrenDists: logdensityof, test_dist, ADTestCase
+import DifferentiationInterface as DI
+using Distributions
+using ForwardDiff
+using ReverseDiff
+using Mooncake
+using Enzyme
+using Plaice
+using Test
+
+const RUN_REACTANT = !Sys.iswindows()
+
+if RUN_REACTANT
+    using Pkg
+    Pkg.add("Reactant")
+    using Reactant
+end
+
 # Independent
 test_dist(
     "Independent single type",

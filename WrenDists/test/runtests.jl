@@ -1,26 +1,4 @@
-using WrenDists
-using WrenDists: logdensityof, test_dist, ADTestCase
-using FillArrays
-import DifferentiationInterface as DI
-using Distributions
-using ForwardDiff
-using ReverseDiff
-using Mooncake
-using Enzyme
-using LinearAlgebra
-using Plaice
-using Random
 using Test
-
-const RUN_REACTANT = !Sys.iswindows()
-
-if RUN_REACTANT
-    include("reactant.jl")
-end
-
-const UNIVARIATE_PLAICE = (from_vec, from_unconstrained_vec)
-const MULTIVARIATE_PLAICE = (to_vec, from_vec, to_unconstrained_vec, from_unconstrained_vec)
-const DIRICHLET_PLAICE = (to_vec, from_vec)
 
 @testset "WrenDists" begin
     # Continuous unconstrained

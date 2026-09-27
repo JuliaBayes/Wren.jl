@@ -1,8 +1,28 @@
+using WrenDists
+using WrenDists: logdensityof, test_dist, ADTestCase
+import DifferentiationInterface as DI
+using Distributions
+using ForwardDiff
+using ReverseDiff
+using Mooncake
+using Enzyme
+using Plaice
+using Test
+using FillArrays
+
+const RUN_REACTANT = !Sys.iswindows()
+
+if RUN_REACTANT
+    using Pkg
+    Pkg.add("Reactant")
+    using Reactant
+end
+
 test_dist(
     "TDist",
     WrenDists.TDist(4.0, 1.0, 2.0),
     1.0 + 2.0 * Distributions.TDist(4.0);
-    plaice_zero_allocs=UNIVARIATE_PLAICE,
+    plaice_zero_allocs=(from_vec, from_unconstrained_vec),
     other_ad_testcases=(let f(x) = logdensityof(WrenDists.TDist(x[1], x[2], x[3]), 1.0)
         ADTestCase(f, [4.0, 1.0, 2.0], (), ())
     end,),
@@ -59,7 +79,6 @@ test_dist(
     Distributions.product_distribution(
         [1.0, 2.0, 3.0] .+ [0.5, 1.0, 2.0] .* Distributions.TDist(4.0),
     );
-    test_reactant=false, # loop-based logdensityof is not traceable yet
     other_ad_testcases=(
         let
             f(x) = logdensityof(

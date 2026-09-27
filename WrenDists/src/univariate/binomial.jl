@@ -21,9 +21,11 @@ Base.eltype(::Type{Binomial{N,P}}) where {N,P} = float(P)
     return isinteger(x) & (x >= zero(x)) & (x <= d.n)
 end
 
-@inline function logbinom(n::T, k::T) where {T<:Number}
-    nc, kc, mc = max(n, zero(T)), max(k, zero(T)), max(n - k, zero(T))
-    return loggamma(nc + one(T)) - loggamma(kc + one(T)) - loggamma(mc + one(T))
+@inline _clamp_to_nonneg(n::N) where {N<:Number} = max(n, zero(N))
+@inline _add_one(n::N) where {N<:Number} = n + one(N)
+@inline function logbinom(n::Number, k::Number)
+    nc, kc, mc = _clamp_to_nonneg(n), _clamp_to_nonneg(k), _clamp_to_nonneg(n - k)
+    return loggamma(_add_one(nc)) - loggamma(_add_one(kc)) - loggamma(_add_one(mc))
 end
 
 @inline function DensityInterface.logdensityof(d::Binomial, x::Number)

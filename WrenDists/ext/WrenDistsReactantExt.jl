@@ -68,11 +68,21 @@ function WrenDists.tdistlowerquantile_fixed(
 end
 
 function WrenDists.test_dist_reactant(d, points::AbstractVector)
+    d_ra = Reactant.to_rarray(d)
     x_ra = Reactant.to_rarray(first(points); track_numbers=true)
-    f = Reactant.@compile WrenDists.logdensityof(d, x_ra)
+    f = Reactant.@compile WrenDists.logdensityof(d_ra, x_ra)
     for x in points
         x_ra = Reactant.to_rarray(x; track_numbers=true)
-        @test Float64(f(d, x_ra)) ≈ WrenDists.logdensityof(d, x)
+        @test Float64(f(d_ra, x_ra)) ≈ WrenDists.logdensityof(d, x)
+    end
+end
+
+function WrenDists.test_halft_quantile_reactant(d::WrenDists.HalfTDist, us)
+    u_ra = Reactant.to_rarray(first(us); track_numbers=true)
+    f = Reactant.@compile WrenDists._halft_upper_quantile(d, u_ra)
+    for u in us
+        u_ra = Reactant.to_rarray(u; track_numbers=true)
+        @test Float64(f(d, u_ra)) ≈ WrenDists._halft_upper_quantile(d, u) rtol = 1e-10
     end
 end
 

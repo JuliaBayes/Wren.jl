@@ -64,8 +64,6 @@ include("multivariate/multinomial.jl")
 # Plaice interface for multivariate distributions
 include("multivariate/plaice.jl")
 
-include("plaice.jl")
-
 include("test_utils.jl")
 
 export logdensityof

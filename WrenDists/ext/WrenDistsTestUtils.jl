@@ -47,8 +47,8 @@ function WrenDists.test_dist(
     skipped_adtypes=(),
     other_ad_testcases=(),
 )
-    @testset "$name" begin
-        @info "Testing $name"
+    @testset "test_dist: $name" begin
+        @info "test_dist: $name"
 
         rng = Xoshiro(468)
 
