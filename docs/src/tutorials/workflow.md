@@ -132,7 +132,8 @@ A posterior predictive check uses the fitted parameters and values of the covari
 This can be done with either the same covariate values used to fit the model, or with a new set of covariate values.
 A new set could either represent a hypothetical new group of penguins that we want to predict for, or help us visualise how `bill_length` changes with `body_mass`, resulting in a plot similar to the prior slope visualisation above.
 
-We'll begin with the former and use [`predict`](@ref) to predict for the same covariates we fit the model with:
+We'll begin with the former and use [`predict`](@ref) to predict for the same covariates we fit the model with.
+`FlexiChains.pushforward_hist` then plots histograms for our posterior prediction and overlays the observed data, giving us an opportunity to spot if the two would clearly diverge:
 
 ```@example workflow
 chain_pred = predict(model, chain_post)
@@ -147,7 +148,7 @@ FlexiChains.Makie.pushforward_hist(
 )
 ```
 
-The model seems to capture the overall data-generating process well!
+The model seems to capture the distribution of the observed data well!
 
 Now let's see what the model learned about how `body_mass` relates to `bill_length`, by drawing single samples from the chain and extracting them with [`parameters`](@extref VarNames.parameters).
 
