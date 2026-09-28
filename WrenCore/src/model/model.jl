@@ -89,7 +89,7 @@ end
 function _dealias(v::AbstractArray{T}) where {T}
     return isbitstype(T) ? copy(v) : deepcopy(v)
 end
-_dealias(v) = deepcopy(v)
+_dealias(v::T) where {T} = isbitstype(T) ? v : deepcopy(v)
 # Models contain `Module`s, which can't be deepcopied. It is currently my belief that models
 # should be immutable (or at least pretend to be), and thus we should not need to deepcopy
 # models that are passed as arguments to models. However, this may need to be revisited.
