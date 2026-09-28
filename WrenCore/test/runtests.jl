@@ -21,6 +21,7 @@ using Test
     include("vecmodel.jl")
     include("draw.jl")
     include("ad.jl")
+    include("issues/132.jl")
 end
 
 end # module WrenCoreTests
