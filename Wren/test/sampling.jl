@@ -4,6 +4,7 @@ module WrenSamplingTests
 
 using Wren
 using Wren.Dists
+using FlexiChains: FlexiChains
 using Random: Xoshiro
 using ForwardDiff: ForwardDiff
 using Test
@@ -65,9 +66,13 @@ end
                 nuts(rng, m, niters, nchains; adtype=AutoForwardDiff(), progress=false),
             "prior" => (rng, m) -> prior(rng, m, niters, nchains; progress=false),
         )
-            x = sampler(Xoshiro(468), model)[@vn(x)]
+            chn1 = sampler(Xoshiro(468), model)
+            chn2 = sampler(Xoshiro(468), model)
+            @test FlexiChains.has_same_data(chn1, chn2)
+            chn3 = sampler(Xoshiro(469), model)
+            @test !FlexiChains.has_same_data(chn1, chn3)
+            x = chn1[@vn(x)]
             @test size(x) == (niters, nchains)
-            @test sampler(Xoshiro(468), model)[@vn(x)] == x
             @test x[:, 1] != x[:, 2]
         end
     end
