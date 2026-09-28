@@ -1,5 +1,7 @@
 # A crude, syntax-level, dataflow analysis for Sample statements in Wren model bodies.
 
+using Accessors: Accessors
+
 get_used_symbols(::Any) = Set{Symbol}() # literals etc
 get_used_symbols(::QuoteNode) = Set{Symbol}()
 get_used_symbols(symbol::Symbol) = Set([symbol])
@@ -68,20 +70,49 @@ function parse_variables!(
     return nothing
 end
 function parse_variables!(expr::WrenExpr, lhs_syms::Set{Symbol}, required_syms::Set{Symbol})
-    # TODO(penelopeysm): Handle for/while control flow VERY carefully! See description in
-    # PR.
-    if expr.head == :for || expr.head == :while
-        _issue_error("uhoh")
-    end
-
-    # TODO(penelopeysm): This is very generic and thus suboptimal. For example, `x = 2` will
-    # reassign to 2 and thus `x` should not be considered as reused. We could definitely do
-    # better here. However, the current implementation is still technically correct, just a
-    # bit conservative - so we can leave the optimisations to the future.
+    # TODO(penelopeysm): This is very generic and thus suboptimal. For example:
+    #
+    #  - `x = 2` will reassign to 2 and thus `x` should not be considered as reused.
+    #
+    #  - if/elseif/else branches are mutually exclusive, so uses of a symbol in the if
+    #    branch should not be considered as reusing a symbol in the else branch. e.g.
+    #
+    #        @wren function g()
+    #            if x
+    #                a ~ Normal()
+    #            else
+    #                b = a  # Should not count as a use of `a` in the if branch.
+    #            end
+    #        end
+    #
+    # We could definitely do better here. However, the current implementation is still
+    # technically correct, just a bit conservative - so we can leave the optimisations to
+    # the future.
     for arg in expr.args
         parse_variables!(arg, lhs_syms, required_syms)
     end
+    # For and while loops have to be traversed twice to make sure we pick up edges between
+    # different iterations of the loop. See e.g. discussion in
+    # https://github.com/JuliaBayes/Wren.jl/pull/124.
+    if expr.head in (:for, :while)
+        for arg in expr.args
+            parse_variables!(arg, lhs_syms, required_syms)
+        end
+    end
     return nothing
+end
+
+reconstruct_statement(@nospecialize(x::Any), ::Set{Symbol}) = x
+function reconstruct_statement(stmt::Sample, required_syms::Set{Symbol})
+    return Accessors.@set stmt.lhs_is_reused = stmt.lhs_top_level_symbol in required_syms
+end
+reconstruct_statement(stmt::Observe, required_syms::Set{Symbol}) = stmt
+function reconstruct_statement(stmt::IID, required_syms::Set{Symbol})
+    return Accessors.@set stmt.tilde = reconstruct_statement(stmt.tilde, required_syms)
+end
+function reconstruct_statement(expr::WrenExpr, required_syms::Set{Symbol})
+    new_args = map(arg -> reconstruct_statement(arg, required_syms), expr.args)
+    return WrenExpr(expr.head, new_args)
 end
 
 function run_dataflow_analysis(stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}})
@@ -101,6 +132,6 @@ function run_dataflow_analysis(stmts::Vector{Union{AbstractWrenExpr,LineNumberNo
         @info "[dataflow.jl] required_syms = $(required_syms)"
     end
 
-    # TODO: change this (obvs)
-    return stmts
+    new_stmts = map(stmt -> reconstruct_statement(stmt, required_syms), stmts)
+    return Vector{Union{AbstractWrenExpr,LineNumberNode}}(new_stmts)
 end
