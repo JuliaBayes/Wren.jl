@@ -91,10 +91,19 @@ function parse_variables!(expr::WrenExpr, lhs_syms::Set{Symbol}, required_syms::
     for arg in expr.args
         parse_variables!(arg, lhs_syms, required_syms)
     end
-    # For and while loops have to be traversed twice to make sure we pick up edges between
-    # different iterations of the loop. See e.g. discussion in
+
+    # For and while loop bodies have to be traversed twice to make sure we pick up edges
+    # between different iterations of the loop. See e.g. discussion in
     # https://github.com/JuliaBayes/Wren.jl/pull/124.
-    if expr.head in (:for, :while)
+    if expr.head === :for
+        # For a `for` loop, the loop iters (`expr.args[1]`) are only evaluated once at the
+        # beginning of the loop, so we can skip it.
+        for arg in expr.args[2:end]
+            parse_variables!(arg, lhs_syms, required_syms)
+        end
+    elseif expr.head === :while
+        # For a `while` loop the condition is evaluated on every iteration so we need to
+        # include it.
         for arg in expr.args
             parse_variables!(arg, lhs_syms, required_syms)
         end
