@@ -68,6 +68,12 @@ function parse_variables!(
     return nothing
 end
 function parse_variables!(expr::WrenExpr, lhs_syms::Set{Symbol}, required_syms::Set{Symbol})
+    # TODO(penelopeysm): Handle for/while control flow VERY carefully! See description in
+    # PR.
+    if expr.head == :for || expr.head == :while
+        _issue_error("uhoh")
+    end
+
     # TODO(penelopeysm): This is very generic and thus suboptimal. For example, `x = 2` will
     # reassign to 2 and thus `x` should not be considered as reused. We could definitely do
     # better here. However, the current implementation is still technically correct, just a
