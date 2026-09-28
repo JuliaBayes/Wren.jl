@@ -16,6 +16,8 @@ function _issue_error(str)
     )
 end
 
+const WREN_COMPILATION_DEBUG = Ref(false)
+
 # Parameter spaces
 include("space.jl")
 
