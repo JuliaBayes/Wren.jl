@@ -89,12 +89,6 @@ end
         @test isempty(setdiff(Set(keys(chn)), Set(keys(pdns))))
     end
 
-    @testset "include_all=false" begin
-        pdns = predict(f(zeros(2)), chn; include_all=false)
-        # Check that the only parameter in the chain is the prediction for y.
-        @test only(Set(parameters(pdns))) == @vn(y)
-    end
-
     @testset "indices are preserved" begin
         pdns = predict(f(zeros(2)), chn[iter=501:1000])
         @test FlexiChains.iter_indices(pdns) == 501:1000

@@ -11,8 +11,7 @@ using WrenCore: WrenCore
     predict(
         [rng::Random.AbstractRNG=Random.default_rng(),]
         model::WrenCore.Model,
-        chain::FlexiChains.VNChain;
-      ,
+        chain::FlexiChains.VNChain,
     ) -> FlexiChains.VNChain
 
 Draw predictions from `model` for all iterations in `chain`.
@@ -33,10 +32,8 @@ function StatsAPI.predict(rng::AbstractRNG, model::WrenCore.Model, chain::VNChai
         WrenCore.LogPriorAccumulator(),
         WrenCore.LogLikelihoodAccumulator(),
     )
-    param_values = FlexiChains.parameters_at(chain)
-    existing_vns = Set(parameters(chain))
     fallback = WrenCore.FromPrior(rng)
-    results = WrenCore.reevaluate(model, param_values, accs, fallback)
+    results = _reevaluate(model, chain, accs, fallback)
     draws = Draw.(last.(results))
     preds = AbstractMCMC.from_samples(VNChain, draws)
     preds = FlexiChains.renumber_iters(preds, FlexiChains.iter_indices(chain))
@@ -48,8 +45,19 @@ function StatsAPI.predict(model::WrenCore.Model, chain::VNChain)
     return StatsAPI.predict(default_rng(), model, chain)
 end
 
+function _reevaluate(model::WrenCore.Model, chain::VNChain, accs, fallback=nothing)
+    return map(FlexiChains.parameters_at(chain)) do vnt
+        WrenCore.evaluate(
+            model,
+            WrenCore.FromParams(vnt, fallback),
+            WrenCore.OriginalSpace(),
+            map(WrenCore.reset, accs),
+        )
+    end
+end
+
 function _pointwise_logp(get_logp, model::WrenCore.Model, chain::VNChain, accs)
-    results = WrenCore.reevaluate(model, FlexiChains.parameters_at(chain), accs)
+    results = _reevaluate(model, chain, accs)
     return map(retval_and_accs -> get_logp(last(retval_and_accs)), results)
 end
 
