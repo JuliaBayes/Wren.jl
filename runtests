@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# Usage: ./runtests [core|dists|all] [julia args...]
+# Usage: ./runtests [core|dists|wren|all] [julia args...]
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
 TARGET="${1:-all}"
@@ -17,5 +17,5 @@ case "$TARGET" in
     core) run_wrencore "$@" ;;
     dists) run_wrendists "$@" ;;
     all) run_wrencore "$@" && run_wrendists "$@" ;;
-    *) echo "Usage: $0 [core|dists|all] [julia args...]" >&2; exit 1 ;;
+    *) echo "Usage: $0 [core|dists|wren|all] [julia args...]" >&2; exit 1 ;;
 esac

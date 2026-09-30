@@ -101,6 +101,7 @@ export @wren,
     apply_parameter_space,
     condition,
     conditioned,
+    decondition,
     iid,
     independent,
     rand_with_logp,
@@ -128,8 +129,8 @@ export @vn, @vnt, VarNamedTuple, VarName, Draw, parameters, extras
 using DensityInterface: logdensityof
 export logdensityof
 
-using StatsAPI: loglikelihood
-export loglikelihood
+using StatsAPI: loglikelihood, predict
+export loglikelihood, predict
 
 using DifferentiationInterface: AutoForwardDiff, AutoReverseDiff, AutoMooncake, AutoEnzyme
 export AutoForwardDiff, AutoReverseDiff, AutoMooncake, AutoEnzyme
