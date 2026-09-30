@@ -202,7 +202,7 @@ function _unindex(indexed::Indexed{D,N,<:AbstractArray{T,N}}, i) where {D,N,T}
     return selectdim(indexed.data, D, i)
 end
 function _unindex(indexed::Indexed, i)
-    _issue_error("cannot safely unindex type $(typeof(indexed))")
+    @_issue_error("cannot safely unindex type $(typeof(indexed))")
 end
 function batched(iters::I, ::Val{F}, args...; kwargs...) where {I,F}
     # Default fallback for batching-unaware calls

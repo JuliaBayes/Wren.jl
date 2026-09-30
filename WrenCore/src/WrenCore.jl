@@ -10,13 +10,8 @@ using Random: AbstractRNG, default_rng
 using VarNames: VarNames, varname, VarName, VarNamedTuple, vnt_pretty_print
 using StatsAPI: StatsAPI
 
-function _issue_error(str)
-    error(
-        "$str.\n\nPlease report this issue at https://github.com/JuliaBayes/Wren.jl/issues. Thank you!\n",
-    )
-end
-
-const WREN_COMPILATION_DEBUG = Ref(false)
+# Debugging and error helpers
+include("debug.jl")
 
 # Parameter spaces
 include("space.jl")
