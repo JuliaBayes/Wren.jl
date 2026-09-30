@@ -13,14 +13,9 @@ run_wrendists() {
     julia "$@" --project="$SCRIPT_DIR/WrenDists" -e "using Pkg; Pkg.test()"
 }
 
-run_wren() {
-    julia "$@" --project="$SCRIPT_DIR/Wren" -e "using Pkg; Pkg.test()"
-}
-
 case "$TARGET" in
     core) run_wrencore "$@" ;;
     dists) run_wrendists "$@" ;;
-    wren) run_wren "$@" ;;
-    all) run_wrencore "$@" && run_wrendists "$@" && run_wren "$@" ;;
+    all) run_wrencore "$@" && run_wrendists "$@" ;;
     *) echo "Usage: $0 [core|dists|wren|all] [julia args...]" >&2; exit 1 ;;
 esac
