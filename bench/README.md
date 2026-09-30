@@ -43,8 +43,9 @@ Pkg.add(["ADTypes", "Chairmarks", "Distributions", "Enzyme", "ForwardDiff", "Rea
 include("halfdists/run.jl")
 ```
 
-Set `WREN_BENCH_NS` (default `1,1000`), `WREN_BENCH_SECONDS` (`1.0`), and
-`WREN_BENCH_BACKENDS` (`enzyme,reactant`). Models differentiate samples with fixed
+Set `WREN_BENCH_NS` (default `1,1000`), `WREN_BENCH_SECONDS` (`1.0`),
+`WREN_BENCH_BACKENDS` (`enzyme,reactant`), and `WREN_BENCH_DEVICE` (`auto`, `cpu`, or
+`gpu`; default `auto`) for Reactant. Models differentiate samples with fixed
 distribution parameters. Reactant timings include host transfers and name the actual
 device. Allocations measure host memory. `construct+density` creates one distribution
 for all `N` observations.

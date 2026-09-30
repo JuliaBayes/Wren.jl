@@ -18,6 +18,7 @@ using WrenDists: WrenDists as WD
 const NS = parse.(Int, split(get(ENV, "WREN_BENCH_NS", "1,1000"), ","))
 const SECONDS = parse(Float64, get(ENV, "WREN_BENCH_SECONDS", "1.0"))
 const BACKENDS = split(get(ENV, "WREN_BENCH_BACKENDS", "enzyme,reactant"), ",")
+const DEVICE = get(ENV, "WREN_BENCH_DEVICE", "auto")
 const ENZYME = AutoEnzyme(; mode=Reverse)
 const ADTYPES = Dict("enzyme" => ENZYME, "reactant" => AutoReactant(ENZYME))
 
@@ -101,10 +102,11 @@ function benchmark_model(Dist, params, N, xs)
     source = FromParams(VarNamedTuple(x=xs), nothing)
     d_ref = reference(Dist, params...)
     # Both distributions use the log transform on [0, ∞), including its Jacobian.
-    reference_lp(z) = sum(t -> logpdf(d_ref, exp(t)) + t, z)
+    reference_term(t) = logpdf(d_ref, exp(t)) + t
     z = log.(xs)
-    expected = reference_lp(z)
-    expected_grad = ForwardDiff.gradient(reference_lp, z)
+    expected = sum(reference_term, z)
+    # Each observation depends on one coordinate, so scalar AD gives the full gradient.
+    expected_grad = ForwardDiff.derivative.(reference_term, z)
     for backend in BACKENDS
         adtype = ADTYPES[backend]
         vm = VecModel(model, adtype; latent_source=source)
@@ -120,6 +122,7 @@ function benchmark_model(Dist, params, N, xs)
 end
 
 function main()
+    DEVICE == "auto" || Reactant.set_default_backend(DEVICE)
     println("Julia: ", VERSION, " (", Threads.nthreads(), " threads)")
     println("CPU: ", Sys.cpu_info()[1].model)
     println("Revision: ", readchomp(`git -C $(joinpath(@__DIR__, "../..")) rev-parse HEAD`))
