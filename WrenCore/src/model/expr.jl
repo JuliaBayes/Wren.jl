@@ -9,7 +9,7 @@ function get_top_level_symbol(expr::Expr)
     elseif Meta.isexpr(expr, :.)
         get_top_level_symbol(expr.args[1])
     else
-        WrenCore.@_issue_error("get_top_level_symbol: unhandled expression $(expr)")
+        WrenCore.@wren_error "get_top_level_symbol: unhandled expression $(expr)"
     end
 end
 
