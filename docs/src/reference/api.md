@@ -10,4 +10,3 @@ logjoint
 loglikelihood
 logprior
 ```
-

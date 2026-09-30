@@ -314,11 +314,11 @@ sums = sum(x, dims=2)
 end
 ```
 
-Equivalently, for the Poisson case, Wren will hopefully one day provide `LogPoisson` which allows you to pass `log(lambda)` directly, so you can write
+Or equivalently, for the Poisson case, Wren also provides `PoissonLog` which allows you to pass `log(lambda)` directly, so you can write
 
 ```julia
 @batch for i in 1:N
-    y[i] ~ LogPoisson(x[i]) # instead of Poisson(exp(x[i]))
+    y[i] ~ PoissonLog(x[i]) # instead of Poisson(exp(x[i]))
 end
 ```
 

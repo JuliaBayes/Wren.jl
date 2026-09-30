@@ -1,10 +1,12 @@
 module WrenDistsReactantExt
 
-using WrenDists: WrenDists, GAMMAINC_TERMS, GAMMAQUANTILE_STEPS
+using WrenDists: WrenDists, GAMMAINC_TERMS, GAMMAQUANTILE_STEPS, TDISTQUANTILE_STEPS
 using WrenDists: basefloat, floortiny, select
 using WrenDists: gammaquantile_start, gammaquantile_step
+using WrenDists: tdistquantile_start, tdistquantile_step
 using Reactant: Reactant, TracedRNumber, TracedRArray, @trace
 using SpecialFunctions: SpecialFunctions, loggamma
+using Test
 
 WrenDists.basefloat(::Type{TracedRNumber{T}}) where {T} = WrenDists.basefloat(T)
 
@@ -51,6 +53,37 @@ function WrenDists.gammalogquantile_fixed(a::T, p::T) where {T<:TracedRNumber}
         u = u - gammaquantile_step(a, lg, u, exp(u), lower, target)
     end
     return u
+end
+
+function WrenDists.tdistlowerquantile_fixed(
+    ν::Number,
+    logp::TracedRNumber,
+    logbeta_half::Number,
+)
+    w = tdistquantile_start(ν, logp)
+    @trace for k in 1:TDISTQUANTILE_STEPS
+        w = min(w - tdistquantile_step(ν, w, logp, logbeta_half), zero(w))
+    end
+    return sqrt(ν) * sinh(w)
+end
+
+function WrenDists.test_dist_reactant(d, points::AbstractVector)
+    d_ra = Reactant.to_rarray(d)
+    x_ra = Reactant.to_rarray(first(points); track_numbers=true)
+    f = Reactant.@compile WrenDists.logdensityof(d_ra, x_ra)
+    for x in points
+        x_ra = Reactant.to_rarray(x; track_numbers=true)
+        @test Float64(f(d_ra, x_ra)) ≈ WrenDists.logdensityof(d, x)
+    end
+end
+
+function WrenDists.test_halft_quantile_reactant(d::WrenDists.HalfTDist, us)
+    u_ra = Reactant.to_rarray(first(us); track_numbers=true)
+    f = Reactant.@compile WrenDists._halft_upper_quantile(d, u_ra)
+    for u in us
+        u_ra = Reactant.to_rarray(u; track_numbers=true)
+        @test Float64(f(d, u_ra)) ≈ WrenDists._halft_upper_quantile(d, u) rtol = 1e-10
+    end
 end
 
 # TODO(penelopeysm) This is piracy!! These were upstreamed in

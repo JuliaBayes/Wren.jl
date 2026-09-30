@@ -13,11 +13,15 @@ Base.eltype(::Type{Categorical{V}}) where {V} = float(eltype(V))
 
 @inline function massat(d::Categorical, x::Number)
     T = masstype(d, x)
-    m = zero(T)
-    for (i, pᵢ) in enumerate(d.p)
-        m += select(x == i, () -> convert(T, pᵢ), () -> zero(T))
+    return if within_compile()
+        convert(T, sum(d.p .* ((1:length(d.p)) .== x)))
+    else
+        m = zero(T)
+        for (i, pᵢ) in enumerate(d.p)
+            m += select(x == i, () -> convert(T, pᵢ), () -> zero(T))
+        end
+        m
     end
-    return m
 end
 
 @inline function DensityInterface.logdensityof(d::Categorical, x::Number)

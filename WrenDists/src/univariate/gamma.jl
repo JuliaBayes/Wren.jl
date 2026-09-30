@@ -5,8 +5,7 @@
 
 Gamma distribution with shape `α` (default 1.0) and scale `θ` (default 1.0).
 
-**Customised batched implementations**: Not yet (will fall back to a product of scalar
-distributions)
+**Customised batched implementations**: Yes
 """
 struct Gamma{A<:Number,T<:Number} <: PositiveUnivariateDist
     α::A
@@ -127,3 +126,40 @@ end
 @inline function Base.rand(rng::AbstractRNG, d::Gamma)
     return _gamma_quantile(d, rand(rng, noisetype(d)))
 end
+
+# --- Batched Gamma ---
+
+struct BatchedGamma{A<:AbstractArray,T<:AbstractArray} <: BatchedUnivariate
+    α::A
+    θ::T
+end
+Base.size(d::BatchedGamma) = size(d.α)
+Base.rand(rng::AbstractRNG, d::BatchedGamma) = rand.(Ref(rng), Gamma.(d.α, d.θ))
+function DensityInterface.logdensityof(d::BatchedGamma, x)
+    α, θ = d.α, d.θ
+    T = float(promote_type(eltype(x), eltype(α), eltype(θ)))
+    return if within_compile()
+        sum(
+            @. ifelse(
+                isfinite(x) & (x >= zero(x)),
+                ifelse(
+                    (x == zero(x)) & (α == one(α)),
+                    -log(θ),
+                    (α - one(α)) * log(abs(x)) - x / θ - loggamma(α) - α * log(θ),
+                ),
+                convert(T, -Inf),
+            )
+        )
+    else
+        s = zero(T)
+        for i in eachindex(x, α, θ)
+            ai, ti, xi = convert(T, α[i]), convert(T, θ[i]), convert(T, x[i])
+            lt = log(ti)
+            value = muladd(ai - one(T), log(abs(xi)), -(xi / ti)) - loggamma(ai) - ai * lt
+            value = ifelse((xi == zero(T)) & (ai == one(T)), -lt, value)
+            s += ifelse(isfinite(xi) & (xi >= zero(T)), value, convert(T, -Inf))
+        end
+        s
+    end
+end
+Plaice.scalar_to_scalar_bijector(::BatchedGamma) = Plaice.Log(0.0, 1)

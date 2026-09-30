@@ -57,6 +57,7 @@ rand(model)
 ```
 
 !!! note
+
     You may have noticed that we did not use `@observe` in our model definition.
     This is because it would prevent `bill_length` from being included in the prior draw `rand(model)`.
     The rest of the workflow shown here is compatible with `@observe`.
@@ -90,6 +91,7 @@ end
 
 fig
 ```
+
 You can read more about working with [`VarName`](@extref VarNames.VarName) and [`VarNamedTuple`](@extref VarNames.VarNamedTuple) in the [VarNames.jl docs](https://github.com/JuliaBayes/VarNames.jl).
 
 We may also want to check if the prior distribution of `bill_length` looks reasonable, i.e., that it doesn't include impossible values such as negative `bill_length`.
@@ -97,15 +99,14 @@ FlexiChains provides helpful functions here – first, we reconstruct the draws 
 
 ```@example workflow
 using FlexiChains: transform_values
-chain_prior = transform_values(
-    chain_prior, @vn(bill_length) => (v -> reconstruct(bill_zs, v))
-)
+chain_prior =
+    transform_values(chain_prior, @vn(bill_length) => (v -> reconstruct(bill_zs, v)))
 observed = reconstruct(bill_zs, penguins.bill_length_mm)
 FlexiChains.Makie.pushforward_hist(
     chain_prior,
     @vn(bill_length);
     observed=observed,
-    axis=(; xlabel="bill_length_mm", limits=((0, 100), nothing))
+    axis=(; xlabel="bill_length_mm", limits=((0, 100), nothing)),
 )
 ```
 
@@ -137,14 +138,13 @@ We'll begin with the former and use [`predict`](@ref) to predict for the same co
 
 ```@example workflow
 chain_pred = predict(model, chain_post)
-chain_pred = transform_values(
-    chain_pred, @vn(bill_length) => (v -> reconstruct(bill_zs, v))
-)
+chain_pred =
+    transform_values(chain_pred, @vn(bill_length) => (v -> reconstruct(bill_zs, v)))
 FlexiChains.Makie.pushforward_hist(
     chain_pred,
     @vn(bill_length);
     observed=observed,
-    axis=(; xlabel="bill length (mm)")
+    axis=(; xlabel="bill length (mm)"),
 )
 ```
 

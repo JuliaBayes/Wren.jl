@@ -44,4 +44,23 @@ using WrenDists
     end
 end
 
+@testset "batch: WrenDists.BernoulliLogit" begin
+    @testset "batched: BernoulliLogit(a[i]) -> BatchedBernoulliLogit" begin
+        @wren function a_batch(y)
+            a ~ WrenCore.iid(WrenDists.Normal(), 3)
+            @batch for i in 1:3
+                @observe y[i] ~ WrenDists.BernoulliLogit(a[i])
+            end
+        end
+        @wren function a_nobatch(y)
+            a ~ WrenCore.iid(WrenDists.Normal(), 3)
+            for i in 1:3
+                @observe y[i] ~ WrenDists.BernoulliLogit(a[i])
+            end
+        end
+        y = [1.0, 0.0, 1.0]
+        test_model_equivalence(a_batch(y), a_nobatch(y))
+    end
+end
+
 end # module WrenBatchBernoulliTests
