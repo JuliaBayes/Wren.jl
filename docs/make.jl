@@ -1,3 +1,6 @@
+# Accept PalmerPenguins download
+ENV["DATADEPS_ALWAYS_ACCEPT"] = "true"
+
 using Pkg: Pkg
 
 using Wren
@@ -9,6 +12,7 @@ using DocumenterInterLinks
 
 links = InterLinks(
     "DynamicHMC" => "https://www.tamaspapp.eu/DynamicHMC.jl/dev/",
+    "FlexiChains" => "https://juliabayes.org/FlexiChains.jl/stable/",
     "Plaice" => "https://juliabayes.org/Plaice.jl/dev/",
     "VarNames" => "https://juliabayes.org/VarNames.jl/stable/",
 )
@@ -20,7 +24,12 @@ makedocs(;
     # automatically detect the inventory version from the git tag. See
     # https://github.com/JuliaDocs/Documenter.jl/pull/2449
     format=Documenter.HTML(; inventory_version=""),
-    modules=[Wren, WrenCore, WrenDists],
+    modules=[
+        Wren,
+        WrenCore,
+        WrenDists,
+        Base.get_extension(WrenCore, :WrenCoreFlexiChainsExt),
+    ],
     pages=[
         "index.md",
         "Tutorials" => [
@@ -29,6 +38,7 @@ makedocs(;
             "tutorials/distributions.md",
             "tutorials/submodels.md",
             "tutorials/mcmc.md",
+            "tutorials/workflow.md",
         ],
         "Explanations" => [
             "explanations/enzyme.md",
