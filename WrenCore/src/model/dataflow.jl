@@ -32,7 +32,7 @@ end
 
 parse_variables!(::Any, ::Set{Symbol}, ::Set{Symbol}) = nothing # e.g. literal
 parse_variables!(::T, ::Set{Symbol}, ::Set{Symbol}) where {T<:AbstractWrenExpr} =
-    _issue_error("unhandled node of type $(T) in dataflow analysis")
+    @wren_error "unhandled node of type $(T) in dataflow analysis"
 parse_variables!(::LineNumberNode, ::Set{Symbol}, ::Set{Symbol}) = nothing
 function parse_variables!(sym::Symbol, lhs_syms::Set{Symbol}, required_syms::Set{Symbol})
     if sym in lhs_syms
@@ -178,10 +178,8 @@ function get_required_syms(stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}}
         parse_variables!(stmt, lhs_syms, required_syms)
     end
 
-    if WREN_COMPILATION_DEBUG[]
-        @info "[dataflow.jl] lhs_syms = $(lhs_syms)"
-        @info "[dataflow.jl] required_syms = $(required_syms)"
-    end
+    @wren_debug "lhs_syms = $(lhs_syms)"
+    @wren_debug "required_syms = $(required_syms)"
 
     return required_syms
 end
