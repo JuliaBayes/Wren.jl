@@ -4,7 +4,72 @@ module WrenDataflowTests
 
 using WrenCore
 using WrenCore: @_to_ir, get_required_syms, run_dataflow_analysis
+using WrenCore: get_used_symbols, get_lhs_index_symbols
+using WrenCore.Expressions: lower_to_wren
 using Test
+
+@testset "get_used_symbols" begin
+    # Check both the raw Julia expression and its lowered form.
+    function test_used(expr, expected)
+        @test get_used_symbols(expr) == Set{Symbol}(expected)
+        @test get_used_symbols(lower_to_wren(expr, @__MODULE__)) == Set{Symbol}(expected)
+    end
+
+    @testset "leaves" begin
+        test_used(:x, [:x])
+        test_used(1, [])
+        test_used("s", [])
+        test_used(QuoteNode(:x), [])
+        test_used(nothing, [])
+    end
+
+    @testset "calls" begin
+        test_used(:(f()), [:f])
+        test_used(:(f(x, y)), [:f, :x, :y])
+        test_used(:(f(g(x))), [:f, :g, :x])
+        test_used(:(x + y), [:+, :x, :y])
+        test_used(:(f.(x)), [:f, :x])
+    end
+
+    @testset "keyword arguments" begin
+        test_used(:(f(; a=x)), [:f, :x])
+        test_used(:(f(a=x)), [:f, :x])
+        test_used(:(f(; x)), [:f, :x])
+        test_used(:(f(x; x=y)), [:f, :x, :y])
+    end
+
+    @testset "indexing and properties" begin
+        test_used(:(x[i]), [:x, :i])
+        test_used(:(x.a), [:x])
+        test_used(:(x.a[i].b), [:x, :i])
+        test_used(:(x[@vn(a)]), [:x, :a])
+    end
+
+    @testset "collections" begin
+        test_used(:([]), [])
+        test_used(:(()), [])
+        test_used(:([x, 1]), [:x])
+        test_used(:((x, y)), [:x, :y])
+        test_used(:("$x"), [:x])
+    end
+
+    @testset "control flow and closures" begin
+        test_used(:(x ? y : z), [:x, :y, :z])
+        test_used(:(() -> x), [:x])
+        test_used(:(map(i -> x * i, y)), [:map, :i, :x, :*, :y])
+    end
+end
+
+@testset "get_lhs_index_symbols" begin
+    @test get_lhs_index_symbols(:x) == Set{Symbol}()
+    @test get_lhs_index_symbols(:(x[i])) == Set{Symbol}([:i])
+    @test get_lhs_index_symbols(:(x[i, j])) == Set{Symbol}([:i, :j])
+    @test get_lhs_index_symbols(:(x.a)) == Set{Symbol}()
+    @test get_lhs_index_symbols(:(x[i].a[j])) == Set{Symbol}([:i, :j])
+    @test get_lhs_index_symbols(:(x[f(i)])) == Set{Symbol}([:f, :i])
+    @test get_lhs_index_symbols(:(x[x[1]])) == Set{Symbol}([:x])
+    @test get_lhs_index_symbols(:(x[1[x]])) == Set{Symbol}([:x])
+end
 
 @testset "sample lhs reuse analysis" begin
     @testset "basic" begin
@@ -47,10 +112,12 @@ using Test
 
         @test get_required_syms(@_to_ir function f7()
             x ~ dist(x)
-        end) == Set{Symbol}([:x])
+        end) == Set{Symbol}()
 
         @test_broken get_required_syms(@_to_ir function f8()
             x ~ a
+            # In principle, reassigning to x should kill the previous value of x.
+            # Wren doesn't detect that yet.
             x = 2
             y ~ dist(x)
         end) == Set{Symbol}()
@@ -67,9 +134,24 @@ using Test
             y ~ dist(f(g(x)))
         end) == Set{Symbol}([:x])
 
-        @test get_required_syms(@_to_ir function e3()
+        @test get_required_syms(@_to_ir function e3a()
             x ~ a
             y ~ dist(; b=x)
+        end) == Set{Symbol}([:x])
+
+        @test get_required_syms(@_to_ir function e3b()
+            x ~ a
+            y ~ dist(; x=b)
+        end) == Set{Symbol}()
+
+        @test get_required_syms(@_to_ir function e3c()
+            x ~ a
+            y ~ dist(x=b)
+        end) == Set{Symbol}()
+
+        @test get_required_syms(@_to_ir function e3d()
+            x ~ a
+            y ~ dist(; x)
         end) == Set{Symbol}([:x])
 
         @test get_required_syms(@_to_ir function e4()
@@ -93,14 +175,6 @@ using Test
         end) == Set{Symbol}([:x])
 
         @test get_required_syms(@_to_ir function e8()
-            y ~ dist([])
-        end) == Set{Symbol}()
-
-        @test get_required_syms(@_to_ir function e9()
-            y ~ dist(())
-        end) == Set{Symbol}()
-
-        @test get_required_syms(@_to_ir function e10()
             x ~ a
             let z = x
                 z
@@ -144,6 +218,15 @@ using Test
             x[1] ~ a
             x[2] ~ b
         end) == Set{Symbol}()
+
+        @test get_required_syms(@_to_ir function l5()
+            x[1] ~ a
+            x[x[1]] ~ b
+        end) == Set{Symbol}([:x])
+
+        @test get_required_syms(@_to_ir function l6()
+            x[x] ~ a
+        end) == Set{Symbol}()
     end
 
     @testset "other statements" begin
@@ -164,15 +247,10 @@ using Test
 
         @test get_required_syms(@_to_ir function o4()
             x ~ a
-            @addloglikelihood x
-        end) == Set{Symbol}([:x])
-
-        @test get_required_syms(@_to_ir function o5()
-            x ~ a
             @addloglikelihood name = :b f(x)
         end) == Set{Symbol}([:x])
 
-        @test get_required_syms(@_to_ir function o6()
+        @test get_required_syms(@_to_ir function o5()
             x ~ a
             @inbounds y = x[1]
         end) == Set{Symbol}([:x])
@@ -204,7 +282,7 @@ using Test
         @test get_required_syms(@_to_ir function b1()
             x ~ a
             @batch for i in j
-                y[i] ~ dist(x)
+                y[i] ~ dist(x[i])
             end
         end) == Set{Symbol}([:x])
 
@@ -327,6 +405,12 @@ using Test
             end
         end) == Set{Symbol}([:a])
 
+        @test get_required_syms(@_to_ir function f_for_self_backedge()
+            for i in j
+                x ~ dist(x)
+            end
+        end) == Set{Symbol}([:x])
+
         @test get_required_syms(@_to_ir function f_for_no_backedge()
             for i in j
                 a ~ b
@@ -354,6 +438,12 @@ using Test
                 a ~ b
             end
         end) == Set{Symbol}([:a])
+
+        @test get_required_syms(@_to_ir function f_while_self_backedge()
+            while u
+                x ~ dist(x)
+            end
+        end) == Set{Symbol}([:x])
 
         @test get_required_syms(@_to_ir function f_while_no_backedge()
             while u

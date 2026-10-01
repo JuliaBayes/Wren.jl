@@ -5,14 +5,31 @@ using Accessors: Accessors
 get_used_symbols(::Any) = Set{Symbol}() # literals etc
 get_used_symbols(::QuoteNode) = Set{Symbol}()
 get_used_symbols(symbol::Symbol) = Set([symbol])
-function get_used_symbols(expr::Expr)
-    return union(get_used_symbols.(expr.args)...)
+function get_used_symbols(expr::Union{Expr,WrenExpr})
+    # Skip names of keyword arguments and names of macros
+    args_to_check = if expr.head === :kw || expr.head === :macrocall
+        expr.args[2:end]
+    else
+        expr.args
+    end
+    return union(Set{Symbol}(), get_used_symbols.(args_to_check)...)
 end
-function get_used_symbols(expr::WrenExpr)
-    return union(get_used_symbols.(expr.args)...)
-end
+get_used_symbols(stmt::OtherStatement) = get_used_symbols(stmt.expr)
 function get_used_symbols(::AbstractWrenExpr)
     _issue_error("unhandled node in get_used_symbols")
+end
+
+# Symbols used in the indices of a Sample LHS, e.g. `i` in `x[i]`. The top-level symbol
+# itself (`x`) is not counted, since it's being assigned to rather than used.
+get_lhs_index_symbols(::Symbol) = Set{Symbol}()
+function get_lhs_index_symbols(expr::Expr)
+    return if Meta.isexpr(expr, :ref)
+        union(get_lhs_index_symbols(expr.args[1]), get_used_symbols.(expr.args[2:end])...)
+    elseif Meta.isexpr(expr, :.)
+        get_lhs_index_symbols(expr.args[1])
+    else
+        get_used_symbols(expr)
+    end
 end
 
 parse_variables!(::Any, ::Set{Symbol}, ::Set{Symbol}) = nothing # e.g. literal
@@ -25,14 +42,22 @@ function parse_variables!(sym::Symbol, lhs_syms::Set{Symbol}, required_syms::Set
     end
     return nothing
 end
+function parse_variables!(expr::Expr, lhs_syms::Set{Symbol}, required_syms::Set{Symbol})
+    # Raw Julia expressions, e.g. inside `OtherStatement`s or `@batch` loop iterators.
+    union!(required_syms, intersect(lhs_syms, get_used_symbols(expr)))
+    return nothing
+end
 function parse_variables!(stmt::Sample, lhs_syms::Set{Symbol}, required_syms::Set{Symbol})
-    push!(lhs_syms, stmt.lhs_top_level_symbol)
-    used = get_used_symbols(stmt.rhs)
+    # In e.g. `x[i] ~ y`, `i` and `y` are considered uses, so we need to check both lhs and
+    # rhs. However `x` itself is not considered used since it's only written to.
+    used = union(get_lhs_index_symbols(stmt.lhs), get_used_symbols(stmt.rhs))
     union!(required_syms, intersect(lhs_syms, used))
+    push!(lhs_syms, stmt.lhs_top_level_symbol)
     return nothing
 end
 function parse_variables!(stmt::Observe, lhs_syms::Set{Symbol}, required_syms::Set{Symbol})
-    used = get_used_symbols(stmt.rhs)
+    # Unlike Sample, the whole LHS counts as a use, since its value is read.
+    used = union(get_used_symbols(stmt.lhs), get_used_symbols(stmt.rhs))
     union!(required_syms, intersect(lhs_syms, used))
     return nothing
 end
