@@ -19,8 +19,6 @@ function get_used_symbols(::AbstractWrenExpr)
     _issue_error("unhandled node in get_used_symbols")
 end
 
-# Symbols used in the indices of a Sample LHS, e.g. `i` in `x[i]`. The top-level symbol
-# itself (`x`) is not counted, since it's being assigned to rather than used.
 get_lhs_index_symbols(::Symbol) = Set{Symbol}()
 function get_lhs_index_symbols(expr::Expr)
     return if Meta.isexpr(expr, :ref)
