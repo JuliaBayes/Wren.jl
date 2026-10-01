@@ -501,10 +501,30 @@ _samples(stmts) = filter(s -> s isa WrenCore.Sample, stmts)
             @batch for i in j
                 y[i] ~ b
             end
+            @batch for i in j
+                z[i] ~ b
+            end
+            w ~ dist(z)
         end)
-        batch = only(filter(s -> s isa WrenCore.Batch, ir))
-        y_stmt = only(_samples(batch.body.args))
-        @test_broken !y_stmt.lhs_is_reused
+        y_batch, z_batch = filter(s -> s isa WrenCore.Batch, ir)
+        y_stmt = only(_samples(y_batch.body.args))
+        z_stmt = only(_samples(z_batch.body.args))
+        @test !y_stmt.lhs_is_reused
+        @test z_stmt.lhs_is_reused
+    end
+
+    @testset "return" begin
+        ir = run_dataflow_analysis(@_to_ir function r6()
+            return x ~ a
+        end)
+        @test !only(filter(s -> s isa WrenCore.ReturnStatement, ir)).expr.lhs_is_reused
+    end
+
+    @testset "addloglikelihood" begin
+        ir = run_dataflow_analysis(@_to_ir function r7()
+            @addloglikelihood (x ~ a)
+        end)
+        @test !only(filter(s -> s isa WrenCore.AddLogLikelihood, ir)).expr.lhs_is_reused
     end
 
     @testset "lhs_top_level_symbol" begin

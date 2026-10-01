@@ -141,12 +141,25 @@ function parse_variables!(expr::WrenExpr, lhs_syms::Set{Symbol}, required_syms::
 end
 
 reconstruct_statement(@nospecialize(x::Any), ::Set{Symbol}) = x
+reconstruct_statement(::T, ::Set{Symbol}) where {T<:AbstractWrenExpr} =
+    _issue_error("unhandled node of type $(T) in reconstruct_statement")
 function reconstruct_statement(stmt::Sample, required_syms::Set{Symbol})
     return Accessors.@set stmt.lhs_is_reused = stmt.lhs_top_level_symbol in required_syms
 end
 reconstruct_statement(stmt::Observe, required_syms::Set{Symbol}) = stmt
+# The contents of an OtherStatement are not lowered, so they can't contain Samples.
+reconstruct_statement(stmt::OtherStatement, required_syms::Set{Symbol}) = stmt
 function reconstruct_statement(stmt::IID, required_syms::Set{Symbol})
     return Accessors.@set stmt.tilde = reconstruct_statement(stmt.tilde, required_syms)
+end
+function reconstruct_statement(stmt::Batch, required_syms::Set{Symbol})
+    return Accessors.@set stmt.body = reconstruct_statement(stmt.body, required_syms)
+end
+function reconstruct_statement(stmt::AddLogLikelihood, required_syms::Set{Symbol})
+    return Accessors.@set stmt.expr = reconstruct_statement(stmt.expr, required_syms)
+end
+function reconstruct_statement(stmt::ReturnStatement, required_syms::Set{Symbol})
+    return Accessors.@set stmt.expr = reconstruct_statement(stmt.expr, required_syms)
 end
 function reconstruct_statement(expr::WrenExpr, required_syms::Set{Symbol})
     new_args = map(arg -> reconstruct_statement(arg, required_syms), expr.args)
