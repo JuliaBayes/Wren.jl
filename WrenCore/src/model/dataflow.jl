@@ -8,6 +8,12 @@ get_used_symbols(symbol::Symbol) = Set([symbol])
 function get_used_symbols(expr::Expr)
     return union(get_used_symbols.(expr.args)...)
 end
+function get_used_symbols(expr::WrenExpr)
+    return union(get_used_symbols.(expr.args)...)
+end
+function get_used_symbols(::AbstractWrenExpr)
+    _issue_error("unhandled node in get_used_symbols")
+end
 
 parse_variables!(::Any, ::Set{Symbol}, ::Set{Symbol}) = nothing # e.g. literal
 parse_variables!(::T, ::Set{Symbol}, ::Set{Symbol}) where {T<:AbstractWrenExpr} =
@@ -124,7 +130,7 @@ function reconstruct_statement(expr::WrenExpr, required_syms::Set{Symbol})
     return WrenExpr(expr.head, new_args)
 end
 
-function run_dataflow_analysis(stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}})
+function get_required_syms(stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}})
     # All top-level symbols on the LHS of Sample nodes
     lhs_syms = Set{Symbol}()
     # The subset of the above that were seen again in a later expression, which we thus need
@@ -141,6 +147,11 @@ function run_dataflow_analysis(stmts::Vector{Union{AbstractWrenExpr,LineNumberNo
         @info "[dataflow.jl] required_syms = $(required_syms)"
     end
 
+    return required_syms
+end
+
+function run_dataflow_analysis(stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}})
+    required_syms = get_required_syms(stmts)
     new_stmts = map(stmt -> reconstruct_statement(stmt, required_syms), stmts)
     return Vector{Union{AbstractWrenExpr,LineNumberNode}}(new_stmts)
 end

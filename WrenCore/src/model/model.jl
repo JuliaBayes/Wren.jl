@@ -298,13 +298,13 @@ function _wren(expr::Expr, mod::Module)
 end
 
 # Parse into probabilistic IR. This is a helper macro meant for internal testing only.
-macro _as_ir(expr)
-    _macro_as_ir(expr, __module__)
+macro _to_ir(expr)
+    _macro_to_ir(expr, __module__)
 end
-function _macro_as_ir(expr::Expr, mod::Module)
+function _macro_to_ir(expr::Expr, mod::Module)
     # Sanity check
-    expr.head == :function || error("@wrenir: expected a function definition")
-    length(expr.args) == 2 || error("@wrenir: expected function expr with 2 expr-args")
+    expr.head == :function || error("@_to_ir: expected a function definition")
+    length(expr.args) == 2 || error("@_to_ir: expected function expr with 2 expr-args")
     _, body = expr.args
     model_exprs = to_wren_exprs(body, mod)
     return model_exprs
