@@ -52,14 +52,14 @@ In the examples above, we demonstrated this by evaluating the entire parent mode
 However, one might also want to access the latent variables of a submodel *inside* the parent model, during its execution.
 
 You can do this directly by indexing into `a` with the relevant `VarName`.
-For example, here we access the latent variable `x` of the inner model and square it:
+For example, here we access the latent variable `x` of the inner model and add one:
 
 ```@example submodel
 @wren function outer_with_latent()
     a ~ inner()
-    xsq = (a[@vn(x)])^2
-    # Make `y`'s support dependent on the square of `a.x`:
-    y ~ Uniform(xsq, xsq + 0.01)
+    xp1 = a[@vn(x)] + 1
+    # Make `y`'s support land around `x + 1`:
+    y ~ Uniform(xp1, xp1 + 0.01)
 end
 
 rand(outer_with_latent())
@@ -70,16 +70,17 @@ rand(outer_with_latent())
 With a distribution on the right-hand side of `~`, `rand(dist)` is indeed the _only_ output that we are interested in.
 However, with a submodel, we may also be interested in the return value of the submodel, which is not part of the latent variables.
 
-For example, in this submodel, the latents include `x`, but the return value is `x^2`:
+For example, in this submodel, the latents include `x`, but the return value is `x + 1`.
+Of course, the return value could be anything, including `x` itself, a transformation of it, or even a completely unrelated value.
 
 ```@example submodel
 @wren function inner_with_retval()
     x ~ Normal()
-    return x^2
+    return x + 1
 end
 ```
 
-In order to allow users to access the return value, Wren stipulates that the `prefix ~ submodel` expression _evaluates_ to the return value of the submodel.
+In order to allow users to access the submodel's return value, Wren stipulates that the `prefix ~ submodel` expression _evaluates_ to the return value of the submodel.
 Thus, you can write `retval = (prefix ~ submodel)`:
 
 !!! note
@@ -88,12 +89,12 @@ Thus, you can write `retval = (prefix ~ submodel)`:
 
 ```@example submodel
 @wren function outer_with_retval()
-    xsq = (a ~ inner_with_retval())
-    y ~ Uniform(xsq, xsq + 0.01)
+    xp1 = (a ~ inner_with_retval())
+    y ~ Uniform(xp1, xp1 + 0.01)
 end
 ```
 
-As in the previous example, `y` should be very close to `a.x`:
+As in the previous example, `y` should be very close to `a.x + 1`:
 
 ```@example submodel
 rand(outer_with_retval())
@@ -104,26 +105,27 @@ rand(outer_with_retval())
 ## Performance considerations
 
 **Note that accessing the latent variables of a submodel comes with a performance cost, *especially* when using gradient-based samplers.
-If at all possible, you should always use the return values.**
+If at all possible, you should always use only the return values.**
 
 Looking at our examples again:
 
 ```julia
 @wren function outer_with_latent()
     a ~ inner()
-    xsq = (a[@vn(x)])^2
-    # Do stuff with `xsq`...
+    xp1 = a[@vn(x)] + 1
+    # Do stuff with `xp1`...
 end
 
 @wren function outer_with_retval()
-    xsq = (a ~ inner())
-    # Do stuff with `xsq`...
+    xp1 = (a ~ inner())
+    # Do stuff with `xp1`...
 end
 ```
 
 As a reminder, `a` here is a `VarNamedTuple` containing the latent variables of `inner`.
 In the second case, it's clear that the value of `a` is never needed.
 **Wren will in such cases completely optimise away the computation of `a`.**
+(To be clear: the submodel itself and its log-density contributions will still be evaluated, and the symbol `a` will still be used as the prefix — but the actual `VarNamedTuple` will never be materialised, since it is never accessed.)
 
 This often does not really save much time when calling e.g. `rand`, because `rand` forces the construction of a `VarNamedTuple` anyway.
 However, this makes a big difference when calculating gradients, because when calculating gradients we're only interested in the log-density terms.
@@ -142,3 +144,6 @@ However, `lp_and_grad` i.e. the gradient of the vectorised log-density) will be 
 ```@example submodel
 @bmodel outer_with_retval() DEFAULT_AD
 ```
+
+Thus, if you are the author of the submodel, you should always try to return any values that the parent model may need.
+However, if you are using somebody else's submodel and they don't return the values you need, Wren will still allow you to access the latent variables (just at a performance cost).
