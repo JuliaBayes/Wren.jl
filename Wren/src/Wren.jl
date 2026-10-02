@@ -38,12 +38,10 @@ using WrenCore:
     DEFAULT_AD,
     # Benchmark and test
     @bmodel,
-    benchmark_ad,
+    benchmark_model,
     test_ad,
-    benchmark_and_test,
     WithBackend,
     WithExpectedResult,
-    NoTest,
     # Initialisations for MCMC
     FromPrior,
     FromParams
@@ -71,12 +69,10 @@ export WrenCore,
     DEFAULT_AD,
     # Benchmark and test
     @bmodel,
-    benchmark_ad,
+    benchmark_model,
     test_ad,
-    benchmark_and_test,
     WithBackend,
     WithExpectedResult,
-    NoTest,
     # Initialisations for MCMC
     FromPrior,
     FromParams

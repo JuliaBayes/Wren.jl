@@ -1,11 +1,13 @@
 include("pmproducts.jl")
 
-using Wren: Wren, VecModel, lp, lp_and_grad, benchmark_and_test
+using Wren: Wren, VecModel, lp, lp_and_grad, benchmark_model
 using DynamicPPL: DynamicPPL
 using ADTypes: AutoEnzyme, AutoMooncake, AutoReactant
 using Enzyme: Reverse, set_runtime_activity
 using Mooncake: Mooncake
 using Reactant: Reactant
+using Chairmarks: @be
+using Statistics: median
 using Printf: @sprintf
 
 # Each entry is either a Chairmarks.Sample (for Wren) / Float64 time in seconds
@@ -86,7 +88,7 @@ function bench(mod)
 
     # -- Wren primals + gradients --
     wren_enzyme_result = _try() do
-        benchmark_and_test(wren_model, enzyme; verbose=false)
+        benchmark_model(wren_model, enzyme; verbose=false)
     end
     wren_primal =
         wren_enzyme_result isa Exception ? wren_enzyme_result :
@@ -95,7 +97,7 @@ function bench(mod)
         wren_enzyme_result isa Exception ? wren_enzyme_result :
         wren_enzyme_result.lp_and_grad_bench.time
     wren_mooncake = _try() do
-        r = benchmark_and_test(wren_model, mooncake; verbose=false)
+        r = benchmark_model(wren_model, mooncake; verbose=false)
         r.lp_and_grad_bench.time
     end
 
@@ -118,11 +120,15 @@ function bench(mod)
 
     # -- Wren + Reactant --
     wren_reactant_primal = _try() do
-        r = benchmark_and_test(wren_model, reactant; benchmark_ad=false, verbose=false)
-        r.lp_bench.time
+        # Benchmarked separately from the gradient, so that we still get a primal time
+        # even if the gradient fails.
+        vecmodel = VecModel(wren_model, reactant)
+        params = vecmodel.sample
+        lp(vecmodel, params) # warmup
+        median(@be lp($vecmodel, $params)).time
     end
     wren_reactant_grad = _try() do
-        r = benchmark_and_test(wren_model, reactant; verbose=false)
+        r = benchmark_model(wren_model, reactant; verbose=false)
         r.lp_and_grad_bench.time
     end
 

@@ -18,8 +18,6 @@ using WrenCore
 end
 
 @testset "AD testing utilities" begin
-    params = [0.2]
-
     @testset "test_ad" begin
         result = test_ad(
             ad_model(),
@@ -27,13 +25,9 @@ end
             latent_source=FromPrior(Xoshiro(473)),
             verbose=false,
         )
-        @test result isa ModelRunResult
+        @test result isa ADTestResult
         @test result.lp_actual ≈ result.lp_expected
         @test result.grad_actual ≈ result.grad_expected
-        @test result.rand_bench === nothing
-        @test result.logjoint_bench === nothing
-        @test result.lp_bench === nothing
-        @test result.lp_and_grad_bench === nothing
         @test occursin("correctness : passed", sprint(show, MIME"text/plain"(), result))
     end
 
@@ -41,49 +35,65 @@ end
         @test_logs (:warn, r"against itself") test_ad(
             ad_model(),
             AutoForwardDiff();
-            test_correctness=WithBackend(AutoForwardDiff()),
+            reference=WithBackend(AutoForwardDiff()),
             verbose=false,
         )
     end
 
-    @testset "benchmark_ad" begin
-        result = benchmark_ad(
+    @testset "WithExpectedResult with `nothing` skips that check" begin
+        result = test_ad(
             ad_model(),
             AutoForwardDiff();
-            latent_source=FromPrior(Xoshiro(474)),
+            reference=WithExpectedResult(nothing, nothing),
             verbose=false,
         )
         @test result.lp_expected === nothing
-        @test result.rand_bench.time > 0
-        @test result.logjoint_bench.time > 0
-        @test result.lp_bench.time > 0
-        @test result.lp_and_grad_bench.time > 0
-    end
-
-    @testset "benchmark_and_test" begin
-        result = benchmark_and_test(
-            ad_model(),
-            AutoForwardDiff();
-            test_correctness=WithBackend(AutoReverseDiff()),
-            latent_source=FromPrior(Xoshiro(476)),
-            verbose=false,
-        )
-        @test result.lp_actual ≈ result.lp_expected
-        @test result.grad_actual ≈ result.grad_expected
-        @test result.rand_bench.time > 0
-        @test result.logjoint_bench.time > 0
-        @test result.lp_bench.time > 0
-        @test result.lp_and_grad_bench.time > 0
+        @test result.grad_expected === nothing
     end
 
     @testset "ADIncorrectException" begin
         @test_throws ADIncorrectException test_ad(
             ad_model(),
             AutoForwardDiff();
-            test_correctness=WithExpectedResult(0.0, [0.0]),
+            reference=WithExpectedResult(0.0, [0.0]),
             latent_source=FromPrior(Xoshiro(475)),
             verbose=false,
         )
+        # Only the gradient is checked here, and it is wrong.
+        e = try
+            test_ad(
+                ad_model(),
+                AutoForwardDiff();
+                reference=WithExpectedResult(nothing, [1e6]),
+                verbose=false,
+            )
+        catch e
+            e
+        end
+        @test e isa ADIncorrectException
+        @test occursin("incorrect gradient", sprint(showerror, e))
+    end
+
+    @testset "benchmark_model" begin
+        result = benchmark_model(
+            ad_model();
+            latent_source=FromPrior(Xoshiro(474)),
+            verbose=false,
+        )
+        @test result isa BenchmarkResult
+        @test result.rand_bench.time > 0
+        @test result.logjoint_bench.time > 0
+        @test result.lp_bench.time > 0
+        @test result.lp_and_grad_bench === nothing
+
+        result = benchmark_model(ad_model(), AutoForwardDiff(); verbose=false)
+        @test result.lp_and_grad_bench.time > 0
+        @test occursin("grad / lp", sprint(show, MIME"text/plain"(), result))
+    end
+
+    @testset "@bmodel" begin
+        @test (@bmodel ad_model()) isa BenchmarkResult
+        @test (@bmodel ad_model() AutoForwardDiff()).lp_and_grad_bench.time > 0
     end
 end
 
