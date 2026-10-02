@@ -78,6 +78,7 @@ end
         result = benchmark_model(
             ad_model();
             latent_source=FromPrior(Xoshiro(474)),
+            seconds=0.1,
             verbose=false,
         )
         @test result isa BenchmarkResult
@@ -86,7 +87,7 @@ end
         @test result.lp_bench.time > 0
         @test result.lp_and_grad_bench === nothing
 
-        result = benchmark_model(ad_model(), AutoForwardDiff(); verbose=false)
+        result = benchmark_model(ad_model(), AutoForwardDiff(); seconds=0.1, verbose=false)
         @test result.lp_and_grad_bench.time > 0
         @test occursin("grad / lp", sprint(show, MIME"text/plain"(), result))
     end

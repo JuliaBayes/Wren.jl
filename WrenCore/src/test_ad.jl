@@ -1,4 +1,4 @@
-using Chairmarks: Chairmarks, @be
+using Chairmarks: Chairmarks
 using LinearAlgebra: norm
 using Random: Xoshiro
 using Statistics: median
@@ -287,6 +287,18 @@ end
 
 _show_sample(s::Chairmarks.Sample) = sprint(show, MIME"text/plain"(), s)
 
+# Benchmarks `f()` for roughly `seconds` and returns the median sample. The garbage collector
+# handling follows DynamicPPL's `run_ad` (which in turn follows Mooncake's benchmarks).
+function _median_bench(f, seconds::Real)
+    f() # warmup
+    # Start from a clean heap.
+    GC.gc(true)
+    # A quick incremental collection after every sample stops garbage from building up and
+    # setting off a full collection partway through a sample, which would make that sample
+    # several times slower.
+    return median(Chairmarks.benchmark(nothing, f, _ -> GC.gc(false); seconds))
+end
+
 function Base.show(io::IO, ::MIME"text/plain", result::BenchmarkResult)
     lines = _model_lines(result.vecmodel)
     push!(lines, "rand" => _show_sample(result.rand_bench))
@@ -308,6 +320,7 @@ end
         lp_function=logjoint_transformed,
         latent_source::AbstractLatentSource=FromPrior(),
         parameter_space::AbstractParameterSpace=UnconstrainedSpace(),
+        seconds::Real=1,
         verbose::Bool=(!isinteractive()),
     ) -> BenchmarkResult
 
@@ -323,6 +336,8 @@ Note that if `adtype` is given, the corresponding backend package must be loaded
 The `lp_function`, `latent_source`, and `parameter_space` keywords are forwarded to
 [`VecModel`](@ref), and have the same defaults.
 
+`seconds` is the approximate time spent on each of the benchmarks.
+
 See also [`@bmodel`](@ref).
 """
 function benchmark_model(
@@ -331,6 +346,7 @@ function benchmark_model(
     lp_function=logjoint_transformed,
     latent_source::AbstractLatentSource=FromPrior(),
     parameter_space::AbstractParameterSpace=UnconstrainedSpace(),
+    seconds::Real=1,
     verbose::Bool=(!isinteractive()),
 )
     _, accs =
@@ -347,19 +363,15 @@ function benchmark_model(
 
     # Model level
     rng = Xoshiro(468) # avoid mutating global RNG
-    rand(rng, model) # warmup
-    rand_bench = median(@be rand($rng, $model))
-    logjoint(model, vnt_params) # warmup
-    logjoint_bench = median(@be logjoint($model, $vnt_params))
+    rand_bench = _median_bench(() -> rand(rng, model), seconds)
+    logjoint_bench = _median_bench(() -> logjoint(model, vnt_params), seconds)
 
     # VecModel level
-    lp(vecmodel, params) # warmup
-    lp_bench = median(@be lp($vecmodel, $params))
+    lp_bench = _median_bench(() -> lp(vecmodel, params), seconds)
     lp_and_grad_bench = if adtype === nothing
         nothing
     else
-        lp_and_grad(vecmodel, params) # warmup
-        median(@be lp_and_grad($vecmodel, $params))
+        _median_bench(() -> lp_and_grad(vecmodel, params), seconds)
     end
 
     result =

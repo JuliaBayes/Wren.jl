@@ -52,9 +52,11 @@ Base.size(d::DiagNormal) = size(d.mu)
 Base.rand(rng::Random.AbstractRNG, d::DiagNormal) =
     randn(rng, size(d.mu)) .* d.sigma .+ d.mu
 
-function DensityInterface.logdensityof(d::DiagNormal, x::AbstractArray{T}) where {T<:Number}
+function DensityInterface.logdensityof(d::DiagNormal, x::AbstractArray{<:Number})
     # Benchmarks @ https://github.com/JuliaBayes/Wren.jl/issues/99
     mu, sigma = d.mu, d.sigma
+    # Promote so that integer data or parameters still give a float result.
+    T = float(promote_type(eltype(x), eltype(mu), eltype(sigma)))
     lognorm = length(x) * convert(T, log2π) / 2
     return if within_compile()
         z = (x .- mu) ./ sigma

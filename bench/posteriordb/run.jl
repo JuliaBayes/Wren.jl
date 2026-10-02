@@ -1,5 +1,3 @@
-include("pmproducts.jl")
-
 using Wren: Wren, VecModel, lp, lp_and_grad, benchmark_model
 using DynamicPPL: DynamicPPL
 using ADTypes: AutoEnzyme, AutoMooncake, AutoReactant
