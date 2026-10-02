@@ -4,7 +4,6 @@
 
 using ADTypes
 using Chairmarks: @be
-# using Differ
 using Distributions
 using DynamicPPL
 using Enzyme
@@ -19,9 +18,10 @@ using Statistics: median
 using WrenCore
 using WrenDists: WrenDists as WD
 
-# include("pmtransforms.jl")
-include("models.jl")
+# using Differ
 # include("differ_rules.jl")
+
+include("models.jl")
 
 using .BenchmarkModels
 

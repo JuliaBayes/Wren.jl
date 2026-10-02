@@ -6,8 +6,6 @@ using ADTypes: AutoEnzyme, AutoMooncake, AutoReactant
 using Enzyme: Reverse, set_runtime_activity
 using Mooncake: Mooncake
 using Reactant: Reactant
-using Chairmarks: @be
-using Statistics: median
 using Printf: @sprintf
 
 # Each entry is either a time in seconds, or an exception that was caught.
@@ -122,8 +120,8 @@ function bench(mod)
         # even if the gradient fails.
         vecmodel = VecModel(wren_model, reactant)
         params = vecmodel.sample
-        lp(vecmodel, params) # warmup
-        median(@be lp($vecmodel, $params)).time
+        # Timed the same way as in `benchmark_model`.
+        Wren.WrenCore._median_bench(() -> lp(vecmodel, params), 1).time
     end
     wren_reactant_grad = _try() do
         r = benchmark_model(wren_model, reactant; verbose=false)
