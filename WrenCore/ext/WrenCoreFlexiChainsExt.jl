@@ -66,8 +66,8 @@ end
 
 Return the log-prior of `model` at each iteration of `chain`.
 
-Unlike [`predict`](@ref), this errors on a variable that `model` requires and `chain` does
-not hold, rather than sampling it.
+Unlike [`predict`](@ref StatsAPI.predict), this errors on a variable that `model` requires
+and `chain` does not hold, rather than sampling it.
 """
 function WrenCore.logprior(model::WrenCore.Model, chain::VNChain)
     accs = WrenCore.AccumulatorTuple(WrenCore.LogPriorAccumulator())
@@ -79,8 +79,8 @@ end
 
 Return the log-likelihood of `model` at each iteration of `chain`.
 
-Unlike [`predict`](@ref), this errors on a variable that `model` requires and `chain` does
-not hold, rather than sampling it.
+Unlike [`predict`](@ref StatsAPI.predict), this errors on a variable that `model` requires
+and `chain` does not hold, rather than sampling it.
 """
 function StatsAPI.loglikelihood(model::WrenCore.Model, chain::VNChain)
     accs = WrenCore.AccumulatorTuple(WrenCore.LogLikelihoodAccumulator())
