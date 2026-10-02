@@ -10,9 +10,8 @@ using Chairmarks: @be
 using Statistics: median
 using Printf: @sprintf
 
-# Each entry is either a Chairmarks.Sample (for Wren) / Float64 time in seconds
-# (for Turing), or an exception that was caught.
-const BenchEntry = Union{Nothing,Real,Exception}
+# Each entry is either a time in seconds, or an exception that was caught.
+const BenchEntry = Union{Real,Exception}
 
 struct BenchResult
     name::String
@@ -37,9 +36,6 @@ function _try(f)
     end
 end
 
-function _format(::Nothing, base)
-    return "—"
-end
 function _format(x::Exception, base)
     msg = join(Base.split(sprint(showerror, x), "\n"), "; ")
     # Truncate long messages
@@ -49,8 +45,10 @@ function _format(x::Exception, base)
     end
     return "ERR: $msg"
 end
-function _format(x::Real, base::Union{Real,Nothing})
-    ratio = base === nothing ? "" : @sprintf("(%.2fx)", x / base)
+# `base` is `nothing` if there is nothing to compare against, or an exception if the
+# baseline failed; in both cases the ratio is left out.
+function _format(x::Real, base::Union{BenchEntry,Nothing})
+    ratio = base isa Real ? @sprintf("(%.2fx)", x / base) : ""
     absolute = if x < 1e-6
         @sprintf("%.3f ns", x * 1e9)
     elseif x < 1e-3
