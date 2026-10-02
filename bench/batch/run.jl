@@ -70,7 +70,7 @@ function grad_time(model, adtype)
         benchmark_primal=false,
         verbose=false,
     )
-    return result.grad_bench.time
+    return result.lp_and_grad_bench.time
 end
 
 println("Times are for one gradient evaluation\n")

@@ -32,8 +32,8 @@ end
         @test result.grad_actual ≈ result.grad_expected
         @test result.rand_bench === nothing
         @test result.logjoint_bench === nothing
-        @test result.primal_bench === nothing
-        @test result.grad_bench === nothing
+        @test result.lp_bench === nothing
+        @test result.lp_and_grad_bench === nothing
         @test occursin("correctness : passed", sprint(show, MIME"text/plain"(), result))
     end
 
@@ -56,8 +56,8 @@ end
         @test result.lp_expected === nothing
         @test result.rand_bench.time > 0
         @test result.logjoint_bench.time > 0
-        @test result.primal_bench.time > 0
-        @test result.grad_bench.time > 0
+        @test result.lp_bench.time > 0
+        @test result.lp_and_grad_bench.time > 0
     end
 
     @testset "benchmark_and_test" begin
@@ -72,8 +72,8 @@ end
         @test result.grad_actual ≈ result.grad_expected
         @test result.rand_bench.time > 0
         @test result.logjoint_bench.time > 0
-        @test result.primal_bench.time > 0
-        @test result.grad_bench.time > 0
+        @test result.lp_bench.time > 0
+        @test result.lp_and_grad_bench.time > 0
     end
 
     @testset "ADIncorrectException" begin

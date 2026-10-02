@@ -90,13 +90,13 @@ function bench(mod)
     end
     wren_primal =
         wren_enzyme_result isa Exception ? wren_enzyme_result :
-        wren_enzyme_result.primal_bench.time
+        wren_enzyme_result.lp_bench.time
     wren_enzyme =
         wren_enzyme_result isa Exception ? wren_enzyme_result :
-        wren_enzyme_result.grad_bench.time
+        wren_enzyme_result.lp_and_grad_bench.time
     wren_mooncake = _try() do
         r = benchmark_and_test(wren_model, mooncake; verbose=false)
-        r.grad_bench.time
+        r.lp_and_grad_bench.time
     end
 
     # -- Turing (DynamicPPL) --
@@ -119,11 +119,11 @@ function bench(mod)
     # -- Wren + Reactant --
     wren_reactant_primal = _try() do
         r = benchmark_and_test(wren_model, reactant; benchmark_ad=false, verbose=false)
-        r.primal_bench.time
+        r.lp_bench.time
     end
     wren_reactant_grad = _try() do
         r = benchmark_and_test(wren_model, reactant; verbose=false)
-        r.grad_bench.time
+        r.lp_and_grad_bench.time
     end
 
     return BenchResult(

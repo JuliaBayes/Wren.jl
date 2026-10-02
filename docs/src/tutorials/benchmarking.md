@@ -1,8 +1,10 @@
 # [Benchmarking](@id benchmarking)
 
+## `@bmodel`
+
 The easiest way to benchmark models is to use the [`@bmodel`](@ref) macro:
 
-```@example 1
+```@example benchmarking
 using Wren, Wren.Dists
 
 @wren function f()
@@ -19,13 +21,26 @@ When passed a single argument, `@bmodel` will benchmark:
   - `logjoint`: the time it takes to compute the log joint probability of a set of parameters
   - `lp`: the time it takes to compute the log-joint probability, but with [a vectorised interface](@ref vectorisation) (this is the same as e.g. `LogDensityProblems.logdensity`, if you are familiar with that interface).
 
+Note that all of these are median benchmarks.
+
 To access the data in this benchmark, you can directly access the fields of the [`ModelRunResult`](@ref) object.
+The relevant fields are named `{function_name}_bench`:
+
+```@example benchmarking
+br = @bmodel f()
+
+br.lp_bench # This is a `Chairmarks.Sample`
+```
+
+```@example benchmarking
+br.lp_bench.time, br.lp_bench.allocs
+```
 
 ## AD
 
 To additionally benchmark gradients, you can pass an `AbstractADType` as the second argument to `@bmodel`:
 
-```@example 1
+```@example benchmarking
 using Enzyme
 
 # `Wren.DEFAULT_AD` is the same as `AutoEnzyme(; mode=Reverse)`.
