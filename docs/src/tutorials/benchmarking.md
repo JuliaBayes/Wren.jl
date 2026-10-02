@@ -23,7 +23,7 @@ When passed a single argument, `@bmodel` will benchmark:
 
 Note that all of these are median benchmarks.
 
-To access the data in this benchmark, you can directly access the fields of the [`ModelRunResult`](@ref) object.
+To access the data in this benchmark, you can directly access the fields of the [`BenchmarkResult`](@ref) object.
 The relevant fields are named `{function_name}_bench`:
 
 ```@example benchmarking
@@ -51,5 +51,10 @@ In addition to the three columns above, this will also benchmark `lp_and_grad`, 
 
 ## More control
 
-If this isn't enough and you want to customise _exactly_ what gets benchmarked, and to test correctness, Wren also provides a function [`benchmark_and_test`](@ref) which has a staggering number of options.
-(There are also slightly simpler versions, [`benchmark_ad`](@ref), and [`test_ad`](@ref).)
+`@bmodel` is shorthand for the [`benchmark_model`](@ref) function, which also accepts keyword arguments to control how the model is vectorised (for example, which parameters to benchmark at).
+
+## Testing AD correctness
+
+To check that an AD backend gives the right log-density and gradient, use [`test_ad`](@ref).
+By default this compares against ForwardDiff, but you can also compare against another backend with [`WithBackend`](@ref), or against known values with [`WithExpectedResult`](@ref).
+If the results don't match, an [`ADIncorrectException`](@ref) is thrown.

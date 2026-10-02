@@ -1,16 +1,11 @@
 # PosteriorDB: eight_schools-eight_schools_centered
-# Deviations: tau prior is half-Cauchy(0, 5) in PDB, replaced with Exponential(5)
-# as PM doesn't have truncated distributions. Applied to both models for fairness.
 module EightSchoolsCentered
 
 using PosteriorDB
 using DynamicPPL, Distributions
 using FillArrays: Fill
-using LinearAlgebra: I
-using Wren: Wren, @wren, @observe
-using ProbabilityMeasures: ProbabilityMeasures as PM
-
-using ..PMProducts: ProductNormal
+using Wren: Wren, @wren, @observe, @batch, @iid
+using WrenDists: WrenDists as WD
 
 const data = let
     pdb = PosteriorDB.database()
@@ -25,7 +20,7 @@ end
 
 @model function dppl_eight_schools_centered(J, y, sigma)
     mu ~ Normal(0, 5)
-    tau ~ Exponential(5)
+    tau ~ truncated(Cauchy(0, 5); lower=0)
     theta ~ product_distribution(Fill(Normal(mu, tau), J))
     for i in 1:J
         y[i] ~ Normal(theta[i], sigma[i])
@@ -37,10 +32,12 @@ const turing_model = dppl_eight_schools_centered(data["J"], data["y"], data["sig
 # ── Wren ──
 
 @wren function eight_schools_centered(y, sigma, J)
-    mu ~ PM.Normal(0.0, 5.0)
-    tau ~ PM.Exponential(5.0)
-    theta ~ PM.MvNormal(fill(mu, J), tau * I)
-    @observe y ~ ProductNormal(theta, sigma)
+    mu ~ WD.Normal(0.0, 5.0)
+    tau ~ WD.HalfCauchy(0.0, 5.0)
+    @iid theta ~ WD.Normal(mu, tau) size=J
+    @batch for i in eachindex(y)
+        @observe y[i] ~ WD.Normal(theta[i], sigma[i])
+    end
     return nothing
 end
 

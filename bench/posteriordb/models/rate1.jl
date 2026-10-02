@@ -4,7 +4,7 @@ module Rate1
 using PosteriorDB
 using DynamicPPL, Distributions
 using Wren: Wren, @wren, @observe
-using ProbabilityMeasures: ProbabilityMeasures as PM
+using WrenDists: WrenDists as WD
 
 const data = let
     pdb = PosteriorDB.database()
@@ -25,8 +25,8 @@ const turing_model = pdb_Rate_1_model(data["n"], data["k"])
 # ── Wren ──
 
 @wren function rate_1_model(k, n)
-    theta ~ PM.Uniform(0.0, 1.0)
-    @observe k ~ PM.Binomial(n, theta)
+    theta ~ WD.Uniform(0.0, 1.0)
+    @observe k ~ WD.Binomial(n, theta)
     return nothing
 end
 

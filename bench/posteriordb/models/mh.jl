@@ -6,12 +6,9 @@ module Mh
 using PosteriorDB
 using DynamicPPL, Distributions
 using FillArrays: Fill
-using LinearAlgebra: I
 using LogExpFunctions: log1pexp, logaddexp, logit
-using Wren: Wren, @wren, @observe, @addloglikelihood
-using ProbabilityMeasures: ProbabilityMeasures as PM
-
-using ..PMProducts: ProductBinomialLogit
+using Wren: Wren, @wren, @observe, @batch, @iid, @addloglikelihood
+using WrenDists: WrenDists as WD
 
 const data = let
     pdb = PosteriorDB.database()
@@ -44,13 +41,16 @@ end
 
 # ── Wren ──
 
-@wren function mh_model(captures, detected, undetected, trials, prior_mean)
-    omega ~ PM.Uniform(0.0, 1.0)
-    mean_p ~ PM.Uniform(0.0, 1.0)
-    sigma ~ PM.Uniform(0.0, 5.0)
-    eps_raw ~ PM.MvNormal(prior_mean, 1.0 * I)
+@wren function mh_model(captures, detected, undetected, trials, M)
+    omega ~ WD.Uniform(0.0, 1.0)
+    mean_p ~ WD.Uniform(0.0, 1.0)
+    sigma ~ WD.Uniform(0.0, 5.0)
+    @iid eps_raw ~ WD.Normal(0.0, 1.0) size=M
     logit_p = logit(mean_p) .+ sigma .* eps_raw
-    @observe captures ~ ProductBinomialLogit(trials, logit_p[detected])
+    logit_p_detected = logit_p[detected]
+    @batch for i in eachindex(captures)
+        @observe captures[i] ~ WD.BinomialLogit(trials, logit_p_detected[i])
+    end
     @addloglikelihood length(detected) * log(omega) + sum(
         logaddexp.(log(omega) .- trials .* log1pexp.(logit_p[undetected]), log1p(-omega)),
     )
@@ -64,7 +64,7 @@ const wren_model = let
     detected = findall(>(0), y)
     undetected = findall(==(0), y)
     captures = y[detected]
-    mh_model(captures, detected, undetected, trials, zeros(M))
+    mh_model(captures, detected, undetected, trials, M)
 end
 
 end
