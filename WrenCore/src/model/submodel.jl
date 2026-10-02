@@ -11,6 +11,8 @@ is_submodel(::Type) = false
 is_submodel(::Type{<:Model}) = true
 
 """
+    CollectOrDiscardSubmodelParams
+
 Internal types used to denote whether the parameters of a submodel should be collected as a
 top-level variable in the parent model. For example, in
 
