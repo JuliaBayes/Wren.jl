@@ -1,5 +1,5 @@
-#!/usr/bin/env sh
-# Usage: ./runtests [core|dists|wren|all] [julia args...]
+#!/usr/bin/env bash
+# Usage: ./runtests [core|dists|all] [julia args...]
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
 TARGET="${1:-all}"

@@ -35,6 +35,7 @@ using WrenCore:
     lp,
     lp_and_grad,
     lp_and_grad!,
+    DEFAULT_AD,
     # Benchmark and test
     @bmodel,
     benchmark_ad,
@@ -67,6 +68,7 @@ export WrenCore,
     lp,
     lp_and_grad,
     lp_and_grad!,
+    DEFAULT_AD,
     # Benchmark and test
     @bmodel,
     benchmark_ad,

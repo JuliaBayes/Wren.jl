@@ -150,9 +150,9 @@ struct ModelRunResult{
     "Median benchmark for evaluating the log-joint density, or `nothing` if not benchmarked."
     logjoint_bench::Union{Nothing,Chairmarks.Sample}
     "Median benchmark for evaluating the vectorised log-density, or `nothing` if not benchmarked."
-    primal_bench::Union{Nothing,Chairmarks.Sample}
+    lp_bench::Union{Nothing,Chairmarks.Sample}
     "Median benchmark for evaluating the log-density and its gradient, or `nothing` if not benchmarked."
-    grad_bench::Union{Nothing,Chairmarks.Sample}
+    lp_and_grad_bench::Union{Nothing,Chairmarks.Sample}
 end
 
 _show_sample(s::Chairmarks.Sample) = sprint(show, MIME"text/plain"(), s)
@@ -172,13 +172,13 @@ function Base.show(io::IO, ::MIME"text/plain", result::ModelRunResult)
     if result.logjoint_bench !== nothing
         push!(lines, "logjoint" => _show_sample(result.logjoint_bench))
     end
-    if result.primal_bench !== nothing
-        push!(lines, "lp" => _show_sample(result.primal_bench))
+    if result.lp_bench !== nothing
+        push!(lines, "lp" => _show_sample(result.lp_bench))
     end
-    if result.grad_bench !== nothing
-        push!(lines, "lp_and_grad" => _show_sample(result.grad_bench))
-        if result.primal_bench !== nothing
-            ratio = result.grad_bench.time / result.primal_bench.time
+    if result.lp_and_grad_bench !== nothing
+        push!(lines, "lp_and_grad" => _show_sample(result.lp_and_grad_bench))
+        if result.lp_bench !== nothing
+            ratio = result.lp_and_grad_bench.time / result.lp_bench.time
             push!(lines, "grad / lp" => string(round(ratio; sigdigits=4)))
         end
     end
@@ -302,7 +302,7 @@ function benchmark_and_test(
         )
         lp(ref_vecmodel, vec_params)
     end
-    primal_bench = if benchmark_primal
+    lp_bench = if benchmark_primal
         lp(vecmodel, vec_params) # warm up
         median(@be lp($vecmodel, $vec_params))
     else
@@ -314,7 +314,7 @@ function benchmark_and_test(
         return ModelRunResult(
             model, vnt_params, vecmodel, vec_params, lp_expected, nothing,
             lp_actual, nothing, atol, rtol, rand_bench, logjoint_bench,
-            primal_bench, nothing
+            lp_bench, nothing
         )
         #! format: on
     end
@@ -359,7 +359,7 @@ function benchmark_and_test(
         end
     end
 
-    grad_bench = if benchmark_ad
+    lp_and_grad_bench = if benchmark_ad
         lp_and_grad(vecmodel, vec_params)
         median(@be lp_and_grad($vecmodel, $vec_params))
     else
@@ -379,8 +379,8 @@ function benchmark_and_test(
         rtol,
         rand_bench,
         logjoint_bench,
-        primal_bench,
-        grad_bench,
+        lp_bench,
+        lp_and_grad_bench,
     )
 
     if verbose
