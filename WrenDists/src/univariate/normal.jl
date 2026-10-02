@@ -80,10 +80,19 @@ struct IsoNormal{M<:AbstractArray,S<:Number} <: AbstractBatchedNormal
 end
 Base.rand(rng::Random.AbstractRNG, d::IsoNormal) = randn(rng, size(d.mu)) .* d.sigma .+ d.mu
 Base.size(d::IsoNormal) = size(d.mu)
-function DensityInterface.logdensityof(d::IsoNormal, x)
+function _isonormal_sqdist(d::IsoNormal, x)
     dist = _zero_logdensity(d, x)
     @inbounds for i in eachindex(x, d.mu)
         dist += abs2(x[i] - d.mu[i])
+    end
+    return dist
+end
+function DensityInterface.logdensityof(d::IsoNormal, x)
+    # Reactant does not allow scalar indexing, so it gets the broadcasted version.
+    dist = if within_compile()
+        sum(abs2, x .- d.mu)
+    else
+        _isonormal_sqdist(d, x)
     end
     N = length(x)
     return -0.5 * dist / abs2(d.sigma) - N * log(d.sigma) - 0.5 * N * log2π
@@ -96,10 +105,19 @@ struct IIDNormal{T<:Tuple,M<:Number,S<:Number} <: AbstractBatchedNormal
 end
 Base.rand(rng::Random.AbstractRNG, d::IIDNormal) = randn(rng, d.size) .* d.sigma .+ d.mu
 Base.size(d::IIDNormal) = d.size
-function DensityInterface.logdensityof(d::IIDNormal, x)
+function _iidnormal_sqdist(d::IIDNormal, x)
     dist = _zero_logdensity(d, x)
     @inbounds for i in eachindex(x)
         dist += abs2(x[i] - d.mu)
+    end
+    return dist
+end
+function DensityInterface.logdensityof(d::IIDNormal, x)
+    # Reactant does not allow scalar indexing, so it gets the broadcasted version.
+    dist = if within_compile()
+        sum(abs2, x .- d.mu)
+    else
+        _iidnormal_sqdist(d, x)
     end
     N = length(x)
     return -0.5 * dist / abs2(d.sigma) - N * log(d.sigma) - 0.5 * N * log2π
