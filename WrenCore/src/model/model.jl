@@ -232,8 +232,20 @@ function extract_args(args_expr::Expr)
     end
 end
 
-macro wren(expr)
-    _wren(expr, __module__)
+macro wren(args...)
+    expr = last(args)
+    internal_to_ir = false
+    for opt in args[1:(end-1)]
+        # `internal_to_ir=true` is meant for internal testing only. It makes `@wren` return
+        # a tuple of the probabilistic IR (before dataflow analysis) and the set of the
+        # function's argument names, instead of defining a model.
+        if Meta.isexpr(opt, :(=)) && opt.args[1] === :internal_to_ir && opt.args[2] isa Bool
+            internal_to_ir = opt.args[2]
+        else
+            error("@wren: unexpected argument `$opt`")
+        end
+    end
+    _wren(expr, __module__; internal_to_ir)
 end
 
 macro observe(expr)
@@ -252,7 +264,7 @@ macro addloglikelihood(args...)
     error("@addloglikelihood must be used inside @wren")
 end
 
-function _wren(expr::Expr, mod::Module)
+function _wren(expr::Expr, mod::Module; internal_to_ir::Bool=false)
     # Sanity check
     expr.head == :function || error("@wren: expected a function definition")
     length(expr.args) == 2 || error("@wren: expected function expr with 2 expr-args")
@@ -265,8 +277,9 @@ function _wren(expr::Expr, mod::Module)
     signature, body = expr.args
 
     model_args, model_arg_symbols = extract_args(fargs_expr)
-    model_exprs, args_to_copy =
-        run_dataflow_analysis(to_wren_exprs(body, mod), model_arg_symbols)
+    ir = to_wren_exprs(body, mod)
+    internal_to_ir && return :(($ir, $model_arg_symbols))
+    model_exprs, args_to_copy = run_dataflow_analysis(ir, model_arg_symbols)
 
     # At macro definition time, we generate a new symbol to store the evaluation function
     # corresponding to the AST *as defined in the macro*. It's possible that users can
@@ -319,17 +332,4 @@ function _wren(expr::Expr, mod::Module)
     function_expr = Expr(:function, esc(signature), function_body)
 
     return function_expr
-end
-
-# Parse into probabilistic IR. This is a helper macro meant for internal testing only.
-macro _to_ir(expr)
-    _macro_to_ir(expr, __module__)
-end
-function _macro_to_ir(expr::Expr, mod::Module)
-    # Sanity check
-    expr.head == :function || error("@_to_ir: expected a function definition")
-    length(expr.args) == 2 || error("@_to_ir: expected function expr with 2 expr-args")
-    _, body = expr.args
-    model_exprs = to_wren_exprs(body, mod)
-    return model_exprs
 end
