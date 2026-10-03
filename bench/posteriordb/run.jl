@@ -32,43 +32,85 @@ function _try(f)
     end
 end
 
-function _format(x::Exception, base)
-    msg = join(Base.split(sprint(showerror, x), "\n"), "; ")
-    # Truncate long messages
-    MAX_LEN = 80
-    if length(msg) > MAX_LEN
-        msg = msg[1:MAX_LEN] * "…"
-    end
-    return "ERR: $msg"
+# Errors are shown in the tables as `ERR [k]`, and listed in full after the tables.
+const ERRORS = Tuple{String,String,Exception}[]
+
+function _format(x::Exception, base, name, column)
+    push!(ERRORS, (name, column, x))
+    return "ERR [$(length(ERRORS))]"
 end
 # `base` is `nothing` if there is nothing to compare against, or an exception if the
 # baseline failed; in both cases the ratio is left out.
-function _format(x::Real, base::Union{BenchEntry,Nothing})
-    ratio = base isa Real ? @sprintf("(%.2fx)", x / base) : ""
+function _format(x::Real, base::Union{BenchEntry,Nothing}, _name, _column)
+    ratio = base isa Real ? " ($(_sigfigs(x / base))x)" : ""
+    # Round before picking the unit, so that e.g. 999.7 ns is shown as 1 μs, not 1000 ns.
+    x = round(x; sigdigits=SIGFIGS)
     absolute = if x < 1e-6
-        @sprintf("%.3f ns", x * 1e9)
+        "$(_sigfigs(x * 1e9)) ns"
     elseif x < 1e-3
-        @sprintf("%.3f μs", x * 1e6)
+        "$(_sigfigs(x * 1e6)) μs"
     elseif x < 1.0
-        @sprintf("%.3f ms", x * 1e3)
+        "$(_sigfigs(x * 1e3)) ms"
     else
-        @sprintf("%.3f s", x)
+        "$(_sigfigs(x)) s"
     end
-    return lpad(absolute, 11) * " " * ratio
+    return absolute * ratio
 end
 
-function Base.show(io::IO, ::MIME"text/plain", r::BenchResult)
-    println(io, "═══ ", r.name, " ═══")
-    println(io, "  Primals:")
-    println(io, "    Wren           : ", _format(r.wren_primal, nothing))
-    println(io, "    Turing         : ", _format(r.turing_primal, r.wren_primal))
-    println(io, "    Wren/Reactant  : ", _format(r.wren_reactant_primal, r.wren_primal))
-    println(io, "  Gradients:")
-    println(io, "    Wren+Enzyme    : ", _format(r.wren_enzyme, nothing))
-    println(io, "    Wren+Mooncake  : ", _format(r.wren_mooncake, r.wren_enzyme))
-    println(io, "    Wren+Reactant  : ", _format(r.wren_reactant_grad, r.wren_enzyme))
-    println(io, "    Turing+Enzyme  : ", _format(r.turing_enzyme, r.wren_enzyme))
-    println(io, "    Turing+Mooncake: ", _format(r.turing_mooncake, r.wren_enzyme))
+# Anything beyond 3 significant figures is just noise.
+const SIGFIGS = 3
+# `%g` drops trailing zeros, so that e.g. 120.0 is shown as 120.
+_sigfigs(x::Real) = @sprintf("%g", round(x; sigdigits=SIGFIGS))
+
+# Each column is a (header, field, baseline field) triple. A baseline of `nothing` means
+# the column is not compared against anything.
+const PRIMAL_COLUMNS = [
+    ("Wren", :wren_primal, nothing),
+    ("Turing", :turing_primal, :wren_primal),
+    ("Wren+R", :wren_reactant_primal, :wren_primal),
+]
+const GRAD_COLUMNS = [
+    ("Wren+E", :wren_enzyme, nothing),
+    ("Wren+M", :wren_mooncake, :wren_enzyme),
+    ("Wren+R", :wren_reactant_grad, :wren_enzyme),
+    ("Turing+E", :turing_enzyme, :wren_enzyme),
+    ("Turing+M", :turing_mooncake, :wren_enzyme),
+]
+
+function print_table(io::IO, title, results, columns)
+    header = ["Model"; [c[1] for c in columns]]
+    rows = map(results) do r
+        cells = map(columns) do (column, field, base)
+            base_value = base === nothing ? nothing : getfield(r, base)
+            _format(getfield(r, field), base_value, r.name, column)
+        end
+        [r.name; cells]
+    end
+    widths = [
+        maximum(textwidth, [header[j]; [row[j] for row in rows]]) for j in eachindex(header)
+    ]
+    # Model names are left-aligned, timings right-aligned.
+    _pad(s, j) = j == 1 ? rpad(s, widths[j]) : lpad(s, widths[j])
+    _line(cells) = "| " * join((_pad(c, j) for (j, c) in enumerate(cells)), " | ") * " |"
+    println(io, title)
+    println(io, _line(header))
+    println(io, "|" * join(("-"^(w + 2) for w in widths), "|") * "|")
+    foreach(row -> println(io, _line(row)), rows)
+    return println(io)
+end
+
+function print_errors(io::IO)
+    isempty(ERRORS) && return nothing
+    println(io, "Errors:")
+    for (k, (name, column, e)) in enumerate(ERRORS)
+        msg = join(Base.split(sprint(showerror, e), "\n"), "; ")
+        # Truncate long messages
+        MAX_LEN = 200
+        if length(msg) > MAX_LEN
+            msg = first(msg, MAX_LEN) * "…"
+        end
+        println(io, "  [$k] $name, $column: $msg")
+    end
 end
 
 function bench(mod)
@@ -150,7 +192,7 @@ include("models/mh.jl")
 include("models/rate1.jl")
 include("models/sblri_blr.jl")
 
-for mod in (
+results = map((
     ArK,
     EightSchoolsCentered,
     GLMBinomial,
@@ -161,8 +203,16 @@ for mod in (
     Mh,
     Rate1,
     SblriBLR,
-)
-    result = bench(mod)
-    show(stdout, MIME"text/plain"(), result)
-    println()
+)) do mod
+    println("Benchmarking ", nameof(mod), "...")
+    bench(mod)
 end
+println()
+print_table(stdout, "Primals (R = Reactant; ratios vs Wren):", results, PRIMAL_COLUMNS)
+print_table(
+    stdout,
+    "Gradients (E = Enzyme, M = Mooncake, R = Reactant; ratios vs Wren+E):",
+    results,
+    GRAD_COLUMNS,
+)
+print_errors(stdout)
