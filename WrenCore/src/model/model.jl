@@ -31,20 +31,28 @@ struct Model{A<:NamedTuple,C<:VarNamedTuple,F}
         stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}},
         mod::Module;
         conditioned::VarNamedTuple=VarNamedTuple(),
-        _unsafe_reuse_evaluation_fn=make_evaluation_fn(keys(args), stmts, mod),
+        _unsafe_reuse_evaluation_fn=nothing,
     )
+        # Copy arguments upon model construction.
         dealiased_args = map(_dealias, args)
-        return new{
-            typeof(dealiased_args),
-            typeof(conditioned),
-            typeof(_unsafe_reuse_evaluation_fn),
-        }(
+        # Regenerate the evaluation function if it wasn't provided.
+        evaluation_fn = if _unsafe_reuse_evaluation_fn === nothing
+            make_evaluation_fn(
+                keys(args),
+                last(get_required_syms_and_args(stmts, Set(keys(args)))),
+                stmts,
+                mod,
+            )
+        else
+            _unsafe_reuse_evaluation_fn
+        end
+        return new{typeof(dealiased_args),typeof(conditioned),typeof(evaluation_fn)}(
             name,
             dealiased_args,
             stmts,
             mod,
             conditioned,
-            _unsafe_reuse_evaluation_fn,
+            evaluation_fn,
         )
     end
 end
@@ -304,7 +312,8 @@ function _wren(expr::Expr, mod::Module)
         $model_args,
         $model_exprs,
         @__MODULE__;
-        # Safe as this is the initial construction.
+        # Safe as the cached RGF is always correct for a given model instantiation, i.e.
+        # `f(arg1, arg2)` and `f(arg3, arg4)` should always use the same RGF.
         _unsafe_reuse_evaluation_fn=($evaluation_fn_ref),
     ))
     function_expr = Expr(:function, esc(signature), function_body)

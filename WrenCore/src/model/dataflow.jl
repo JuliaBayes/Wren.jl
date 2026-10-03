@@ -44,7 +44,7 @@ struct DataflowAnalysisState
     args_to_copy::Set{Symbol}
 end
 function mark_lhs_symbol!(state::DataflowAnalysisState, sym::Symbol)
-    # Record that we've seen `syms` on the LHS of a tilde
+    # Record that we've seen `sym` on the LHS of a tilde
     push!(state.lhs_syms, sym)
     return nothing
 end
@@ -58,8 +58,8 @@ function mark_symbol_used!(state::DataflowAnalysisState, syms::Set{Symbol})
     return nothing
 end
 function mark_as_written_to!(state::DataflowAnalysisState, syms::Set{Symbol})
-    # Record that we've read from `syms` in a later expression. This is a special case for
-    # the lhs of Observe statements which we know are only read from, not written to.
+    # Record that we've written to `syms` in a later expression. This is a special case for
+    # the lhs of Sample statements which we know are only written to, not read from.
     union!(state.dirty_args, intersect(state.args, syms))
     return nothing
 end
@@ -87,7 +87,7 @@ function parse_variables!(expr::Expr, state::DataflowAnalysisState)
     # can happen in, for example,
     #
     #  f(x, y) = x .= y; return x
-    # 
+    #
     # where `x` is written to and then subsequently read from. This is kind of pathological
     # but sadly we have to be safe in the presence of arbitrary Julia code.
     mark_symbol_used!(state, used)
@@ -225,7 +225,7 @@ function get_required_syms_and_args(
         Set{Symbol}(),
     )
 
-    # Populate the `lhs_syms` and `required_syms` sets.
+    # Populate the sets in `state`.
     for stmt in stmts
         parse_variables!(stmt, state)
     end
@@ -236,7 +236,6 @@ function get_required_syms_and_args(
         @info "[dataflow.jl] args_to_copy = $(state.args_to_copy)"
     end
 
-    # @info state.args_to_copy
     return state.required_syms, state.args_to_copy
 end
 
