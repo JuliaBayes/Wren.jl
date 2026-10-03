@@ -245,6 +245,10 @@ macro addloglikelihood(args...)
 end
 
 function _wren(expr::Expr, mod::Module)
+    # The short form `f(x) = body` has the same signature and body as the long form.
+    if expr.head == :(=) && Meta.isexpr(expr.args[1], (:call, :where))
+        expr = Expr(:function, expr.args...)
+    end
     # Sanity check
     expr.head == :function || error("@wren: expected a function definition")
     length(expr.args) == 2 || error("@wren: expected function expr with 2 expr-args")
