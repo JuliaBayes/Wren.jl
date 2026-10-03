@@ -31,9 +31,21 @@ struct Model{A<:NamedTuple,C<:VarNamedTuple,F}
         stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}},
         mod::Module;
         conditioned::VarNamedTuple=VarNamedTuple(),
-        evaluation_fn=make_evaluation_fn(keys(args), stmts, mod),
+        _unsafe_reuse_evaluation_fn=nothing,
     )
+        # Copy arguments upon model construction.
         dealiased_args = map(_dealias, args)
+        # Regenerate the evaluation function if it wasn't provided.
+        evaluation_fn = if _unsafe_reuse_evaluation_fn === nothing
+            make_evaluation_fn(
+                keys(args),
+                last(get_required_syms_and_args(stmts, Set(keys(args)))),
+                stmts,
+                mod,
+            )
+        else
+            _unsafe_reuse_evaluation_fn
+        end
         return new{typeof(dealiased_args),typeof(conditioned),typeof(evaluation_fn)}(
             name,
             dealiased_args,
@@ -97,13 +109,18 @@ _dealias(model::Model) = model
 
 function make_evaluation_fn(
     argnames::Tuple{Vararg{Symbol}},
+    args_to_copy::Set{Symbol},
     stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}},
     mod::Module,
 )
     body = Expr(:block)
     @gensym model_args
     for k in argnames
-        push!(body.args, :($(k) = $(WrenCore._dealias)($model_args.$k)))
+        if k in args_to_copy
+            push!(body.args, :($(k) = $(WrenCore._dealias)($model_args.$k)))
+        else
+            push!(body.args, :($(k) = $model_args.$k))
+        end
     end
 
     @gensym accs conditioned latent_source parameter_space retval
@@ -198,22 +215,37 @@ function Base.show(io::IO, ::MIME"text/plain", model::Model)
     return nothing
 end
 
-function to_namedtuple(args_expr::Expr)
+function extract_args(args_expr::Expr)
     args_expr.head == :tuple || error("@wren: expected a tuple of arguments")
     if isempty(args_expr.args)
-        :(NamedTuple())
+        :(NamedTuple()), Set{Symbol}()
     else
         new_expr = Expr(:tuple)
+        syms = Set{Symbol}()
         for arg in args_expr.args
+            # TODO(penelopeysm): support default positional arguments or keyword arguments.
             arg isa Symbol || error("@wren: expected function argument to be a symbol")
             push!(new_expr.args, :($arg = $(esc(arg))))
+            push!(syms, arg)
         end
-        new_expr
+        new_expr, syms
     end
 end
 
-macro wren(expr)
-    _wren(expr, __module__)
+macro wren(args...)
+    expr = last(args)
+    internal_to_ir = false
+    for opt in args[1:(end-1)]
+        # `internal_to_ir=true` is meant for internal testing only. It makes `@wren` return
+        # a tuple of the probabilistic IR (before dataflow analysis) and the set of the
+        # function's argument names, instead of defining a model.
+        if Meta.isexpr(opt, :(=)) && opt.args[1] === :internal_to_ir && opt.args[2] isa Bool
+            internal_to_ir = opt.args[2]
+        else
+            error("@wren: unexpected argument `$opt`")
+        end
+    end
+    _wren(expr, __module__; internal_to_ir)
 end
 
 macro observe(expr)
@@ -232,7 +264,7 @@ macro addloglikelihood(args...)
     error("@addloglikelihood must be used inside @wren")
 end
 
-function _wren(expr::Expr, mod::Module)
+function _wren(expr::Expr, mod::Module; internal_to_ir::Bool=false)
     # Sanity check
     expr.head == :function || error("@wren: expected a function definition")
     length(expr.args) == 2 || error("@wren: expected function expr with 2 expr-args")
@@ -244,8 +276,10 @@ function _wren(expr::Expr, mod::Module)
     fargs_expr = Expr(:tuple, fargs...)
     signature, body = expr.args
 
-    model_args = to_namedtuple(fargs_expr)
-    model_exprs = run_dataflow_analysis(to_wren_exprs(body, mod))
+    model_args, model_arg_symbols = extract_args(fargs_expr)
+    ir = to_wren_exprs(body, mod)
+    internal_to_ir && return :(($ir, $model_arg_symbols))
+    model_exprs, args_to_copy = run_dataflow_analysis(ir, model_arg_symbols)
 
     # At macro definition time, we generate a new symbol to store the evaluation function
     # corresponding to the AST *as defined in the macro*. It's possible that users can
@@ -277,6 +311,7 @@ function _wren(expr::Expr, mod::Module)
         quote
             const $evaluation_fn_name = $make_evaluation_fn(
                 ($(QuoteNode.(fargs)...),),
+                $args_to_copy,
                 $model_exprs,
                 $(QuoteNode(mod)),
             )
@@ -290,22 +325,11 @@ function _wren(expr::Expr, mod::Module)
         $model_args,
         $model_exprs,
         @__MODULE__;
-        evaluation_fn=($evaluation_fn_ref),
+        # Safe as the cached RGF is always correct for a given model instantiation, i.e.
+        # `f(arg1, arg2)` and `f(arg3, arg4)` should always use the same RGF.
+        _unsafe_reuse_evaluation_fn=($evaluation_fn_ref),
     ))
     function_expr = Expr(:function, esc(signature), function_body)
 
     return function_expr
-end
-
-# Parse into probabilistic IR. This is a helper macro meant for internal testing only.
-macro _to_ir(expr)
-    _macro_to_ir(expr, __module__)
-end
-function _macro_to_ir(expr::Expr, mod::Module)
-    # Sanity check
-    expr.head == :function || error("@_to_ir: expected a function definition")
-    length(expr.args) == 2 || error("@_to_ir: expected function expr with 2 expr-args")
-    _, body = expr.args
-    model_exprs = to_wren_exprs(body, mod)
-    return model_exprs
 end

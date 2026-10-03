@@ -23,6 +23,7 @@ using Test
     include("draw.jl")
     include("ad.jl")
     include("predict.jl")
+    include("issues/69.jl")
     include("issues/132.jl")
 end
 
