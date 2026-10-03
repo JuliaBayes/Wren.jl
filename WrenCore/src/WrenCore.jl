@@ -16,6 +16,10 @@ function _issue_error(str)
     )
 end
 
+function _docs_link(str)
+    return "https://juliabayes.org/Wren.jl/$str"
+end
+
 const WREN_COMPILATION_DEBUG = Ref(false)
 
 # Parameter spaces

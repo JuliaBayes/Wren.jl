@@ -8,8 +8,6 @@ using WrenCore: get_used_symbols, get_lhs_index_symbols
 using WrenCore.Expressions: lower_to_wren
 using Test
 
-# Run the dataflow analysis on the output of `@wren internal_to_ir=true`. Returns a tuple of
-# `(required_syms, args_to_copy)`.
 analyse((ir, args)) = WrenCore.get_required_syms_and_args(ir, args)
 
 @testset "get_used_symbols" begin
@@ -75,322 +73,316 @@ end
     @test get_lhs_index_symbols(:(x[1[x]])) == Set{Symbol}([:x])
 end
 
-@testset "dataflow analysis" begin
+@testset "sample lhs reuse analysis" begin
     @testset "basic" begin
-        @test analyse(@wren internal_to_ir=true function f1(a, b)
+        @test first(analyse(@wren internal_to_ir=true function f1()
             x ~ a
             y ~ b
-        end) == (Set{Symbol}(), Set{Symbol}([:a, :b]))
+        end)) == Set{Symbol}()
 
-        @test analyse(@wren internal_to_ir=true function f2a(a)
+        @test first(analyse(@wren internal_to_ir=true function f2a()
             x ~ a
             y ~ dist(x)
-        end) == (Set{Symbol}([:x]), Set{Symbol}([:a]))
+        end)) == Set{Symbol}([:x])
 
-        @test analyse(@wren internal_to_ir=true function f2b(a, y)
+        @test first(analyse(@wren internal_to_ir=true function f2b()
             x ~ a
             @observe y ~ x
-        end) == (Set{Symbol}([:x]), Set{Symbol}([:a]))
+        end)) == Set{Symbol}([:x])
 
         # Uses prior to sampling don't count
-        @test analyse(@wren internal_to_ir=true function f3(y, b)
+        @test first(analyse(@wren internal_to_ir=true function f3()
             a = y
             y ~ b
-        end) == (Set{Symbol}(), Set{Symbol}([:y, :b]))
+        end)) == Set{Symbol}()
 
         # Any part of the lhs being reused counts as a reuse
-        @test analyse(@wren internal_to_ir=true function f4(a)
+        @test first(analyse(@wren internal_to_ir=true function f4()
             x ~ a
             y ~ dist(x[1])
-        end) == (Set{Symbol}([:x]), Set{Symbol}([:a]))
+        end)) == Set{Symbol}([:x])
 
-        @test analyse(@wren internal_to_ir=true function f5(a)
+        @test first(analyse(@wren internal_to_ir=true function f5()
             x ~ a
             y = x
-        end) == (Set{Symbol}([:x]), Set{Symbol}([:a]))
+        end)) == Set{Symbol}([:x])
 
-        @test analyse(@wren internal_to_ir=true function f6(a)
+        @test first(analyse(@wren internal_to_ir=true function f6()
             x ~ a
             x
-        end) == (Set{Symbol}([:x]), Set{Symbol}([:a]))
+        end)) == Set{Symbol}([:x])
 
-        @test analyse(@wren internal_to_ir=true function f7(x)
+        @test first(analyse(@wren internal_to_ir=true function f7()
             x ~ dist(x)
-        end) == (Set{Symbol}(), Set{Symbol}([:x]))
+        end)) == Set{Symbol}()
 
-        required, to_copy = analyse(@wren internal_to_ir=true function f8(a)
+        @test_broken first(analyse(@wren internal_to_ir=true function f8()
             x ~ a
             # In principle, reassigning to x should kill the previous value of x.
             # Wren doesn't detect that yet.
             x = 2
             y ~ dist(x)
-        end)
-
-        @test_broken required == Set{Symbol}()
-
-        @test to_copy == Set{Symbol}([:a])
+        end)) == Set{Symbol}()
     end
 
     @testset "uses inside expressions" begin
-        @test analyse(@wren internal_to_ir=true function e1(a)
+        @test first(analyse(@wren internal_to_ir=true function e1()
             x ~ a
             y ~ dist(x.b)
-        end) == (Set{Symbol}([:x]), Set{Symbol}([:a]))
+        end)) == Set{Symbol}([:x])
 
-        @test analyse(@wren internal_to_ir=true function e2(a)
+        @test first(analyse(@wren internal_to_ir=true function e2()
             x ~ a
             y ~ dist(f(g(x)))
-        end) == (Set{Symbol}([:x]), Set{Symbol}([:a]))
+        end)) == Set{Symbol}([:x])
 
-        @test analyse(@wren internal_to_ir=true function e3a(a)
+        @test first(analyse(@wren internal_to_ir=true function e3a()
             x ~ a
             y ~ dist(; b=x)
-        end) == (Set{Symbol}([:x]), Set{Symbol}([:a]))
+        end)) == Set{Symbol}([:x])
 
-        @test analyse(@wren internal_to_ir=true function e3b(a, b)
+        @test first(analyse(@wren internal_to_ir=true function e3b()
             x ~ a
             y ~ dist(; x=b)
-        end) == (Set{Symbol}(), Set{Symbol}([:a, :b]))
+        end)) == Set{Symbol}()
 
-        @test analyse(@wren internal_to_ir=true function e3c(a, b)
+        @test first(analyse(@wren internal_to_ir=true function e3c()
             x ~ a
             y ~ dist(x=b)
-        end) == (Set{Symbol}(), Set{Symbol}([:a, :b]))
+        end)) == Set{Symbol}()
 
-        @test analyse(@wren internal_to_ir=true function e3d(a)
+        @test first(analyse(@wren internal_to_ir=true function e3d()
             x ~ a
             y ~ dist(; x)
-        end) == (Set{Symbol}([:x]), Set{Symbol}([:a]))
+        end)) == Set{Symbol}([:x])
 
-        @test analyse(@wren internal_to_ir=true function e4(a)
+        @test first(analyse(@wren internal_to_ir=true function e4()
             x ~ a
             y ~ dist(x[@vn(b)])
-        end) == (Set{Symbol}([:x]), Set{Symbol}([:a]))
+        end)) == Set{Symbol}([:x])
 
-        @test analyse(@wren internal_to_ir=true function e5(a)
+        @test first(analyse(@wren internal_to_ir=true function e5()
             x ~ a
             y ~ dist("$x")
-        end) == (Set{Symbol}([:x]), Set{Symbol}([:a]))
+        end)) == Set{Symbol}([:x])
 
-        @test analyse(@wren internal_to_ir=true function e6(a)
+        @test first(analyse(@wren internal_to_ir=true function e6()
             x ~ a
             y ~ dist([x, 1])
-        end) == (Set{Symbol}([:x]), Set{Symbol}([:a]))
+        end)) == Set{Symbol}([:x])
 
-        @test analyse(@wren internal_to_ir=true function e7(a)
+        @test first(analyse(@wren internal_to_ir=true function e7()
             x ~ a
             y ~ dist(() -> x)
-        end) == (Set{Symbol}([:x]), Set{Symbol}([:a]))
+        end)) == Set{Symbol}([:x])
 
-        @test analyse(@wren internal_to_ir=true function e8(a)
+        @test first(analyse(@wren internal_to_ir=true function e8()
             x ~ a
             let z = x
                 z
             end
-        end) == (Set{Symbol}([:x]), Set{Symbol}([:a]))
+        end)) == Set{Symbol}([:x])
     end
 
     @testset "closures and inner functions" begin
         # Note: RGF can't define closures over variables outside the model body, but
         # closures over variables defined in the model body are allowed.
-        @test analyse(@wren internal_to_ir=true function c1(a)
+        @test first(analyse(@wren internal_to_ir=true function c1()
             x ~ a
             f = () -> x
-        end) == (Set{Symbol}([:x]), Set{Symbol}([:a]))
+        end)) == Set{Symbol}([:x])
 
-        @test analyse(@wren internal_to_ir=true function c2(a)
+        @test first(analyse(@wren internal_to_ir=true function c2()
             x ~ a
             function g()
                 return x
             end
-        end) == (Set{Symbol}([:x]), Set{Symbol}([:a]))
+        end)) == Set{Symbol}([:x])
     end
 
     @testset "uses in lhs" begin
-        @test analyse(@wren internal_to_ir=true function l1(a, b, z)
+        @test first(analyse(@wren internal_to_ir=true function l1()
             x ~ a
             z[x] ~ b
-        end) == (Set{Symbol}([:x]), Set{Symbol}([:a, :b]))
+        end)) == Set{Symbol}([:x])
 
-        @test analyse(@wren internal_to_ir=true function l2(a, b, z)
+        @test first(analyse(@wren internal_to_ir=true function l2()
             x ~ a
             @observe z[x] ~ b
-        end) == (Set{Symbol}([:x]), Set{Symbol}([:a, :b]))
+        end)) == Set{Symbol}([:x])
 
-        @test analyse(@wren internal_to_ir=true function l3(a, c, z)
+        @test first(analyse(@wren internal_to_ir=true function l3()
             x ~ a
             z[x.b] ~ c
-        end) == (Set{Symbol}([:x]), Set{Symbol}([:a, :c]))
+        end)) == Set{Symbol}([:x])
 
-        @test analyse(@wren internal_to_ir=true function l4(x, a, b)
+        @test first(analyse(@wren internal_to_ir=true function l4()
             x[1] ~ a
             x[2] ~ b
-        end) == (Set{Symbol}(), Set{Symbol}([:a, :b]))
+        end)) == Set{Symbol}()
 
-        @test analyse(@wren internal_to_ir=true function l5(x, a, b)
+        @test first(analyse(@wren internal_to_ir=true function l5()
             x[1] ~ a
             x[x[1]] ~ b
-        end) == (Set{Symbol}([:x]), Set{Symbol}([:x, :a, :b]))
+        end)) == Set{Symbol}([:x])
 
-        @test analyse(@wren internal_to_ir=true function l6(x, a)
+        @test first(analyse(@wren internal_to_ir=true function l6()
             x[x] ~ a
-        end) == (Set{Symbol}(), Set{Symbol}([:x, :a]))
+        end)) == Set{Symbol}()
     end
 
     @testset "other statements" begin
-        @test analyse(@wren internal_to_ir=true function o1(a, y)
+        @test first(analyse(@wren internal_to_ir=true function o1()
             x ~ a
             @observe y ~ dist(x)
-        end) == (Set{Symbol}([:x]), Set{Symbol}([:a]))
+        end)) == Set{Symbol}([:x])
 
-        @test analyse(@wren internal_to_ir=true function o2(a)
+        @test first(analyse(@wren internal_to_ir=true function o2()
             x ~ a
             return x
-        end) == (Set{Symbol}([:x]), Set{Symbol}([:a]))
+        end)) == Set{Symbol}([:x])
 
-        @test analyse(@wren internal_to_ir=true function o3(a)
+        @test first(analyse(@wren internal_to_ir=true function o3()
             x ~ a
             return f(x)
-        end) == (Set{Symbol}([:x]), Set{Symbol}([:a]))
+        end)) == Set{Symbol}([:x])
 
-        @test analyse(@wren internal_to_ir=true function o4(a)
-            x ~ a
-            @addloglikelihood name = :b f(x)
-        end) == (Set{Symbol}([:x]), Set{Symbol}([:a]))
+        @test first(
+            analyse(@wren internal_to_ir=true function o4()
+                x ~ a
+                @addloglikelihood name = :b f(x)
+            end),
+        ) == Set{Symbol}([:x])
 
-        @test analyse(@wren internal_to_ir=true function o5(a)
+        @test first(analyse(@wren internal_to_ir=true function o5()
             x ~ a
             @inbounds y = x[1]
-        end) == (Set{Symbol}([:x]), Set{Symbol}([:a]))
+        end)) == Set{Symbol}([:x])
     end
 
     @testset "iid" begin
-        @test analyse(@wren internal_to_ir=true function i1(a)
+        @test first(analyse(@wren internal_to_ir=true function i1()
             x ~ a
             @iid y ~ dist(x)
-        end) == (Set{Symbol}([:x]), Set{Symbol}([:a]))
+        end)) == Set{Symbol}([:x])
 
-        @test analyse(@wren internal_to_ir=true function i2(a, b)
+        @test first(analyse(@wren internal_to_ir=true function i2()
             x ~ a
             @iid size = x y ~ b
-        end) == (Set{Symbol}([:x]), Set{Symbol}([:a, :b]))
+        end)) == Set{Symbol}([:x])
 
-        @test analyse(@wren internal_to_ir=true function i3(a)
+        @test first(analyse(@wren internal_to_ir=true function i3()
             @iid x ~ a
             y ~ dist(x)
-        end) == (Set{Symbol}([:x]), Set{Symbol}([:a]))
+        end)) == Set{Symbol}([:x])
 
-        @test analyse(@wren internal_to_ir=true function i4(a, y)
+        @test first(analyse(@wren internal_to_ir=true function i4()
             x ~ a
             @observe @iid y ~ dist(x)
-        end) == (Set{Symbol}([:x]), Set{Symbol}([:a]))
+        end)) == Set{Symbol}([:x])
     end
 
     @testset "batch" begin
-        @test analyse(@wren internal_to_ir=true function b1(a, j, y)
+        @test first(analyse(@wren internal_to_ir=true function b1()
             x ~ a
             @batch for i in j
                 y[i] ~ dist(x[i])
             end
-        end) == (Set{Symbol}([:x]), Set{Symbol}([:a, :j]))
+        end)) == Set{Symbol}([:x])
 
-        @test analyse(@wren internal_to_ir=true function b2(a, y)
+        @test first(analyse(@wren internal_to_ir=true function b2()
             x ~ a
             @batch for i in x
                 y[i] ~ b
             end
-        end) == (Set{Symbol}([:x]), Set{Symbol}([:a]))
+        end)) == Set{Symbol}([:x])
 
-        @test analyse(@wren internal_to_ir=true function b3(a, b, j, y)
+        @test first(analyse(@wren internal_to_ir=true function b3()
             x ~ a
             @batch size = x for i in j
                 y[i] ~ b
             end
-        end) == (Set{Symbol}([:x]), Set{Symbol}([:a, :b, :j]))
+        end)) == Set{Symbol}([:x])
 
-        @test analyse(@wren internal_to_ir=true function b4(b, j, y)
+        @test first(analyse(@wren internal_to_ir=true function b4()
             @batch for i in j
                 y[i] ~ b
             end
             z ~ dist(y)
-        end) == (Set{Symbol}([:y]), Set{Symbol}([:b, :j, :y]))
+        end)) == Set{Symbol}([:y])
 
-        @test analyse(@wren internal_to_ir=true function b5(b, j, y)
+        @test first(analyse(@wren internal_to_ir=true function b5()
             @batch for i in j
                 y[i] ~ b
             end
-        end) == (Set{Symbol}(), Set{Symbol}([:b, :j]))
+        end)) == Set{Symbol}()
     end
 
     @testset "if" begin
-        @test analyse(@wren internal_to_ir=true function f_if1(a, u)
+        @test first(analyse(@wren internal_to_ir=true function f_if1()
             x ~ a
             if u
                 x
             else
                 1
             end
-        end) == (Set{Symbol}([:x]), Set{Symbol}([:a, :u]))
+        end)) == Set{Symbol}([:x])
 
-        @test analyse(@wren internal_to_ir=true function f_if2(a, foo)
+        @test first(analyse(@wren internal_to_ir=true function f_if2()
             x ~ a
             if x
                 foo
             end
-        end) == (Set{Symbol}([:x]), Set{Symbol}([:a, :foo]))
+        end)) == Set{Symbol}([:x])
 
-        @test analyse(@wren internal_to_ir=true function f_if3(a, u)
+        @test first(analyse(@wren internal_to_ir=true function f_if3()
             if u
                 x ~ a
             end
             y ~ dist(x)
-        end) == (Set{Symbol}([:x]), Set{Symbol}([:a, :u]))
+        end)) == Set{Symbol}([:x])
 
-        @test analyse(@wren internal_to_ir=true function f_if4(a, u, foo, bar)
+        @test first(analyse(@wren internal_to_ir=true function f_if4()
             x ~ a
             if u
                 foo
             elseif x
                 bar
             end
-        end) == (Set{Symbol}([:x]), Set{Symbol}([:a, :u, :foo, :bar]))
+        end)) == Set{Symbol}([:x])
 
-        required, to_copy = analyse(@wren internal_to_ir=true function f_if5(a, u)
+        @test_broken first(analyse(@wren internal_to_ir=true function f_if5()
             if u
                 x ~ a
             else
                 y = x
             end
-        end)
-
-        @test_broken required == Set{Symbol}()
-
-        @test to_copy == Set{Symbol}([:a, :u])
+        end)) == Set{Symbol}()
     end
 
     @testset "for" begin
-        @test analyse(@wren internal_to_ir=true function f_for1(a, j)
+        @test first(analyse(@wren internal_to_ir=true function f_for1()
             x ~ a
             for i in j
                 x
             end
-        end) == (Set{Symbol}([:x]), Set{Symbol}([:a, :j]))
+        end)) == Set{Symbol}([:x])
 
-        @test analyse(@wren internal_to_ir=true function f_for2(a)
+        @test first(analyse(@wren internal_to_ir=true function f_for2()
             x ~ a
             for i in 1:10
                 y ~ dist(x)
             end
-        end) == (Set{Symbol}([:x]), Set{Symbol}([:a]))
+        end)) == Set{Symbol}([:x])
 
-        @test analyse(@wren internal_to_ir=true function f_for3(a, c)
+        @test first(analyse(@wren internal_to_ir=true function f_for3()
             x ~ a
             for i in x
                 y ~ c
             end
-        end) == (Set{Symbol}([:x]), Set{Symbol}([:a, :c]))
+        end)) == Set{Symbol}([:x])
 
-        required, to_copy = analyse(@wren internal_to_ir=true function f_for4(a, y, c)
+        @test_broken first(analyse(@wren internal_to_ir=true function f_for4()
             x ~ a
             # This shouldn't count because the loop index `x` will shadow the top-level `x`.
             # Wren currently conservatively reports that `x` is reused, but in principle it
@@ -398,143 +390,195 @@ end
             for x in y
                 z ~ c
             end
-        end)
+        end)) == Set{Symbol}()
 
-        @test_broken required == Set{Symbol}()
-
-        @test to_copy == Set{Symbol}([:a, :y, :c])
-
-        @test analyse(@wren internal_to_ir=true function f_for_backedge(a, b, j)
+        @test first(analyse(@wren internal_to_ir=true function f_for_backedge(a)
             # See discussion in https://github.com/JuliaBayes/Wren.jl/pull/124
             for i in j
                 z = a
                 a ~ b
             end
-        end) == (Set{Symbol}([:a]), Set{Symbol}([:a, :b, :j]))
+        end)) == Set{Symbol}([:a])
 
-        @test analyse(@wren internal_to_ir=true function f_for_nested_backedge(b, j, l)
+        @test first(analyse(@wren internal_to_ir=true function f_for_nested_backedge()
             for i in j
                 for k in l
                     z = a
                 end
                 a ~ b
             end
-        end) == (Set{Symbol}([:a]), Set{Symbol}([:b, :j, :l]))
+        end)) == Set{Symbol}([:a])
 
-        @test analyse(@wren internal_to_ir=true function f_for_self_backedge(j)
+        @test first(analyse(@wren internal_to_ir=true function f_for_self_backedge()
             for i in j
                 x ~ dist(x)
             end
-        end) == (Set{Symbol}([:x]), Set{Symbol}([:j]))
+        end)) == Set{Symbol}([:x])
 
-        @test analyse(@wren internal_to_ir=true function f_for_no_backedge(b, j)
+        @test first(analyse(@wren internal_to_ir=true function f_for_no_backedge()
             for i in j
                 a ~ b
             end
-        end) == (Set{Symbol}(), Set{Symbol}([:b, :j]))
+        end)) == Set{Symbol}()
     end
 
     @testset "while" begin
-        @test analyse(@wren internal_to_ir=true function f_while1(a, u)
+        @test first(analyse(@wren internal_to_ir=true function f_while1()
             x ~ a
             while u
                 y ~ dist(x)
             end
-        end) == (Set{Symbol}([:x]), Set{Symbol}([:a, :u]))
+        end)) == Set{Symbol}([:x])
 
-        @test analyse(@wren internal_to_ir=true function f_while_backedge(b, u)
+        @test first(analyse(@wren internal_to_ir=true function f_while_backedge()
             while u
                 z = a
                 a ~ b
             end
-        end) == (Set{Symbol}([:a]), Set{Symbol}([:b, :u]))
+        end)) == Set{Symbol}([:a])
 
-        @test analyse(@wren internal_to_ir=true function f_while_cond(b)
+        @test first(analyse(@wren internal_to_ir=true function f_while_cond()
             while a
                 a ~ b
             end
-        end) == (Set{Symbol}([:a]), Set{Symbol}([:b]))
+        end)) == Set{Symbol}([:a])
 
-        @test analyse(@wren internal_to_ir=true function f_while_self_backedge(u)
+        @test first(analyse(@wren internal_to_ir=true function f_while_self_backedge()
             while u
                 x ~ dist(x)
             end
-        end) == (Set{Symbol}([:x]), Set{Symbol}([:u]))
+        end)) == Set{Symbol}([:x])
 
-        @test analyse(@wren internal_to_ir=true function f_while_no_backedge(b, u)
+        @test first(analyse(@wren internal_to_ir=true function f_while_no_backedge()
             while u
                 a ~ b
             end
-        end) == (Set{Symbol}(), Set{Symbol}([:b, :u]))
-    end
-
-    @testset "argument copying" begin
-        @test analyse(@wren internal_to_ir=true function ac_unused(y)
-            x ~ a
-        end) == (Set{Symbol}(), Set{Symbol}())
-
-        # Written to, then read from: needs a copy.
-        @test analyse(@wren internal_to_ir=true function ac_write_read(y)
-            y[1] ~ a
-            @observe y[1] ~ b
-        end) == (Set{Symbol}([:y]), Set{Symbol}([:y]))
-
-        # Read from, then written to: no copy. This means that the write will be visible on
-        # the next model evaluation, which is intended (see the docs on mutability).
-        @test analyse(@wren internal_to_ir=true function ac_read_write(y)
-            @observe y[1] ~ a
-            y[1] ~ b
-        end) == (Set{Symbol}(), Set{Symbol}())
-
-        # Inside loops, a read can come after a write from the previous iteration.
-        @test analyse(@wren internal_to_ir=true function ac_read_write_for(y, j)
-            for i in j
-                @observe y[i] ~ a
-                y[i] ~ b
-            end
-        end) == (Set{Symbol}([:y]), Set{Symbol}([:y, :j]))
-
-        @test analyse(@wren internal_to_ir=true function ac_read_write_while(y, u)
-            while u
-                @observe y[1] ~ a
-                y[1] ~ b
-            end
-        end) == (Set{Symbol}([:y]), Set{Symbol}([:y, :u]))
-
-        # The whole LHS of an observe statement is only read from, including indices. (Side
-        # effects in the LHS are forbidden.) This is unlike Sample, where indices are
-        # treated as general uses.
-        @test analyse(@wren internal_to_ir=true function ac_observe_index(y, i)
-            @observe y[i] ~ a
-        end) == (Set{Symbol}(), Set{Symbol}())
-
-        @test analyse(@wren internal_to_ir=true function ac_sample_index(y, i)
-            y[i] ~ a
-        end) == (Set{Symbol}(), Set{Symbol}([:i]))
-
-        # Sampling a top-level argument is only a write...
-        @test analyse(@wren internal_to_ir=true function ac_toplevel(x)
-            x ~ a
-        end) == (Set{Symbol}(), Set{Symbol}())
-
-        # ...but returning it counts as a read, since the return value may be used by a
-        # parent model (if this is a submodel) or by the user.
-        @test analyse(@wren internal_to_ir=true function ac_toplevel_return(x)
-            x ~ a
-            return x
-        end) == (Set{Symbol}([:x]), Set{Symbol}([:x]))
-
-        @test analyse(@wren internal_to_ir=true function ac_batch_observe(y, j)
-            @batch for i in j
-                @observe y[i] ~ a
-            end
-        end) == (Set{Symbol}(), Set{Symbol}([:j]))
+        end)) == Set{Symbol}()
     end
 end
 
+@testset "arg copy analysis" begin
+    @testset "basic" begin
+        @test last(analyse(@wren internal_to_ir=true function f1(a)
+            x ~ a
+        end)) == Set{Symbol}([:a])
+
+        @test_broken last(analyse(@wren internal_to_ir=true function f2(a)
+            # Reassigning to the entire variable `a` should kill the previous value, but
+            # Wren doesn't detect that.
+            a = x
+        end)) == Set{Symbol}()
+
+        @test last(analyse(@wren internal_to_ir=true function f3(a)
+            # Very conservative, can be improved - see #150
+            x = a
+        end)) == Set{Symbol}([:a])
+
+        @test last(analyse(@wren internal_to_ir=true function f4(a)
+            # Very conservative, can be improved - see #150
+            x = f(a)
+        end)) == Set{Symbol}([:a])
+
+        @test last(analyse(@wren internal_to_ir=true function f5(a)
+            # Very conservative, can be improved - see #150
+            x ~ Normal(a)
+        end)) == Set{Symbol}([:a])
+
+        @test last(analyse(@wren internal_to_ir=true function f6(a)
+            a ~ Normal()
+        end)) == Set{Symbol}()
+
+        @test last(analyse(@wren internal_to_ir=true function f7(a)
+            @observe a ~ Normal()
+        end)) == Set{Symbol}()
+    end
+
+    @testset "genuine cases where it must be copied" begin
+        @test last(analyse(@wren internal_to_ir=true function g1(a)
+            d ~ y       # `d` is differentiable
+            c ~ f(a, d) # potentially copied into `a` and read via `c`
+        end)) == Set{Symbol}([:a])
+
+        @test last(analyse(@wren internal_to_ir=true function g2(a)
+            a ~ y     # `a` is differentiable
+            b ~ f(a)  # directly read out
+        end)) == Set{Symbol}([:a])
+
+        @test last(analyse(@wren internal_to_ir=true function g3(a)
+            a ~ y                   # `a` is differentiable
+            @addloglikelihood f(a)  # directly read out
+        end)) == Set{Symbol}([:a])
+
+        @test last(analyse(@wren internal_to_ir=true function g4(a)
+            # This was the original trigger for adding copies, so if this fails the whole
+            # thing is broken! https://github.com/JuliaBayes/Wren.jl/issues/69
+            @batch for i in 1:N
+                a[i] ~ d
+                b[i] ~ dist(a[i])
+            end
+        end)) == Set{Symbol}([:a])
+    end
+
+    @testset "multiple samples / observes" begin
+        @test last(analyse(@wren internal_to_ir=true function ffor1(a)
+            for i in 1:N
+                a[i] ~ dist
+            end
+        end)) == Set{Symbol}()
+
+        @test last(analyse(@wren internal_to_ir=true function ffor2(a)
+            # Very conservative, can be improved - see #150
+            for i in 1:eachindex(a)
+                a[i] ~ dist
+            end
+        end)) == Set{Symbol}([:a])
+
+        @test last(analyse(@wren internal_to_ir=true function ffor3(a)
+            for i in 1:N
+                @observe a[i] ~ dist
+            end
+        end)) == Set{Symbol}()
+
+        @test last(analyse(@wren internal_to_ir=true function ffor4(a)
+            # Very conservative, can be improved - see #150
+            for i in 1:eachindex(a)
+                @observe a[i] ~ dist
+            end
+        end)) == Set{Symbol}([:a])
+    end
+
+    @testset "iid" begin
+        @test last(analyse(@wren internal_to_ir=true function i1(a)
+            # Very conservative, can be improved - see #150
+            @iid x ~ dist(a)
+        end)) == Set{Symbol}([:a])
+
+        @test last(analyse(@wren internal_to_ir=true function i2(a)
+            # This is very conservative as well, but not related to #150
+            @iid x ~ dist size=a
+        end)) == Set{Symbol}([:a])
+    end
+
+    @testset "batch" begin
+        @test last(analyse(@wren internal_to_ir=true function b2(a)
+            @batch for i in 1:N
+                a[i] ~ d
+            end
+        end)) == Set{Symbol}()
+
+        @test last(analyse(@wren internal_to_ir=true function b3(a)
+            # Very conservative, can be improved - see #150
+            @batch for i in 1:N
+                b[i] ~ a[i]
+            end
+        end)) == Set{Symbol}([:a])
+    end
+end
+
+
 _samples(stmts) = filter(s -> s isa WrenCore.Sample, stmts)
 
-@testset "rewriting samples with lhs_is_reused" begin
+@testset "rewriting stage of dataflow analysis" begin
     @testset "top level" begin
         ir, args = @wren internal_to_ir=true function r1()
             x ~ a
