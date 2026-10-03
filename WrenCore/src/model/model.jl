@@ -31,16 +31,20 @@ struct Model{A<:NamedTuple,C<:VarNamedTuple,F}
         stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}},
         mod::Module;
         conditioned::VarNamedTuple=VarNamedTuple(),
-        evaluation_fn=make_evaluation_fn(keys(args), stmts, mod),
+        _unsafe_reuse_evaluation_fn=make_evaluation_fn(keys(args), stmts, mod),
     )
         dealiased_args = map(_dealias, args)
-        return new{typeof(dealiased_args),typeof(conditioned),typeof(evaluation_fn)}(
+        return new{
+            typeof(dealiased_args),
+            typeof(conditioned),
+            typeof(_unsafe_reuse_evaluation_fn),
+        }(
             name,
             dealiased_args,
             stmts,
             mod,
             conditioned,
-            evaluation_fn,
+            _unsafe_reuse_evaluation_fn,
         )
     end
 end
@@ -97,13 +101,18 @@ _dealias(model::Model) = model
 
 function make_evaluation_fn(
     argnames::Tuple{Vararg{Symbol}},
+    args_to_copy::Set{Symbol},
     stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}},
     mod::Module,
 )
     body = Expr(:block)
     @gensym model_args
     for k in argnames
-        push!(body.args, :($(k) = $(WrenCore._dealias)($model_args.$k)))
+        if k in args_to_copy
+            push!(body.args, :($(k) = $(WrenCore._dealias)($model_args.$k)))
+        else
+            push!(body.args, :($(k) = $model_args.$k))
+        end
     end
 
     @gensym accs conditioned latent_source parameter_space retval
@@ -198,17 +207,20 @@ function Base.show(io::IO, ::MIME"text/plain", model::Model)
     return nothing
 end
 
-function to_namedtuple(args_expr::Expr)
+function extract_args(args_expr::Expr)
     args_expr.head == :tuple || error("@wren: expected a tuple of arguments")
     if isempty(args_expr.args)
-        :(NamedTuple())
+        :(NamedTuple()), Set{Symbol}()
     else
         new_expr = Expr(:tuple)
+        syms = Set{Symbol}()
         for arg in args_expr.args
+            # TODO(penelopeysm): support default positional arguments or keyword arguments.
             arg isa Symbol || error("@wren: expected function argument to be a symbol")
             push!(new_expr.args, :($arg = $(esc(arg))))
+            push!(syms, arg)
         end
-        new_expr
+        new_expr, syms
     end
 end
 
@@ -244,8 +256,9 @@ function _wren(expr::Expr, mod::Module)
     fargs_expr = Expr(:tuple, fargs...)
     signature, body = expr.args
 
-    model_args = to_namedtuple(fargs_expr)
-    model_exprs = run_dataflow_analysis(to_wren_exprs(body, mod))
+    model_args, model_arg_symbols = extract_args(fargs_expr)
+    model_exprs, args_to_copy =
+        run_dataflow_analysis(to_wren_exprs(body, mod), model_arg_symbols)
 
     # At macro definition time, we generate a new symbol to store the evaluation function
     # corresponding to the AST *as defined in the macro*. It's possible that users can
@@ -277,6 +290,7 @@ function _wren(expr::Expr, mod::Module)
         quote
             const $evaluation_fn_name = $make_evaluation_fn(
                 ($(QuoteNode.(fargs)...),),
+                $args_to_copy,
                 $model_exprs,
                 $(QuoteNode(mod)),
             )
@@ -290,7 +304,8 @@ function _wren(expr::Expr, mod::Module)
         $model_args,
         $model_exprs,
         @__MODULE__;
-        evaluation_fn=($evaluation_fn_ref),
+        # Safe as this is the initial construction.
+        _unsafe_reuse_evaluation_fn=($evaluation_fn_ref),
     ))
     function_expr = Expr(:function, esc(signature), function_body)
 

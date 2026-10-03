@@ -3,10 +3,14 @@ module WrenDataflowTests
 @info "testing dataflow.jl"
 
 using WrenCore
-using WrenCore: @_to_ir, get_required_syms, run_dataflow_analysis
+using WrenCore: @_to_ir, run_dataflow_analysis
 using WrenCore: get_used_symbols, get_lhs_index_symbols
 using WrenCore.Expressions: lower_to_wren
 using Test
+
+function get_required_syms(ir)
+    return first(WrenCore.get_required_syms_and_args(ir, Set{Symbol}()))
+end
 
 @testset "get_used_symbols" begin
     # Check both the raw Julia expression and its lowered form.
@@ -457,17 +461,18 @@ _samples(stmts) = filter(s -> s isa WrenCore.Sample, stmts)
 
 @testset "rewriting samples with lhs_is_reused" begin
     @testset "top level" begin
-        ir = run_dataflow_analysis(@_to_ir function r1()
+        ir = @_to_ir function r1()
             x ~ a
             y ~ dist(x)
-        end)
+        end
+        ir, _ = run_dataflow_analysis(ir, Set{Symbol}())
         x_stmt, y_stmt = _samples(ir)
         @test x_stmt.lhs_is_reused
         @test !y_stmt.lhs_is_reused
     end
 
     @testset "inside for and if" begin
-        ir = run_dataflow_analysis(@_to_ir function r2()
+        ir = @_to_ir function r2()
             x ~ a
             for i in j
                 y ~ dist(x)
@@ -475,7 +480,8 @@ _samples(stmts) = filter(s -> s isa WrenCore.Sample, stmts)
                     z ~ dist(y)
                 end
             end
-        end)
+        end
+        ir, _ = run_dataflow_analysis(ir, Set{Symbol}())
         x_stmt = only(_samples(ir))
         for_body = only(filter(s->s isa WrenCore.WrenExpr, ir)).args[2]
         y_stmt = only(_samples(for_body.args))
@@ -487,17 +493,18 @@ _samples(stmts) = filter(s -> s isa WrenCore.Sample, stmts)
     end
 
     @testset "iid" begin
-        ir = run_dataflow_analysis(@_to_ir function r3()
+        ir = @_to_ir function r3()
             @iid x ~ a
             @iid y ~ dist(x)
-        end)
+        end
+        ir, _ = run_dataflow_analysis(ir, Set{Symbol}())
         x_stmt, y_stmt = filter(s -> s isa WrenCore.IID, ir)
         @test x_stmt.tilde.lhs_is_reused
         @test !y_stmt.tilde.lhs_is_reused
     end
 
     @testset "batch" begin
-        ir = run_dataflow_analysis(@_to_ir function r4()
+        ir = @_to_ir function r4()
             @batch for i in j
                 y[i] ~ b
             end
@@ -505,7 +512,8 @@ _samples(stmts) = filter(s -> s isa WrenCore.Sample, stmts)
                 z[i] ~ b
             end
             w ~ dist(z)
-        end)
+        end
+        ir, _ = run_dataflow_analysis(ir, Set{Symbol}())
         y_batch, z_batch = filter(s -> s isa WrenCore.Batch, ir)
         y_stmt = only(_samples(y_batch.body.args))
         z_stmt = only(_samples(z_batch.body.args))
@@ -514,26 +522,29 @@ _samples(stmts) = filter(s -> s isa WrenCore.Sample, stmts)
     end
 
     @testset "return" begin
-        ir = run_dataflow_analysis(@_to_ir function r6()
+        ir = @_to_ir function r6()
             return x ~ a
-        end)
+        end
+        ir, _ = run_dataflow_analysis(ir, Set{Symbol}())
         @test !only(filter(s -> s isa WrenCore.ReturnStatement, ir)).expr.lhs_is_reused
     end
 
     @testset "addloglikelihood" begin
-        ir = run_dataflow_analysis(@_to_ir function r7()
+        ir = @_to_ir function r7()
             @addloglikelihood (x ~ a)
-        end)
+        end
+        ir, _ = run_dataflow_analysis(ir, Set{Symbol}())
         @test !only(filter(s -> s isa WrenCore.AddLogLikelihood, ir)).expr.lhs_is_reused
     end
 
     @testset "lhs_top_level_symbol" begin
-        ir = run_dataflow_analysis(@_to_ir function r5()
+        ir = @_to_ir function r5()
             x ~ a
             y[1] ~ b
             z.c ~ d
             w[1].e[2] ~ f
-        end)
+        end
+        ir, _ = run_dataflow_analysis(ir, Set{Symbol}())
         @test map(s -> s.lhs_top_level_symbol, _samples(ir)) == [:x, :y, :z, :w]
     end
 end

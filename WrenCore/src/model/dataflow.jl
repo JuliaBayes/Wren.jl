@@ -166,7 +166,10 @@ function reconstruct_statement(expr::WrenExpr, required_syms::Set{Symbol})
     return WrenExpr(expr.head, new_args)
 end
 
-function get_required_syms(stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}})
+function get_required_syms_and_args(
+    stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}},
+    args::Set{Symbol},
+)
     # All top-level symbols on the LHS of Sample nodes
     lhs_syms = Set{Symbol}()
     # The subset of the above that were seen again in a later expression, which we thus need
@@ -178,16 +181,24 @@ function get_required_syms(stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}}
         parse_variables!(stmt, lhs_syms, required_syms)
     end
 
+    # TODO
+    args_to_copy = args
+    # @info args args_to_copy
+
     if WREN_COMPILATION_DEBUG[]
         @info "[dataflow.jl] lhs_syms = $(lhs_syms)"
         @info "[dataflow.jl] required_syms = $(required_syms)"
+        @info "[dataflow.jl] args_to_copy = $(args_to_copy)"
     end
 
-    return required_syms
+    return required_syms, args_to_copy
 end
 
-function run_dataflow_analysis(stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}})
-    required_syms = get_required_syms(stmts)
+function run_dataflow_analysis(
+    stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}},
+    args::Set{Symbol},
+)
+    required_syms, args_to_copy = get_required_syms_and_args(stmts, args)
     new_stmts = map(stmt -> reconstruct_statement(stmt, required_syms), stmts)
-    return Vector{Union{AbstractWrenExpr,LineNumberNode}}(new_stmts)
+    return Vector{Union{AbstractWrenExpr,LineNumberNode}}(new_stmts), args_to_copy
 end
