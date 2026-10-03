@@ -49,14 +49,18 @@ parse_variables!(::T, ::DataflowAnalysisState) where {T<:AbstractWrenExpr} =
     _issue_error("unhandled node of type $(T) in dataflow analysis")
 parse_variables!(::LineNumberNode, ::DataflowAnalysisState) = nothing
 function parse_variables!(sym::Symbol, state::DataflowAnalysisState)
-    if sym in state.lhs_syms
-        push!(state.required_syms, sym)
-    end
+    sym in state.lhs_syms && push!(state.required_syms, sym)
+    # Note the order here: we must first check `dirty_args` before writing to it
+    sym in state.dirty_args && push!(state.args_to_copy, sym)
+    sym in state.args && push!(state.dirty_args, sym)
     return nothing
 end
 function parse_variables!(expr::Expr, state::DataflowAnalysisState)
     # Raw Julia expressions, e.g. inside `OtherStatement`s or `@batch` loop iterators.
-    union!(state.required_syms, intersect(state.lhs_syms, get_used_symbols(expr)))
+    used = get_used_symbols(expr)
+    union!(state.required_syms, intersect(state.lhs_syms, used))
+    union!(state.args_to_copy, intersect(state.dirty_args, used))
+    union!(state.dirty_args, intersect(state.args, used))
     return nothing
 end
 function parse_variables!(stmt::Sample, state::DataflowAnalysisState)
@@ -64,13 +68,22 @@ function parse_variables!(stmt::Sample, state::DataflowAnalysisState)
     # rhs. However `x` itself is not considered used since it's only written to.
     used = union(get_lhs_index_symbols(stmt.lhs), get_used_symbols(stmt.rhs))
     union!(state.required_syms, intersect(state.lhs_syms, used))
+    union!(state.args_to_copy, intersect(state.dirty_args, used))
+    union!(state.dirty_args, intersect(state.args, used))
+    # Mark the LHS symbol itself.
     push!(state.lhs_syms, stmt.lhs_top_level_symbol)
+    # TODO(penelopeysm): Appearing on the LHS of a Sample statement doesn't necessarily mean
+    # that the symbol is written to, since it might have been conditioned on. So this is
+    # overly conservative. See https://github.com/JuliaBayes/Wren.jl/issues/139.
+    stmt.lhs_top_level_symbol in state.args &&
+        push!(state.dirty_args, stmt.lhs_top_level_symbol)
     return nothing
 end
 function parse_variables!(stmt::Observe, state::DataflowAnalysisState)
     # Unlike Sample, the whole LHS counts as a use, since its value is read.
     used = union(get_used_symbols(stmt.lhs), get_used_symbols(stmt.rhs))
     union!(state.required_syms, intersect(state.lhs_syms, used))
+    union!(state.args_to_copy, intersect(state.dirty_args, used))
     return nothing
 end
 function parse_variables!(stmt::IID, state::DataflowAnalysisState)
@@ -148,9 +161,9 @@ reconstruct_statement(::T, ::Set{Symbol}) where {T<:AbstractWrenExpr} =
 function reconstruct_statement(stmt::Sample, required_syms::Set{Symbol})
     return Accessors.@set stmt.lhs_is_reused = stmt.lhs_top_level_symbol in required_syms
 end
-reconstruct_statement(stmt::Observe, required_syms::Set{Symbol}) = stmt
+reconstruct_statement(stmt::Observe, ::Set{Symbol}) = stmt
 # The contents of an OtherStatement are not lowered, so they can't contain Samples.
-reconstruct_statement(stmt::OtherStatement, required_syms::Set{Symbol}) = stmt
+reconstruct_statement(stmt::OtherStatement, ::Set{Symbol}) = stmt
 function reconstruct_statement(stmt::IID, required_syms::Set{Symbol})
     return Accessors.@set stmt.tilde = reconstruct_statement(stmt.tilde, required_syms)
 end
@@ -191,9 +204,8 @@ function get_required_syms_and_args(
         @info "[dataflow.jl] args_to_copy = $(state.args_to_copy)"
     end
 
-    # TODO(penelopeysm): Populate state.args_to_copy and return it instead of just returning
-    # state.args.
-    return state.required_syms, state.args
+    # @info state.args_to_copy
+    return state.required_syms, state.args_to_copy
 end
 
 function run_dataflow_analysis(
