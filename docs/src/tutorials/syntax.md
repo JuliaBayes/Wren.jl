@@ -96,6 +96,12 @@ It should be noted that the two models above are actually semantically equivalen
 
 Immutable structs largely behave the same way as top-level variables, and mutable structs follow the same principles as arrays.
 
+!!! note "No side effects"
+
+    Left-hand sides of tilde-statements should not have side effects.
+    If they do, Wren makes no guarantee as to what will happen!
+    For example, `y[i + 1] ~ Normal()` is fine, but `y[i += 1] ~ Normal()` is not (it will parse but is undefined behaviour).
+
 ## Conditioning
 
 Now, we would almost certainly like to progress from the starting point above where everything is a latent variable.
