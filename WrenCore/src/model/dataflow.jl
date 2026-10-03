@@ -43,47 +43,79 @@ struct DataflowAnalysisState
     # Dirty arguments which have potentially been read from again
     args_to_copy::Set{Symbol}
 end
+function mark_lhs_symbol!(state::DataflowAnalysisState, sym::Symbol)
+    # Record that we've seen `syms` on the LHS of a tilde
+    push!(state.lhs_syms, sym)
+    return nothing
+end
+function mark_symbol_used!(state::DataflowAnalysisState, syms::Set{Symbol})
+    # Record that we've used `syms` in a later expression. In general, 'use' means
+    # that the symbol may have been both written to and read from.
+    union!(state.required_syms, intersect(state.lhs_syms, syms))
+    args = intersect(state.args, syms)
+    union!(state.dirty_args, args)
+    union!(state.args_to_copy, args)
+    return nothing
+end
+function mark_as_written_to!(state::DataflowAnalysisState, syms::Set{Symbol})
+    # Record that we've read from `syms` in a later expression. This is a special case for
+    # the lhs of Observe statements which we know are only read from, not written to.
+    union!(state.dirty_args, intersect(state.args, syms))
+    return nothing
+end
+function mark_as_read_from!(state::DataflowAnalysisState, syms::Set{Symbol})
+    # Record that we've read from `syms` in a later expression. This is a special case for
+    # the lhs of Observe statements which we know are only read from, not written to.
+    union!(state.required_syms, intersect(state.lhs_syms, syms))
+    union!(state.args_to_copy, intersect(state.dirty_args, syms))
+    return nothing
+end
 
 parse_variables!(::Any, ::DataflowAnalysisState) = nothing # e.g. literal
 parse_variables!(::T, ::DataflowAnalysisState) where {T<:AbstractWrenExpr} =
     _issue_error("unhandled node of type $(T) in dataflow analysis")
 parse_variables!(::LineNumberNode, ::DataflowAnalysisState) = nothing
 function parse_variables!(sym::Symbol, state::DataflowAnalysisState)
-    sym in state.lhs_syms && push!(state.required_syms, sym)
-    # Note the order here: we must first check `dirty_args` before writing to it
-    sym in state.dirty_args && push!(state.args_to_copy, sym)
-    sym in state.args && push!(state.dirty_args, sym)
+    mark_symbol_used!(state, Set([sym]))
     return nothing
 end
 function parse_variables!(expr::Expr, state::DataflowAnalysisState)
     # Raw Julia expressions, e.g. inside `OtherStatement`s or `@batch` loop iterators.
     used = get_used_symbols(expr)
-    union!(state.required_syms, intersect(state.lhs_syms, used))
-    union!(state.args_to_copy, intersect(state.dirty_args, used))
-    union!(state.dirty_args, intersect(state.args, used))
+    # TODO(penelopeysm): This is a very conservative analysis because it assumes that
+    # any appearance of a symbol in an expression counts as BOTH a write and a read. This
+    # can happen in, for example,
+    #
+    #  f(x, y) = x .= y; return x
+    # 
+    # where `x` is written to and then subsequently read from. This is kind of pathological
+    # but sadly we have to be safe in the presence of arbitrary Julia code.
+    mark_symbol_used!(state, used)
     return nothing
 end
 function parse_variables!(stmt::Sample, state::DataflowAnalysisState)
     # In e.g. `x[i] ~ y`, `i` and `y` are considered uses, so we need to check both lhs and
     # rhs. However `x` itself is not considered used since it's only written to.
     used = union(get_lhs_index_symbols(stmt.lhs), get_used_symbols(stmt.rhs))
-    union!(state.required_syms, intersect(state.lhs_syms, used))
-    union!(state.args_to_copy, intersect(state.dirty_args, used))
-    union!(state.dirty_args, intersect(state.args, used))
-    # Mark the LHS symbol itself.
-    push!(state.lhs_syms, stmt.lhs_top_level_symbol)
+    mark_symbol_used!(state, used)
     # TODO(penelopeysm): Appearing on the LHS of a Sample statement doesn't necessarily mean
     # that the symbol is written to, since it might have been conditioned on. So this is
     # overly conservative. See https://github.com/JuliaBayes/Wren.jl/issues/139.
-    stmt.lhs_top_level_symbol in state.args &&
-        push!(state.dirty_args, stmt.lhs_top_level_symbol)
+    #
+    # Note: in the case where it's conditioned on, the symbol isn't read from because Wren
+    # will read from the `model.conditioned` VNT instead. This might change if #139 is
+    # implemented.
+    mark_as_written_to!(state, Set([stmt.lhs_top_level_symbol]))
+    # Record the top-level LHS symbol itself.
+    mark_lhs_symbol!(state, stmt.lhs_top_level_symbol)
     return nothing
 end
 function parse_variables!(stmt::Observe, state::DataflowAnalysisState)
-    # Unlike Sample, the whole LHS counts as a use, since its value is read.
-    used = union(get_used_symbols(stmt.lhs), get_used_symbols(stmt.rhs))
-    union!(state.required_syms, intersect(state.lhs_syms, used))
-    union!(state.args_to_copy, intersect(state.dirty_args, used))
+    lhs_used = get_used_symbols(stmt.lhs)
+    rhs_used = get_used_symbols(stmt.rhs)
+    # LHS is only read from, but RHS can in general be either.
+    mark_as_read_from!(state, lhs_used)
+    mark_symbol_used!(state, rhs_used)
     return nothing
 end
 function parse_variables!(stmt::IID, state::DataflowAnalysisState)
