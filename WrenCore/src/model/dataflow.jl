@@ -30,75 +30,77 @@ function get_lhs_index_symbols(expr::Expr)
     end
 end
 
-parse_variables!(::Any, ::Set{Symbol}, ::Set{Symbol}) = nothing # e.g. literal
-parse_variables!(::T, ::Set{Symbol}, ::Set{Symbol}) where {T<:AbstractWrenExpr} =
+struct DataflowAnalysisState
+    # All top-level symbols on the LHS of Sample nodes
+    lhs_syms::Set{Symbol}
+    # The subset of the above that were seen again in a later expression, which we thus need
+    # the values of
+    required_syms::Set{Symbol}
+    # All model arguments
+    args::Set{Symbol}
+    # Arguments which have potentially been written to
+    dirty_args::Set{Symbol}
+    # Dirty arguments which have potentially been read from again
+    args_to_copy::Set{Symbol}
+end
+
+parse_variables!(::Any, ::DataflowAnalysisState) = nothing # e.g. literal
+parse_variables!(::T, ::DataflowAnalysisState) where {T<:AbstractWrenExpr} =
     _issue_error("unhandled node of type $(T) in dataflow analysis")
-parse_variables!(::LineNumberNode, ::Set{Symbol}, ::Set{Symbol}) = nothing
-function parse_variables!(sym::Symbol, lhs_syms::Set{Symbol}, required_syms::Set{Symbol})
-    if sym in lhs_syms
-        push!(required_syms, sym)
+parse_variables!(::LineNumberNode, ::DataflowAnalysisState) = nothing
+function parse_variables!(sym::Symbol, state::DataflowAnalysisState)
+    if sym in state.lhs_syms
+        push!(state.required_syms, sym)
     end
     return nothing
 end
-function parse_variables!(expr::Expr, lhs_syms::Set{Symbol}, required_syms::Set{Symbol})
+function parse_variables!(expr::Expr, state::DataflowAnalysisState)
     # Raw Julia expressions, e.g. inside `OtherStatement`s or `@batch` loop iterators.
-    union!(required_syms, intersect(lhs_syms, get_used_symbols(expr)))
+    union!(state.required_syms, intersect(state.lhs_syms, get_used_symbols(expr)))
     return nothing
 end
-function parse_variables!(stmt::Sample, lhs_syms::Set{Symbol}, required_syms::Set{Symbol})
+function parse_variables!(stmt::Sample, state::DataflowAnalysisState)
     # In e.g. `x[i] ~ y`, `i` and `y` are considered uses, so we need to check both lhs and
     # rhs. However `x` itself is not considered used since it's only written to.
     used = union(get_lhs_index_symbols(stmt.lhs), get_used_symbols(stmt.rhs))
-    union!(required_syms, intersect(lhs_syms, used))
-    push!(lhs_syms, stmt.lhs_top_level_symbol)
+    union!(state.required_syms, intersect(state.lhs_syms, used))
+    push!(state.lhs_syms, stmt.lhs_top_level_symbol)
     return nothing
 end
-function parse_variables!(stmt::Observe, lhs_syms::Set{Symbol}, required_syms::Set{Symbol})
+function parse_variables!(stmt::Observe, state::DataflowAnalysisState)
     # Unlike Sample, the whole LHS counts as a use, since its value is read.
     used = union(get_used_symbols(stmt.lhs), get_used_symbols(stmt.rhs))
-    union!(required_syms, intersect(lhs_syms, used))
+    union!(state.required_syms, intersect(state.lhs_syms, used))
     return nothing
 end
-function parse_variables!(stmt::IID, lhs_syms::Set{Symbol}, required_syms::Set{Symbol})
-    parse_variables!(stmt.tilde, lhs_syms, required_syms)
-    parse_variables!(stmt.size, lhs_syms, required_syms)
+function parse_variables!(stmt::IID, state::DataflowAnalysisState)
+    parse_variables!(stmt.tilde, state)
+    parse_variables!(stmt.size, state)
     return nothing
 end
-function parse_variables!(stmt::Batch, lhs_syms::Set{Symbol}, required_syms::Set{Symbol})
+function parse_variables!(stmt::Batch, state::DataflowAnalysisState)
     # TODO(penelopeysm): Inside the for loop, we know that the loop index is a new symbol,
     # so uses of it inside the loop body should not be considered as reusing a top-level
     # symbol. However, the chance that the loop index shadows a top-level symbol is pretty
     # low, so we can ignore this for now.
-    parse_variables!(stmt.loop_iters, lhs_syms, required_syms)
-    parse_variables!(stmt.size, lhs_syms, required_syms)
-    parse_variables!(stmt.body, lhs_syms, required_syms)
+    parse_variables!(stmt.loop_iters, state)
+    parse_variables!(stmt.size, state)
+    parse_variables!(stmt.body, state)
     return nothing
 end
-function parse_variables!(
-    stmt::AddLogLikelihood,
-    lhs_syms::Set{Symbol},
-    required_syms::Set{Symbol},
-)
-    parse_variables!(stmt.expr, lhs_syms, required_syms)
+function parse_variables!(stmt::AddLogLikelihood, state::DataflowAnalysisState)
+    parse_variables!(stmt.expr, state)
     return nothing
 end
-function parse_variables!(
-    stmt::ReturnStatement,
-    lhs_syms::Set{Symbol},
-    required_syms::Set{Symbol},
-)
-    parse_variables!(stmt.expr, lhs_syms, required_syms)
+function parse_variables!(stmt::ReturnStatement, state::DataflowAnalysisState)
+    parse_variables!(stmt.expr, state)
     return nothing
 end
-function parse_variables!(
-    stmt::OtherStatement,
-    lhs_syms::Set{Symbol},
-    required_syms::Set{Symbol},
-)
-    parse_variables!(stmt.expr, lhs_syms, required_syms)
+function parse_variables!(stmt::OtherStatement, state::DataflowAnalysisState)
+    parse_variables!(stmt.expr, state)
     return nothing
 end
-function parse_variables!(expr::WrenExpr, lhs_syms::Set{Symbol}, required_syms::Set{Symbol})
+function parse_variables!(expr::WrenExpr, state::DataflowAnalysisState)
     # TODO(penelopeysm): This is very generic and thus suboptimal. For example:
     #
     #  - `x = 2` will reassign to 2 and thus `x` should not be considered as reused.
@@ -118,7 +120,7 @@ function parse_variables!(expr::WrenExpr, lhs_syms::Set{Symbol}, required_syms::
     # technically correct, just a bit conservative - so we can leave the optimisations to
     # the future.
     for arg in expr.args
-        parse_variables!(arg, lhs_syms, required_syms)
+        parse_variables!(arg, state)
     end
 
     # For and while loop bodies have to be traversed twice to make sure we pick up edges
@@ -128,13 +130,13 @@ function parse_variables!(expr::WrenExpr, lhs_syms::Set{Symbol}, required_syms::
         # For a `for` loop, the loop iters (`expr.args[1]`) are only evaluated once at the
         # beginning of the loop, so we can skip it.
         for arg in expr.args[2:end]
-            parse_variables!(arg, lhs_syms, required_syms)
+            parse_variables!(arg, state)
         end
     elseif expr.head === :while
         # For a `while` loop the condition is evaluated on every iteration so we need to
         # include it.
         for arg in expr.args
-            parse_variables!(arg, lhs_syms, required_syms)
+            parse_variables!(arg, state)
         end
     end
     return nothing
@@ -170,28 +172,28 @@ function get_required_syms_and_args(
     stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}},
     args::Set{Symbol},
 )
-    # All top-level symbols on the LHS of Sample nodes
-    lhs_syms = Set{Symbol}()
-    # The subset of the above that were seen again in a later expression, which we thus need
-    # the values of
-    required_syms = Set{Symbol}()
+    state = DataflowAnalysisState(
+        Set{Symbol}(),
+        Set{Symbol}(),
+        args,
+        Set{Symbol}(),
+        Set{Symbol}(),
+    )
 
     # Populate the `lhs_syms` and `required_syms` sets.
     for stmt in stmts
-        parse_variables!(stmt, lhs_syms, required_syms)
+        parse_variables!(stmt, state)
     end
-
-    # TODO
-    args_to_copy = args
-    # @info args args_to_copy
 
     if WREN_COMPILATION_DEBUG[]
-        @info "[dataflow.jl] lhs_syms = $(lhs_syms)"
-        @info "[dataflow.jl] required_syms = $(required_syms)"
-        @info "[dataflow.jl] args_to_copy = $(args_to_copy)"
+        @info "[dataflow.jl] lhs_syms = $(state.lhs_syms)"
+        @info "[dataflow.jl] required_syms = $(state.required_syms)"
+        @info "[dataflow.jl] args_to_copy = $(state.args_to_copy)"
     end
 
-    return required_syms, args_to_copy
+    # TODO(penelopeysm): Populate state.args_to_copy and return it instead of just returning
+    # state.args.
+    return state.required_syms, state.args
 end
 
 function run_dataflow_analysis(
