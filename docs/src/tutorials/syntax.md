@@ -102,6 +102,46 @@ Immutable structs largely behave the same way as top-level variables, and mutabl
     If they do, Wren makes no guarantee as to what will happen!
     For example, `y[i + 1] ~ Normal()` is fine, but `y[i += 1] ~ Normal()` is not (it will parse but is undefined behaviour).
 
+## Mutability
+
+Related to the point above is that arguments which are mutable (e.g. arrays, Dicts, mutable structs) are not guaranteed to be copied upon every model evaluation.
+This is done for performance reasons: for example, it means that you can preallocate a scratch array and pass it to the model so that it can be reused on every evaluation!
+However, it does also mean that if you mutate an argument inside a model, this _may_ be visible on subsequent evaluations.
+This is especially so if you make use of Wren's copy-elision optimisations.
+(TODO: This doesn't exist yet, but it will soon.)
+
+It is quite hard to _accidentally_ trigger such behaviour in an observable manner, and if you do so you will probably be able to guess that you are doing something wrong.
+Here is a rather contrived example:
+
+```@example model
+@wren function mutable(y)
+    # This reads the value of `y[1]`.
+    @observe y[1] ~ Normal()
+    # This mutates `y[1]` by sampling a new value for it.
+    y[1] ~ Normal()
+end
+
+y_outside = [0.0]
+model = mutable(y_outside)
+model.args.y
+```
+
+Evaluating the model will now mutate `y`:
+
+```@example model
+rand(model);
+model.args.y
+```
+
+and if we evaluate it again, the log-density associated with the `@observe` statement will change.
+
+However, Wren guarantees that the value of `y_outside` will never be mutated.
+This is because when Wren _constructs_ a model (i.e., when calling `mutable(y_outside)`), it will copy the value of `y_outside`.
+
+```@example model
+y_outside
+```
+
 ## Conditioning
 
 Now, we would almost certainly like to progress from the starting point above where everything is a latent variable.
