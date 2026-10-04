@@ -99,23 +99,23 @@ end
         @test (@bmodel ad_model() AutoForwardDiff()).lp_and_grad_bench.time > 0
     end
 
-    @testset "optimise_copies" begin
+    @testset "reduce_copies" begin
         copied_args(::WrenCore.Model{A,C,F,Val{S}}) where {A,C,F,S} = S
 
         # `x` is written to and then read, so skipping its copy gives wrong gradients with
         # Enzyme (see #69). `y` is only read, but is copied because of `eachindex(y)`.
-        @wren function optimise_model(x, y)
+        @wren function reduce_model(x, y)
             @batch for i in eachindex(y)
                 x[i] ~ WrenDists.Normal()
                 @observe y[i] ~ WrenDists.Normal(x[i])
             end
         end
-        model = optimise_model(zeros(5), randn(Xoshiro(468), 5))
+        model = reduce_model(zeros(5), randn(Xoshiro(468), 5))
         @test copied_args(model) == (:x, :y)
 
-        optimised = optimise_copies(model, AutoEnzyme(; mode=Reverse); verbose=false)
-        @test copied_args(optimised) == (:x,)
-        @test optimised.evaluation_fn === model.evaluation_fn
+        reduced = reduce_copies(model, AutoEnzyme(; mode=Reverse); verbose=false)
+        @test copied_args(reduced) == (:x,)
+        @test reduced.evaluation_fn === model.evaluation_fn
     end
 end
 

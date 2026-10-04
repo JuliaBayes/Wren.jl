@@ -36,7 +36,7 @@ using WrenCore:
     lp_and_grad,
     lp_and_grad!,
     DEFAULT_AD,
-    optimise_copies,
+    reduce_copies,
     # Benchmark and test
     @bmodel,
     benchmark_model,
@@ -68,7 +68,7 @@ export WrenCore,
     lp_and_grad,
     lp_and_grad!,
     DEFAULT_AD,
-    optimise_copies,
+    reduce_copies,
     # Benchmark and test
     @bmodel,
     benchmark_model,

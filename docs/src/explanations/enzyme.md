@@ -17,7 +17,7 @@ We can (usually) help with minimising bugs and filing issues upstream, which wil
 ## Runtime activity
 
 Wren does not _generally_ require you to enable runtime activity when using Enzyme.
-Thus, you can simply use `AutoEnzyme(; mode=Reverse)` as the adtype when e.g. [sampling with NUTS](@ref nuts), or [constructing a `VecModel`](@ref vectorisation).
+Thus, you can simply use `DEFAULT_AD` (an alias for `AutoEnzyme(; mode=Reverse)`) as the adtype when e.g. [sampling with NUTS](@ref nuts), or [constructing a `VecModel`](@ref vectorisation).
 
 However, depending on how the model is written, sometimes Enzyme detects that it is necessary to use runtime activity.
 If you are familiar with Enzyme, you will know that this usually causes an error to be thrown.
@@ -56,27 +56,55 @@ Mixing these two things in the same struct (i.e., `MvNormal`) will trigger Enzym
 However, at the same time, it's clearly not possible to rewrite the model to avoid this.
 If the offending struct is only used as an observation distribution, then you can [manually write out the log-likelihood and use `@addloglikelihood`](@ref addloglike) and thus avoid making the struct, but this is less expressive and will make your model less usable.
 
-!!! note "To be precise..."
+### Copies
 
-    The need for runtime activity in the above case can also be overcome by creating a copy of `sigma` inside the model.
-    In fact, because of [certain other Enzyme-related requirements](@id enzyme-copyargs), Wren does actually copy all model arguments during evaluation, so this model as written above does _not_ require runtime activity:
+The need for runtime activity in the above case can also be overcome by creating a copy of `sigma` inside the model.
+In fact, Wren does often copy some model arguments during evaluation in order to ensure correctness (see [the page on argument copying](@ref copies) for more information).
+You can see this by printing the model in the REPL:
 
-    ```@example enzyme-rta
-    sigma = ones(4);
-    y = randn(4)
-    
-    WrenCore.set_auto_runtime_activity!(false)
-    # Should error if it needs runtime activity; but doesn't
-    VecModel(f(sigma, y), AutoEnzyme(; mode=Reverse))
-    ```
+```@example enzyme-rta
+sigma = ones(4);
+y = randn(4)
+f(sigma, y)
+```
 
-    However, note that creating a copy comes with its own performance cost so this is not a free solution.
+Wren shows here that `sigma` is copied at every model evaluation, which in fact circumvents the need for runtime activity.
+However, if we were to disable the copying with [`@nocopy`](@ref) annotations, then we would see that runtime activity will be turned on:
+
+```@example enzyme-rta
+@wren function f_nocopy(@nocopy(sigma), y)
+    m ~ MvNormal(zeros(4), I)
+    y ~ MvNormal(m, Diagonal(sigma))
+end
+VecModel(f_nocopy(sigma, y), DEFAULT_AD)
+```
+
+In this printout, the second type parameter of the [`ReverseMode`](https://enzyme.mit.edu/julia/stable/api/#EnzymeCore.ReverseMode) struct is `true`, which indicates that runtime activity has been enabled.
+
+Is the copy or the runtime activity the better solution?
+We can [benchmark](@ref benchmarking) to see which is faster:
+
+```@example enzyme-rta
+@bmodel f(sigma, y) DEFAULT_AD
+# Notice also that runtime activity isn't enabled here.
+```
+
+```@example enzyme-rta
+@bmodel f_nocopy(sigma, y) DEFAULT_AD
+```
+
+In this case we can see that eliding the copy is faster.
+
+If you use [`reduce_copies`](@ref copies) to automatically detect which copies can be safely skipped, it will always opt to remove the copies, even if that requires runtime activity to be enabled.
+The reason for this is because the cost of copies scale with the size of the arguments and can in principle get very large, whereas runtime activity scales with the number of loads and stores.
+Furthermore, eliding copies also makes the primal faster (as seen above), and also reduces GC pressure.
 
 ## [Copying model arguments on evaluation](@id enzyme-copyargs)
 
 !!! warning
 
     You should not need to read this unless you are actively developing Wren.
+    [The tutorial on argument copying](@ref copies) should have enough information for most users of Wren!
 
 When originally written, Wren did not copy any model arguments during model evaluation (it would copy them when _creating_ the model, but not when _evaluating_ it, since the latter is usually done many more times).
 
@@ -137,4 +165,4 @@ This behaviour is intentional in Enzyme and is a result of the `Const` marking.
 There isn't a simple way to work around this with DifferentiationInterface, so Wren currently works around this by copying most model arguments during evaluation.
 Wren does perform some basic analysis to try to avoid copying things that definitely don't need to be copied, but this is very conservative since Wren only has access to the syntax tree.
 
-The recommended workaround to this is for users to manually use `@nocopy` annotations on model arguments which are safe to not copy, or to use the `elide_copies` function to automatically detect which arguments can be safely not copied.
+The recommended workaround to this is for users to manually use [`@nocopy`](@ref) annotations on model arguments which are safe to not copy, or to use the [`reduce_copies`](@ref) function to automatically detect which arguments can be safely not copied.

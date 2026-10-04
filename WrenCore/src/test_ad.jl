@@ -265,7 +265,7 @@ function test_ad(
 end
 
 """
-    optimise_copies(
+    reduce_copies(
         model::WrenCore.Model,
         adtype::DI.AbstractADType;
         n_points::Int=10,
@@ -283,7 +283,7 @@ affect the log density or gradient computed with `adtype`.
 
 TODO: Finish docstring.
 """
-function optimise_copies(
+function reduce_copies(
     model::Model{A,C,F,Val{S}},
     adtype::DI.AbstractADType;
     n_points::Int=10,
@@ -355,9 +355,9 @@ function optimise_copies(
 
     if verbose
         if isempty(removed)
-            @info "optimise_copies: no copies could be skipped"
+            @info "reduce_copies: no copies could be skipped"
         else
-            @info "optimise_copies: these arguments can be marked @nocopy: $(join(removed, ", "))"
+            @info "reduce_copies: these arguments can be marked @nocopy: $(join(removed, ", "))"
         end
     end
     return with_copies(copy_argnames)
