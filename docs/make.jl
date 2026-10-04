@@ -9,6 +9,7 @@ using WrenDists
 using Documenter
 using DocumenterCodeBlocks
 using DocumenterInterLinks
+using DocumenterMermaid
 
 links = InterLinks(
     "DynamicHMC" => "https://www.tamaspapp.eu/DynamicHMC.jl/dev/",
@@ -37,13 +38,14 @@ makedocs(;
             "tutorials/models.md",
             "tutorials/distributions.md",
             "tutorials/submodels.md",
-            "tutorials/benchmarking.md",
             "tutorials/mcmc.md",
             "tutorials/workflow.md",
         ],
+        "How-tos" => ["howtos/benchmarking.md"],
         "Explanations" => [
             "explanations/enzyme.md",
             "explanations/batch.md",
+            "explanations/staged.md",
             "explanations/motivation.md",
         ],
         "Reference" => ["reference/distributions.md", "reference/api.md"],
