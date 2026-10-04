@@ -4,9 +4,12 @@ module WrenAliasingTests
 
 using WrenCore
 using Distributions
+using ForwardDiff, ReverseDiff, Mooncake, Enzyme
+using Chairmarks
 using Test
 
-# The names of the arguments that `model` copies on every evaluation.
+# The names of the arguments that `model` will copy on every evaluation when run under
+# Enzyme.
 copied_args(::WrenCore.Model{A,C,F,Val{S}}) where {A,C,F,S} = S
 
 @testset "aliasing.jl" begin
@@ -61,6 +64,93 @@ copied_args(::WrenCore.Model{A,C,F,Val{S}}) where {A,C,F,S} = S
             # read-only.
             @test x == xcopy
         end
+    end
+
+    @testset "model evaluation doesn't usually copy args" begin
+        # Unless under Enzyme, but that isn't tested here.
+        @wren function fmutates(x)
+            x[1] += 1.0
+            return x[1]
+        end
+
+        X = [0.0] # should never be mutated
+        model = fmutates(X)
+
+        @test model.args.x[1] == 0.0
+        rand(model)
+        @test model.args.x[1] == 1.0
+        rand(model)
+        @test model.args.x[1] == 2.0
+        @test X[1] == 0.0 # Original array should not have been modified
+    end
+
+    @testset "AD primal never copies args" begin
+        @wren function fmutates(x)
+            a ~ Normal() # needs to not be an empty model
+            x[1] += 1.0
+            return x[1]
+        end
+
+        model = fmutates(zeros(1000))
+        @testset "$(nameof(typeof(adtype)))" for adtype in (
+            AutoForwardDiff(),
+            AutoReverseDiff(),
+            AutoReverseDiff(; compile=true),
+            AutoMooncake(),
+            AutoEnzyme(; mode=Forward),
+            AutoEnzyme(; mode=Reverse),
+        )
+            vm = VecModel(model, adtype)
+
+            x_orig = vm.model.args.x[1]
+            params = rand(vm)
+            @test vm.model.args.x[1] > x_orig
+
+            x_orig = vm.model.args.x[1]
+            lp(vm, params)
+            @test vm.model.args.x[1] > x_orig
+
+            # For non-Enzyme gradients, it should always be guaranteed that the copy is
+            # elided. The problem with testing mutation behaviour is that it's not always
+            # visible to the caller: for example Mooncake 'undoes' mutation on the reverse
+            # pass. So we have to test this indirectly via allocations.
+            #
+            # In fact, it's likely that this test will pass for Enzyme as well, but that's
+            # only because of `reduce_copies` instead of a guarantee from Wren to not
+            # perform the copy. So we don't test that here.
+            if !(adtype isa AutoEnzyme)
+                bm = @b lp_and_grad($vm, $params)
+                @test bm.bytes < sizeof(vm.model.args.x)
+            end
+        end
+    end
+
+    @testset "reduce_copies" begin
+        @wren function f_redundant_copy(y)
+            a ~ Normal()
+            for i in eachindex(y)
+                # y[i] ~ Normal(a) would cause allocations O(size(y)), which would
+                # make the last test here fail.
+                y[i] = a
+            end
+        end
+        Y = randn(1000)
+        model = f_redundant_copy(Y)
+        @test copied_args(model) == (:y,)
+
+        # Test that without `reduce_copies`, the copy is performed.
+        vm = VecModel(model, WrenCore.DEFAULT_AD; reduce_copies=false)
+        @test copied_args(vm.model) == (:y,)
+        params = rand(vm)
+        bm = @b lp_and_grad($vm, $params)
+        @test bm.bytes >= sizeof(Y)
+
+        # Test that with `reduce_copies`, the copy is elided.
+        vm = VecModel(model, WrenCore.DEFAULT_AD; reduce_copies=true)
+        @test copied_args(vm.model) == ()
+        bm = @b lp_and_grad($vm, $params)
+        @info bm.bytes
+        @test bm.bytes < sizeof(Y)
     end
 
     @testset "@nocopy" begin
@@ -147,29 +237,6 @@ copied_args(::WrenCore.Model{A,C,F,Val{S}}) where {A,C,F,S} = S
                 @observe z ~ Normal(x[1] + y[1])
             end
             @test copied_args(nc_mixed([0.0], [0.0], 0.0)) == (:x,)
-        end
-
-        @testset "evaluation writes into the uncopied argument" begin
-            @wren function nc_write(@nocopy(y))
-                y[1] ~ Normal()
-                return y
-            end
-            @wren function copy_write(y)
-                y[1] ~ Normal()
-                return y
-            end
-
-            model = copy_write([0.0])
-            # If `copied_args` doesn't contain `:y`, then the subsequent test doesn't make
-            # sense.
-            @test copied_args(model) == (:y,)
-            rand(model)
-            @test model.args.y == [0.0]
-
-            model = nc_write([0.0])
-            @test copied_args(model) == () # likewise.
-            rand(model)
-            @test model.args.y != [0.0]
         end
 
         @testset "copy set is kept when conditioning" begin

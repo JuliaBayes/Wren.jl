@@ -8,6 +8,8 @@ using Random
 using Test
 using DifferentiationInterface
 
+copied_args(::WrenCore.Model{A,C,F,Val{S}}) where {A,C,F,S} = S
+
 @testset "#69 Enzyme.Const differentiable data" begin
     @wren function f(x, y, N)
         @batch for i in 1:N
@@ -20,16 +22,30 @@ using DifferentiationInterface
     x, y = randn(N), randn(N)
     model = f(x, y, N)
 
-    vm_enz = VecModel(model, WrenCore.DEFAULT_AD)
     vm_fd = VecModel(model, AutoFiniteDifferences(; fdm=central_fdm(5, 1)))
 
-    for i in 1:5
-        params = rand(vm_enz)
-        lp_enz, grad_enz = lp_and_grad(vm_enz, params)
-        lp_fd, grad_fd = lp_and_grad(vm_fd, params)
+    # Make sure that `reduce_copies` doesn't jeopardise correctness.
+    for reduce_copies in (true, false)
+        vm_enz = VecModel(model, WrenCore.DEFAULT_AD; reduce_copies=reduce_copies)
 
-        @test lp_enz ≈ lp_fd
-        @test grad_enz ≈ grad_fd
+        for i in 1:5
+            params = rand(vm_enz)
+            lp_enz, grad_enz = lp_and_grad(vm_enz, params)
+            lp_fd, grad_fd = lp_and_grad(vm_fd, params)
+
+            @test lp_enz ≈ lp_fd
+            @test grad_enz ≈ grad_fd
+        end
+    end
+
+    @testset "reduce_copies" begin
+        # Dataflow analysis should detect that `y` doesn't need to be copied
+        vm_full = VecModel(model, WrenCore.DEFAULT_AD; reduce_copies=false)
+        @test copied_args(vm_full.model) == (:N, :x)
+
+        # reduce_copies shouldn't reduce that further
+        vm_reduced = VecModel(model, WrenCore.DEFAULT_AD; reduce_copies=true)
+        @test copied_args(vm_reduced.model) == (:N, :x)
     end
 
     @testset "with nocopy" begin

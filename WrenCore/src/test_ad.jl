@@ -286,7 +286,13 @@ enzyme-copyargs)), so for any other `adtype` this returns `model` unchanged.
 
 TODO: Finish docstring.
 """
-reduce_copies(model::Model, ::Union{DI.AbstractADType,Nothing}; kwargs...) = model
+# (The type parameters on `model` are only there to match the Enzyme method, so that the
+# Enzyme method is strictly more specific and calls aren't ambiguous.)
+reduce_copies(
+    model::Model{A,C,F,Val{S}},
+    ::Union{DI.AbstractADType,Nothing};
+    kwargs...,
+) where {A,C,F,S} = model
 function reduce_copies(
     model::Model{A,C,F,Val{S}},
     adtype::DI.AutoEnzyme;
@@ -339,6 +345,12 @@ function reduce_copies(
     # Try removing each candidate in turn. Each attempt keeps the removals that already
     # passed, so this doesn't rely on arguments being independent of each other (for
     # example, two arguments might share memory).
+    #
+    # TODO(penelopeysm): Each attempt is a new model type, so Enzyme has to compile a new
+    # gradient for it (roughly 1 second each on the posteriordb models). This could be made
+    # cheaper by first trying to remove all candidates at once, and if that fails, splitting
+    # the candidates in half and recursing (like a binary search). Usually almost all copies
+    # can be removed, so the first attempt would often be the only one needed.
     copy_argnames = S
     removed = Symbol[]
     for k in candidates
