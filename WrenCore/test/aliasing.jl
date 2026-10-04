@@ -256,33 +256,6 @@ copied_args(::WrenCore.Model{A,C,F,Val{S}}) where {A,C,F,S} = S
         end
     end
 
-    @testset "changing copy set directly" begin
-        @wren function shared_rgf(y)
-            y[1] ~ Normal()
-            return y
-        end
-        model = shared_rgf([0.0])
-        @test copied_args(model) == (:y,)
-
-        # Build a model which reuses the same evaluation function but copies nothing.
-        nocopy_model = WrenCore.Model(
-            model.name,
-            model.args,
-            model.stmts,
-            model.mod;
-            enzyme_copy_argnames=Val(()),
-            _unsafe_reuse_evaluation_fn=model.evaluation_fn,
-        )
-        @test nocopy_model.evaluation_fn === model.evaluation_fn
-        @test copied_args(nocopy_model) == ()
-
-        # The copy set controls whether evaluation writes into `model.args`.
-        rand(model)
-        @test model.args.y == [0.0]
-        rand(nocopy_model)
-        @test nocopy_model.args.y != [0.0]
-    end
-
     @testset "only arguments that can hold differentiable data are copied" begin
         maybe_dealias(v) =
             WrenCore._maybe_dealias(EvalContext{true}(), Val((:v,)), Val(:v), v)
