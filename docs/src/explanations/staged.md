@@ -78,7 +78,10 @@ This is surprisingly easy to trigger:
 
 ```@repl rgfs
 for d in (Normal(), Exponential())
+    # d is a local variable...
+
     @wren function oops_closed_over_local()
+        # ... but our model closes over it
         x ~ d
     end
 
@@ -87,7 +90,7 @@ for d in (Normal(), Exponential())
 end
 ```
 
-This can of course be worked around, for example by passing `d` into the model as an argument.
+This can be worked around, for example by passing `d` into the model as an argument.
 However, it's still of course a limitation, and the error message isn't super helpful either.
 
 ## IR design
