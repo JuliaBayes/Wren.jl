@@ -20,17 +20,46 @@ using DifferentiationInterface
     x, y = randn(N), randn(N)
     model = f(x, y, N)
 
-    vm1 = VecModel(model, WrenCore.DEFAULT_AD)
-    vm2 = VecModel(model, AutoFiniteDifferences(; fdm=central_fdm(5, 1)))
+    vm_enz = VecModel(model, WrenCore.DEFAULT_AD)
+    vm_fd = VecModel(model, AutoFiniteDifferences(; fdm=central_fdm(5, 1)))
 
     for i in 1:5
-        params = rand(vm1)
-        lp1, grad1 = lp_and_grad(vm1, params)
-        lp2, grad2 = lp_and_grad(vm2, params)
+        params = rand(vm_enz)
+        lp_enz, grad_enz = lp_and_grad(vm_enz, params)
+        lp_fd, grad_fd = lp_and_grad(vm_fd, params)
 
-        @test lp1 ≈ lp2
-        @test grad1 ≈ grad2
+        @test lp_enz ≈ lp_fd
+        @test grad_enz ≈ grad_fd
     end
+
+    @testset "with nocopy" begin
+        # This should give incorrect gradients with Enzyme.
+        # https://github.com/EnzymeAD/Enzyme.jl/issues/2344
+        #
+        # Technically this is not a Wren test, and in principle if Enzyme magically fixes
+        # the const 'issue' this test will fail. But given that it's documented /
+        # intentional behaviour in Enzyme, I think this should be reasonably reliable to
+        # keep.
+        @wren function f_nocopy(@nocopy(x), y, N)
+            @batch for i in 1:N
+                x[i] ~ Normal()
+                @observe y[i] ~ Normal(x[i])
+            end
+        end
+        N = 10
+        x, y = randn(N), randn(N)
+        model_nocopy = f_nocopy(x, y, N)
+
+        vm_nocopy = VecModel(model_nocopy, WrenCore.DEFAULT_AD)
+        params = rand(vm_nocopy)
+
+        _, grad_nocopy = lp_and_grad(vm_nocopy, params)
+        _, grad_fd = lp_and_grad(vm_fd, params)
+
+        # Should be wrong.
+        @test maximum(abs.(grad_nocopy .- grad_fd)) > 1e-4
+    end
+
 end
 
 end
