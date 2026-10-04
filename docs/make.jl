@@ -45,7 +45,7 @@ makedocs(;
         "Explanations" => [
             "explanations/enzyme.md",
             "explanations/batch.md",
-            "explanations/rgf.md",
+            "explanations/staged.md",
             "explanations/motivation.md",
         ],
         "Reference" => ["reference/distributions.md", "reference/api.md"],

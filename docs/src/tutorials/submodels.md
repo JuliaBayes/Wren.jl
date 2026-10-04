@@ -102,7 +102,7 @@ rand(outer_with_retval())
 
 (You can also use this syntax for distributions, but it's much less interesting as the `retval` will also be the same as `rand(dist)`.)
 
-## Performance considerations
+## [Performance considerations](@id submodel-performance)
 
 **Note that accessing the latent variables of a submodel comes with a performance cost, *especially* when using gradient-based samplers.
 If at all possible, you should always use only the return values.**

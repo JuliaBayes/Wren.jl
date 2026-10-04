@@ -36,9 +36,9 @@ struct Model{A<:NamedTuple,C<:VarNamedTuple,F,CA<:Val}
     function Model(
         name::Symbol,
         args::NamedTuple,
-        stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}},
+        stmts::Vector{<:Union{AbstractWrenExpr,LineNumberNode}},
         mod::Module;
-        enzyme_copy_argnames::Val,
+        enzyme_copy_argnames::Val=Val{sort(keys(args))}(),
         conditioned::VarNamedTuple=VarNamedTuple(),
         _unsafe_reuse_evaluation_fn=nothing,
     )
@@ -178,7 +178,7 @@ to overload `_needs_copy`, as the generated function only has access to the meth
 
 function make_evaluation_fn(
     argnames::Tuple{Vararg{Symbol}},
-    stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}},
+    stmts::Vector{<:Union{AbstractWrenExpr,LineNumberNode}},
     mod::Module,
 )
     body = Expr(:block)
