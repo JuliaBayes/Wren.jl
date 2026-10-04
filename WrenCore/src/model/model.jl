@@ -122,6 +122,26 @@ arguments down.
 _copied_args(::Model{A,C,F,Val{CA}}) where {A,C,F,CA} = CA
 
 """
+    _with_copied_args(model::Model, copy_argnames)
+
+Return the same model, but with `copy_argnames` (an iterable of symbols) as its
+`enzyme_copy_argnames`. This reuses the evaluation function, so no new code is generated.
+The names are sorted so that the same set of arguments always gives the same type (as in the
+`@wren` macro).
+"""
+function _with_copied_args(model::Model, copy_argnames)
+    return Model(
+        model.name,
+        model.args,
+        model.stmts,
+        model.mod;
+        conditioned=model.conditioned,
+        enzyme_copy_argnames=Val(Tuple(sort!(collect(Symbol, copy_argnames)))),
+        _unsafe_reuse_evaluation_fn=model.evaluation_fn,
+    )
+end
+
+"""
     EvalContext{Enzyme}
 
 Information about how a model is being evaluated. It is passed to the model's evaluation
@@ -141,7 +161,7 @@ Return `_dealias(v)` if the following all hold true:
 - `EvalContext` tells us that we are running under Enzyme AD, which is the only situation where
   copies need to be made for correctness;
 - `name` is in `S`, the set of argument names which must be copied (`S` can be pruned either through
-  Wren's dataflow analysis, or by a user's `@nocopy` annotations); and
+  Wren's dataflow analysis, or by [`reduce_copies`](@ref)); and
 - `v` is a type that needs copying (see `_needs_copy`).
 
 Otherwise, returns `v`.
@@ -216,35 +236,6 @@ function get_function_name_and_args(signature::Expr)
     else
         error("@wren: expected function signature")
     end
-end
-
-"""
-    strip_nocopy_annotations(signature::Expr)
-
-Remove `@nocopy` annotations from the arguments in a model's function signature. Returns the
-new signature together with the set of argument names that were annotated.
-"""
-function strip_nocopy_annotations(signature::Expr)
-    if signature.head == :where
-        new_inner, nocopy_args = strip_nocopy_annotations(signature.args[1])
-        return Expr(:where, new_inner, signature.args[2:end]...), nocopy_args
-    end
-    signature.head == :call || error("@wren: expected function signature")
-    nocopy_args = Set{Symbol}()
-    new_args = map(signature.args[2:end]) do arg
-        # Only the bare `@nocopy` is recognised, not qualified forms like
-        # `WrenCore.@nocopy`. Since this is a purely syntactic check, we can't tell what a
-        # qualified name actually refers to.
-        Meta.isexpr(arg, :macrocall) && arg.args[1] === Symbol("@nocopy") || return arg
-        # `arg.args[2]` is a LineNumberNode.
-        inner = arg.args[3:end]
-        if !(length(inner) == 1 && inner[1] isa Symbol)
-            error("@wren: `@nocopy` must be applied to a single argument name, got `$arg`")
-        end
-        push!(nocopy_args, only(inner))
-        return only(inner)
-    end
-    return Expr(:call, signature.args[1], new_args...), nocopy_args
 end
 
 function _show_namedtuple_tree(io::IO, nt::NamedTuple, prefix::String)
@@ -358,38 +349,12 @@ macro addloglikelihood(args...)
     error("@addloglikelihood must be used inside @wren")
 end
 
-"""
-    @nocopy
-
-Mark a model argument as one that should never be copied when the model is evaluated, e.g.
-
-```julia
-@wren function f(x, @nocopy(y))
-    ...
-end
-```
-
-By default, Wren copies an argument on every evaluation if it cannot rule out that the
-argument is written to and then read from again (see the [Enzyme docs](@ref
-enzyme-copyargs) for why this matters). `@nocopy` overrides this.
-
-It is only safe to use `@nocopy` on an argument if, inside the model, the argument is either
-never written to, or is written to but never read from afterwards. If this does not hold,
-gradients computed with Enzyme may be silently wrong.
-"""
-macro nocopy(args...)
-    error("@nocopy must be used on an argument in the signature of a @wren function")
-end
-
 function _wren(expr::Expr, mod::Module; internal_to_ir::Bool=false)
     # Sanity check
     expr.head == :function || error("@wren: expected a function definition")
     length(expr.args) == 2 || error("@wren: expected function expr with 2 expr-args")
 
-    # Remove `@nocopy` annotations from the signature, since the model constructor we emit
-    # below should just have plain arguments.
     signature, body = expr.args
-    signature, nocopy_args = strip_nocopy_annotations(signature)
 
     # Generate a new symbol for the model's body, since we want the original
     # symbol to directly create the `Model`.
@@ -402,7 +367,7 @@ function _wren(expr::Expr, mod::Module; internal_to_ir::Bool=false)
     internal_to_ir && return :(($ir, $model_arg_symbols))
     model_exprs, args_to_copy = run_dataflow_analysis(ir, model_arg_symbols)
     # Sorted so that the same set of arguments always gives the same type.
-    enzyme_copy_argnames = Val(Tuple(sort!(collect(setdiff(args_to_copy, nocopy_args)))))
+    enzyme_copy_argnames = Val(Tuple(sort!(collect(args_to_copy))))
 
     # At macro definition time, we generate a new symbol to store the evaluation function
     # corresponding to the AST *as defined in the macro*. It's possible that users can

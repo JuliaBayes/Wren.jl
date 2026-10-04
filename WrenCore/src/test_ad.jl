@@ -304,20 +304,6 @@ function reduce_copies(
     verbose::Bool=true,
 ) where {A,C,F,S}
     atol, rtol = promote(atol, rtol)
-    # The same model, but only copying the arguments in `copy_argnames`. This reuses the
-    # evaluation function, so no new code is generated. The names are sorted so that the
-    # same set of arguments always gives the same type (as in the `@wren` macro).
-    function with_copies(copy_argnames::Tuple{Vararg{Symbol}})
-        return Model(
-            model.name,
-            model.args,
-            model.stmts,
-            model.mod;
-            conditioned=model.conditioned,
-            enzyme_copy_argnames=Val(Tuple(sort!(collect(copy_argnames)))),
-            _unsafe_reuse_evaluation_fn=model.evaluation_fn,
-        )
-    end
     function lp_and_collected_grad(vecmodel, params)
         lp, grad = lp_and_grad(vecmodel, params)
         # standardise the array type returned, as in `test_ad`.
@@ -354,7 +340,7 @@ function reduce_copies(
     for k in candidates
         trial_argnames = filter(!=(k), copy_argnames)
         trial_vecmodel = VecModel(
-            with_copies(trial_argnames),
+            _with_copied_args(model, trial_argnames),
             adtype,
             ref_vecmodel.lp_function,
             ref_vecmodel.parameter_space,
@@ -376,10 +362,10 @@ function reduce_copies(
         if isempty(removed)
             @info "reduce_copies: no copies could be skipped"
         else
-            @info "reduce_copies: these arguments can be marked @nocopy: $(join(removed, ", "))"
+            @info "reduce_copies: these arguments no longer need to be copied: $(join(removed, ", "))"
         end
     end
-    return with_copies(copy_argnames)
+    return _with_copied_args(model, copy_argnames)
 end
 
 """

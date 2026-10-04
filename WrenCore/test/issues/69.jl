@@ -46,7 +46,7 @@ using DifferentiationInterface
         @test WrenCore._copied_args(vm_reduced.model) == (:N, :x)
     end
 
-    @testset "with nocopy" begin
+    @testset "without copies" begin
         # This should give incorrect gradients with Enzyme.
         # https://github.com/EnzymeAD/Enzyme.jl/issues/2344
         #
@@ -54,16 +54,7 @@ using DifferentiationInterface
         # the const 'issue' this test will fail. But given that it's documented /
         # intentional behaviour in Enzyme, I think this should be reasonably reliable to
         # keep.
-        @wren function f_nocopy(@nocopy(x), y, N)
-            @batch for i in 1:N
-                x[i] ~ Normal()
-                @observe y[i] ~ Normal(x[i])
-            end
-        end
-        N = 10
-        x, y = randn(N), randn(N)
-        model_nocopy = f_nocopy(x, y, N)
-
+        model_nocopy = WrenCore._with_copied_args(model, ())
         vm_nocopy = VecModel(model_nocopy, WrenCore.DEFAULT_AD)
         params = rand(vm_nocopy)
 
