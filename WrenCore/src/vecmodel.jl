@@ -120,7 +120,8 @@ end
         adtype::Union{ADTypes.AbstractADType,Nothing};
         lp_function=logjoint_transformed,
         latent_source=FromPrior(),
-        parameter_space=UnconstrainedSpace()
+        parameter_space=UnconstrainedSpace(),
+        reduce_copies=true,
     )
 
 A vectorised form of `model`, which is designed to take a single vector of parameters as
@@ -198,6 +199,17 @@ since the mapping is invariant to the order in which the latent variables are en
 - `parameter_space::AbstractParameterSpace`: The parameter space in which the vectorised
   model is defined. The default is [`UnconstrainedSpace`](@ref), which is almost always what
   you want (again this is mostly for compatibility with gradient-based inference algorithms).
+
+- `reduce_copies::Bool`: When differentiating with Enzyme, Wren copies some of the model's
+  arguments on every evaluation (see [the docs](@ref enzyme-copyargs)). If this is `true`,
+  [`reduce_copies`](@ref) is first called on the model to find out which of these copies can
+  be skipped. This has no effect for other AD backends, which never make the copies. The
+  default is `true`.
+
+  In very pathological cases, `reduce_copies` may skip a copy that is actually needed (e.g.
+  when there is parameter-dependent control flow which (1) in turn causes a change in Enzyme's
+  behaviour, and (2) is not caught by the random testing in `reduce_copies`). This is very
+  unlikely, but if you are concerned about this, you can disable this.
 """
 struct VecModel{
     M<:Model,
@@ -252,7 +264,9 @@ function VecModel(
         model.args,
         model.conditioned,
         model.enzyme_copy_argnames,
-        EvalContext{true}(),
+        # Safe to avoid the copy because for Enzyme (where the copy is needed) we will call
+        # `DI.prepare_gradient` with the correct EvalContext below.
+        EvalContext{false}(),
         lp_function,
         parameter_space,
         vecinfo,
@@ -275,7 +289,7 @@ function VecModel(
             DI.Constant(model.args),
             DI.Constant(model.conditioned),
             DI.Constant(model.enzyme_copy_argnames),
-            DI.Constant(EvalContext{true}()),
+            DI.Constant(_eval_context(adtype)),
             DI.Constant(lp_function),
             DI.Constant(parameter_space),
             DI.Constant(vecinfo),
@@ -304,7 +318,20 @@ function VecModel(
     latent_source::AbstractLatentSource=FromPrior(),
     lp_function=logjoint_transformed,
     parameter_space::AbstractParameterSpace=UnconstrainedSpace(),
+    reduce_copies::Bool=true,
 )
+    model = if reduce_copies
+        WrenCore.reduce_copies(
+            model,
+            adtype;
+            lp_function,
+            latent_source,
+            parameter_space,
+            verbose=false,
+        )
+    else
+        model
+    end
     vecinfo, sample = _prepare_vecmodel_info(model, latent_source, parameter_space)
     return VecModel(model, adtype, lp_function, parameter_space, vecinfo, sample)
 end
@@ -341,6 +368,17 @@ end
 
 _use_closure(::DI.AutoReverseDiff{compile}) where {compile} = compile
 _use_closure(::DI.AbstractADType) = false
+
+"""
+    _eval_context(adtype)
+
+The [`EvalContext`](@ref) that a `VecModel` with the given AD backend should evaluate its
+model with. Only Enzyme needs model arguments to be copied on evaluation (see [the
+docs](@ref enzyme-copyargs)); other AD backends can track gradients through writes into
+model arguments, so the copies can be skipped.
+"""
+_eval_context(::Union{DI.AbstractADType,Nothing}) = EvalContext{false}()
+_eval_context(::DI.AutoEnzyme) = EvalContext{true}()
 
 # overloaded in EnzymeExt as it depends on runtime activity error which isn't in Core
 _handle_enzyme(@nospecialize(vm::VecModel)) = vm
@@ -429,7 +467,7 @@ function lp_and_grad(vecmodel::VecModel, params::AbstractVector)
             DI.Constant(vecmodel.model.args),
             DI.Constant(vecmodel.model.conditioned),
             DI.Constant(vecmodel.model.enzyme_copy_argnames),
-            DI.Constant(EvalContext{true}()),
+            DI.Constant(_eval_context(vecmodel.adtype)),
             DI.Constant(vecmodel.lp_function),
             DI.Constant(vecmodel.parameter_space),
             DI.Constant(vecmodel.vecinfo),
@@ -468,7 +506,7 @@ function lp_and_grad!(grad::AbstractVector, vecmodel::VecModel, params::Abstract
             DI.Constant(vecmodel.model.args),
             DI.Constant(vecmodel.model.conditioned),
             DI.Constant(vecmodel.model.enzyme_copy_argnames),
-            DI.Constant(EvalContext{true}()),
+            DI.Constant(_eval_context(vecmodel.adtype)),
             DI.Constant(vecmodel.lp_function),
             DI.Constant(vecmodel.parameter_space),
             DI.Constant(vecmodel.vecinfo),

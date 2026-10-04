@@ -281,11 +281,15 @@ end
 Return a copy of `model` which skips copying any arguments whose copies turn out not to
 affect the log density or gradient computed with `adtype`.
 
+The copies are only made when differentiating with Enzyme (see [the docs](@ref
+enzyme-copyargs)), so for any other `adtype` this returns `model` unchanged.
+
 TODO: Finish docstring.
 """
+reduce_copies(model::Model, ::Union{DI.AbstractADType,Nothing}; kwargs...) = model
 function reduce_copies(
     model::Model{A,C,F,Val{S}},
-    adtype::DI.AbstractADType;
+    adtype::DI.AutoEnzyme;
     n_points::Int=10,
     rng::AbstractRNG=Xoshiro(468),
     atol::Real=100 * eps(),
@@ -316,10 +320,15 @@ function reduce_copies(
         return lp, collect(grad)
     end
 
-    # The model as given only skips copies that are safe by construction, so it serves as
-    # the reference. The points are evaluated in order, so that any state carried between
-    # evaluations through an uncopied argument shows up as a difference.
-    ref_vecmodel = VecModel(model, adtype; latent_source, lp_function, parameter_space)
+    ref_vecmodel = VecModel(
+        model,
+        adtype;
+        latent_source,
+        lp_function,
+        parameter_space,
+        # `reduce_copies` must be false here, otherwise infinite recursion!
+        reduce_copies=false,
+    )
     points = [rand(rng, ref_vecmodel) for _ in 1:n_points]
     expected = [lp_and_collected_grad(ref_vecmodel, p) for p in points]
 
