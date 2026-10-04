@@ -306,7 +306,7 @@ function reduce_copies(
             model.stmts,
             model.mod;
             conditioned=model.conditioned,
-            copy_argnames=Val(Tuple(sort!(collect(copy_argnames)))),
+            enzyme_copy_argnames=Val(Tuple(sort!(collect(copy_argnames)))),
             _unsafe_reuse_evaluation_fn=model.evaluation_fn,
         )
     end
@@ -448,8 +448,13 @@ function benchmark_model(
     seconds::Real=1,
     verbose::Bool=(!isinteractive()),
 )
-    _, accs =
-        evaluate(model, latent_source, OriginalSpace(), WrenCore.default_accumulators())
+    _, accs = evaluate(
+        model,
+        latent_source,
+        OriginalSpace(),
+        WrenCore.default_accumulators(),
+        EvalContext{false}(),
+    )
     vnt_params = parameters(accs)
     vecmodel = VecModel(
         model,

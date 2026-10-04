@@ -34,6 +34,7 @@ end
             FromPrior(),
             OriginalSpace(),
             WrenCore.default_accumulators(),
+            EvalContext{false}(),
         )
         out_pars = parameters(accs)
         a = out_pars[@vn(x.a)]
@@ -51,6 +52,7 @@ end
             FromParams(in_pars),
             OriginalSpace(),
             WrenCore.default_accumulators(),
+            EvalContext{false}(),
         )
         out_pars = parameters(accs)
         @test retval == (VarNamedTuple(; a=in_pars[@vn(x.a)]), 2 * in_pars[@vn(x.a)] + 1)
@@ -87,6 +89,7 @@ end
             FromPrior(),
             OriginalSpace(),
             WrenCore.default_accumulators(),
+            EvalContext{false}(),
         )
         out_pars = parameters(accs)
         @test only(keys(out_pars)) == @vn(x.a)
@@ -102,6 +105,7 @@ end
             FromParams(in_pars),
             OriginalSpace(),
             WrenCore.default_accumulators(),
+            EvalContext{false}(),
         )
         out_pars = parameters(accs)
         @test only(keys(out_pars)) == @vn(x.a)
@@ -126,6 +130,7 @@ end
             FromPrior(),
             OriginalSpace(),
             WrenCore.default_accumulators(),
+            EvalContext{false}(),
         )
         out_pars = parameters(accs)
         @test size(out_pars.data.x) == (2, 2) # tests that templated_setindex worked
@@ -146,6 +151,7 @@ end
             FromParams(in_pars),
             OriginalSpace(),
             WrenCore.default_accumulators(),
+            EvalContext{false}(),
         )
         out_pars = parameters(accs)
 
@@ -183,6 +189,7 @@ end
             FromParams(in_pars),
             OriginalSpace(),
             WrenCore.default_accumulators(),
+            EvalContext{false}(),
         )
 
         @test retval == b
@@ -208,6 +215,7 @@ end
             FromPrior(),
             OriginalSpace(),
             WrenCore.default_accumulators(),
+            EvalContext{false}(),
         )
         @test retval == 42
         @test parameters(accs) == VarNamedTuple()
@@ -235,6 +243,7 @@ end
             FromPrior(),
             OriginalSpace(),
             WrenCore.default_accumulators(),
+            EvalContext{false}(),
         )
         out_pars = parameters(accs)
         @test only(keys(out_pars)) == @vn(x.y.a)
@@ -253,6 +262,7 @@ end
             FromParams(in_pars),
             OriginalSpace(),
             WrenCore.default_accumulators(),
+            EvalContext{false}(),
         )
         @test retval ≈ 2a + 2
         @test parameters(accs) == in_pars

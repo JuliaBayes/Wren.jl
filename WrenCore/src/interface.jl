@@ -8,7 +8,7 @@ function default_accumulators(::Type{FloatT}=LogProbType) where {FloatT}
 end
 
 """
-    evaluate(model, latent_source, parameter_space, accs)
+    evaluate(model, latent_source, parameter_space, accs, ctx)
 
 Evaluate `model` in three stages for every latent variable:
 
@@ -19,12 +19,17 @@ Evaluate `model` in three stages for every latent variable:
 
 All three components are required. Higher-level interfaces may choose defaults, but this
 method keeps the evaluation pipeline explicit.
+
+`ctx` is an [`EvalContext`](@ref), which says whether to make the copies of model arguments
+that Enzyme needs. Unless the model is being differentiated with Enzyme, this should be
+`EvalContext{false}()`.
 """
 @inline function evaluate(
     model::Model,
     latent_source::AbstractLatentSource,
     parameter_space::AbstractParameterSpace,
     accs::AccumulatorTuple,
+    ctx::EvalContext,
 )
     return model.evaluation_fn(
         latent_source,
@@ -32,7 +37,8 @@ method keeps the evaluation pipeline explicit.
         accs,
         model.args,
         model.conditioned,
-        model.copy_argnames,
+        model.enzyme_copy_argnames,
+        ctx,
     )
 end
 
@@ -42,6 +48,7 @@ function Base.rand(rng::AbstractRNG, model::Model)
         FromPrior(rng),
         OriginalSpace(),
         AccumulatorTuple(ParamsAccumulator()),
+        EvalContext{false}(),
     )
     return VarNames.parameters(accs)
 end
@@ -66,6 +73,7 @@ function rand_with_logp(rng::AbstractRNG, model::Model)
             LogPriorAccumulator(),
             LogLikelihoodAccumulator(),
         ),
+        EvalContext{false}(),
     )
     return accs
 end
@@ -92,7 +100,7 @@ function condition(model::Model, values::VarNamedTuple)
         model.stmts,
         model.mod;
         conditioned=new_conditioned,
-        copy_argnames=model.copy_argnames,
+        enzyme_copy_argnames=model.enzyme_copy_argnames,
         _unsafe_reuse_evaluation_fn=model.evaluation_fn,
     )
 end
@@ -129,7 +137,7 @@ function decondition(model::Model, vns::VarName...)
         model.stmts,
         model.mod;
         conditioned=new_conditioned,
-        copy_argnames=model.copy_argnames,
+        enzyme_copy_argnames=model.enzyme_copy_argnames,
         _unsafe_reuse_evaluation_fn=model.evaluation_fn,
     )
 end
@@ -145,6 +153,7 @@ function logjoint(model::Model, params::VarNamedTuple)
         FromParams(params),
         OriginalSpace(),
         AccumulatorTuple(LogPriorAccumulator(), LogLikelihoodAccumulator()),
+        EvalContext{false}(),
     )
     return logjoint(accs)
 end

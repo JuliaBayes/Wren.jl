@@ -53,6 +53,7 @@ struct _VecModelLP{
     A<:NamedTuple,
     C<:VarNamedTuple,
     CA<:Val,
+    X<:EvalContext,
     F,
     S<:AbstractParameterSpace,
     R<:VecInfo,
@@ -61,7 +62,8 @@ struct _VecModelLP{
     evaluation_fn::E
     model_args::A
     conditioned::C
-    copy_argnames::CA
+    enzyme_copy_argnames::CA
+    ctx::X
     lp_function::F
     parameter_space::S
     vecinfo::R
@@ -73,7 +75,8 @@ function (f::_VecModelLP)(params::AbstractVector)
         f.evaluation_fn,
         f.model_args,
         f.conditioned,
-        f.copy_argnames,
+        f.enzyme_copy_argnames,
+        f.ctx,
         f.lp_function,
         f.parameter_space,
         f.vecinfo,
@@ -91,15 +94,23 @@ function _vecmodel_lp(
     evaluation_fn,
     model_args::NamedTuple,
     conditioned::VarNamedTuple,
-    copy_argnames::Val,
+    enzyme_copy_argnames::Val,
+    ctx::EvalContext,
     lp_function,
     parameter_space::AbstractParameterSpace,
     vecinfo::VecInfo,
     accs::AccumulatorTuple,
 )
     source = FromVector(params, vecinfo)
-    _, accs =
-        evaluation_fn(source, parameter_space, accs, model_args, conditioned, copy_argnames)
+    _, accs = evaluation_fn(
+        source,
+        parameter_space,
+        accs,
+        model_args,
+        conditioned,
+        enzyme_copy_argnames,
+        ctx,
+    )
     return lp_function(accs)
 end
 
@@ -240,7 +251,8 @@ function VecModel(
         model.evaluation_fn,
         model.args,
         model.conditioned,
-        model.copy_argnames,
+        model.enzyme_copy_argnames,
+        EvalContext{true}(),
         lp_function,
         parameter_space,
         vecinfo,
@@ -262,7 +274,8 @@ function VecModel(
             DI.Constant(model.evaluation_fn),
             DI.Constant(model.args),
             DI.Constant(model.conditioned),
-            DI.Constant(model.copy_argnames),
+            DI.Constant(model.enzyme_copy_argnames),
+            DI.Constant(EvalContext{true}()),
             DI.Constant(lp_function),
             DI.Constant(parameter_space),
             DI.Constant(vecinfo),
@@ -358,7 +371,7 @@ function _prepare_vecmodel_info(
     parameter_space::AbstractParameterSpace,
 )
     accs = AccumulatorTuple(VectorisedParamsAccumulator(), SitenameCountAccumulator())
-    _, accs = evaluate(model, source, parameter_space, accs)
+    _, accs = evaluate(model, source, parameter_space, accs, EvalContext{false}())
     vecvals = vectorised_params(accs)
     sca = getacc(accs, Val{SITENAMECOUNT_ACCNAME}())
 
@@ -415,7 +428,8 @@ function lp_and_grad(vecmodel::VecModel, params::AbstractVector)
             DI.Constant(vecmodel.model.evaluation_fn),
             DI.Constant(vecmodel.model.args),
             DI.Constant(vecmodel.model.conditioned),
-            DI.Constant(vecmodel.model.copy_argnames),
+            DI.Constant(vecmodel.model.enzyme_copy_argnames),
+            DI.Constant(EvalContext{true}()),
             DI.Constant(vecmodel.lp_function),
             DI.Constant(vecmodel.parameter_space),
             DI.Constant(vecmodel.vecinfo),
@@ -453,7 +467,8 @@ function lp_and_grad!(grad::AbstractVector, vecmodel::VecModel, params::Abstract
             DI.Constant(vecmodel.model.evaluation_fn),
             DI.Constant(vecmodel.model.args),
             DI.Constant(vecmodel.model.conditioned),
-            DI.Constant(vecmodel.model.copy_argnames),
+            DI.Constant(vecmodel.model.enzyme_copy_argnames),
+            DI.Constant(EvalContext{true}()),
             DI.Constant(vecmodel.lp_function),
             DI.Constant(vecmodel.parameter_space),
             DI.Constant(vecmodel.vecinfo),
@@ -530,6 +545,12 @@ Draw model parameters from `latent_source` and return them as a vector compatibl
 function vectorise_latents(latent_source::AbstractLatentSource, vecmodel::VecModel)
     params = similar(vecmodel.sample)
     accs = AccumulatorTuple(VecSampleAccumulator(params, vecmodel.vecinfo))
-    _, accs = evaluate(vecmodel.model, latent_source, vecmodel.parameter_space, accs)
+    _, accs = evaluate(
+        vecmodel.model,
+        latent_source,
+        vecmodel.parameter_space,
+        accs,
+        EvalContext{false}(),
+    )
     return _get_vec_sample(accs)
 end

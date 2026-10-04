@@ -24,16 +24,21 @@ struct Model{A<:NamedTuple,C<:VarNamedTuple,F,CA<:Val}
     conditioned::C
     "The cached evaluation function."
     evaluation_fn::F
-    "The names of the arguments which are copied on every evaluation, as a `Val` of a sorted
-    tuple of symbols."
-    copy_argnames::CA
+    "The names of the arguments which are copied on every evaluation when differentiating
+    with Enzyme. This must be a `Val` of a tuple of symbols (preferably sorted to
+    deduplicate compilation).
+
+    Whether they are actually copied is decided by the [EvalContext](@ref) that the model is
+    evaluated with. That struct allows us to differentiate code being run with Enzyme (where
+    the copy is needed) from other code (where the copy is not needed)."
+    enzyme_copy_argnames::CA
 
     function Model(
         name::Symbol,
         args::NamedTuple,
         stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}},
         mod::Module;
-        copy_argnames::Val,
+        enzyme_copy_argnames::Val,
         conditioned::VarNamedTuple=VarNamedTuple(),
         _unsafe_reuse_evaluation_fn=nothing,
     )
@@ -49,7 +54,7 @@ struct Model{A<:NamedTuple,C<:VarNamedTuple,F,CA<:Val}
             typeof(dealiased_args),
             typeof(conditioned),
             typeof(evaluation_fn),
-            typeof(copy_argnames),
+            typeof(enzyme_copy_argnames),
         }(
             name,
             dealiased_args,
@@ -57,7 +62,7 @@ struct Model{A<:NamedTuple,C<:VarNamedTuple,F,CA<:Val}
             mod,
             conditioned,
             evaluation_fn,
-            copy_argnames,
+            enzyme_copy_argnames,
         )
     end
 end
@@ -104,10 +109,29 @@ _needs_copy(::Type{<:AbstractArray{<:Integer}}) = false
 _needs_copy(::Type{<:Model}) = false
 
 """
-    _maybe_dealias(::Val{S}, ::Val{name}, v)
+    EvalContext{Enzyme}
 
-Return `_dealias(v)` if `name` is one of the symbols in the tuple `S` and `v` is a type that
-needs copying (see `_needs_copy`). and `v` otherwise.
+Information about how a model is being evaluated. It is passed to the model's evaluation
+function, and from there on to any submodels, so that they are evaluated in the same way.
+
+`EnzymeCopies` is a `Bool` that says whether we are running under Enzyme AD. In such a case,
+the arguments in the model's `enzyme_copy_argnames` should be copied on evaluation (see
+`_maybe_dealias`).
+"""
+struct EvalContext{Enzyme} end
+
+"""
+    _maybe_dealias(::EvalContext, ::Val{S}, ::Val{name}, v)
+
+Return `_dealias(v)` if the following all hold true:
+
+- `EvalContext` tells us that we are running under Enzyme AD, which is the only situation where
+  copies need to be made for correctness;
+- `name` is in `S`, the set of argument names which must be copied (`S` can be pruned either through
+  Wren's dataflow analysis, or by a user's `@nocopy` annotations); and
+- `v` is a type that needs copying (see `_needs_copy`).
+
+Otherwise, returns `v`.
 
 The decision only depends on types, so should be resolvable at compile-time.
 
@@ -115,8 +139,9 @@ Apparently, making this a generated function means that it's impossible for e.g.
 to overload `_needs_copy`, as the generated function only has access to the methods of
 `_needs_copy` that were present at the compilation world age.
 """
-@inline _maybe_dealias(::Val{S}, ::Val{name}, v::V) where {S,name,V} =
+@inline _maybe_dealias(::EvalContext{true}, ::Val{S}, ::Val{name}, v::V) where {S,name,V} =
     name in S && _needs_copy(V) ? _dealias(v) : v
+@inline _maybe_dealias(::EvalContext{false}, ::Val, ::Val, v) = v
 
 function make_evaluation_fn(
     argnames::Tuple{Vararg{Symbol}},
@@ -124,13 +149,14 @@ function make_evaluation_fn(
     mod::Module,
 )
     body = Expr(:block)
-    @gensym model_args copy_argnames
+    @gensym model_args enzyme_copy_argnames ctx
     for k in argnames
         push!(
             body.args,
             :(
                 $(k) = $(WrenCore._maybe_dealias)(
-                    $copy_argnames,
+                    $ctx,
+                    $enzyme_copy_argnames,
                     Val($(QuoteNode(k))),
                     $model_args.$k,
                 )
@@ -139,7 +165,8 @@ function make_evaluation_fn(
     end
 
     @gensym accs conditioned latent_source parameter_space retval
-    model_body = emit_statements(stmts, accs, conditioned, latent_source, parameter_space)
+    model_body =
+        emit_statements(stmts, accs, conditioned, latent_source, parameter_space, ctx)
     push!(body.args, :($retval = $model_body))
     push!(body.args, :(return ($retval, $accs)))
     return RuntimeGeneratedFunctions.RuntimeGeneratedFunction(
@@ -152,7 +179,8 @@ function make_evaluation_fn(
                 $accs,
                 $model_args,
                 $conditioned,
-                $copy_argnames,
+                $enzyme_copy_argnames,
+                $ctx,
             )
                 $body
             end
@@ -365,7 +393,7 @@ function _wren(expr::Expr, mod::Module; internal_to_ir::Bool=false)
     internal_to_ir && return :(($ir, $model_arg_symbols))
     model_exprs, args_to_copy = run_dataflow_analysis(ir, model_arg_symbols)
     # Sorted so that the same set of arguments always gives the same type.
-    copy_argnames = Val(Tuple(sort!(collect(setdiff(args_to_copy, nocopy_args)))))
+    enzyme_copy_argnames = Val(Tuple(sort!(collect(setdiff(args_to_copy, nocopy_args)))))
 
     # At macro definition time, we generate a new symbol to store the evaluation function
     # corresponding to the AST *as defined in the macro*. It's possible that users can
@@ -413,7 +441,7 @@ function _wren(expr::Expr, mod::Module; internal_to_ir::Bool=false)
         # Safe as the cached RGF is always correct for a given model instantiation, i.e.
         # `f(arg1, arg2)` and `f(arg3, arg4)` should always use the same RGF.
         _unsafe_reuse_evaluation_fn=($evaluation_fn_ref),
-        copy_argnames=($copy_argnames),
+        enzyme_copy_argnames=($enzyme_copy_argnames),
     ))
     function_expr = Expr(:function, esc(signature), function_body)
 
