@@ -10,7 +10,7 @@ A Wren model.
 
 $(TYPEDFIELDS)
 """
-struct Model{A<:NamedTuple,C<:VarNamedTuple,F}
+struct Model{A<:NamedTuple,C<:VarNamedTuple,F,CA<:Val}
     "Name of the function declared with @wren"
     name::Symbol
     "Positional arguments passed to the model."
@@ -22,40 +22,42 @@ struct Model{A<:NamedTuple,C<:VarNamedTuple,F}
     mod::Module
     "The set of variables that the model is conditioned on."
     conditioned::C
-    "The cached evaluation function, which also records which arguments are copied on each
-    evaluation (see [`EvaluationFn`](@ref WrenCore.EvaluationFn))."
+    "The cached evaluation function."
     evaluation_fn::F
+    "The names of the arguments which are copied on every evaluation, as a `Val` of a sorted
+    tuple of symbols."
+    copy_args::CA
 
     function Model(
         name::Symbol,
         args::NamedTuple,
         stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}},
         mod::Module;
+        copy_args::Val,
         conditioned::VarNamedTuple=VarNamedTuple(),
         _unsafe_reuse_evaluation_fn=nothing,
     )
         # Copy arguments upon model construction.
         dealiased_args = map(_dealias, args)
         # Regenerate the evaluation function if it wasn't provided.
-        #
-        # Note that this reruns the dataflow analysis from scratch, so any `@nocopy`
-        # annotations from the original `@wren` definition are lost. That only means that
-        # more arguments are copied than necessary, which is slower but still correct.
         evaluation_fn = if _unsafe_reuse_evaluation_fn === nothing
-            EvaluationFn(
-                make_evaluation_fn(keys(args), stmts, mod),
-                last(get_required_syms_and_args(stmts, Set(keys(args)))),
-            )
+            make_evaluation_fn(keys(args), stmts, mod)
         else
             _unsafe_reuse_evaluation_fn
         end
-        return new{typeof(dealiased_args),typeof(conditioned),typeof(evaluation_fn)}(
+        return new{
+            typeof(dealiased_args),
+            typeof(conditioned),
+            typeof(evaluation_fn),
+            typeof(copy_args),
+        }(
             name,
             dealiased_args,
             stmts,
             mod,
             conditioned,
             evaluation_fn,
+            copy_args,
         )
     end
 end
@@ -117,45 +119,9 @@ Return `_dealias(v)` if `name` is one of the symbols in the tuple `S`, and `v` o
 Both `S` and `name` are type parameters, so this resolves at compile time to either a copy or
 nothing at all.
 """
-@inline _maybe_dealias(::Val{S}, ::Val{name}, v) where {S,name} =
-    name in S ? _dealias(v) : v
-
-"""
-    EvaluationFn{S}(rgf)
-
-The evaluation function of a model. This wraps the model's RGF together with `S`, a sorted
-tuple of the names of the model arguments which are copied (with `_dealias`) on every
-evaluation.
-
-The set of arguments to copy is stored as a type parameter instead of being written into
-the RGF's body. This means that a single RGF (one per `@wren` definition) can be shared
-between models which copy different sets of arguments. Julia compiles the RGF separately for
-each `S`, just as it would for any other change in argument types, and within each compiled
-version the decision of whether to copy an argument is known at compile time.
-"""
-struct EvaluationFn{S,R}
-    rgf::R
-    EvaluationFn{S}(rgf::R) where {S,R} = new{S,R}(rgf)
+@generated function _maybe_dealias(::Val{S}, ::Val{name}, v) where {S,name}
+    name in S ? :($(_dealias)(v)) : :(v)
 end
-EvaluationFn(rgf, args_to_copy::Set{Symbol}) =
-    EvaluationFn{Tuple(sort!(collect(args_to_copy)))}(rgf)
-@inline function (f::EvaluationFn{S})(
-    latent_source,
-    parameter_space,
-    accs,
-    model_args,
-    conditioned,
-) where {S}
-    return f.rgf(latent_source, parameter_space, accs, model_args, conditioned, Val(S))
-end
-
-"""
-    _copied_args(model::Model)
-
-Return a sorted tuple of the names of the arguments that `model` copies on every evaluation.
-"""
-_copied_args(::EvaluationFn{S}) where {S} = S
-_copied_args(model::Model) = _copied_args(model.evaluation_fn)
 
 function make_evaluation_fn(
     argnames::Tuple{Vararg{Symbol}},
@@ -201,7 +167,7 @@ end
 
 # for debugging
 function view_evaluation_fn(m::Model)
-    return RuntimeGeneratedFunctions.get_expression(m.evaluation_fn.rgf)
+    return RuntimeGeneratedFunctions.get_expression(m.evaluation_fn)
 end
 
 ## macro stuff
@@ -214,12 +180,6 @@ function get_function_name_and_args(signature::Expr)
     else
         error("@wren: expected function signature")
     end
-end
-
-function _is_nocopy_macro(x)
-    nocopy = Symbol("@nocopy")
-    # Matches `@nocopy` as well as qualified forms such as `WrenCore.@nocopy`.
-    return x === nocopy || (Meta.isexpr(x, :.) && x.args[end] == QuoteNode(nocopy))
 end
 
 """
@@ -236,7 +196,10 @@ function strip_nocopy_annotations(signature::Expr)
     signature.head == :call || error("@wren: expected function signature")
     nocopy_args = Set{Symbol}()
     new_args = map(signature.args[2:end]) do arg
-        Meta.isexpr(arg, :macrocall) && _is_nocopy_macro(arg.args[1]) || return arg
+        # Only the bare `@nocopy` is recognised, not qualified forms like
+        # `WrenCore.@nocopy`. Since this is a purely syntactic check, we can't tell what a
+        # qualified name actually refers to.
+        Meta.isexpr(arg, :macrocall) && arg.args[1] === Symbol("@nocopy") || return arg
         # `arg.args[2]` is a LineNumberNode.
         inner = arg.args[3:end]
         if !(length(inner) == 1 && inner[1] isa Symbol)
@@ -402,7 +365,8 @@ function _wren(expr::Expr, mod::Module; internal_to_ir::Bool=false)
     ir = to_wren_exprs(body, mod)
     internal_to_ir && return :(($ir, $model_arg_symbols))
     model_exprs, args_to_copy = run_dataflow_analysis(ir, model_arg_symbols)
-    setdiff!(args_to_copy, nocopy_args)
+    # Sorted so that the same set of arguments always gives the same type.
+    copy_args = Val(Tuple(sort!(collect(setdiff(args_to_copy, nocopy_args)))))
 
     # At macro definition time, we generate a new symbol to store the evaluation function
     # corresponding to the AST *as defined in the macro*. It's possible that users can
@@ -432,13 +396,10 @@ function _wren(expr::Expr, mod::Module; internal_to_ir::Bool=false)
     # have access to that binding.
     mod.eval(
         quote
-            const $evaluation_fn_name = $EvaluationFn(
-                $make_evaluation_fn(
-                    ($(QuoteNode.(fargs)...),),
-                    $model_exprs,
-                    $(QuoteNode(mod)),
-                ),
-                $args_to_copy,
+            const $evaluation_fn_name = $make_evaluation_fn(
+                ($(QuoteNode.(fargs)...),),
+                $model_exprs,
+                $(QuoteNode(mod)),
             )
         end,
     )
@@ -453,6 +414,7 @@ function _wren(expr::Expr, mod::Module; internal_to_ir::Bool=false)
         # Safe as the cached RGF is always correct for a given model instantiation, i.e.
         # `f(arg1, arg2)` and `f(arg3, arg4)` should always use the same RGF.
         _unsafe_reuse_evaluation_fn=($evaluation_fn_ref),
+        copy_args=($copy_args),
     ))
     function_expr = Expr(:function, esc(signature), function_body)
 

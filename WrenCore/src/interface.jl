@@ -32,6 +32,7 @@ method keeps the evaluation pipeline explicit.
         accs,
         model.args,
         model.conditioned,
+        model.copy_args,
     )
 end
 
@@ -91,6 +92,7 @@ function condition(model::Model, values::VarNamedTuple)
         model.stmts,
         model.mod;
         conditioned=new_conditioned,
+        copy_args=model.copy_args,
         _unsafe_reuse_evaluation_fn=model.evaluation_fn,
     )
 end
@@ -127,6 +129,7 @@ function decondition(model::Model, vns::VarName...)
         model.stmts,
         model.mod;
         conditioned=new_conditioned,
+        copy_args=model.copy_args,
         _unsafe_reuse_evaluation_fn=model.evaluation_fn,
     )
 end

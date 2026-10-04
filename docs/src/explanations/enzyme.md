@@ -153,5 +153,5 @@ If you know that an argument is safe, you can tell Wren not to copy it with [`@n
 end
 ```
 
-Internally, the set of arguments to copy is stored as a type parameter of the model's evaluation function (`WrenCore.EvaluationFn`), rather than being written into the generated code.
+Internally, the set of arguments to copy is stored as a type parameter of the `Model` (in its `copy_args` field), rather than being written into the generated code.
 This means that models which copy different sets of arguments can share the same generated code: Julia simply compiles it once for each set.
