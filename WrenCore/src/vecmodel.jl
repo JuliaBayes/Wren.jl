@@ -1,7 +1,7 @@
 using ADTypes: NoAutoDiff # DI doesn't export
 using EnzymeCore: Reverse
 
-const AUTO_RUNTIME_ACTIVITY = Ref{Union{Nothing,Bool}}(nothing)
+const AUTO_RUNTIME_ACTIVITY = Ref{Union{Nothing,Bool}}(true)
 
 const DEFAULT_AD = DI.AutoEnzyme(; mode=Reverse)
 
@@ -16,7 +16,7 @@ differentiated, but comes at a performance cost.
 
 Wren recommends using reverse-mode Enzyme, i.e., `AutoEnzyme(; mode=Reverse)` as the AD
 backend, which does not enable runtime activity. **By default, Wren will automatically
-enable runtime activity if Enzyme requires it, but will issue an info message.**
+enable runtime activity if Enzyme requires it.**
 
 If you would rather have Wren raise an error, set
 
@@ -24,17 +24,16 @@ If you would rather have Wren raise an error, set
 WrenCore.set_auto_runtime_activity!(false)
 ```
 
-Conversely, if you are happy with this and want to suppress the info message, set
-
-```julia
-WrenCore.set_auto_runtime_activity!(true)
-```
-
-To restore the default behaviour (automatic enabling of runtime activity but with an info
-message), set
+Or if you want an info message instead of an error, set
 
 ```julia
 WrenCore.set_auto_runtime_activity!(nothing)
+```
+
+To restore the default behaviour (silently enabling runtime activity), set
+
+```julia
+WrenCore.set_auto_runtime_activity!(true)
 ```
 """
 function set_auto_runtime_activity!(val::Union{Bool,Nothing})
@@ -209,7 +208,7 @@ since the mapping is invariant to the order in which the latent variables are en
   In very pathological cases, `reduce_copies` may skip a copy that is actually needed (e.g.
   when there is parameter-dependent control flow which (1) in turn causes a change in Enzyme's
   behaviour, and (2) is not caught by the random testing in `reduce_copies`). This is very
-  unlikely, but if you are concerned about this, you can disable this.
+  unlikely, but if you are concerned about this, you can disable this option.
 """
 struct VecModel{
     M<:Model,
@@ -379,6 +378,8 @@ model arguments, so the copies can be skipped.
 """
 _eval_context(::Union{DI.AbstractADType,Nothing}) = EvalContext{false}()
 _eval_context(::DI.AutoEnzyme) = EvalContext{true}()
+
+_copied_args(vm::VecModel) = _copied_args(vm.model)
 
 # overloaded in EnzymeExt as it depends on runtime activity error which isn't in Core
 _handle_enzyme(@nospecialize(vm::VecModel)) = vm

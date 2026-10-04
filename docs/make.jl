@@ -37,7 +37,6 @@ makedocs(;
             "tutorials/models.md",
             "tutorials/distributions.md",
             "tutorials/submodels.md",
-            "tutorials/copies.md",
             "tutorials/benchmarking.md",
             "tutorials/mcmc.md",
             "tutorials/workflow.md",

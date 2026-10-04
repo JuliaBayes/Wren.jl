@@ -8,8 +8,6 @@ using Random
 using Test
 using DifferentiationInterface
 
-copied_args(::WrenCore.Model{A,C,F,Val{S}}) where {A,C,F,S} = S
-
 @testset "#69 Enzyme.Const differentiable data" begin
     @wren function f(x, y, N)
         @batch for i in 1:N
@@ -41,11 +39,11 @@ copied_args(::WrenCore.Model{A,C,F,Val{S}}) where {A,C,F,S} = S
     @testset "reduce_copies" begin
         # Dataflow analysis should detect that `y` doesn't need to be copied
         vm_full = VecModel(model, WrenCore.DEFAULT_AD; reduce_copies=false)
-        @test copied_args(vm_full.model) == (:N, :x)
+        @test WrenCore._copied_args(vm_full.model) == (:N, :x)
 
         # reduce_copies shouldn't reduce that further
         vm_reduced = VecModel(model, WrenCore.DEFAULT_AD; reduce_copies=true)
-        @test copied_args(vm_reduced.model) == (:N, :x)
+        @test WrenCore._copied_args(vm_reduced.model) == (:N, :x)
     end
 
     @testset "with nocopy" begin

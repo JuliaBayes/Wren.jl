@@ -8,9 +8,6 @@ using ForwardDiff, ReverseDiff, Mooncake, Enzyme
 using Chairmarks
 using Test
 
-# The names of the arguments that `model` will copy on every evaluation when run under
-# Enzyme.
-copied_args(::WrenCore.Model{A,C,F,Val{S}}) where {A,C,F,S} = S
 
 @testset "aliasing.jl" begin
     @testset "type stability of _dealias" begin
@@ -136,18 +133,18 @@ copied_args(::WrenCore.Model{A,C,F,Val{S}}) where {A,C,F,S} = S
         end
         Y = randn(1000)
         model = f_redundant_copy(Y)
-        @test copied_args(model) == (:y,)
+        @test WrenCore._copied_args(model) == (:y,)
 
         # Test that without `reduce_copies`, the copy is performed.
         vm = VecModel(model, WrenCore.DEFAULT_AD; reduce_copies=false)
-        @test copied_args(vm.model) == (:y,)
+        @test WrenCore._copied_args(vm.model) == (:y,)
         params = rand(vm)
         bm = @b lp_and_grad($vm, $params)
         @test bm.bytes >= sizeof(Y)
 
         # Test that with `reduce_copies`, the copy is elided.
         vm = VecModel(model, WrenCore.DEFAULT_AD; reduce_copies=true)
-        @test copied_args(vm.model) == ()
+        @test WrenCore._copied_args(vm.model) == ()
         bm = @b lp_and_grad($vm, $params)
         @info bm.bytes
         @test bm.bytes < sizeof(Y)
@@ -226,8 +223,8 @@ copied_args(::WrenCore.Model{A,C,F,Val{S}}) where {A,C,F,S} = S
                 y[1] ~ Normal()
                 return y
             end
-            @test copied_args(nc_default([0.0])) == (:y,)
-            @test copied_args(nc_annotated([0.0])) == ()
+            @test WrenCore._copied_args(nc_default([0.0])) == (:y,)
+            @test WrenCore._copied_args(nc_annotated([0.0])) == ()
         end
 
         @testset "other arguments are still analysed" begin
@@ -236,7 +233,7 @@ copied_args(::WrenCore.Model{A,C,F,Val{S}}) where {A,C,F,S} = S
                 y[1] ~ Normal()
                 @observe z ~ Normal(x[1] + y[1])
             end
-            @test copied_args(nc_mixed([0.0], [0.0], 0.0)) == (:x,)
+            @test WrenCore._copied_args(nc_mixed([0.0], [0.0], 0.0)) == (:x,)
         end
 
         @testset "copy set is kept when conditioning" begin
@@ -249,10 +246,10 @@ copied_args(::WrenCore.Model{A,C,F,Val{S}}) where {A,C,F,S} = S
                 return (x, y)
             end
             model = nc_cond([0.0], [0.0])
-            @test copied_args(model) == (:x,)
+            @test WrenCore._copied_args(model) == (:x,)
             conditioned_model = model | VarNamedTuple(a=1.0)
-            @test copied_args(conditioned_model) == (:x,)
-            @test copied_args(decondition(conditioned_model)) == (:x,)
+            @test WrenCore._copied_args(conditioned_model) == (:x,)
+            @test WrenCore._copied_args(decondition(conditioned_model)) == (:x,)
         end
     end
 

@@ -100,8 +100,6 @@ end
     end
 
     @testset "reduce_copies" begin
-        copied_args(::WrenCore.Model{A,C,F,Val{S}}) where {A,C,F,S} = S
-
         # `x` is written to and then read, so skipping its copy gives wrong gradients with
         # Enzyme (see #69). `y` is only read, but is copied because of `eachindex(y)`.
         @wren function reduce_model(x, y)
@@ -111,10 +109,10 @@ end
             end
         end
         model = reduce_model(zeros(5), randn(Xoshiro(468), 5))
-        @test copied_args(model) == (:x, :y)
+        @test WrenCore._copied_args(model) == (:x, :y)
 
         reduced = reduce_copies(model, AutoEnzyme(; mode=Reverse); verbose=false)
-        @test copied_args(reduced) == (:x,)
+        @test WrenCore._copied_args(reduced) == (:x,)
         @test reduced.evaluation_fn === model.evaluation_fn
     end
 end

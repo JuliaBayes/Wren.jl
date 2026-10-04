@@ -283,16 +283,14 @@ affect the log density or gradient computed with `adtype`.
 
 The copies are only made when differentiating with Enzyme (see [the docs](@ref
 enzyme-copyargs)), so for any other `adtype` this returns `model` unchanged.
-
-TODO: Finish docstring.
 """
-# (The type parameters on `model` are only there to match the Enzyme method, so that the
-# Enzyme method is strictly more specific and calls aren't ambiguous.)
-reduce_copies(
+function reduce_copies(
     model::Model{A,C,F,Val{S}},
     ::Union{DI.AbstractADType,Nothing};
     kwargs...,
-) where {A,C,F,S} = model
+) where {A,C,F,S}
+    model
+end
 function reduce_copies(
     model::Model{A,C,F,Val{S}},
     adtype::DI.AutoEnzyme;

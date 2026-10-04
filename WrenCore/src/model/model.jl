@@ -109,6 +109,19 @@ _needs_copy(::Type{<:AbstractArray{<:Integer}}) = false
 _needs_copy(::Type{<:Model}) = false
 
 """
+    _copied_args(::Model)
+
+Get the set of argument names that are marked for copying. NOTE: This is for internal use
+only. Be careful interpreting the results of this function! For example, even if
+`_copied_args(model)` returns a nonempty set, this does not mean that the model's arguments
+are actually copied. Outside of Enzyme contexts (i.e., in normal evaluation like
+`rand(model)`, the copies are always disabled. This includes AD with non-Enzyme backends.
+And with Enzyme, it's very possible that [`reduce_copies`](@ref) will prune this set of
+arguments down.
+"""
+_copied_args(::Model{A,C,F,Val{CA}}) where {A,C,F,CA} = CA
+
+"""
     EvalContext{Enzyme}
 
 Information about how a model is being evaluated. It is passed to the model's evaluation
