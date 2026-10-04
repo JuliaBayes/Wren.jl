@@ -1,4 +1,4 @@
-using Wren: Wren, VecModel, lp, lp_and_grad, benchmark_model
+using Wren: Wren, VecModel, lp, lp_and_grad, benchmark_model, optimise_copies
 using DynamicPPL: DynamicPPL
 using ADTypes: AutoEnzyme, AutoMooncake, AutoReactant
 using Enzyme: Reverse, set_runtime_activity
@@ -124,7 +124,8 @@ function bench(mod)
 
     # -- Wren primals + gradients --
     wren_enzyme_result = _try() do
-        benchmark_model(wren_model, enzyme; verbose=false)
+        optimised_wren_model = optimise_copies(wren_model, enzyme; verbose=false)
+        benchmark_model(optimised_wren_model, enzyme; verbose=false)
     end
     wren_primal =
         wren_enzyme_result isa Exception ? wren_enzyme_result :
@@ -133,7 +134,8 @@ function bench(mod)
         wren_enzyme_result isa Exception ? wren_enzyme_result :
         wren_enzyme_result.lp_and_grad_bench.time
     wren_mooncake = _try() do
-        r = benchmark_model(wren_model, mooncake; verbose=false)
+        optimised_wren_model = optimise_copies(wren_model, mooncake; verbose=false)
+        r = benchmark_model(optimised_wren_model, mooncake; verbose=false)
         r.lp_and_grad_bench.time
     end
 

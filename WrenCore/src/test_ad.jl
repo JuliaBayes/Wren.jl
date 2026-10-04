@@ -275,6 +275,7 @@ end
         lp_function=logjoint_transformed,
         latent_source::AbstractLatentSource=FromPrior(),
         parameter_space::AbstractParameterSpace=UnconstrainedSpace(),
+        verbose::Bool=true,
     ) -> Model
 
 Return a copy of `model` which skips copying any arguments whose copies turn out not to
@@ -292,19 +293,20 @@ function optimise_copies(
     lp_function=logjoint_transformed,
     latent_source::AbstractLatentSource=FromPrior(),
     parameter_space::AbstractParameterSpace=UnconstrainedSpace(),
+    verbose::Bool=true,
 ) where {A,C,F,S}
     atol, rtol = promote(atol, rtol)
     # The same model, but only copying the arguments in `copy_argnames`. This reuses the
-    # evaluation function, so no new code is generated. `copy_argnames` must be sorted (see
-    # the `@wren` macro).
-    function with_copies(copy_argnames)
+    # evaluation function, so no new code is generated. The names are sorted so that the
+    # same set of arguments always gives the same type (as in the `@wren` macro).
+    function with_copies(copy_argnames::Tuple{Vararg{Symbol}})
         return Model(
             model.name,
             model.args,
             model.stmts,
             model.mod;
             conditioned=model.conditioned,
-            copy_argnames=Val(Tuple(copy_argnames)),
+            copy_argnames=Val(Tuple(sort!(collect(copy_argnames)))),
             _unsafe_reuse_evaluation_fn=model.evaluation_fn,
         )
     end
@@ -328,7 +330,7 @@ function optimise_copies(
     # Try removing each candidate in turn. Each attempt keeps the removals that already
     # passed, so this doesn't rely on arguments being independent of each other (for
     # example, two arguments might share memory).
-    copy_argnames = collect(S)
+    copy_argnames = S
     removed = Symbol[]
     for k in candidates
         trial_argnames = filter(!=(k), copy_argnames)
@@ -351,10 +353,12 @@ function optimise_copies(
         end
     end
 
-    if isempty(removed)
-        @info "optimise_copies: no copies could be skipped"
-    else
-        @info "optimise_copies: these arguments can be marked @nocopy: $(join(removed, ", "))"
+    if verbose
+        if isempty(removed)
+            @info "optimise_copies: no copies could be skipped"
+        else
+            @info "optimise_copies: these arguments can be marked @nocopy: $(join(removed, ", "))"
+        end
     end
     return with_copies(copy_argnames)
 end
