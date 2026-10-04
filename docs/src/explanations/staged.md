@@ -113,11 +113,7 @@ They simply serve as syntax markers for the IR generation stage.
 
 Why macros, though?
 To begin with, we are fundamentally limited by Julia syntax: we can't invent our own syntax, because it has to be parsed by a normal Julia macro (`@wren`).
-So we can't, for example, write `[observe] a ~ b` as that won't parse:
-
-```@repl staged
-:([observe] a ~ b)
-```
+So we can't, for example, write `[observe] a ~ b` as that simply won't parse.
 
 Then, we don't want to hijack any preexisting Julia syntax.
 This means that, for example, we don't want to parse `a => b` into something, because that usually means `Pair(a, b)` in Julia.
