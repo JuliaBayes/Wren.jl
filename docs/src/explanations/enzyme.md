@@ -137,4 +137,4 @@ This behaviour is intentional in Enzyme and is a result of the `Const` marking.
 There isn't a simple way to work around this with DifferentiationInterface, so Wren currently works around this by copying most model arguments during evaluation.
 Wren does perform some basic analysis to try to avoid copying things that definitely don't need to be copied, but this is very conservative since Wren only has access to the syntax tree.
 
-The recommended workaround to this is for users to manually use `@nocopy` annotations on model arguments which are safe to not copy, or to use the `minimise_copies` function to automatically detect which arguments can be safely not copied.
+The recommended workaround to this is for users to manually use `@nocopy` annotations on model arguments which are safe to not copy, or to use the `elide_copies` function to automatically detect which arguments can be safely not copied.

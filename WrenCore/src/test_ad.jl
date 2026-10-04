@@ -265,6 +265,101 @@ function test_ad(
 end
 
 """
+    optimise_copies(
+        model::WrenCore.Model,
+        adtype::DI.AbstractADType;
+        n_points::Int=10,
+        rng::AbstractRNG=Xoshiro(468),
+        atol::Real=100 * eps(),
+        rtol::Real=sqrt(eps()),
+        lp_function=logjoint_transformed,
+        latent_source::AbstractLatentSource=FromPrior(),
+        parameter_space::AbstractParameterSpace=UnconstrainedSpace(),
+    ) -> Model
+
+Return a copy of `model` which skips copying any arguments whose copies turn out not to
+affect the log density or gradient computed with `adtype`.
+
+TODO: Finish docstring.
+"""
+function optimise_copies(
+    model::Model{A,C,F,Val{S}},
+    adtype::DI.AbstractADType;
+    n_points::Int=10,
+    rng::AbstractRNG=Xoshiro(468),
+    atol::Real=100 * eps(),
+    rtol::Real=sqrt(eps()),
+    lp_function=logjoint_transformed,
+    latent_source::AbstractLatentSource=FromPrior(),
+    parameter_space::AbstractParameterSpace=UnconstrainedSpace(),
+) where {A,C,F,S}
+    atol, rtol = promote(atol, rtol)
+    # The same model, but only copying the arguments in `copy_argnames`. This reuses the
+    # evaluation function, so no new code is generated. `copy_argnames` must be sorted (see
+    # the `@wren` macro).
+    function with_copies(copy_argnames)
+        return Model(
+            model.name,
+            model.args,
+            model.stmts,
+            model.mod;
+            conditioned=model.conditioned,
+            copy_argnames=Val(Tuple(copy_argnames)),
+            _unsafe_reuse_evaluation_fn=model.evaluation_fn,
+        )
+    end
+    function lp_and_collected_grad(vecmodel, params)
+        lp, grad = lp_and_grad(vecmodel, params)
+        # standardise the array type returned, as in `test_ad`.
+        return lp, collect(grad)
+    end
+
+    # The model as given only skips copies that are safe by construction, so it serves as
+    # the reference. The points are evaluated in order, so that any state carried between
+    # evaluations through an uncopied argument shows up as a difference.
+    ref_vecmodel = VecModel(model, adtype; latent_source, lp_function, parameter_space)
+    points = [rand(rng, ref_vecmodel) for _ in 1:n_points]
+    expected = [lp_and_collected_grad(ref_vecmodel, p) for p in points]
+
+    # `_dealias` returns isbits values and models unchanged, so skipping those copies would
+    # make no difference.
+    candidates = filter(k -> !isbits(model.args[k]) && !(model.args[k] isa Model), S)
+
+    # Try removing each candidate in turn. Each attempt keeps the removals that already
+    # passed, so this doesn't rely on arguments being independent of each other (for
+    # example, two arguments might share memory).
+    copy_argnames = collect(S)
+    removed = Symbol[]
+    for k in candidates
+        trial_argnames = filter(!=(k), copy_argnames)
+        trial_vecmodel = VecModel(
+            with_copies(trial_argnames),
+            adtype,
+            ref_vecmodel.lp_function,
+            ref_vecmodel.parameter_space,
+            ref_vecmodel.vecinfo,
+            ref_vecmodel.sample,
+        )
+        passed = all(zip(points, expected)) do (params, (lp_expected, grad_expected))
+            lp_actual, grad_actual = lp_and_collected_grad(trial_vecmodel, params)
+            return _check_passed(lp_expected, lp_actual, atol, rtol) &&
+                   _check_passed(grad_expected, grad_actual, atol, rtol)
+        end
+        if passed
+            copy_argnames = trial_argnames
+            push!(removed, k)
+        end
+    end
+
+    if isempty(removed)
+        @info "optimise_copies: no copies could be skipped"
+    else
+        @info "optimise_copies: these arguments can be marked @nocopy: $(join(removed, ", "))"
+    end
+    return with_copies(copy_argnames)
+end
+
+"""
     BenchmarkResult
 
 The benchmark results returned by [`benchmark_model`](@ref) and [`@bmodel`](@ref). Each

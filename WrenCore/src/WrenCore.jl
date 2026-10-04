@@ -128,6 +128,7 @@ export @wren,
     @bmodel,
     benchmark_model,
     test_ad,
+    optimise_copies,
     target_transform
 
 # Reexports
