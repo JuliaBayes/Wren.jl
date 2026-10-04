@@ -66,38 +66,11 @@ end
     _dealias
 
 Create a copy of a model argument that has the same contents, but avoids aliasing the user's
-data. This is called on the model's arguments each time the model is evaluated.
+data.
 
-The main purpose of this is in fact to ensure correctness under AD with Enzyme.
-
-Specifically, the call to `DI.value_and_gradient` in `VecModel` passes the model's arguments
-as a `DI.Const`, which means that the model's arguments should never contain differentiable
-data. This is true at the start of the model (the differentiable data is in the active
-`params` argument), but if we then _write_ params into the model's arguments, then any
-gradients with respect to the model's arguments (i.e., gradients with respect to the params)
-will be lost.
-
-This is best illustrated with an example. Consider:
-
-```julia
-@wren function my_model(x)
-    x[1:4] ~ dist
-end
-```
-
-In the `VecModel` evaluation, this is lowered to something like:
-
-```julia
-function lp(params, x)
-    p14 = view(params, 1:4)
-    x[1:4] = p14  # Writing differentiable data into `x`!
-    return logdensityof(dist, x[1:4])
-end
-```
-
-Sometimes Enzyme does in fact return the correct gradient, but this relies on an LLVM
-optimisation and cannot be guaranteed. See
-https://github.com/EnzymeAD/Enzyme.jl/issues/2344.
+This is called on model construction, as well as on model evaluation (unless the argument
+has been proven or annotated to not require copying). See [the docs](@ref enzyme-copyargs)
+for why this matters.
 """
 function _dealias(v::SubArray{T}) where {T}
     v = collect(v)  # Avoid copying the entire parent array.
@@ -113,15 +86,37 @@ _dealias(v::T) where {T} = isbitstype(T) ? v : deepcopy(v)
 _dealias(model::Model) = model
 
 """
+    _needs_copy(::Type{T})
+
+Whether a model argument of type `T` needs to be copied on every evaluation, assuming that
+the dataflow analysis (or the user) has not ruled it out. The only reason for these copies
+is to stop differentiable data being written into the model's arguments (see `_dealias`),
+so types that can't hold differentiable data, or that `_dealias` returns unchanged anyway,
+are never copied.
+
+Note that this is separate from the copy made when the model is constructed, which protects
+the user's data and always uses `_dealias`.
+"""
+_needs_copy(::Type{T}) where {T} = !isbitstype(T)
+# Integers can't hold differentiable data: writing a float into an integer array either
+# errors or creates a new array.
+_needs_copy(::Type{<:AbstractArray{<:Integer}}) = false
+_needs_copy(::Type{<:Model}) = false
+
+"""
     _maybe_dealias(::Val{S}, ::Val{name}, v)
 
-Return `_dealias(v)` if `name` is one of the symbols in the tuple `S`, and `v` otherwise.
-Both `S` and `name` are type parameters, so this resolves at compile time to either a copy or
-nothing at all.
+Return `_dealias(v)` if `name` is one of the symbols in the tuple `S` and `v` is a type that
+needs copying (see `_needs_copy`). and `v` otherwise.
+
+The decision only depends on types, so should be resolvable at compile-time.
+
+Apparently, making this a generated function means that it's impossible for e.g. extensions
+to overload `_needs_copy`, as the generated function only has access to the methods of
+`_needs_copy` that were present at the compilation world age.
 """
-@generated function _maybe_dealias(::Val{S}, ::Val{name}, v) where {S,name}
-    name in S ? :($(_dealias)(v)) : :(v)
-end
+@inline _maybe_dealias(::Val{S}, ::Val{name}, v::V) where {S,name,V} =
+    name in S && _needs_copy(V) ? _dealias(v) : v
 
 function make_evaluation_fn(
     argnames::Tuple{Vararg{Symbol}},
@@ -219,9 +214,8 @@ function _show_namedtuple_tree(io::IO, nt::NamedTuple, prefix::String, copied::T
         connector = last ? "└─ " : "├─ "
         print(io, prefix, connector)
         printstyled(io, k; color=:red)
-        # `_dealias` returns isbits values and models unchanged, so these aren't really
-        # copied even if they are in the copy set.
-        if k in copied && !isbits(v) && !(v isa Model)
+        # Arguments in the copy set are only really copied if `_needs_copy` says so.
+        if k in copied && _needs_copy(typeof(v))
             printstyled(io, " (copied)"; color=:white)
         end
         print(io, " => ")

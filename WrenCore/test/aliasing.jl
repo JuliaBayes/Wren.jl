@@ -215,6 +215,29 @@ copied_args(::WrenCore.Model{A,C,F,Val{S}}) where {A,C,F,S} = S
         rand(nocopy_model)
         @test nocopy_model.args.y != [0.0]
     end
+
+    @testset "only arguments that can hold differentiable data are copied" begin
+        maybe_dealias(v) = WrenCore._maybe_dealias(Val((:v,)), Val(:v), v)
+        # Copied
+        v = [1.0, 2.0]
+        @test maybe_dealias(v) !== v
+        # Not copied
+        for v in ([1, 2], [true, false], view([1, 2, 3], 1:2), 1, (1.0, 2.0))
+            @test maybe_dealias(v) === v
+        end
+        # Not in the copy set, so not copied even though it could hold differentiable data
+        v = [1.0, 2.0]
+        @test WrenCore._maybe_dealias(Val((:w,)), Val(:v), v) === v
+
+        @testset "integer arrays are still copied on model construction" begin
+            @wren function int_arg(z)
+                a ~ Normal()
+                return z
+            end
+            z = [1, 2]
+            @test int_arg(z).args.z !== z
+        end
+    end
 end
 
 end

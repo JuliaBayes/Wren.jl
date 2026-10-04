@@ -323,9 +323,9 @@ function optimise_copies(
     points = [rand(rng, ref_vecmodel) for _ in 1:n_points]
     expected = [lp_and_collected_grad(ref_vecmodel, p) for p in points]
 
-    # `_dealias` returns isbits values and models unchanged, so skipping those copies would
-    # make no difference.
-    candidates = filter(k -> !isbits(model.args[k]) && !(model.args[k] isa Model), S)
+    # Arguments in the copy set are only really copied if `_needs_copy` says so, so
+    # skipping the others would make no difference.
+    candidates = filter(k -> _needs_copy(typeof(model.args[k])), S)
 
     # Try removing each candidate in turn. Each attempt keeps the removals that already
     # passed, so this doesn't rely on arguments being independent of each other (for
