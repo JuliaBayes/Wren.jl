@@ -11,7 +11,7 @@ flowchart TD
 
 The model definition is what you write:
 
-```@example rgfs
+```@example staged
 using Wren, Wren.Dists
 
 @wren function my_model(y)
@@ -32,7 +32,7 @@ The probabilistic IR looks something like the following, but a bit more complica
 
     Although it's not really useful for the average user, you can view this if you want with
 
-    ```@example rgfs
+    ```@example staged
     dump(model.stmts)
     ```
 
@@ -53,7 +53,7 @@ end
 
     Again, although it's not really useful for the average user, you can view this if you want with
 
-    ```@example rgfs
+    ```@example staged
     using WrenCore
     
     WrenCore.view_evaluation_fn(model)
@@ -76,7 +76,7 @@ Besides the substantial extra complexity of the codebase, it also means that we 
 For example, model bodies cannot close over local variables (only global variables).
 This is surprisingly easy to trigger:
 
-```@repl rgfs
+```@repl staged
 for d in (Normal(), Exponential())
     # d is a local variable...
 
@@ -93,9 +93,42 @@ end
 This can be worked around, for example by passing `d` into the model as an argument.
 However, it's still of course a limitation, and the error message isn't super helpful either.
 
-## IR design
+## IR and syntax design
 
-TODO.
+Above we saw two of the 'special expressions' that Wren uses in its IR, namely `Sample` and `Observe`.
+These have a very unimaginative one-to-one mapping to the special nodes in Wren:
+
+| Syntax                  | IR node          |
+|:----------------------- |:---------------- |
+| `a ~ b`                 | Sample           |
+| `@observe a ~ b`        | Observe          |
+| `@iid size=N ...`       | IID              |
+| `@batch for ...`        | Batch            |
+| `@addloglikelihood ...` | AddLogLikelihood |
+| `return ...`            | ReturnStatement  |
+
+As you can see, most of these are denoted by macros.
+As it turns out, none of these macros actually have a meaning outside of Wren model bodies: they don't actually expand into anything.
+They simply serve as syntax markers for the IR generation stage.
+
+Why macros, though?
+To begin with, we are fundamentally limited by Julia syntax: we can't invent our own syntax, because it has to be parsed by a normal Julia macro (`@wren`).
+So we can't, for example, write `[observe] a ~ b` as that won't parse:
+
+```@repl staged
+:([observe] a ~ b)
+```
+
+Then, we don't want to hijack any preexisting Julia syntax.
+This means that, for example, we don't want to parse `a => b` into something, because that usually means `Pair(a, b)` in Julia.
+Once we eliminate those, we are actually left with very few operators that aren't weird Unicode stuff that is impossible to type.
+
+In principle, we could use any kind of function call to denote these.
+For example, we could say that `sample(a, b)` is what is now `a ~ b`, and `iid(sample(a, b); size=N)` is what is now `@iid size=N a ~ b`.
+However, this is a bit too understated: it looks just like a normal function call, and it's not obvious to the user that these have special semantics.
+
+Macros are the best compromise between all of these.
+We aren't restricted to a fixed set of possibilities (as is the case with operators), but also to most Julia programmers it should be intuitive that macros have special effects!
 
 ## Programmatic generation
 
@@ -103,7 +136,7 @@ The above claim that the IR *allows* for programmatic generation is very careful
 
 However, you can in principle do something like this:
 
-```@example rgfs
+```@example staged
 using WrenCore.Expressions: Sample, Observe, AbstractWrenExpr
 using WrenCore: RuntimeGeneratedFunctions
 
@@ -119,6 +152,6 @@ manual_model = Wren.Model(:my_model, (; y=1.0), stmts, @__MODULE__)
 Obviously, this leaks internal details of Wren, and is not exactly a user-friendly API.
 However, it does show that it should be possible to construct the `stmts` array programmatically, generate a Wren model from it, and then use that model:
 
-```@example rgfs
+```@example staged
 rand(manual_model)
 ```
