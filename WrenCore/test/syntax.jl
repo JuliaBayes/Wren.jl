@@ -27,6 +27,7 @@ end
                 FromPrior(),
                 OriginalSpace(),
                 WrenCore.default_accumulators(),
+                EvalContext{false}(),
             )
             pars = parameters(accs)
             @test retval === nothing
@@ -48,6 +49,7 @@ end
                 FromPrior(),
                 OriginalSpace(),
                 WrenCore.default_accumulators(),
+                EvalContext{false}(),
             )
             @test retval === nothing
             @test parameters(accs) isa VarNamedTuple
@@ -71,6 +73,7 @@ end
                 FromPrior(),
                 OriginalSpace(),
                 WrenCore.default_accumulators(),
+                EvalContext{false}(),
             )
             pars = parameters(accs)
             @test retval === nothing
@@ -90,6 +93,7 @@ end
                 FromPrior(),
                 OriginalSpace(),
                 WrenCore.default_accumulators(),
+                EvalContext{false}(),
             )
             pars = parameters(accs)
             @test retval === nothing
@@ -109,8 +113,13 @@ end
         end
         model = observe_macro()
         @test model.name === :observe_macro
-        retval, accs =
-            evaluate(model, FromPrior(), OriginalSpace(), WrenCore.default_accumulators())
+        retval, accs = evaluate(
+            model,
+            FromPrior(),
+            OriginalSpace(),
+            WrenCore.default_accumulators(),
+            EvalContext{false}(),
+        )
         pars = parameters(accs)
         @test retval === nothing
         @test pars isa VarNamedTuple
@@ -138,6 +147,7 @@ end
             source,
             OriginalSpace(),
             WrenCore.default_accumulators(),
+            EvalContext{false}(),
         )
         @test logprior(accs) ≈ sum(logdensityof.(Ref(Normal()), [0.5, 1.0, 2.0]))
         @test loglikelihood(accs) ≈ logdensityof(Normal(), 0.25)
@@ -163,6 +173,7 @@ end
             source,
             OriginalSpace(),
             WrenCore.default_accumulators(),
+            EvalContext{false}(),
         )
         @test logprior(accs) ≈ logdensityof(Normal(), 0.5)
         @test loglikelihood(accs) ≈ logdensityof(Normal(), 0.5)
@@ -172,6 +183,7 @@ end
             source,
             OriginalSpace(),
             WrenCore.default_accumulators(),
+            EvalContext{false}(),
         )
         @test logprior(accs) ≈ logdensityof(Normal(), 2.0)
         @test loglikelihood(accs) ≈ logdensityof(Normal(), 2.0)
@@ -190,6 +202,7 @@ end
             FromPrior(),
             OriginalSpace(),
             WrenCore.default_accumulators(),
+            EvalContext{false}(),
         )
         pars = parameters(accs)
         @test only(keys(pars)) == @vn(x.a)
@@ -233,6 +246,7 @@ end
                 source,
                 OriginalSpace(),
                 WrenCore.default_accumulators(),
+                EvalContext{false}(),
             )
             @test parameters(accs) == VarNamedTuple(; x)
             @test logprior(accs) ≈ logdensityof(Normal(), x)
@@ -244,6 +258,7 @@ end
                 FromPrior(),
                 OriginalSpace(),
                 WrenCore.default_accumulators(),
+                EvalContext{false}(),
             )
             @test parameters(accs) == VarNamedTuple()
             @test iszero(logprior(accs))
@@ -264,6 +279,7 @@ end
                 FromPrior(),
                 OriginalSpace(),
                 WrenCore.default_accumulators(),
+                EvalContext{false}(),
             )
             pars = parameters(accs)
             x_val = pars[@vn(x)]
@@ -282,6 +298,7 @@ end
                 FromPrior(),
                 OriginalSpace(),
                 WrenCore.default_accumulators(),
+                EvalContext{false}(),
             )
             pars = parameters(accs)
             x_val = pars[@vn(x)]
@@ -301,6 +318,7 @@ end
                 FromPrior(),
                 OriginalSpace(),
                 WrenCore.default_accumulators(),
+                EvalContext{false}(),
             )
             pars = parameters(accs)
             x_val = pars[@vn(x)]
@@ -320,6 +338,7 @@ end
                 FromPrior(),
                 OriginalSpace(),
                 WrenCore.default_accumulators(),
+                EvalContext{false}(),
             )
             pars = parameters(accs)
             x_val = pars[@vn(x)]
@@ -352,6 +371,7 @@ end
                 $source,
                 OriginalSpace(),
                 $(WrenCore.default_accumulators()),
+                EvalContext{false}(),
             )
             @test !iszero(result_with.allocs)
 
@@ -360,7 +380,13 @@ end
                 WrenCore.default_accumulators(),
                 Val(WrenCore.LOG_LIKELIHOOD_ACCNAME),
             )
-            result_without = @b evaluate($model, $source, OriginalSpace(), $accs_no_ll)
+            result_without = @b evaluate(
+                $model,
+                $source,
+                OriginalSpace(),
+                $accs_no_ll,
+                EvalContext{false}(),
+            )
             @test iszero(result_without.allocs)
         end
     end
@@ -376,6 +402,7 @@ end
                 FromPrior(),
                 OriginalSpace(),
                 WrenCore.default_accumulators(),
+                EvalContext{false}(),
             )
             @test retval == parameters(accs)[@vn(x)]
         end
@@ -390,6 +417,7 @@ end
                 FromPrior(),
                 OriginalSpace(),
                 WrenCore.default_accumulators(),
+                EvalContext{false}(),
             )
             @test retval === nothing
         end
@@ -404,6 +432,7 @@ end
                 FromPrior(),
                 OriginalSpace(),
                 WrenCore.default_accumulators(),
+                EvalContext{false}(),
             )
             @test retval == parameters(accs)[@vn(x)]
 
@@ -417,6 +446,7 @@ end
                 FromPrior(),
                 OriginalSpace(),
                 WrenCore.default_accumulators(),
+                EvalContext{false}(),
             )
             @test retval == 2
         end
@@ -454,6 +484,7 @@ end
             source,
             OriginalSpace(),
             WrenCore.default_accumulators(),
+            EvalContext{false}(),
         )
         expected_logp = sum(logdensityof(Normal(), value) for value in values)
 
@@ -468,6 +499,7 @@ end
             FromPrior(),
             OriginalSpace(),
             WrenCore.default_accumulators(),
+            EvalContext{false}(),
         )
         @test retval == :empty
         @test parameters(accs) == VarNamedTuple()

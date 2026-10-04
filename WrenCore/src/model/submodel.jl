@@ -40,11 +40,13 @@ struct DiscardSubmodelParams <: CollectOrDiscardSubmodelParams end
         accs::AccumulatorTuple,
         vn::VarName,
         collect_params::CollectOrDiscardSubmodelParams,
+        ctx::EvalContext,
     )
 
 Evaluate a tilde-statement of the form `vn ~ rhs`, where `rhs` is a submodel. The
 `collect_params` argument indicates whether the parent model might require access to the
-parameters of the submodel as a top-level variable.
+parameters of the submodel as a top-level variable. `ctx` is the parent model's
+[`EvalContext`](@ref), which should be passed on when evaluating the submodel.
 """
 @generated function evaluate_submodel(
     rhs,
@@ -55,6 +57,7 @@ parameters of the submodel as a top-level variable.
     # https://github.com/JuliaBayes/Wren.jl/issues/4
     vn::VarName,
     ::CollectSubmodelParams,
+    ctx::EvalContext,
 ) where {names}
     parent_has_params_acc = PARAMS_ACCNAME in names
     expr = Expr(:block)
@@ -66,7 +69,7 @@ parameters of the submodel as a top-level variable.
     end
     push!(
         expr.args,
-        :((retval, child_accs) = evaluate(rhs, child_source, child_space, child_accs)),
+        :((retval, child_accs) = evaluate(rhs, child_source, child_space, child_accs, ctx)),
     )
     push!(expr.args, :(child_params = VarNames.parameters(child_accs)))
     if !parent_has_params_acc
@@ -104,10 +107,11 @@ function evaluate_submodel(
     accs::AccumulatorTuple,
     vn::VarName,
     ::DiscardSubmodelParams,
+    ctx::EvalContext,
 )
     child_source = scope(latent_source, vn)
     child_space = scope(parameter_space, vn)
     child_accs = scope(map(split, accs), vn)
-    retval, child_accs = evaluate(rhs, child_source, child_space, child_accs)
+    retval, child_accs = evaluate(rhs, child_source, child_space, child_accs, ctx)
     return retval, UncollectedParams(), child_accs
 end

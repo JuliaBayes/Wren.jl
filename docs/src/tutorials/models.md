@@ -129,10 +129,14 @@ The good thing about this design is that you can choose which accumulators to in
 Now that we have the ingredients, let's put it all together:
 
 ```@example models
-using WrenCore: evaluate, OriginalSpace
+using WrenCore: evaluate, OriginalSpace, EvalContext
 
-retval, accs = evaluate(model, FromParams(trace), OriginalSpace(), accs);
+retval, accs =
+    evaluate(model, FromParams(trace), OriginalSpace(), accs, EvalContext{false}());
 ```
+
+The last argument, [`EvalContext`](@ref), controls whether model arguments are copied during evaluation.
+This is only needed when differentiating with Enzyme, so you should almost always pass `EvalContext{false}()` here.
 
 `evaluate` returns a tuple of the model's return value:
 

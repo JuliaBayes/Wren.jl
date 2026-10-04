@@ -265,6 +265,110 @@ function test_ad(
 end
 
 """
+    reduce_copies(
+        model::WrenCore.Model,
+        adtype::DI.AbstractADType;
+        n_points::Int=10,
+        rng::AbstractRNG=Xoshiro(468),
+        atol::Real=100 * eps(),
+        rtol::Real=sqrt(eps()),
+        lp_function=logjoint_transformed,
+        latent_source::AbstractLatentSource=FromPrior(),
+        parameter_space::AbstractParameterSpace=UnconstrainedSpace(),
+        verbose::Bool=true,
+    ) -> Model
+
+Return a copy of `model` which skips copying any arguments whose copies turn out not to
+affect the log density or gradient computed with `adtype`.
+
+The copies are only made when differentiating with Enzyme (see [the docs](@ref
+enzyme-copyargs)), so for any other `adtype` this returns `model` unchanged.
+"""
+function reduce_copies(
+    model::Model{A,C,F,Val{S}},
+    ::Union{DI.AbstractADType,Nothing};
+    kwargs...,
+) where {A,C,F,S}
+    model
+end
+function reduce_copies(
+    model::Model{A,C,F,Val{S}},
+    adtype::DI.AutoEnzyme;
+    n_points::Int=10,
+    rng::AbstractRNG=Xoshiro(468),
+    atol::Real=100 * eps(),
+    rtol::Real=sqrt(eps()),
+    lp_function=logjoint_transformed,
+    latent_source::AbstractLatentSource=FromPrior(),
+    parameter_space::AbstractParameterSpace=UnconstrainedSpace(),
+    verbose::Bool=true,
+) where {A,C,F,S}
+    atol, rtol = promote(atol, rtol)
+    function lp_and_collected_grad(vecmodel, params)
+        lp, grad = lp_and_grad(vecmodel, params)
+        # standardise the array type returned, as in `test_ad`.
+        return lp, collect(grad)
+    end
+
+    ref_vecmodel = VecModel(
+        model,
+        adtype;
+        latent_source,
+        lp_function,
+        parameter_space,
+        # `reduce_copies` must be false here, otherwise infinite recursion!
+        reduce_copies=false,
+    )
+    points = [rand(rng, ref_vecmodel) for _ in 1:n_points]
+    expected = [lp_and_collected_grad(ref_vecmodel, p) for p in points]
+
+    # Arguments in the copy set are only really copied if `_needs_copy` says so, so
+    # skipping the others would make no difference.
+    candidates = filter(k -> _needs_copy(typeof(model.args[k])), S)
+
+    # Try removing each candidate in turn. Each attempt keeps the removals that already
+    # passed, so this doesn't rely on arguments being independent of each other (for
+    # example, two arguments might share memory).
+    #
+    # TODO(penelopeysm): Each attempt is a new model type, so Enzyme has to compile a new
+    # gradient for it (roughly 1 second each on the posteriordb models). This could be made
+    # cheaper by first trying to remove all candidates at once, and if that fails, splitting
+    # the candidates in half and recursing (like a binary search). Usually almost all copies
+    # can be removed, so the first attempt would often be the only one needed.
+    copy_argnames = S
+    removed = Symbol[]
+    for k in candidates
+        trial_argnames = filter(!=(k), copy_argnames)
+        trial_vecmodel = VecModel(
+            _with_copied_args(model, trial_argnames),
+            adtype,
+            ref_vecmodel.lp_function,
+            ref_vecmodel.parameter_space,
+            ref_vecmodel.vecinfo,
+            ref_vecmodel.sample,
+        )
+        passed = all(zip(points, expected)) do (params, (lp_expected, grad_expected))
+            lp_actual, grad_actual = lp_and_collected_grad(trial_vecmodel, params)
+            return _check_passed(lp_expected, lp_actual, atol, rtol) &&
+                   _check_passed(grad_expected, grad_actual, atol, rtol)
+        end
+        if passed
+            copy_argnames = trial_argnames
+            push!(removed, k)
+        end
+    end
+
+    if verbose
+        if isempty(removed)
+            @info "reduce_copies: no copies could be skipped"
+        else
+            @info "reduce_copies: these arguments no longer need to be copied: $(join(removed, ", "))"
+        end
+    end
+    return _with_copied_args(model, copy_argnames)
+end
+
+"""
     BenchmarkResult
 
 The benchmark results returned by [`benchmark_model`](@ref) and [`@bmodel`](@ref). Each
@@ -349,8 +453,13 @@ function benchmark_model(
     seconds::Real=1,
     verbose::Bool=(!isinteractive()),
 )
-    _, accs =
-        evaluate(model, latent_source, OriginalSpace(), WrenCore.default_accumulators())
+    _, accs = evaluate(
+        model,
+        latent_source,
+        OriginalSpace(),
+        WrenCore.default_accumulators(),
+        EvalContext{false}(),
+    )
     vnt_params = parameters(accs)
     vecmodel = VecModel(
         model,

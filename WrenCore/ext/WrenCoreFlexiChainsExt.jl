@@ -52,6 +52,7 @@ function _reevaluate(model::WrenCore.Model, chain::VNChain, accs, fallback=nothi
             WrenCore.FromParams(vnt, fallback),
             WrenCore.OriginalSpace(),
             map(WrenCore.reset, accs),
+            WrenCore.EvalContext{false}(),
         )
     end
 end

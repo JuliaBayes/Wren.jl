@@ -57,6 +57,10 @@ function WrenCore.VecModel(
         model.evaluation_fn,
         model_args,
         model.conditioned,
+        model.enzyme_copy_argnames,
+        # TODO(penelopeysm): We'll conservatively copy the model args here just like we do
+        # with Enzyme. However, I'm unsure if Enzyme-MLIR requires it.
+        WrenCore.EvalContext{true}(),
         lp_function,
         parameter_space,
         vecinfo,

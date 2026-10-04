@@ -114,6 +114,7 @@ export @wren,
     independent,
     rand_with_logp,
     evaluate,
+    EvalContext,
     get_latent,
     vectorised_params,
     logjac,
@@ -127,6 +128,7 @@ export @wren,
     @bmodel,
     benchmark_model,
     test_ad,
+    reduce_copies,
     target_transform
 
 # Reexports

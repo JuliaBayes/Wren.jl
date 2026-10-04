@@ -49,7 +49,8 @@ end
         WrenCore.LogLikelihoodAccumulator(),
         WrenCore.ParamsAccumulator(),
     )
-    _, accs = evaluate(model, FromParams(from_prior), OriginalSpace(), accs)
+    _, accs =
+        evaluate(model, FromParams(from_prior), OriginalSpace(), accs, EvalContext{false}())
     from_accs = Draw(accs, (chain=2,))
     @test parameters(from_accs) == parameters(from_prior)
     @test extras(from_accs).chain == 2
