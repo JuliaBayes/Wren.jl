@@ -57,7 +57,7 @@ function WrenCore.VecModel(
         model.evaluation_fn,
         model_args,
         model.conditioned,
-        model.copy_args,
+        model.copy_argnames,
         lp_function,
         parameter_space,
         vecinfo,

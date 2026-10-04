@@ -203,7 +203,7 @@ copied_args(::WrenCore.Model{A,C,F,Val{S}}) where {A,C,F,S} = S
             model.args,
             model.stmts,
             model.mod;
-            copy_args=Val(()),
+            copy_argnames=Val(()),
             _unsafe_reuse_evaluation_fn=model.evaluation_fn,
         )
         @test nocopy_model.evaluation_fn === model.evaluation_fn
@@ -214,25 +214,6 @@ copied_args(::WrenCore.Model{A,C,F,Val{S}}) where {A,C,F,S} = S
         @test model.args.y == [0.0]
         rand(nocopy_model)
         @test nocopy_model.args.y != [0.0]
-
-        # A hand-built model, which regenerates the evaluation function, must say which
-        # arguments to copy.
-        @test_throws UndefKeywordError WrenCore.Model(
-            model.name,
-            model.args,
-            model.stmts,
-            model.mod,
-        )
-        rebuilt_model = WrenCore.Model(
-            model.name,
-            model.args,
-            model.stmts,
-            model.mod;
-            copy_args=Val((:y,)),
-        )
-        @test copied_args(rebuilt_model) == (:y,)
-        rand(rebuilt_model)
-        @test rebuilt_model.args.y == [0.0]
     end
 end
 

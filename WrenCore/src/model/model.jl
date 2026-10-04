@@ -26,14 +26,14 @@ struct Model{A<:NamedTuple,C<:VarNamedTuple,F,CA<:Val}
     evaluation_fn::F
     "The names of the arguments which are copied on every evaluation, as a `Val` of a sorted
     tuple of symbols."
-    copy_args::CA
+    copy_argnames::CA
 
     function Model(
         name::Symbol,
         args::NamedTuple,
         stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}},
         mod::Module;
-        copy_args::Val,
+        copy_argnames::Val,
         conditioned::VarNamedTuple=VarNamedTuple(),
         _unsafe_reuse_evaluation_fn=nothing,
     )
@@ -49,7 +49,7 @@ struct Model{A<:NamedTuple,C<:VarNamedTuple,F,CA<:Val}
             typeof(dealiased_args),
             typeof(conditioned),
             typeof(evaluation_fn),
-            typeof(copy_args),
+            typeof(copy_argnames),
         }(
             name,
             dealiased_args,
@@ -57,7 +57,7 @@ struct Model{A<:NamedTuple,C<:VarNamedTuple,F,CA<:Val}
             mod,
             conditioned,
             evaluation_fn,
-            copy_args,
+            copy_argnames,
         )
     end
 end
@@ -129,13 +129,13 @@ function make_evaluation_fn(
     mod::Module,
 )
     body = Expr(:block)
-    @gensym model_args copy_args
+    @gensym model_args copy_argnames
     for k in argnames
         push!(
             body.args,
             :(
                 $(k) = $(WrenCore._maybe_dealias)(
-                    $copy_args,
+                    $copy_argnames,
                     Val($(QuoteNode(k))),
                     $model_args.$k,
                 )
@@ -157,7 +157,7 @@ function make_evaluation_fn(
                 $accs,
                 $model_args,
                 $conditioned,
-                $copy_args,
+                $copy_argnames,
             )
                 $body
             end
@@ -366,7 +366,7 @@ function _wren(expr::Expr, mod::Module; internal_to_ir::Bool=false)
     internal_to_ir && return :(($ir, $model_arg_symbols))
     model_exprs, args_to_copy = run_dataflow_analysis(ir, model_arg_symbols)
     # Sorted so that the same set of arguments always gives the same type.
-    copy_args = Val(Tuple(sort!(collect(setdiff(args_to_copy, nocopy_args)))))
+    copy_argnames = Val(Tuple(sort!(collect(setdiff(args_to_copy, nocopy_args)))))
 
     # At macro definition time, we generate a new symbol to store the evaluation function
     # corresponding to the AST *as defined in the macro*. It's possible that users can
@@ -414,7 +414,7 @@ function _wren(expr::Expr, mod::Module; internal_to_ir::Bool=false)
         # Safe as the cached RGF is always correct for a given model instantiation, i.e.
         # `f(arg1, arg2)` and `f(arg3, arg4)` should always use the same RGF.
         _unsafe_reuse_evaluation_fn=($evaluation_fn_ref),
-        copy_args=($copy_args),
+        copy_argnames=($copy_argnames),
     ))
     function_expr = Expr(:function, esc(signature), function_body)
 

@@ -61,7 +61,7 @@ struct _VecModelLP{
     evaluation_fn::E
     model_args::A
     conditioned::C
-    copy_args::CA
+    copy_argnames::CA
     lp_function::F
     parameter_space::S
     vecinfo::R
@@ -73,7 +73,7 @@ function (f::_VecModelLP)(params::AbstractVector)
         f.evaluation_fn,
         f.model_args,
         f.conditioned,
-        f.copy_args,
+        f.copy_argnames,
         f.lp_function,
         f.parameter_space,
         f.vecinfo,
@@ -91,7 +91,7 @@ function _vecmodel_lp(
     evaluation_fn,
     model_args::NamedTuple,
     conditioned::VarNamedTuple,
-    copy_args::Val,
+    copy_argnames::Val,
     lp_function,
     parameter_space::AbstractParameterSpace,
     vecinfo::VecInfo,
@@ -99,7 +99,7 @@ function _vecmodel_lp(
 )
     source = FromVector(params, vecinfo)
     _, accs =
-        evaluation_fn(source, parameter_space, accs, model_args, conditioned, copy_args)
+        evaluation_fn(source, parameter_space, accs, model_args, conditioned, copy_argnames)
     return lp_function(accs)
 end
 
@@ -240,7 +240,7 @@ function VecModel(
         model.evaluation_fn,
         model.args,
         model.conditioned,
-        model.copy_args,
+        model.copy_argnames,
         lp_function,
         parameter_space,
         vecinfo,
@@ -262,7 +262,7 @@ function VecModel(
             DI.Constant(model.evaluation_fn),
             DI.Constant(model.args),
             DI.Constant(model.conditioned),
-            DI.Constant(model.copy_args),
+            DI.Constant(model.copy_argnames),
             DI.Constant(lp_function),
             DI.Constant(parameter_space),
             DI.Constant(vecinfo),
@@ -415,7 +415,7 @@ function lp_and_grad(vecmodel::VecModel, params::AbstractVector)
             DI.Constant(vecmodel.model.evaluation_fn),
             DI.Constant(vecmodel.model.args),
             DI.Constant(vecmodel.model.conditioned),
-            DI.Constant(vecmodel.model.copy_args),
+            DI.Constant(vecmodel.model.copy_argnames),
             DI.Constant(vecmodel.lp_function),
             DI.Constant(vecmodel.parameter_space),
             DI.Constant(vecmodel.vecinfo),
@@ -453,7 +453,7 @@ function lp_and_grad!(grad::AbstractVector, vecmodel::VecModel, params::Abstract
             DI.Constant(vecmodel.model.evaluation_fn),
             DI.Constant(vecmodel.model.args),
             DI.Constant(vecmodel.model.conditioned),
-            DI.Constant(vecmodel.model.copy_args),
+            DI.Constant(vecmodel.model.copy_argnames),
             DI.Constant(vecmodel.lp_function),
             DI.Constant(vecmodel.parameter_space),
             DI.Constant(vecmodel.vecinfo),
