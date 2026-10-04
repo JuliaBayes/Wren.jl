@@ -134,24 +134,7 @@ Since `m` was declared as `Const`, it doesn't have a 'shadow': in other words, i
 So when we reach the log-likelihood term, Enzyme has no way of 'tracking' the gradient of the log-likelihood with respect to `params`.
 
 This behaviour is intentional in Enzyme and is a result of the `Const` marking.
-There isn't a simple way to work around this with DifferentiationInterface, so Wren works around this by copying model arguments during evaluation.
+There isn't a simple way to work around this with DifferentiationInterface, so Wren currently works around this by copying most model arguments during evaluation.
+Wren does perform some basic analysis to try to avoid copying things that definitely don't need to be copied, but this is very conservative since Wren only has access to the syntax tree.
 
-Copying every argument would be wasteful, though, so Wren inspects the model's AST to work out which arguments could fall into the trap above.
-An argument only needs to be copied if it might be written to and then read from again.
-For example, an argument which only appears on the left-hand side of `@observe` statements is never written to, so it isn't copied.
-
-This analysis has to be cautious, because it works at the level of syntax and can't see what arbitrary Julia functions do.
-Any appearance of an argument outside a tilde-statement, even something as harmless as `eachindex(y)`, counts as a possible write.
-If you know that an argument is safe, you can tell Wren not to copy it with [`@nocopy`](@ref):
-
-```julia
-@wren function f(@nocopy(y))
-    mu ~ Normal()
-    @batch for i in eachindex(y)
-        @observe y[i] ~ Normal(mu)
-    end
-end
-```
-
-Internally, the set of arguments to copy is stored as a type parameter of the `Model` (in its `copy_argnames` field), rather than being written into the generated code.
-This means that models which copy different sets of arguments can share the same generated code: Julia simply compiles it once for each set.
+The recommended workaround to this is for users to manually use `@nocopy` annotations on model arguments which are safe to not copy, or to use the `minimise_copies` function to automatically detect which arguments can be safely not copied.
