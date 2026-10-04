@@ -107,8 +107,7 @@ Immutable structs largely behave the same way as top-level variables, and mutabl
 Related to the point above is that arguments which are mutable (e.g. arrays, Dicts, mutable structs) are not guaranteed to be copied upon every model evaluation.
 This is done for performance reasons: for example, it means that you can preallocate a scratch array and pass it to the model so that it can be reused on every evaluation!
 However, it does also mean that if you mutate an argument inside a model, this _may_ be visible on subsequent evaluations.
-This is especially so if you make use of Wren's copy-elision optimisations.
-(TODO: This doesn't exist yet, but it will soon.)
+This is especially so if you mark arguments with [`@nocopy`](@ref) (see below).
 
 It is quite hard to _accidentally_ trigger such behaviour in an observable manner, and if you do so you will probably be able to guess that you are doing something wrong.
 Here is a rather contrived example:
@@ -141,6 +140,36 @@ This is because when Wren _constructs_ a model (i.e., when calling `mutable(y_ou
 ```@example model
 y_outside
 ```
+
+### Skipping copies with `@nocopy`
+
+When evaluating a model, Wren copies any argument that might be written to and then read from again, because otherwise gradients computed with Enzyme can be silently wrong (see [here](@ref enzyme-copyargs) for the details).
+Wren decides this by looking at the model's code, and it has to be cautious: any use of an argument outside a tilde-statement counts as a possible write.
+For example, `y` below is copied on every evaluation, just because it appears in `eachindex(y)`:
+
+```@example model
+@wren function copies_y(y)
+    mu ~ Normal()
+    @batch for i in eachindex(y)
+        @observe y[i] ~ Normal(mu)
+    end
+end
+```
+
+For large arguments these copies can be a noticeable fraction of the cost of evaluating the model.
+If you know that an argument is safe, you can mark it with `@nocopy` in the model's signature to skip the copy:
+
+```@example model
+@wren function skips_copy(@nocopy(y))
+    mu ~ Normal()
+    @batch for i in eachindex(y)
+        @observe y[i] ~ Normal(mu)
+    end
+end
+```
+
+An argument is safe to mark with `@nocopy` if, inside the model, it is either never written to, or written to but never read from afterwards.
+If you mark an argument that doesn't meet this condition, Enzyme gradients may be wrong.
 
 ## Conditioning
 

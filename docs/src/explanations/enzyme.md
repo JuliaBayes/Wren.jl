@@ -134,8 +134,24 @@ Since `m` was declared as `Const`, it doesn't have a 'shadow': in other words, i
 So when we reach the log-likelihood term, Enzyme has no way of 'tracking' the gradient of the log-likelihood with respect to `params`.
 
 This behaviour is intentional in Enzyme and is a result of the `Const` marking.
-There isn't a simple way to work around this with DifferentiationInterface, so Wren currently works around this by copying all model arguments during evaluation.
+There isn't a simple way to work around this with DifferentiationInterface, so Wren works around this by copying model arguments during evaluation.
 
-In principle, this can be somewhat relaxed by inspecting the model AST to see how many times each model argument is used.
-In general, if a model argument is only used once, then it can't fall into the trap above, and we can safely elide the copy.
-This optimisation has not been implemented yet, though.
+Copying every argument would be wasteful, though, so Wren inspects the model's AST to work out which arguments could fall into the trap above.
+An argument only needs to be copied if it might be written to and then read from again.
+For example, an argument which only appears on the left-hand side of `@observe` statements is never written to, so it isn't copied.
+
+This analysis has to be cautious, because it works at the level of syntax and can't see what arbitrary Julia functions do.
+Any appearance of an argument outside a tilde-statement, even something as harmless as `eachindex(y)`, counts as a possible write.
+If you know that an argument is safe, you can tell Wren not to copy it with [`@nocopy`](@ref):
+
+```julia
+@wren function f(@nocopy(y))
+    mu ~ Normal()
+    @batch for i in eachindex(y)
+        @observe y[i] ~ Normal(mu)
+    end
+end
+```
+
+Internally, the set of arguments to copy is stored as a type parameter of the model's evaluation function (`WrenCore.EvaluationFn`), rather than being written into the generated code.
+This means that models which copy different sets of arguments can share the same generated code: Julia simply compiles it once for each set.
