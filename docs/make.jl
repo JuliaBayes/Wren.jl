@@ -44,9 +44,9 @@ makedocs(;
         "How-tos" => ["howtos/benchmarking.md"],
         "Explanations" => [
             "explanations/enzyme.md",
+            "explanations/reactant.md",
             "explanations/batch.md",
             "explanations/staged.md",
-            "explanations/motivation.md",
         ],
         "Reference" => ["reference/distributions.md", "reference/api.md"],
     ],
