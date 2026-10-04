@@ -1,7 +1,7 @@
 # Staged computation
 
-One of Wren's unique features is that it uses staged computation to generate the evaluation functions for models.
-That sounds like a scary term, but it essentially means that the evaluation function is not generated in a single shot but rather in a multi-stage pipeline:
+One of Wren's features, inspired by [Soss.jl](https://github.com/cscherrer/Soss.jl) and [Tilde.jl](https://github.com/cscherrer/Tilde.jl), is that it uses staged computation to generate the evaluation functions for models.
+That sounds like a scary term, but it essentially means that the evaluation function is generated via a multi-stage pipeline:
 
 ```mermaid
 flowchart TD
@@ -51,7 +51,7 @@ end
 
 !!! details "The actual IR"
 
-    Again, although it's not really useful for the average user, you can view this if you want with
+    Again, although it's not really useful for the average user, you can view this with
 
     ```@example staged
     using WrenCore
@@ -73,6 +73,13 @@ The main motivation is that the intermediate representation (IR):
 
 This of course doesn't come for free.
 Besides the substantial extra complexity of the codebase, it also means that we have to use [RuntimeGeneratedFunctions.jl](https://github.com/SciML/RuntimeGeneratedFunctions.jl) in the second step (IR to evaluation function), which brings with it some limitations.
+
+!!! note
+
+    Soss and Tilde use [GeneralizedGenerated.jl](https://github.com/JuliaStaging/GeneralizedGenerated.jl) instead of RGF.
+    GG is supposedly more powerful than RGF, but I haven't yet come across a use case where GG was absolutely necessary.
+    Furthermore, RGF is actually maintained (for example it is used in ModelingToolkit.jl), and so it seems like a better choice for a dependency.
+
 For example, model bodies cannot close over local variables (only global variables).
 This is surprisingly easy to trigger:
 
