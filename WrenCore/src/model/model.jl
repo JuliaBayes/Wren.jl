@@ -211,7 +211,7 @@ function strip_nocopy_annotations(signature::Expr)
     return Expr(:call, signature.args[1], new_args...), nocopy_args
 end
 
-function _show_namedtuple_tree(io::IO, nt::NamedTuple, prefix::String)
+function _show_namedtuple_tree(io::IO, nt::NamedTuple, prefix::String, copied::Tuple)
     nkeys = length(nt)
     compact_io = IOContext(io, :compact => true, :limit => true)
     for (i, (k, v)) in enumerate(pairs(nt))
@@ -219,6 +219,11 @@ function _show_namedtuple_tree(io::IO, nt::NamedTuple, prefix::String)
         connector = last ? "└─ " : "├─ "
         print(io, prefix, connector)
         printstyled(io, k; color=:red)
+        # `_dealias` returns isbits values and models unchanged, so these aren't really
+        # copied even if they are in the copy set.
+        if k in copied && !isbits(v) && !(v isa Model)
+            printstyled(io, " (copied)"; color=:white)
+        end
         print(io, " => ")
         show(compact_io, v)
         last || println(io)
@@ -233,7 +238,7 @@ function Base.show(io::IO, model::Model)
 end
 
 # In the REPL
-function Base.show(io::IO, ::MIME"text/plain", model::Model)
+function Base.show(io::IO, ::MIME"text/plain", model::Model{A,C,F,Val{S}}) where {A,C,F,S}
     printstyled(io, "Model ", model.name; bold=true)
     println(io)
     prefix = get(io, :tree_prefix, "")
@@ -257,7 +262,7 @@ function Base.show(io::IO, ::MIME"text/plain", model::Model)
                 printstyled(io, " (none)"; color=:white)
             else
                 println(io)
-                _show_namedtuple_tree(io, value, child_prefix)
+                _show_namedtuple_tree(io, value, child_prefix, S)
             end
         elseif label == "conditioned" && value isa VarNamedTuple
             if isempty(value)
