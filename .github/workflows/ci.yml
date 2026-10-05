@@ -26,7 +26,7 @@ jobs:
         runner:
           # Ubuntu
           - version: '1'
-            os: ubuntu-latest
+            os: blacksmith-4vcpu-ubuntu-2404
 
           # TODO(penelopeysm): Re-enable testing on more platforms once the repo is public.
           # For now we keep the matrix small to avoid spending too many CI minutes.
