@@ -1,7 +1,7 @@
 # posteriordb
 
 ```
-cd bench
+cd bench/adhoc
 julia --project=. posteriordb/run.jl
 ```
 
