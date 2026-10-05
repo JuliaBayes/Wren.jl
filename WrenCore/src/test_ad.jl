@@ -464,7 +464,6 @@ function benchmark_model(
         latent_source=FromParams(vnt_params, nothing),
         lp_function,
         parameter_space,
-        reduce_copies=false,
     )
     params = vecmodel.sample
 
