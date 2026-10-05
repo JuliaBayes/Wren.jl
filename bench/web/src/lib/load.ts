@@ -9,7 +9,9 @@ export function parseRun(source: string, json: any): Run {
             `${source}: unsupported schema_version ${json.schema_version}`,
         );
     }
-    const backends: string[] = [];
+    // Older or hand-written files might not have a `backends` list; in that case the
+    // backends are collected from the results below.
+    const backends: string[] = [...(json.backends ?? [])];
     const models = new Map<string, ModelResult>();
     for (const [name, raw] of Object.entries<any>(json.results)) {
         const entries = new Map<string, Entry>();

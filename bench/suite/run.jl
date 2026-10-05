@@ -79,6 +79,8 @@ function main(outfile)
             "git_sha" => git_sha,
             "julia_version" => string(VERSION),
         ),
+        # Lists the backends in order, since the keys in `results` get sorted.
+        "backends" => first.(BACKENDS),
         "results" => results,
     )
     mkpath(dirname(abspath(outfile)))
