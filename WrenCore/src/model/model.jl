@@ -320,7 +320,6 @@ function extract_args(args_expr::Expr)
         new_expr = Expr(:tuple)
         syms = Set{Symbol}()
         for arg in args_expr.args
-            # TODO(penelopeysm): support default positional arguments or keyword arguments.
             arg isa Symbol || error("@wren: expected function argument to be a symbol")
             push!(new_expr.args, :($arg = $(esc(arg))))
             push!(syms, arg)

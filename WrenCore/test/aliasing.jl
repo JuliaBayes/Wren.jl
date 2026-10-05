@@ -165,6 +165,22 @@ using Test
         @test WrenCore._copied_args(decondition(conditioned_model)) == (:x,)
     end
 
+    @testset "default and keyword arguments are copied like positional ones" begin
+        @wren function kw_copies(x, y=[0.0]; z=[0.0], w=[0.0])
+            a ~ Normal()
+            y[1] ~ Normal(a)
+            z[1] ~ Normal(a)
+            b ~ Normal(y[1] + z[1])
+        end
+        model = kw_copies(1.0)
+        @test WrenCore._copied_args(model) == (:y, :z)
+        # Gradients are only right under Enzyme if the copies are actually made.
+        vm_enzyme = VecModel(model, AutoEnzyme(; mode=Reverse); reduce_copies=false)
+        vm_fd = VecModel(model, AutoForwardDiff())
+        params = rand(vm_enzyme)
+        @test lp_and_grad(vm_enzyme, params)[2] ≈ lp_and_grad(vm_fd, params)[2]
+    end
+
     @testset "only arguments that can hold differentiable data are copied" begin
         maybe_dealias(v) =
             WrenCore._maybe_dealias(EvalContext{true}(), Val((:v,)), Val(:v), v)
