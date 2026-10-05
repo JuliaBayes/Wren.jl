@@ -13,7 +13,16 @@ Stores the Reactant-compiled functions.
 struct ReactantPrep{P,G}
     primal::P
     value_and_gradient::G
+    # Batched functions are compiled lazily, once per (eltype, number of columns).
+    batch_primal::Dict{Tuple{DataType,Int},Any}
+    batch_value_and_gradient::Dict{Tuple{DataType,Int},Any}
 end
+ReactantPrep(primal, value_and_gradient) = ReactantPrep(
+    primal,
+    value_and_gradient,
+    Dict{Tuple{DataType,Int},Any}(),
+    Dict{Tuple{DataType,Int},Any}(),
+)
 struct ValueAndGradientCallable{F,A}
     f::F
     adtype::A
@@ -27,6 +36,32 @@ function (f::ValueAndGradientCallable)(params)
     result = Enzyme.gradient(_with_primal(f.adtype.mode), f.f, params)
     return result.val, only(result.derivs)
 end
+_grad_mode(::AutoEnzyme{Nothing}) = Enzyme.Reverse
+_grad_mode(adtype::AutoEnzyme) = adtype.mode
+
+# Columns are independent, so the gradient of the summed log-densities is the matrix of
+# per-column gradients.
+struct SummedLP{B}
+    b::B
+end
+(s::SummedLP)(params) = sum(s.b(params))
+
+struct BatchedValueAndGradientCallable{B,A}
+    b::B
+    adtype::A
+end
+function (f::BatchedValueAndGradientCallable)(params)
+    grad = only(Enzyme.gradient(_grad_mode(f.adtype.mode), SummedLP(f.b), params))
+    return f.b(params), grad
+end
+
+# `Ops.batch` vectorises the per-column log-density over the columns of `params`, so the
+# compiled program does not grow with the number of columns.
+function (b::WrenCore.BatchedLP)(params::Reactant.AnyTracedRMatrix)
+    params = Reactant.TracedUtils.materialize_traced_array(params)
+    return vec(Reactant.Ops.batch(b.lp_func, params, [1]))
+end
+
 function WrenCore.VecModel(
     model::WrenCore.Model,
     adtype::AutoReactant;
@@ -91,6 +126,28 @@ end
 function WrenCore.lp_and_grad(vecmodel::ReactantWrenModel, params::AbstractVector)
     value, grad = vecmodel.adprep.value_and_gradient(Reactant.to_rarray(params))
     return _to_host(value), Array(grad)
+end
+
+function _compiled_batch(f, cache::Dict, params::AbstractMatrix)
+    return get!(cache, (eltype(params), size(params, 2))) do
+        Reactant.@compile f(Reactant.to_rarray(params))
+    end
+end
+function WrenCore.lp_batch(vecmodel::ReactantWrenModel, params::AbstractMatrix)
+    WrenCore._check_batch_size(vecmodel, params)
+    b = WrenCore.batched_lp_function(vecmodel)
+    compiled = _compiled_batch(b, vecmodel.adprep.batch_primal, params)
+    return Array(compiled(Reactant.to_rarray(params)))
+end
+function WrenCore.lp_and_grad_batch(vecmodel::ReactantWrenModel, params::AbstractMatrix)
+    WrenCore._check_batch_size(vecmodel, params)
+    f = BatchedValueAndGradientCallable(
+        WrenCore.batched_lp_function(vecmodel),
+        vecmodel.adtype,
+    )
+    compiled = _compiled_batch(f, vecmodel.adprep.batch_value_and_gradient, params)
+    values, grads = compiled(Reactant.to_rarray(params))
+    return Array(values), Array(grads)
 end
 function WrenCore.lp_and_grad!(
     grad::AbstractVector,

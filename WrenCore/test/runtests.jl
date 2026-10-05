@@ -20,6 +20,7 @@ using Test
     include("aliasing.jl")
     include("submodel.jl")
     include("vecmodel.jl")
+    include("vecmodel_batch.jl")
     include("draw.jl")
     include("ad.jl")
 end

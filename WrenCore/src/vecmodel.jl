@@ -461,6 +461,77 @@ function lp_and_grad!(
 end
 
 """
+    BatchedLP
+
+Callable struct which evaluates the log-density of a `VecModel` at each column of a matrix of
+parameters, returning a vector of log-densities. Obtain one with
+[`batched_lp_function`](@ref).
+
+By default this is a loop over the columns. When traced by Reactant, it instead lowers to a
+single batched operation, so the compiled program does not grow with the number of columns.
+"""
+struct BatchedLP{F<:_VecModelLP}
+    lp_func::F
+end
+function (b::BatchedLP)(params::AbstractMatrix)
+    # An explicit loop rather than `map(b.lp_func, eachcol(params))`: the latter stores the
+    # constant `lp_func` alongside active data, which Enzyme rejects without runtime activity.
+    out = Vector{typeof(b.lp_func(view(params, :, 1)))}(undef, size(params, 2))
+    for t in axes(params, 2)
+        out[t] = b.lp_func(view(params, :, t))
+    end
+    return out
+end
+
+"""
+    batched_lp_function(vecmodel::VecModel)
+
+Return a callable `f` such that `f(params::AbstractMatrix)` is the vector of log-densities of
+`vecmodel` at each column of `params`.
+
+Unlike [`lp_batch`](@ref), this is a plain Julia function that is not tied to `vecmodel`'s AD
+backend, so it can be differentiated (to any order) or compiled by other packages. Columns
+are independent, so the gradient of `sum(f(params))` is the matrix of per-column gradients.
+
+If `vecmodel` was constructed with `AutoReactant`, its model arguments are stored as Reactant
+arrays, and tracing `f` inside `Reactant.@compile` produces a single batched program.
+"""
+batched_lp_function(vecmodel::VecModel) = BatchedLP(vecmodel.lp_func)
+
+function _check_batch_size(vecmodel::VecModel, params::AbstractMatrix)
+    size(params, 1) == vecmodel.dimension || throw(
+        DimensionMismatch(
+            "VecModel expects parameter columns of length $(vecmodel.dimension), but " *
+            "received a matrix with $(size(params, 1)) rows.",
+        ),
+    )
+    return nothing
+end
+
+"""
+    lp_batch(vecmodel::VecModel, params::AbstractMatrix)
+
+Calculate the log-density of `vecmodel` at each column of `params`, returning a vector.
+"""
+function lp_batch(vecmodel::VecModel, params::AbstractMatrix)
+    _check_batch_size(vecmodel, params)
+    return batched_lp_function(vecmodel)(params)
+end
+
+"""
+    lp_and_grad_batch(vecmodel::VecModel, params::AbstractMatrix)
+
+Returns a tuple `(log_densities, grads)`, where `log_densities` is the vector of
+log-densities of `vecmodel` at each column of `params`, and `grads` is a matrix the same size
+as `params` whose columns are the corresponding gradients.
+"""
+function lp_and_grad_batch(vecmodel::VecModel, params::AbstractMatrix)
+    _check_batch_size(vecmodel, params)
+    results = map(Base.Fix1(lp_and_grad, vecmodel), eachcol(params))
+    return map(first, results), reduce(hcat, map(last, results))
+end
+
+"""
     LogDensityProblems.capabilities(::Type{<:VecModel})
 
 LogDensityProblems.LogDensityOrder{0} if the `VecModel` was constructed without an AD

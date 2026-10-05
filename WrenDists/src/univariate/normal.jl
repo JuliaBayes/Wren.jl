@@ -79,9 +79,14 @@ end
 Base.rand(rng::Random.AbstractRNG, d::IsoNormal) = randn(rng, size(d.mu)) .* d.sigma .+ d.mu
 Base.size(d::IsoNormal) = size(d.mu)
 function DensityInterface.logdensityof(d::IsoNormal, x)
-    dist = _zero_logdensity(d, x)
-    @inbounds for i in eachindex(x, d.mu)
-        dist += abs2(x[i] - d.mu[i])
+    dist = if within_compile()
+        sum(abs2, x .- d.mu)
+    else
+        s = _zero_logdensity(d, x)
+        @inbounds for i in eachindex(x, d.mu)
+            s += abs2(x[i] - d.mu[i])
+        end
+        s
     end
     N = length(x)
     return -0.5 * dist / abs2(d.sigma) - N * log(d.sigma) - 0.5 * N * log2π
@@ -95,9 +100,14 @@ end
 Base.rand(rng::Random.AbstractRNG, d::IIDNormal) = randn(rng, d.size) .* d.sigma .+ d.mu
 Base.size(d::IIDNormal) = d.size
 function DensityInterface.logdensityof(d::IIDNormal, x)
-    dist = _zero_logdensity(d, x)
-    @inbounds for i in eachindex(x)
-        dist += abs2(x[i] - d.mu)
+    dist = if within_compile()
+        sum(abs2, x .- d.mu)
+    else
+        # `sum` rather than a loop: Enzyme forward-over-reverse (Hessian-vector products)
+        # fails on a loop over a view of the parameters, with "cannot handle unknown
+        # binary operator", even when iterating over values rather than indexing.
+        mu = d.mu
+        sum(xi -> abs2(xi - mu), x; init=_zero_logdensity(d, x))
     end
     N = length(x)
     return -0.5 * dist / abs2(d.sigma) - N * log(d.sigma) - 0.5 * N * log2π
