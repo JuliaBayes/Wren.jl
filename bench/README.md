@@ -16,7 +16,10 @@ again later, remove the label and add it back).
 
 `web/` is a small website that shows one run as a table, or compares two runs (pick a
 'tip' and a 'base'; cells are coloured by how much faster or slower tip is, and hovering
-shows the base time). To run it locally:
+shows the base time).
+
+It can only be run locally right now. However, when the repo is public, we can
+host this on GitHub Pages:
 
 ```sh
 cd bench/web
