@@ -53,7 +53,7 @@
                     <optgroup label={groupLabel}>
                         {#each entries as entry}
                             <option value={entry.file}>
-                                {runLabel(entry)} · {formatTimestamp(entry.timestamp)} · {shortSha(entry.git_sha)}
+                                {formatTimestamp(entry.timestamp)} {shortSha(entry.git_sha)} ({runLabel(entry)})
                             </option>
                         {/each}
                     </optgroup>

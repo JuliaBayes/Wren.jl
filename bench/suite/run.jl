@@ -5,7 +5,7 @@
 #     julia --project=bench bench/suite/run.jl [--label <text> | --release] [--no-save]
 #
 # The label is shown on the website to identify the run (e.g. "WrenCore-v0.2.0" or
-# "PR #123"). If not given, it defaults to the short git sha.
+# "PR #123"). If not given, it defaults to the subject line of the commit's message.
 #
 # `--release` labels the run with the release's tag, `WrenCore-v<version>`, using the
 # version in `WrenCore/Project.toml`. The current commit must have that tag.
@@ -160,6 +160,14 @@ function main()
         info in values(Pkg.dependencies())
     )
     short_sha = first(git_sha, 7)
+    # The website shows the sha next to the label, so use the commit message as the default
+    # label rather than the sha.
+    label = if LABEL === nothing
+        subject = readchomp(`git -C $REPO log -1 --format=%s`)
+        DIRTY ? "$subject (dirty)" : subject
+    else
+        LABEL
+    end
     # Timings are only comparable between runs on the same kind of machine.
     machine = Dict(
         "cpu" => Sys.cpu_info()[1].model,
@@ -175,8 +183,7 @@ function main()
             "timestamp" => string(timestamp) * "Z",
             "git_sha" => git_sha,
             "commit_date" => commit_date,
-            "label" =>
-                LABEL === nothing ? (DIRTY ? "$short_sha-dirty" : short_sha) : LABEL,
+            "label" => label,
             # Whether there were uncommitted changes, i.e. whether `git_sha` describes the
             # code that was benchmarked.
             "dirty" => DIRTY,
