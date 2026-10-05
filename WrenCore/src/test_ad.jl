@@ -420,7 +420,7 @@ end
         model::WrenCore.Model,
         adtype::Union{Nothing,DI.AbstractADType}=nothing;
         lp_function=logjoint_transformed,
-        latent_source::AbstractLatentSource=FromPrior(),
+        latent_source::AbstractLatentSource=FromPrior(Xoshiro(468)),
         parameter_space::AbstractParameterSpace=UnconstrainedSpace(),
         seconds::Real=2,
         verbose::Bool=(!isinteractive()),
@@ -436,7 +436,10 @@ Benchmark a model at multiple levels:
 Note that if `adtype` is given, the corresponding backend package must be loaded first.
 
 The `lp_function`, `latent_source`, and `parameter_space` keywords are forwarded to
-[`VecModel`](@ref), and have the same defaults.
+[`VecModel`](@ref). `lp_function` and `parameter_space` have the same defaults as for
+`VecModel`. `latent_source` instead defaults to drawing from the prior with a fixed seed, so
+that every call benchmarks at the same parameters. (The time taken can depend on the
+parameter values, so random parameters make results vary between calls.)
 
 `seconds` is the approximate time spent on each of the benchmarks.
 
@@ -446,7 +449,7 @@ function benchmark_model(
     model::Model,
     adtype::Union{Nothing,DI.AbstractADType}=nothing;
     lp_function=logjoint_transformed,
-    latent_source::AbstractLatentSource=FromPrior(),
+    latent_source::AbstractLatentSource=FromPrior(Xoshiro(468)),
     parameter_space::AbstractParameterSpace=UnconstrainedSpace(),
     seconds::Real=2,
     verbose::Bool=(!isinteractive()),
