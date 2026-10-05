@@ -1,8 +1,11 @@
 // The format of the JSON files written by `bench/suite/run.jl`.
 
 export interface RunMeta {
+    /** When the benchmark was run. */
     timestamp: string;
     git_sha: string | null;
+    /** When the benchmarked commit was made. Missing in older files. */
+    commit_date?: string | null;
     /** Identifies the run, e.g. "WrenCore v0.2.0" or "PR #123". Missing in older files. */
     label?: string;
     julia_version: string;
@@ -32,5 +35,6 @@ export interface IndexEntry {
     file: string;
     timestamp: string;
     git_sha: string | null;
+    commit_date?: string | null;
     label?: string;
 }

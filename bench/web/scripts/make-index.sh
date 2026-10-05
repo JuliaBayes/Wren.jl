@@ -12,6 +12,6 @@ done
 if [[ ${#files[@]} -eq 0 ]]; then
     echo "[]" > "$dir/index.json"
 else
-    jq -n '[inputs | {file: (input_filename | split("/") | last), timestamp: .meta.timestamp, git_sha: .meta.git_sha, label: .meta.label}] | sort_by(.timestamp) | reverse' \
+    jq -n '[inputs | {file: (input_filename | split("/") | last), timestamp: .meta.timestamp, git_sha: .meta.git_sha, commit_date: .meta.commit_date, label: .meta.label}] | sort_by(.timestamp) | reverse' \
         "${files[@]}" > "$dir/index.json"
 fi

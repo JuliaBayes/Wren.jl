@@ -50,13 +50,13 @@ const MODELS = (
     ArK,
     EightSchoolsCentered,
     GLMBinomial,
-    # GLMPoisson,
-    # GLMMPoisson,
-    # GPRegr,
-    # KidscoreInteraction,
-    # Mh,
-    # Rate1,
-    # SblriBLR,
+    GLMPoisson,
+    GLMMPoisson,
+    GPRegr,
+    KidscoreInteraction,
+    Mh,
+    Rate1,
+    SblriBLR,
 )
 
 function bench(model, adtype)
@@ -90,6 +90,14 @@ function main()
     catch
         nothing
     end
+    # When the benchmarked commit was made, in UTC. Unlike `timestamp` (when the benchmark
+    # was run), this is still right if an old commit is benchmarked later.
+    commit_date = try
+        cmd = `git -C $(@__DIR__) log -1 --format=%cd --date=format-local:%Y-%m-%dT%H:%M:%SZ`
+        readchomp(addenv(cmd, "TZ" => "UTC"))
+    catch
+        nothing
+    end
     # The version of every package in the manifest, so that changes in dependencies can be
     # tracked across runs. Packages without a version (e.g. some stdlibs) are `nothing`.
     manifest = Dict(
@@ -103,6 +111,7 @@ function main()
         "meta" => Dict(
             "timestamp" => string(timestamp) * "Z",
             "git_sha" => git_sha,
+            "commit_date" => commit_date,
             "label" => LABEL === nothing ? short_sha : LABEL,
             "julia_version" => string(VERSION),
         ),
