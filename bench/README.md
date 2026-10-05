@@ -2,24 +2,52 @@
 
 ## Benchmark suite
 
-`suite/` benchmarks Wren's primal, Enzyme reverse, and Mooncake reverse on a set of
-PosteriorDB models, and saves the results to a JSON file in `suite/results/`, named
-`<UTC timestamp>-<short git sha>.json`:
+`suite/` benchmarks Wren on a set of PosteriorDB models.
+
+By default, this is intended to be used for 'production' benchmarking. In other
+words, the benchmarks used here are saved in the repo's history (specifically
+the `benchmark-results` branch) so that we can keep a record of performance
+over time.
+
+To run the benchmarks locally (e.g. to try out local changes), run:
 
 ```sh
-julia --project=bench bench/suite/run.jl
+julia --project=bench bench/suite/run.jl --no-save
 ```
 
-CI runs this on every push to `main` and on release tags, and saves the file to `runs/` on
-the `benchmark-results` branch. To benchmark a PR, add the `benchmark` label to it (to run
-again later, remove the label and add it back).
+### Instructions for production benchmarking
 
-`web/` is a small website that shows one run as a table, or compares two runs (pick a
-'tip' and a 'base'; cells are coloured by how much faster or slower tip is, and hovering
-shows the base time).
+The git sha, commit date, Julia version, package versions and machine details
+are filled in automatically.
 
-It can only be run locally right now. However, when the repo is public, we can
-host this on GitHub Pages:
+By default, runs are labelled with just the short SHA. However, for version
+releases we'll want to label the run with the version number, so that we can
+easily see the performance of each release. To do so, run:
+
+```sh
+julia --project=bench bench/suite/run.jl --label "WrenCore@X.Y.Z"
+```
+
+Production benchmarks aren't currently run on CI because timings are too
+inconsistent. (If one day we have dedicated machines, we could do that
+instead.) Instead, the production benchmarks are currently manually run on
+Penny's laptop.
+
+### The website
+
+`web/` is a small website that shows one run as a table, or compares two runs
+(pick a 'tip' and a 'base'; cells are coloured by how much faster or slower tip
+is, and hovering shows the base time).
+
+Currently, because the repo is private, there are some limitations. In particular:
+
+  - It's not hosted online, you have to view it locally.
+  - You have to fetch the JSON benchmark results yourself.
+
+When the repo is public, we can host this on GitHub Pages, and make the website
+fetch results over HTTP from GitHub.
+
+Anyway, to view this locally:
 
 ```sh
 cd bench/web
