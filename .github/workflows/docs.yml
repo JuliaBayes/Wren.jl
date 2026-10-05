@@ -25,7 +25,7 @@ jobs:
       IS_PR_BUT_NOT_FORK: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name }}
 
     steps:
-      - uses: useblacksmith/checkout@v1 # 7.0.1
+      - uses: useblacksmith/checkout@25227e61ff9dafe400e22fa487b673eac4e4409a # v1
       - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # 3.0.2
       - uses: julia-actions/cache@b7788abd52452d5bc033d69796e110d9906af4ab # 3.2.0
 
