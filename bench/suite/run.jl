@@ -181,7 +181,10 @@ function save(outfile, short_sha)
         cp(outfile, joinpath(runs, basename(outfile)))
         write_index(runs)
         run(`git -C $dir add runs`)
-        run(`git -C $dir commit -m "Add benchmark results for $short_sha"`)
+        # The results branch has no pre-commit config, so tell pre-commit (if it's
+        # installed as a git hook) not to fail because of that.
+        commit = `git -C $dir commit -m "Add benchmark results for $short_sha"`
+        run(addenv(commit, "PRE_COMMIT_ALLOW_NO_CONFIG" => "1"))
         run(`git -C $dir push origin HEAD:$RESULTS_BRANCH`)
     finally
         run(`git -C $REPO worktree remove --force $dir`)

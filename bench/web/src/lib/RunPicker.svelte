@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { formatTimestamp, runLabel, shortSha } from "./format";
+    import { formatTimestamp, isRelease, runLabel, shortSha } from "./format";
     import type { IndexEntry } from "./types";
 
     interface Props {
@@ -19,6 +19,10 @@
         allowNone,
         onLoadFile,
     }: Props = $props();
+
+    // Release runs (labelled e.g. "WrenCore v0.2.0") are listed in their own group.
+    let releases = $derived(index.filter((e) => isRelease(e)));
+    let others = $derived(index.filter((e) => !isRelease(e)));
 
     let fileInput: HTMLInputElement;
 
@@ -44,15 +48,17 @@
                     {/each}
                 </optgroup>
             {/if}
-            {#if index.length > 0}
-                <optgroup label="Saved runs">
-                    {#each index as entry}
-                        <option value={entry.file}>
-                            {runLabel(entry)} · {formatTimestamp(entry.timestamp)} · {shortSha(entry.git_sha)}
-                        </option>
-                    {/each}
-                </optgroup>
-            {/if}
+            {#each [["Releases", releases], ["Other runs", others]] as const as [groupLabel, entries]}
+                {#if entries.length > 0}
+                    <optgroup label={groupLabel}>
+                        {#each entries as entry}
+                            <option value={entry.file}>
+                                {runLabel(entry)} · {formatTimestamp(entry.timestamp)} · {shortSha(entry.git_sha)}
+                            </option>
+                        {/each}
+                    </optgroup>
+                {/if}
+            {/each}
         </select>
     </label>
     <button onclick={() => fileInput.click()}>Load file…</button>
