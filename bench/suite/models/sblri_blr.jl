@@ -2,7 +2,7 @@
 module SblriBLR
 
 using PosteriorDB
-using Wren: Wren, @wren, @observe, @batch, @iid
+using WrenCore: @wren, @observe, @batch, @iid
 using WrenDists: WrenDists as WD
 
 const data = let

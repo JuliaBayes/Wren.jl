@@ -2,7 +2,7 @@
 module Rate1
 
 using PosteriorDB
-using Wren: Wren, @wren, @observe
+using WrenCore: @wren, @observe
 using WrenDists: WrenDists as WD
 
 const data = let

@@ -2,7 +2,7 @@
 module GLMPoisson
 
 using PosteriorDB
-using Wren: Wren, @wren, @observe, @batch
+using WrenCore: @wren, @observe, @batch
 using WrenDists: WrenDists as WD
 
 const data = let
