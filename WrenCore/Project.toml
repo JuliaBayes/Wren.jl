@@ -24,21 +24,28 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 VarNames = "09a315b2-63fc-4165-8d7f-d59368e770cc"
 
 [weakdeps]
+AbstractMCMC = "80f14c24-f653-4e6a-9b94-39d6b0f70001"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
+FlexiChains = "4a37a8b9-6e57-4b92-8664-298d46e639f7"
 Mooncake = "da2b9cff-9c12-43a0-ae48-6db2b0edb7d6"
 Reactant = "3c362404-f566-11ee-1572-e11a4b42c853"
 WrenDists = "2ad4af40-d7c9-42b2-92b0-e09d37d1e75a"
 
+[sources]
+FlexiChains = {rev = "v0.7", url = "https://github.com/JuliaBayes/FlexiChains.jl"}
+
 [extensions]
 WrenCoreDistributionsExt = ["Distributions"]
 WrenCoreEnzymeExt = ["Enzyme", "DifferentiationInterface"]
+WrenCoreFlexiChainsExt = ["AbstractMCMC", "FlexiChains"]
 WrenCoreMooncakeExt = ["Mooncake"]
 WrenCoreReactantExt = ["ADTypes", "Enzyme", "Reactant"]
 WrenCoreWrenDistsExt = ["WrenDists"]
 
 [compat]
 ADTypes = "1"
+AbstractMCMC = "5"
 Accessors = "0.1"
 Chairmarks = "1"
 DensityInterface = "0.4"
@@ -47,6 +54,7 @@ DocStringExtensions = "0.9"
 Enzyme = "0.13"
 EnzymeCore = "0.6 - 0.8"
 FillArrays = "1"
+FlexiChains = "0.7"
 LinearAlgebra = "1"
 LogDensityProblems = "2"
 Mooncake = "0.4, 0.5"
@@ -60,3 +68,6 @@ StatsAPI = "1"
 Test = "1"
 VarNames = "0.1.4"
 WrenDists = "0.1"
+
+[extras]
+FlexiChains = "4a37a8b9-6e57-4b92-8664-298d46e639f7"

@@ -1,4 +1,4 @@
-using Chairmarks: Chairmarks, @be
+using Chairmarks: Chairmarks
 using LinearAlgebra: norm
 using Random: Xoshiro
 using Statistics: median
@@ -6,7 +6,7 @@ using Statistics: median
 """
     AbstractADCorrectnessTestSetting
 
-Different ways to check the correctness of an AD backend.
+Different ways to check the correctness of an AD backend in [`test_ad`](@ref).
 """
 abstract type AbstractADCorrectnessTestSetting end
 
@@ -32,12 +32,9 @@ struct WithExpectedResult{V<:Union{Number,Nothing},G<:Union{AbstractVector,Nothi
     grad::G
 end
 
-"""
-    NoTest()
-
-Disable AD correctness checking in [`benchmark_and_test`](@ref).
-"""
-struct NoTest <: AbstractADCorrectnessTestSetting end
+# An expected value of `nothing` means that the check is skipped.
+_check_passed(::Nothing, actual, atol, rtol) = true
+_check_passed(expected, actual, atol, rtol) = isapprox(expected, actual; atol, rtol)
 
 """
     ADIncorrectException
@@ -53,17 +50,17 @@ struct ADIncorrectException{VE,VA,GE,GA,T<:Real} <: Exception
     rtol::T
 end
 function Base.showerror(io::IO, exception::ADIncorrectException)
-    lp_passed = isapprox(
+    lp_passed = _check_passed(
         exception.lp_expected,
-        exception.lp_actual;
-        atol=exception.atol,
-        rtol=exception.rtol,
+        exception.lp_actual,
+        exception.atol,
+        exception.rtol,
     )
-    grad_passed = isapprox(
+    grad_passed = _check_passed(
         exception.grad_expected,
-        exception.grad_actual;
-        atol=exception.atol,
-        rtol=exception.rtol,
+        exception.grad_actual,
+        exception.atol,
+        exception.rtol,
     )
     failed = if !lp_passed && !grad_passed
         "lp and gradient"
@@ -86,20 +83,19 @@ function Base.showerror(io::IO, exception::ADIncorrectException)
         min_rtol = min_atol / max(abs(exception.lp_expected), abs(exception.lp_actual))
         s = """
           lp check would have passed with:
-               atol ≥ $min_atol"
-            or rtol ≥ $min_rtol"
+               atol ≥ $min_atol
+            or rtol ≥ $min_rtol
         """
         println(io)
         print(io, s)
     end
     if !grad_passed
-        println(io)
         diff_norm = norm(exception.grad_expected - exception.grad_actual)
         max_norm = max(norm(exception.grad_expected), norm(exception.grad_actual))
         s = """
           Gradient check would have passed with:
-               atol ≥ $diff_norm"
-            or rtol ≥ $(diff_norm / max_norm)"
+               atol ≥ $diff_norm
+            or rtol ≥ $(diff_norm / max_norm)
         """
         println(io)
         print(io, s)
@@ -107,85 +103,9 @@ function Base.showerror(io::IO, exception::ADIncorrectException)
     return nothing
 end
 
-"""
-    ModelRunResult
-
-The correctness and benchmark results returned by [`benchmark_and_test`](@ref).
-
-$(TYPEDFIELDS)
-"""
-struct ModelRunResult{
-    M<:Model,
-    V<:VarNamedTuple,
-    VM<:Union{VecModel,Nothing},
-    P<:Union{AbstractVector,Nothing},
-    VE,
-    GE,
-    VA,
-    GA,
-    T<:Real,
-}
-    "The model that was tested."
-    model::M
-    "A VarNamedTuple sample drawn from the model's prior."
-    vnt_params::V
-    "The vectorised model that was tested."
-    vecmodel::VM
-    "The vector of parameters that was tested with `vecmodel`."
-    params::P
-    "The expected log-density value, or `nothing` if correctness was not checked."
-    lp_expected::VE
-    "The expected gradient of the log-density, or `nothing` if correctness was not checked."
-    grad_expected::GE
-    "The actual log-density value returned by the AD backend."
-    lp_actual::VA
-    "The actual gradient of the log-density returned by the AD backend."
-    grad_actual::GA
-    "The absolute tolerance used for correctness checking."
-    atol::T
-    "The relative tolerance used for correctness checking."
-    rtol::T
-    "Median benchmark for drawing a sample from the model, or `nothing` if not benchmarked."
-    rand_bench::Union{Nothing,Chairmarks.Sample}
-    "Median benchmark for evaluating the log-joint density, or `nothing` if not benchmarked."
-    logjoint_bench::Union{Nothing,Chairmarks.Sample}
-    "Median benchmark for evaluating the vectorised log-density, or `nothing` if not benchmarked."
-    primal_bench::Union{Nothing,Chairmarks.Sample}
-    "Median benchmark for evaluating the log-density and its gradient, or `nothing` if not benchmarked."
-    grad_bench::Union{Nothing,Chairmarks.Sample}
-end
-
-_show_sample(s::Chairmarks.Sample) = sprint(show, MIME"text/plain"(), s)
-
-function Base.show(io::IO, ::MIME"text/plain", result::ModelRunResult)
-    lines = Pair{String,String}[]
-    push!(lines, "model" => string(result.model.name))
-    if result.vecmodel !== nothing
-        push!(lines, "backend" => string(result.vecmodel.adtype))
-    end
-    if result.params !== nothing
-        push!(lines, "n_params" => string(length(result.params)))
-    end
-    if result.rand_bench !== nothing
-        push!(lines, "rand" => _show_sample(result.rand_bench))
-    end
-    if result.logjoint_bench !== nothing
-        push!(lines, "logjoint" => _show_sample(result.logjoint_bench))
-    end
-    if result.primal_bench !== nothing
-        push!(lines, "lp" => _show_sample(result.primal_bench))
-    end
-    if result.grad_bench !== nothing
-        push!(lines, "lp_and_grad" => _show_sample(result.grad_bench))
-        if result.primal_bench !== nothing
-            ratio = result.grad_bench.time / result.primal_bench.time
-            push!(lines, "grad / lp" => string(round(ratio; sigdigits=4)))
-        end
-    end
-    if result.lp_expected !== nothing || result.grad_expected !== nothing
-        push!(lines, "correctness" => "passed")
-    end
-    println(io, "ModelRunResult")
+# Prints `title` followed by `lines` as a tree.
+function _print_tree(io::IO, title::String, lines::Vector{Pair{String,String}})
+    println(io, title)
     for (i, (key, val)) in enumerate(lines)
         connector = i == length(lines) ? "└" : "├"
         padded_key = rpad(key, 12)
@@ -198,41 +118,75 @@ function Base.show(io::IO, ::MIME"text/plain", result::ModelRunResult)
     return nothing
 end
 
+# Lines describing the model and vectorised model, shared by both result types.
+function _model_lines(vecmodel::VecModel)
+    lines = Pair{String,String}["model"=>string(vecmodel.model.name)]
+    if vecmodel.adtype !== nothing
+        push!(lines, "backend" => string(vecmodel.adtype))
+    end
+    push!(lines, "n_params" => string(length(vecmodel.sample)))
+    return lines
+end
+
 """
-    benchmark_and_test(
+    ADTestResult
+
+The correctness results returned by [`test_ad`](@ref).
+
+$(TYPEDFIELDS)
+"""
+struct ADTestResult{M<:VecModel,VE,GE,VA,GA,T<:Real}
+    "The vectorised model that was tested. The parameters used are in `vecmodel.sample`."
+    vecmodel::M
+    "The expected log-density value, or `nothing` if it was not checked."
+    lp_expected::VE
+    "The expected gradient of the log-density, or `nothing` if it was not checked."
+    grad_expected::GE
+    "The actual log-density value returned by the AD backend."
+    lp_actual::VA
+    "The actual gradient of the log-density returned by the AD backend."
+    grad_actual::GA
+    "The absolute tolerance used for correctness checking."
+    atol::T
+    "The relative tolerance used for correctness checking."
+    rtol::T
+end
+
+function Base.show(io::IO, ::MIME"text/plain", result::ADTestResult)
+    lines = _model_lines(result.vecmodel)
+    push!(lines, "correctness" => "passed")
+    _print_tree(io, "ADTestResult", lines)
+    return nothing
+end
+
+"""
+    test_ad(
         model::WrenCore.Model,
-        adtype::Union{Nothing,DI.AbstractADType};
-        kwargs...
-    ) -> ModelRunResult
+        adtype::DI.AbstractADType;
+        reference::AbstractADCorrectnessTestSetting=WithBackend(),
+        atol::Real=100 * eps(),
+        rtol::Real=sqrt(eps()),
+        lp_function=logjoint_transformed,
+        latent_source::AbstractLatentSource=FromPrior(),
+        parameter_space::AbstractParameterSpace=UnconstrainedSpace(),
+        verbose::Bool=(!isinteractive()),
+    ) -> ADTestResult
 
-Test and benchmark a model, optionally including its vectorised form and AD.
+Check that the log-density and gradient computed by `adtype` on `model` are correct, and
+throw an [`ADIncorrectException`](@ref) if not.
 
-Note that if `adtype` is specified, the corresponding backend package must be loaded first.
+Note that the corresponding backend package for `adtype` must be loaded first.
 
-This function evaluates performance at multiple levels:
+`reference` determines what the results are compared against: either another backend
+([`WithBackend`](@ref)) or known values ([`WithExpectedResult`](@ref)).
 
-- **Model level**: benchmarks [`rand`](@ref) (sampling from the prior) and
-  [`logjoint`](@ref) (log-joint density evaluation).
-- **VecModel level**: benchmarks [`lp`](@ref) (log-density of the vectorised model) and
-  [`lp_and_grad`](@ref) (log-density and its gradient).
-
-If `test_correctness` is also specified, then the log-density and gradient returned by the
-AD backend are compared against either a reference backend or a manually specified expected
-result.
-
-## Keyword arguments
-
-The `lp_function` and `parameter_space` keywords are forwarded to [`VecModel`](@ref), and
-have the same defaults.
-
+The `lp_function`, `latent_source`, and `parameter_space` keywords are forwarded to
+[`VecModel`](@ref), and have the same defaults.
 """
-function benchmark_and_test(
+function test_ad(
     model::Model,
-    adtype::Union{Nothing,DI.AbstractADType};
-    benchmark_model::Bool=true,
-    benchmark_primal::Bool=true,
-    benchmark_ad::Bool=(adtype !== nothing),
-    test_correctness::Union{AbstractADCorrectnessTestSetting,Bool}=NoTest(),
+    adtype::DI.AbstractADType;
+    reference::AbstractADCorrectnessTestSetting=WithBackend(),
     atol::Real=100 * eps(),
     rtol::Real=sqrt(eps()),
     lp_function=logjoint_transformed,
@@ -240,42 +194,273 @@ function benchmark_and_test(
     parameter_space::AbstractParameterSpace=UnconstrainedSpace(),
     verbose::Bool=(!isinteractive()),
 )
-    # Promote boolean test_ad to an AbstractADCorrectnessTestSetting
-    test_correctness =
-        test_correctness isa Bool ? (test_correctness ? WithBackend() : NoTest()) :
-        test_correctness
-    if test_correctness isa WithBackend && adtype == test_correctness.adtype
+    if reference isa WithBackend && adtype == reference.adtype
         @warn "Testing correctness of $adtype against itself — results will always pass. " *
               "Use a different reference backend or WithExpectedResult."
     end
     atol, rtol = promote(atol, rtol)
 
-    _, accs =
-        evaluate(model, latent_source, OriginalSpace(), WrenCore.default_accumulators())
-    vnt_params = parameters(accs)
+    vecmodel = VecModel(model, adtype; latent_source, lp_function, parameter_space)
+    params = vecmodel.sample
 
-    # Model-level benchmarking: sample and logjoint
-    rand_bench, logjoint_bench = if benchmark_model
-        rng = Xoshiro(468) # avoid mutating global RNG
-        rand(rng, model) # warmup
-        rb = median(@be rand($rng, $model))
-        logjoint(model, vnt_params) # warmup
-        ljb = median(@be logjoint($model, $vnt_params))
-        rb, ljb
+    lp_actual, grad_actual = lp_and_grad(vecmodel, params)
+    # standardise the array type returned. DI is agnostic towards this.
+    # https://github.com/JuliaDiff/DifferentiationInterface.jl/issues/754
+    grad_actual = collect(grad_actual)
+
+    lp_expected, grad_expected = if reference isa WithExpectedResult
+        reference.lp, reference.grad === nothing ? nothing : collect(reference.grad)
     else
-        nothing, nothing
-    end
-    if test_correctness === NoTest() && !benchmark_primal && !benchmark_ad
-        # Nothing else to do, can return early.
-        #! format: off
-        return ModelRunResult(
-            model, vnt_params, nothing, nothing, nothing, nothing, nothing,
-            nothing, atol, rtol, rand_bench, logjoint_bench, nothing, nothing
+        # The expected lp is computed without any backend. This usually doesn't really
+        # need to be tested, except for Reactant where the computation graph is different.
+        no_ad_vecmodel = VecModel(
+            vecmodel.model,
+            nothing,
+            vecmodel.lp_function,
+            vecmodel.parameter_space,
+            vecmodel.vecinfo,
+            vecmodel.sample,
         )
-        #! format: on
+        ref_vecmodel = VecModel(
+            vecmodel.model,
+            reference.adtype,
+            vecmodel.lp_function,
+            vecmodel.parameter_space,
+            vecmodel.vecinfo,
+            vecmodel.sample,
+        )
+        _, grad = lp_and_grad(ref_vecmodel, params)
+        lp(no_ad_vecmodel, params), collect(grad)
     end
 
-    # VecModel-level
+    lp_passed = _check_passed(lp_expected, lp_actual, atol, rtol)
+    grad_passed = _check_passed(grad_expected, grad_actual, atol, rtol)
+    if !lp_passed || !grad_passed
+        throw(
+            ADIncorrectException(
+                lp_expected,
+                lp_actual,
+                grad_expected,
+                grad_actual,
+                atol,
+                rtol,
+            ),
+        )
+    end
+
+    result = ADTestResult(
+        vecmodel,
+        lp_expected,
+        grad_expected,
+        lp_actual,
+        grad_actual,
+        atol,
+        rtol,
+    )
+    if verbose
+        show(stdout, MIME"text/plain"(), result)
+        println()
+    end
+    return result
+end
+
+"""
+    reduce_copies(
+        model::WrenCore.Model,
+        adtype::DI.AbstractADType;
+        n_points::Int=10,
+        rng::AbstractRNG=Xoshiro(468),
+        atol::Real=100 * eps(),
+        rtol::Real=sqrt(eps()),
+        lp_function=logjoint_transformed,
+        latent_source::AbstractLatentSource=FromPrior(),
+        parameter_space::AbstractParameterSpace=UnconstrainedSpace(),
+        verbose::Bool=true,
+    ) -> Model
+
+Return a copy of `model` which skips copying any arguments whose copies turn out not to
+affect the log density or gradient computed with `adtype`.
+
+The copies are only made when differentiating with Enzyme (see [the docs](@ref
+enzyme-copyargs)), so for any other `adtype` this returns `model` unchanged.
+"""
+function reduce_copies(
+    model::Model{A,C,F,Val{S}},
+    ::Union{DI.AbstractADType,Nothing};
+    kwargs...,
+) where {A,C,F,S}
+    model
+end
+function reduce_copies(
+    model::Model{A,C,F,Val{S}},
+    adtype::DI.AutoEnzyme;
+    n_points::Int=10,
+    rng::AbstractRNG=Xoshiro(468),
+    atol::Real=100 * eps(),
+    rtol::Real=sqrt(eps()),
+    lp_function=logjoint_transformed,
+    latent_source::AbstractLatentSource=FromPrior(),
+    parameter_space::AbstractParameterSpace=UnconstrainedSpace(),
+    verbose::Bool=true,
+) where {A,C,F,S}
+    atol, rtol = promote(atol, rtol)
+    function lp_and_collected_grad(vecmodel, params)
+        lp, grad = lp_and_grad(vecmodel, params)
+        # standardise the array type returned, as in `test_ad`.
+        return lp, collect(grad)
+    end
+
+    ref_vecmodel = VecModel(
+        model,
+        adtype;
+        latent_source,
+        lp_function,
+        parameter_space,
+        # `reduce_copies` must be false here, otherwise infinite recursion!
+        reduce_copies=false,
+    )
+    points = [rand(rng, ref_vecmodel) for _ in 1:n_points]
+    expected = [lp_and_collected_grad(ref_vecmodel, p) for p in points]
+
+    # Arguments in the copy set are only really copied if `_needs_copy` says so, so
+    # skipping the others would make no difference.
+    candidates = filter(k -> _needs_copy(typeof(model.args[k])), S)
+
+    # Try removing each candidate in turn. Each attempt keeps the removals that already
+    # passed, so this doesn't rely on arguments being independent of each other (for
+    # example, two arguments might share memory).
+    #
+    # TODO(penelopeysm): Each attempt is a new model type, so Enzyme has to compile a new
+    # gradient for it (roughly 1 second each on the posteriordb models). This could be made
+    # cheaper by first trying to remove all candidates at once, and if that fails, splitting
+    # the candidates in half and recursing (like a binary search). Usually almost all copies
+    # can be removed, so the first attempt would often be the only one needed.
+    copy_argnames = S
+    removed = Symbol[]
+    for k in candidates
+        trial_argnames = filter(!=(k), copy_argnames)
+        trial_vecmodel = VecModel(
+            _with_copied_args(model, trial_argnames),
+            adtype,
+            ref_vecmodel.lp_function,
+            ref_vecmodel.parameter_space,
+            ref_vecmodel.vecinfo,
+            ref_vecmodel.sample,
+        )
+        passed = all(zip(points, expected)) do (params, (lp_expected, grad_expected))
+            lp_actual, grad_actual = lp_and_collected_grad(trial_vecmodel, params)
+            return _check_passed(lp_expected, lp_actual, atol, rtol) &&
+                   _check_passed(grad_expected, grad_actual, atol, rtol)
+        end
+        if passed
+            copy_argnames = trial_argnames
+            push!(removed, k)
+        end
+    end
+
+    if verbose
+        if isempty(removed)
+            @info "reduce_copies: no copies could be skipped"
+        else
+            @info "reduce_copies: these arguments no longer need to be copied: $(join(removed, ", "))"
+        end
+    end
+    return _with_copied_args(model, copy_argnames)
+end
+
+"""
+    BenchmarkResult
+
+The benchmark results returned by [`benchmark_model`](@ref) and [`@bmodel`](@ref). Each
+benchmark is the median `Chairmarks.Sample` for the function it is named after.
+
+$(TYPEDFIELDS)
+"""
+struct BenchmarkResult{M<:VecModel}
+    "The vectorised model that was benchmarked. The parameters used are in `vecmodel.sample`."
+    vecmodel::M
+    "Benchmark for drawing a sample from the model with [`rand`](@ref)."
+    rand_bench::Chairmarks.Sample
+    "Benchmark for evaluating the log-joint density with [`logjoint`](@ref)."
+    logjoint_bench::Chairmarks.Sample
+    "Benchmark for evaluating the vectorised log-density with [`lp`](@ref)."
+    lp_bench::Chairmarks.Sample
+    "Benchmark for [`lp_and_grad`](@ref), or `nothing` if no AD backend was given."
+    lp_and_grad_bench::Union{Nothing,Chairmarks.Sample}
+end
+
+_show_sample(s::Chairmarks.Sample) = sprint(show, MIME"text/plain"(), s)
+
+# Benchmarks `f()` for roughly `seconds` and returns the median sample. The garbage collector
+# handling follows DynamicPPL's `run_ad` (which in turn follows Mooncake's benchmarks).
+function _median_bench(f, seconds::Real)
+    f() # warmup
+    # Start from a clean heap.
+    GC.gc(true)
+    # A quick incremental collection after every sample stops garbage from building up and
+    # setting off a full collection partway through a sample, which would make that sample
+    # several times slower.
+    return median(Chairmarks.benchmark(nothing, f, _ -> GC.gc(false); seconds))
+end
+
+function Base.show(io::IO, ::MIME"text/plain", result::BenchmarkResult)
+    lines = _model_lines(result.vecmodel)
+    push!(lines, "rand" => _show_sample(result.rand_bench))
+    push!(lines, "logjoint" => _show_sample(result.logjoint_bench))
+    push!(lines, "lp" => _show_sample(result.lp_bench))
+    if result.lp_and_grad_bench !== nothing
+        push!(lines, "lp_and_grad" => _show_sample(result.lp_and_grad_bench))
+        ratio = result.lp_and_grad_bench.time / result.lp_bench.time
+        push!(lines, "grad / lp" => string(round(ratio; sigdigits=4)))
+    end
+    _print_tree(io, "BenchmarkResult", lines)
+    return nothing
+end
+
+"""
+    benchmark_model(
+        model::WrenCore.Model,
+        adtype::Union{Nothing,DI.AbstractADType}=nothing;
+        lp_function=logjoint_transformed,
+        latent_source::AbstractLatentSource=FromPrior(),
+        parameter_space::AbstractParameterSpace=UnconstrainedSpace(),
+        seconds::Real=1,
+        verbose::Bool=(!isinteractive()),
+    ) -> BenchmarkResult
+
+Benchmark a model at multiple levels:
+
+- **Model level**: [`rand`](@ref) (sampling from the prior) and [`logjoint`](@ref)
+  (log-joint density evaluation).
+- **VecModel level**: [`lp`](@ref) (log-density of the vectorised model) and, if `adtype`
+  is given, [`lp_and_grad`](@ref) (log-density and its gradient).
+
+Note that if `adtype` is given, the corresponding backend package must be loaded first.
+
+The `lp_function`, `latent_source`, and `parameter_space` keywords are forwarded to
+[`VecModel`](@ref), and have the same defaults.
+
+`seconds` is the approximate time spent on each of the benchmarks.
+
+See also [`@bmodel`](@ref).
+"""
+function benchmark_model(
+    model::Model,
+    adtype::Union{Nothing,DI.AbstractADType}=nothing;
+    lp_function=logjoint_transformed,
+    latent_source::AbstractLatentSource=FromPrior(),
+    parameter_space::AbstractParameterSpace=UnconstrainedSpace(),
+    seconds::Real=1,
+    verbose::Bool=(!isinteractive()),
+)
+    _, accs = evaluate(
+        model,
+        latent_source,
+        OriginalSpace(),
+        WrenCore.default_accumulators(),
+        EvalContext{false}(),
+    )
+    vnt_params = parameters(accs)
     vecmodel = VecModel(
         model,
         adtype;
@@ -283,167 +468,41 @@ function benchmark_and_test(
         lp_function,
         parameter_space,
     )
-    vec_params = vecmodel.sample
+    params = vecmodel.sample
 
-    lp_actual = test_correctness isa NoTest ? nothing : lp(vecmodel, vec_params)
-    lp_expected = if test_correctness isa NoTest
+    # Model level
+    rng = Xoshiro(468) # avoid mutating global RNG
+    rand_bench = _median_bench(() -> rand(rng, model), seconds)
+    logjoint_bench = _median_bench(() -> logjoint(model, vnt_params), seconds)
+
+    # VecModel level
+    lp_bench = _median_bench(() -> lp(vecmodel, params), seconds)
+    lp_and_grad_bench = if adtype === nothing
         nothing
-    elseif test_correctness isa WithExpectedResult
-        test_correctness.lp
     else
-        # Correctness is tested against no-backend. This usually doesn't really need to be
-        # tested, except for Reactant where the computation graph is different.
-        ref_vecmodel = VecModel(
-            model,
-            nothing;
-            latent_source=FromParams(vnt_params, nothing),
-            lp_function,
-            parameter_space,
-        )
-        lp(ref_vecmodel, vec_params)
-    end
-    primal_bench = if benchmark_primal
-        lp(vecmodel, vec_params) # warm up
-        median(@be lp($vecmodel, $vec_params))
-    else
-        nothing
-    end
-    # If no AD testing / benchmarking, we can stop here
-    if test_correctness isa NoTest && !benchmark_ad
-        #! format: off
-        return ModelRunResult(
-            model, vnt_params, vecmodel, vec_params, lp_expected, nothing,
-            lp_actual, nothing, atol, rtol, rand_bench, logjoint_bench,
-            primal_bench, nothing
-        )
-        #! format: on
+        _median_bench(() -> lp_and_grad(vecmodel, params), seconds)
     end
 
-    lp_actual, grad_actual = lp_and_grad(vecmodel, vec_params)
-    # standardise the array type returned. DI is agnostic towards this.
-    # https://github.com/JuliaDiff/DifferentiationInterface.jl/issues/754
-    grad_actual = collect(grad_actual)
-
-    grad_expected = if test_correctness isa NoTest
-        nothing
-    elseif test_correctness isa WithExpectedResult
-        test_correctness.grad === nothing ? nothing : collect(test_correctness.grad)
-    else
-        reference = VecModel(
-            vecmodel.model,
-            test_correctness.adtype,
-            vecmodel.lp_function,
-            vecmodel.parameter_space,
-            vecmodel.vecinfo,
-            vecmodel.sample,
-        )
-        _, grad = lp_and_grad(reference, vec_params)
-        collect(grad)
-    end
-
-    if !(test_correctness isa NoTest)
-        lp_passed = lp_expected !== nothing && isapprox(lp_expected, lp_actual; atol, rtol)
-        grad_passed =
-            grad_expected !== nothing && isapprox(grad_expected, grad_actual; atol, rtol)
-        if !lp_passed || !grad_passed
-            throw(
-                ADIncorrectException(
-                    lp_expected,
-                    lp_actual,
-                    grad_expected,
-                    grad_actual,
-                    atol,
-                    rtol,
-                ),
-            )
-        end
-    end
-
-    grad_bench = if benchmark_ad
-        lp_and_grad(vecmodel, vec_params)
-        median(@be lp_and_grad($vecmodel, $vec_params))
-    else
-        nothing
-    end
-
-    result = ModelRunResult(
-        model,
-        vnt_params,
-        vecmodel,
-        vec_params,
-        lp_expected,
-        grad_expected,
-        lp_actual,
-        grad_actual,
-        atol,
-        rtol,
-        rand_bench,
-        logjoint_bench,
-        primal_bench,
-        grad_bench,
-    )
-
+    result =
+        BenchmarkResult(vecmodel, rand_bench, logjoint_bench, lp_bench, lp_and_grad_bench)
     if verbose
         show(stdout, MIME"text/plain"(), result)
         println()
     end
-
     return result
-end
-
-"""
-    test_ad(model, adtype; kwargs...) -> ModelRunResult
-
-Check the correctness of `adtype` on `model` without benchmarking.
-
-Equivalent to `benchmark_and_test(model, adtype; benchmark_model=false, benchmark_ad=false, kwargs...)`.
-"""
-function test_ad(
-    model::Model,
-    adtype::DI.AbstractADType;
-    test_correctness::Union{AbstractADCorrectnessTestSetting,Bool}=WithBackend(),
-    benchmark_model=false,
-    benchmark_primal=false,
-    benchmark_ad=false,
-    kwargs...,
-)
-    return benchmark_and_test(
-        model,
-        adtype;
-        test_correctness,
-        benchmark_model,
-        benchmark_primal,
-        benchmark_ad,
-        kwargs...,
-    )
-end
-
-"""
-    benchmark_ad(model, adtype; kwargs...) -> ModelRunResult
-
-Benchmark `adtype` on `model` without checking correctness.
-
-Equivalent to `benchmark_and_test(model, adtype; test_ad=NoTest(), kwargs...)`.
-"""
-function benchmark_ad(
-    model::Model,
-    adtype::DI.AbstractADType;
-    test_correctness=NoTest(),
-    kwargs...,
-)
-    return benchmark_and_test(model, adtype; test_correctness, kwargs...)
 end
 
 """
     @bmodel model
     @bmodel model adtype
 
-Benchmark a model. The one-argument form benchmarks `rand`, `logjoint`, and `lp` only. The
-two-argument form also benchmarks `lp_and_grad` with the given AD backend.
+Benchmark a model; shorthand for [`benchmark_model`](@ref). The one-argument form
+benchmarks `rand`, `logjoint`, and `lp` only. The two-argument form also benchmarks
+`lp_and_grad` with the given AD backend.
 """
 macro bmodel(model)
-    return :(benchmark_and_test($(esc(model)), nothing; benchmark_ad=false))
+    return :(benchmark_model($(esc(model))))
 end
 macro bmodel(model, adtype)
-    return :(benchmark_and_test($(esc(model)), $(esc(adtype))))
+    return :(benchmark_model($(esc(model)), $(esc(adtype))))
 end

@@ -10,6 +10,7 @@ function get_lp_components(model::WrenCore.Model, params)
         FromParams(params),
         OriginalSpace(),
         AccumulatorTuple(LogPriorAccumulator(), LogLikelihoodAccumulator()),
+        WrenCore.EvalContext{false}(),
     )
     return logprior(accs), loglikelihood(accs)
 end

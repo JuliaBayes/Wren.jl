@@ -52,9 +52,11 @@ Base.size(d::DiagNormal) = size(d.mu)
 Base.rand(rng::Random.AbstractRNG, d::DiagNormal) =
     randn(rng, size(d.mu)) .* d.sigma .+ d.mu
 
-function DensityInterface.logdensityof(d::DiagNormal, x::AbstractArray{T}) where {T<:Number}
+function DensityInterface.logdensityof(d::DiagNormal, x::AbstractArray{<:Number})
     # Benchmarks @ https://github.com/JuliaBayes/Wren.jl/issues/99
     mu, sigma = d.mu, d.sigma
+    # Promote so that integer data or parameters still give a float result.
+    T = float(promote_type(eltype(x), eltype(mu), eltype(sigma)))
     lognorm = length(x) * convert(T, log2π) / 2
     return if within_compile()
         z = (x .- mu) ./ sigma
@@ -78,15 +80,19 @@ struct IsoNormal{M<:AbstractArray,S<:Number} <: AbstractBatchedNormal
 end
 Base.rand(rng::Random.AbstractRNG, d::IsoNormal) = randn(rng, size(d.mu)) .* d.sigma .+ d.mu
 Base.size(d::IsoNormal) = size(d.mu)
+function _isonormal_sqdist(d::IsoNormal, x)
+    dist = _zero_logdensity(d, x)
+    @inbounds for i in eachindex(x, d.mu)
+        dist += abs2(x[i] - d.mu[i])
+    end
+    return dist
+end
 function DensityInterface.logdensityof(d::IsoNormal, x)
+    # Reactant does not allow scalar indexing, so it gets the broadcasted version.
     dist = if within_compile()
         sum(abs2, x .- d.mu)
     else
-        s = _zero_logdensity(d, x)
-        @inbounds for i in eachindex(x, d.mu)
-            s += abs2(x[i] - d.mu[i])
-        end
-        s
+        _isonormal_sqdist(d, x)
     end
     N = length(x)
     return -0.5 * dist / abs2(d.sigma) - N * log(d.sigma) - 0.5 * N * log2π
@@ -99,15 +105,19 @@ struct IIDNormal{T<:Tuple,M<:Number,S<:Number} <: AbstractBatchedNormal
 end
 Base.rand(rng::Random.AbstractRNG, d::IIDNormal) = randn(rng, d.size) .* d.sigma .+ d.mu
 Base.size(d::IIDNormal) = d.size
+# `sum` rather than a loop: Enzyme forward-over-reverse (Hessian-vector products) fails on
+# a loop over a view of the parameters, with "cannot handle unknown binary operator", even
+# when iterating over values rather than indexing.
+function _iidnormal_sqdist(d::IIDNormal, x)
+    mu = d.mu
+    return sum(xi -> abs2(xi - mu), x; init=_zero_logdensity(d, x))
+end
 function DensityInterface.logdensityof(d::IIDNormal, x)
+    # Reactant does not allow scalar indexing, so it gets the broadcasted version.
     dist = if within_compile()
         sum(abs2, x .- d.mu)
     else
-        # `sum` rather than a loop: Enzyme forward-over-reverse (Hessian-vector products)
-        # fails on a loop over a view of the parameters, with "cannot handle unknown
-        # binary operator", even when iterating over values rather than indexing.
-        mu = d.mu
-        sum(xi -> abs2(xi - mu), x; init=_zero_logdensity(d, x))
+        _iidnormal_sqdist(d, x)
     end
     N = length(x)
     return -0.5 * dist / abs2(d.sigma) - N * log(d.sigma) - 0.5 * N * log2π

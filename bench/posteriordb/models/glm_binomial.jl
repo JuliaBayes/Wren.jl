@@ -3,10 +3,8 @@ module GLMBinomial
 
 using PosteriorDB
 using DynamicPPL, Distributions
-using Wren: Wren, @wren, @observe
-using ProbabilityMeasures: ProbabilityMeasures as PM
-
-using ..PMProducts: ProductBinomialLogit
+using Wren: Wren, @wren, @observe, @batch
+using WrenDists: WrenDists as WD
 
 const data = let
     pdb = PosteriorDB.database()
@@ -35,11 +33,13 @@ end
 # ── Wren ──
 
 @wren function glm_binomial_model(counts, trials, year, year_squared)
-    alpha ~ PM.Normal(0.0, 100.0)
-    beta1 ~ PM.Normal(0.0, 100.0)
-    beta2 ~ PM.Normal(0.0, 100.0)
+    alpha ~ WD.Normal(0.0, 100.0)
+    beta1 ~ WD.Normal(0.0, 100.0)
+    beta2 ~ WD.Normal(0.0, 100.0)
     logit_p = alpha .+ beta1 .* year .+ beta2 .* year_squared
-    @observe counts ~ ProductBinomialLogit(trials, logit_p)
+    @batch for i in eachindex(counts)
+        @observe counts[i] ~ WD.BinomialLogit(trials[i], logit_p[i])
+    end
     return nothing
 end
 

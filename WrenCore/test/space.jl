@@ -6,6 +6,8 @@ using WrenCore
 using Test
 using Distributions
 
+const NO_COPY = WrenCore.EvalContext{false}()
+
 @testset "space.jl" begin
     @testset "every latent representation agrees in every parameter space" begin
         @wren function exp_model()
@@ -26,7 +28,8 @@ using Distributions
             space in (UnconstrainedSpace(), OriginalSpace())
 
             source = FromParams(VarNamedTuple(; x=tval))
-            _, accs = evaluate(model, source, space, WrenCore.default_accumulators())
+            _, accs =
+                evaluate(model, source, space, WrenCore.default_accumulators(), NO_COPY)
             @test parameters(accs)[@vn(x)] ≈ x
             @test logprior(accs) ≈ -x
             if space isa UnconstrainedSpace
@@ -52,14 +55,14 @@ using Distributions
 
         partial = VarNamedTuple(; a=VarNamedTuple(; x=0.5))
         source = FromParams(partial, FromPrior())
-        _, new_accs = evaluate(model, source, OriginalSpace(), accs)
+        _, new_accs = evaluate(model, source, OriginalSpace(), accs, NO_COPY)
         pars = parameters(new_accs)
         @test pars[@vn(a.x)] == 0.5
         @test logprior(new_accs) ≈ logpdf(Normal(), 0.5) + logpdf(Normal(), pars[@vn(a.y)])
 
         # No params at all under `a`: the submodel is evaluated with the fallback only.
         source = FromParams(VarNamedTuple(; b=1.0), FromPrior())
-        _, new_accs = evaluate(model, source, OriginalSpace(), accs)
+        _, new_accs = evaluate(model, source, OriginalSpace(), accs, NO_COPY)
         @test haskey(parameters(new_accs), @vn(a.x))
         @test haskey(parameters(new_accs), @vn(a.y))
 
@@ -68,12 +71,14 @@ using Distributions
             FromParams(partial),
             OriginalSpace(),
             accs,
+            NO_COPY,
         )
         @test_throws ArgumentError evaluate(
             model,
             FromParams(VarNamedTuple(; a=0.5)),
             OriginalSpace(),
             accs,
+            NO_COPY,
         )
     end
 end

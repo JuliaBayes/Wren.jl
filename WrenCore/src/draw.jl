@@ -42,7 +42,7 @@ function VarNames.Draw(
     include_log_probs::Bool=true,
 )
     accs = _draw_accumulators(include_log_probs)
-    _, accs = evaluate(model, source, OriginalSpace(), accs)
+    _, accs = evaluate(model, source, OriginalSpace(), accs, EvalContext{false}())
     return _draw(accs, stats, include_log_probs)
 end
 
@@ -120,7 +120,13 @@ function VarNames.Draw(
 
     source = FromVector(params, vecmodel.vecinfo)
     accs = _draw_accumulators(include_log_probs)
-    _, accs = evaluate(vecmodel.model, source, vecmodel.parameter_space, accs)
+    _, accs = evaluate(
+        vecmodel.model,
+        source,
+        vecmodel.parameter_space,
+        accs,
+        EvalContext{false}(),
+    )
     return _draw(accs, stats, include_log_probs)
 end
 

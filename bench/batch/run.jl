@@ -10,9 +10,11 @@
 # is a comma-separated list of N values (default 10,100,1000,10000).
 
 using ADTypes
+using Chairmarks: @be
 using Enzyme: Reverse
 using Printf: @printf, @sprintf
 using Random: Xoshiro
+using Statistics: median
 using WrenCore
 using WrenDists
 
@@ -63,14 +65,10 @@ end
 
 # Median time for one log-density-and-gradient evaluation.
 function grad_time(model, adtype)
-    result = WrenCore.benchmark_and_test(
-        model,
-        adtype;
-        benchmark_model=false,
-        benchmark_primal=false,
-        verbose=false,
-    )
-    return result.grad_bench.time
+    vecmodel = VecModel(model, adtype)
+    params = vecmodel.sample
+    lp_and_grad(vecmodel, params) # warmup
+    return median(@be lp_and_grad($vecmodel, $params)).time
 end
 
 println("Times are for one gradient evaluation\n")
