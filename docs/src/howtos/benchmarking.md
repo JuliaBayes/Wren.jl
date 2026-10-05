@@ -21,7 +21,7 @@ When passed a single argument, `@bmodel` will benchmark:
   - `logjoint`: the time it takes to compute the log joint probability of a set of parameters
   - `lp`: the time it takes to compute the log-joint probability, but with [a vectorised interface](@ref vectorisation) (this is the same as e.g. `LogDensityProblems.logdensity`, if you are familiar with that interface).
 
-Note that all of these are median benchmarks.
+Note that all of these report the fastest time out of all the samples, since that varies the least between runs.
 
 To access the data in this benchmark, you can directly access the fields of the [`BenchmarkResult`](@ref) object.
 The relevant fields are named `{function_name}_bench`:

@@ -1,7 +1,6 @@
 using Chairmarks: Chairmarks
 using LinearAlgebra: norm
 using Random: Xoshiro
-using Statistics: median
 
 """
     AbstractADCorrectnessTestSetting
@@ -372,7 +371,7 @@ end
     BenchmarkResult
 
 The benchmark results returned by [`benchmark_model`](@ref) and [`@bmodel`](@ref). Each
-benchmark is the median `Chairmarks.Sample` for the function it is named after.
+benchmark is the fastest `Chairmarks.Sample` for the function it is named after.
 
 $(TYPEDFIELDS)
 """
@@ -391,13 +390,15 @@ end
 
 _show_sample(s::Chairmarks.Sample) = sprint(show, MIME"text/plain"(), s)
 
-# Benchmarks `f()` for roughly `seconds` and returns the median sample. The garbage collector
-# handling follows DynamicPPL's `run_ad` (which in turn follows Mooncake's benchmarks).
-function _median_bench(f, seconds::Real)
+# Benchmarks `f()` for roughly `seconds` and returns the fastest sample. The fastest sample
+# is the one least affected by other things running on the machine, so it varies less
+# between runs than the median. The garbage collector handling follows DynamicPPL's `run_ad`
+# (which in turn follows Mooncake's benchmarks).
+function _min_bench(f, seconds::Real)
     f() # warmup
     GC.gc(true)
     # Incremental collection after every sample.
-    return median(Chairmarks.benchmark(nothing, f, _ -> GC.gc(false); seconds))
+    return minimum(Chairmarks.benchmark(nothing, f, _ -> GC.gc(false); seconds))
 end
 
 function Base.show(io::IO, ::MIME"text/plain", result::BenchmarkResult)
@@ -421,7 +422,7 @@ end
         lp_function=logjoint_transformed,
         latent_source::AbstractLatentSource=FromPrior(),
         parameter_space::AbstractParameterSpace=UnconstrainedSpace(),
-        seconds::Real=1,
+        seconds::Real=2,
         verbose::Bool=(!isinteractive()),
     ) -> BenchmarkResult
 
@@ -447,7 +448,7 @@ function benchmark_model(
     lp_function=logjoint_transformed,
     latent_source::AbstractLatentSource=FromPrior(),
     parameter_space::AbstractParameterSpace=UnconstrainedSpace(),
-    seconds::Real=1,
+    seconds::Real=2,
     verbose::Bool=(!isinteractive()),
 )
     _, accs = evaluate(
@@ -469,15 +470,15 @@ function benchmark_model(
 
     # Model level
     rng = Xoshiro(468) # avoid mutating global RNG
-    rand_bench = _median_bench(() -> rand(rng, model), seconds)
-    logjoint_bench = _median_bench(() -> logjoint(model, vnt_params), seconds)
+    rand_bench = _min_bench(() -> rand(rng, model), seconds)
+    logjoint_bench = _min_bench(() -> logjoint(model, vnt_params), seconds)
 
     # VecModel level
-    lp_bench = _median_bench(() -> lp(vecmodel, params), seconds)
+    lp_bench = _min_bench(() -> lp(vecmodel, params), seconds)
     lp_and_grad_bench = if adtype === nothing
         nothing
     else
-        _median_bench(() -> lp_and_grad(vecmodel, params), seconds)
+        _min_bench(() -> lp_and_grad(vecmodel, params), seconds)
     end
 
     result =
