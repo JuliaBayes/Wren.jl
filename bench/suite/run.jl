@@ -91,11 +91,19 @@ if SAVE
     fetch_results_branch()
 end
 
+# BLAS's own threads make small matrix operations (as in GPRegr) much slower in some Julia
+# sessions but not others, e.g. a gradient that usually takes 5 μs taking 5–460 μs. One
+# BLAS thread makes the results consistent, and the matrices here are too small to benefit
+# from more.
+using LinearAlgebra: BLAS
+BLAS.set_num_threads(1)
+
 yesno(x::Bool) = x ? "Yes" : "No"
 println("Commit: ", readchomp(`git -C $REPO rev-parse --short HEAD`))
 println("Label: ", LABEL)
 println("Is release: ", yesno(RELEASE))
 println("Save to $RESULTS_BRANCH: ", yesno(SAVE))
+println("Julia threads: ", Threads.nthreads())
 println()
 
 using WrenCore: benchmark_model, AutoEnzyme, AutoMooncake, Reverse
@@ -261,6 +269,9 @@ function main()
         "memory_gb" => round(Int, Sys.total_memory() / 2^30),
         "os" => string(Sys.KERNEL),
         "arch" => string(Sys.ARCH),
+        # Timings also depend on these settings.
+        "julia_threads" => Threads.nthreads(),
+        "blas_threads" => BLAS.get_num_threads(),
     )
     timestamp = now(UTC)
     output = Dict(

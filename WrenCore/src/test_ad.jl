@@ -422,7 +422,7 @@ end
         lp_function=logjoint_transformed,
         latent_source::AbstractLatentSource=FromPrior(Xoshiro(468)),
         parameter_space::AbstractParameterSpace=UnconstrainedSpace(),
-        seconds::Real=2,
+        seconds::Real=1,
         verbose::Bool=(!isinteractive()),
     ) -> BenchmarkResult
 
@@ -451,7 +451,7 @@ function benchmark_model(
     lp_function=logjoint_transformed,
     latent_source::AbstractLatentSource=FromPrior(Xoshiro(468)),
     parameter_space::AbstractParameterSpace=UnconstrainedSpace(),
-    seconds::Real=2,
+    seconds::Real=1,
     verbose::Bool=(!isinteractive()),
 )
     _, accs = evaluate(

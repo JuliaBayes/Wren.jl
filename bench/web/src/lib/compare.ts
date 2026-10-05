@@ -1,7 +1,7 @@
 import type { Entry } from "./types";
 
 /** Changes smaller than this (in either direction) are treated as noise. */
-export const NOISE_THRESHOLD = 0.05;
+export const NOISE_THRESHOLD = 0.1;
 /** Changes of this factor or more get the strongest colour. */
 const MAX_FACTOR = 2;
 

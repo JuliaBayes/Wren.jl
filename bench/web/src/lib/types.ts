@@ -18,6 +18,8 @@ export interface RunMeta {
         memory_gb: number;
         os: string;
         arch: string;
+        julia_threads?: number;
+        blas_threads?: number;
     };
 }
 
