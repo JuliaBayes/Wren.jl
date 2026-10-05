@@ -13,8 +13,8 @@ $(TYPEDFIELDS)
 struct Model{A<:NamedTuple,C<:VarNamedTuple,F,CA<:Val}
     "Name of the function declared with @wren"
     name::Symbol
-    "Positional arguments passed to the model."
-    args::A # TODO(penelopeysm): kwargs.
+    "Positional and keyword arguments passed to the model."
+    args::A
     "The model's AST, stored as Wren's probabilistic IR"
     stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}}
     "Module that the model was defined in. Required to make RGF resolve globals / functions
@@ -230,7 +230,19 @@ end
 
 function get_function_name_and_args(signature::Expr)
     if signature.head == :call
-        return (signature.args[1], signature.args[2:end])
+        # Keyword arguments parse as a leading `:parameters` block. Julia applies defaults
+        # and type annotations through the escaped signature, so only the names matter here.
+        args = signature.args[2:end]
+        if !isempty(args) && Meta.isexpr(args[1], :parameters)
+            args = [args[2:end]; args[1].args]
+        end
+        names = map(args) do arg
+            while Meta.isexpr(arg, (:kw, :(::)), 2)
+                arg = arg.args[1]
+            end
+            arg
+        end
+        return (signature.args[1], names)
     elseif signature.head == :where
         return get_function_name_and_args(signature.args[1])
     else
@@ -308,7 +320,6 @@ function extract_args(args_expr::Expr)
         new_expr = Expr(:tuple)
         syms = Set{Symbol}()
         for arg in args_expr.args
-            # TODO(penelopeysm): support default positional arguments or keyword arguments.
             arg isa Symbol || error("@wren: expected function argument to be a symbol")
             push!(new_expr.args, :($arg = $(esc(arg))))
             push!(syms, arg)
@@ -350,6 +361,10 @@ macro addloglikelihood(args...)
 end
 
 function _wren(expr::Expr, mod::Module; internal_to_ir::Bool=false)
+    # The short form `f(x) = body` has the same signature and body as the long form.
+    if expr.head == :(=) && Meta.isexpr(expr.args[1], (:call, :where))
+        expr = Expr(:function, expr.args...)
+    end
     # Sanity check
     expr.head == :function || error("@wren: expected a function definition")
     length(expr.args) == 2 || error("@wren: expected function expr with 2 expr-args")
