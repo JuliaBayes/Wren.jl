@@ -3,14 +3,16 @@
 ## Benchmark suite
 
 `suite/` benchmarks Wren's primal, Enzyme reverse, and Mooncake reverse on a set of
-PosteriorDB models, and saves the results to a JSON file:
+PosteriorDB models, and saves the results to a JSON file in `suite/results/`, named
+`<UTC timestamp>-<short git sha>.json`:
 
 ```sh
-julia --project=bench bench/suite/run.jl results.json
+julia --project=bench bench/suite/run.jl
 ```
 
-On every push to `main`, CI runs this and saves the file to `runs/` on the
-`benchmark-results` branch.
+CI runs this on every push to `main` and on release tags, and saves the file to `runs/` on
+the `benchmark-results` branch. To benchmark a PR, add the `benchmark` label to it (to run
+again later, remove the label and add it back).
 
 `web/` is a small website that shows one run as a table, or compares two runs (pick a
 'tip' and a 'base'; cells are coloured by how much faster or slower tip is, and hovering

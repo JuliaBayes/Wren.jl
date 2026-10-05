@@ -7,6 +7,13 @@ on:
   push:
     branches:
       - main
+    # Release tags, as created by TagBot
+    tags:
+      - 'WrenCore-v*'
+  # On PRs, only run when requested by adding the `benchmark` label. To run again (e.g.
+  # after more commits), remove the label and add it back.
+  pull_request:
+    types: [labeled]
   workflow_dispatch:
 
 permissions:
@@ -15,14 +22,18 @@ permissions:
   # needed to push to the benchmark-results branch
   contents: write
 
-# Don't run two benchmarks at once, as they would race to push their results.
-concurrency:
-  group: ${{ github.workflow }}
-  cancel-in-progress: false
-
 jobs:
   bench:
+    if: github.event_name != 'pull_request' || github.event.label.name == 'benchmark'
     runs-on: ubuntu-latest
+
+    # Cancel an existing benchmark on the same PR if it is requested again. Runs on
+    # different refs can happen at the same time; the last step handles them both pushing.
+    # This is set on the job rather than the workflow, so that adding some other label to a
+    # PR (which skips this job) doesn't cancel a benchmark that is running.
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
@@ -37,17 +48,23 @@ jobs:
         run: julia --color=yes --project=bench -e 'using Pkg; Pkg.instantiate()'
 
       - name: Run benchmarks
-        id: run
+        # Writes one file to bench/suite/results/. Release tags and PRs get a label; other
+        # runs are labelled with the git sha.
         run: |
-          file="$(date -u +%Y%m%dT%H%M%SZ)-$(git rev-parse --short HEAD).json"
-          echo "file=$file" >> "$GITHUB_OUTPUT"
-          julia --color=yes --project=bench bench/suite/run.jl "$RUNNER_TEMP/$file"
+          if [[ "$GITHUB_REF" == refs/tags/WrenCore-v* ]]; then
+            # WrenCore-v0.2.0 => WrenCore v0.2.0
+            label="WrenCore v${GITHUB_REF_NAME#WrenCore-v}"
+          elif [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
+            label="PR #$PR_NUMBER"
+          else
+            label=""
+          fi
+          julia --color=yes --project=bench bench/suite/run.jl ${label:+--label "$label"}
         env:
           DATADEPS_ALWAYS_ACCEPT: "true"
+          PR_NUMBER: ${{ github.event.pull_request.number }}
 
       - name: Save results to the benchmark-results branch
-        env:
-          FILE: ${{ steps.run.outputs.file }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -57,9 +74,19 @@ jobs:
           else
             git worktree add --orphan -b benchmark-results results
           fi
-          mkdir -p results/runs
-          cp "$RUNNER_TEMP/$FILE" results/runs/
-          bench/web/scripts/make-index.sh results/runs
-          git -C results add runs
-          git -C results commit -m "Add benchmark results for ${GITHUB_SHA::7}"
-          git -C results push origin benchmark-results
+          # Another run might push in between our fetch and push. If so, start again from
+          # the new state of the branch.
+          for attempt in 1 2 3 4 5; do
+            mkdir -p results/runs
+            cp bench/suite/results/*.json results/runs/
+            bench/web/scripts/make-index.sh results/runs
+            git -C results add runs
+            git -C results commit -m "Add benchmark results for ${GITHUB_SHA::7}"
+            if git -C results push origin benchmark-results; then
+              exit 0
+            fi
+            git -C results fetch origin benchmark-results
+            git -C results reset --hard origin/benchmark-results
+          done
+          echo "Failed to push results after 5 attempts"
+          exit 1

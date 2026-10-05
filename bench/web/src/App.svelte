@@ -1,10 +1,11 @@
 <script lang="ts">
     import { fetchIndex, fetchRun, readRunFile } from "./lib/load";
     import { NOISE_THRESHOLD } from "./lib/compare";
-    import { formatTimestamp, shortSha } from "./lib/format";
+    import { formatTimestamp, runLabel, shortSha } from "./lib/format";
     import type { IndexEntry, Run } from "./lib/types";
     import RunPicker from "./lib/RunPicker.svelte";
     import ResultsTable from "./lib/ResultsTable.svelte";
+    import Manifest from "./lib/Manifest.svelte";
 
     let theme = $state(document.documentElement.getAttribute("data-theme") ?? "light");
     function toggleTheme() {
@@ -116,9 +117,9 @@
 
     {#if tip}
         <ul class="run-info">
-            <li><b>Tip:</b> {describe(tip)}</li>
+            <li><b>Tip:</b> <b>{runLabel(tip.meta)}</b> · {describe(tip)}</li>
             {#if base}
-                <li><b>Base:</b> {describe(base)}</li>
+                <li><b>Base:</b> <b>{runLabel(base.meta)}</b> · {describe(base)}</li>
             {/if}
         </ul>
         <ul class="legend">
@@ -134,6 +135,9 @@
             {/if}
         </ul>
         <ResultsTable {tip} {base} />
+
+        <h2>Manifest</h2>
+        <Manifest {tip} {base} />
     {:else if !error}
         <p>No runs found. Load a results file with the button above.</p>
     {/if}

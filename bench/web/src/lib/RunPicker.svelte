@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { formatTimestamp, shortSha } from "./format";
+    import { formatTimestamp, runLabel, shortSha } from "./format";
     import type { IndexEntry } from "./types";
 
     interface Props {
@@ -48,7 +48,7 @@
                 <optgroup label="Saved runs">
                     {#each index as entry}
                         <option value={entry.file}>
-                            {formatTimestamp(entry.timestamp)} · {shortSha(entry.git_sha)}
+                            {runLabel(entry)} · {formatTimestamp(entry.timestamp)} · {shortSha(entry.git_sha)}
                         </option>
                     {/each}
                 </optgroup>

@@ -1,15 +1,30 @@
-# Benchmarks each model with each backend and writes the results to a JSON file.
+# Benchmarks each model with each backend and writes the results to a JSON file in
+# `bench/suite/results/`, named `<UTC timestamp>-<short git sha>.json`.
 #
-#     julia --project=bench bench/suite/run.jl [output.json]
+#     julia --project=bench bench/suite/run.jl [--label <text>]
+#
+# The label is shown on the website to identify the run (e.g. "WrenCore v0.2.0" or
+# "PR #123"). If not given, it defaults to the short git sha.
 #
 # The JSON files are read by the website in `bench/web`.
+
+# Check the arguments before loading anything, since that takes a while.
+const LABEL = if isempty(ARGS)
+    nothing
+elseif length(ARGS) == 2 && ARGS[1] == "--label"
+    ARGS[2]
+else
+    println(stderr, "Usage: julia --project=bench bench/suite/run.jl [--label <text>]")
+    exit(1)
+end
 
 using Wren: benchmark_model
 using ADTypes: AutoEnzyme, AutoMooncake
 using Enzyme: Reverse
 using Mooncake: Mooncake
 using JSON: JSON
-using Dates: now, UTC
+using Dates: Dates, now, UTC, @dateformat_str
+using Pkg: Pkg
 
 # `nothing` means the primal (no AD). Add more backends here.
 const BACKENDS = [
@@ -29,19 +44,20 @@ include("models/mh.jl")
 include("models/rate1.jl")
 include("models/sblri_blr.jl")
 
-# The names are used to match up models across runs, so don't change them.
-const MODELS = [
-    "ark" => ArK.wren_model,
-    "eight_schools_centered" => EightSchoolsCentered.wren_model,
-    "glm_binomial" => GLMBinomial.wren_model,
-    "glm_poisson" => GLMPoisson.wren_model,
-    "glmm_poisson" => GLMMPoisson.wren_model,
-    "gp_regr" => GPRegr.wren_model,
-    "kidscore_interaction" => KidscoreInteraction.wren_model,
-    "mh" => Mh.wren_model,
-    "rate1" => Rate1.wren_model,
-    "sblri_blr" => SblriBLR.wren_model,
-]
+# Each module must define `wren_model`. The module names are used to match up models
+# across runs, so don't change them.
+const MODELS = (
+    ArK,
+    EightSchoolsCentered,
+    GLMBinomial,
+    # GLMPoisson,
+    # GLMMPoisson,
+    # GPRegr,
+    # KidscoreInteraction,
+    # Mh,
+    # Rate1,
+    # SblriBLR,
+)
 
 function bench(model, adtype)
     try
@@ -54,9 +70,11 @@ function bench(model, adtype)
     end
 end
 
-function main(outfile)
+function main()
     results = Dict{String,Any}()
-    for (name, model) in MODELS
+    for mod in MODELS
+        name = string(nameof(mod))
+        model = mod.wren_model
         model_results = Dict{String,Any}()
         for (backend, adtype) in BACKENDS
             println("Benchmarking $name with $backend...")
@@ -72,21 +90,35 @@ function main(outfile)
     catch
         nothing
     end
+    # The version of every package in the manifest, so that changes in dependencies can be
+    # tracked across runs. Packages without a version (e.g. some stdlibs) are `nothing`.
+    manifest = Dict(
+        info.name => (info.version === nothing ? nothing : string(info.version)) for
+        info in values(Pkg.dependencies())
+    )
+    short_sha = git_sha === nothing ? "unknown" : first(git_sha, 7)
+    timestamp = now(UTC)
     output = Dict(
         "schema_version" => 1,
         "meta" => Dict(
-            "timestamp" => string(now(UTC)) * "Z",
+            "timestamp" => string(timestamp) * "Z",
             "git_sha" => git_sha,
+            "label" => LABEL === nothing ? short_sha : LABEL,
             "julia_version" => string(VERSION),
         ),
         # Lists the backends in order, since the keys in `results` get sorted.
         "backends" => first.(BACKENDS),
         "results" => results,
+        "manifest" => manifest,
     )
-    mkpath(dirname(abspath(outfile)))
+    # The timestamp comes first so that the files sort by time.
+    filename =
+        Dates.format(timestamp, dateformat"yyyymmdd\THHMMSS\Z") * "-" * short_sha * ".json"
+    outfile = joinpath(@__DIR__, "results", filename)
+    mkpath(dirname(outfile))
     open(io -> JSON.json(io, output; pretty=true), outfile, "w")
     println("Results written to $outfile")
     return nothing
 end
 
-main(isempty(ARGS) ? "results.json" : ARGS[1])
+main()

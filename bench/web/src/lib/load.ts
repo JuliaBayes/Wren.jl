@@ -22,7 +22,10 @@ export function parseRun(source: string, json: any): Run {
         }
         models.set(name, { dim: raw.dim ?? null, entries });
     }
-    return { source, meta: json.meta, backends, models };
+    const manifest = json.manifest
+        ? new Map(Object.entries<string | null>(json.manifest))
+        : null;
+    return { source, meta: json.meta, backends, models, manifest };
 }
 
 /** Fetch `runs/index.json`. Returns an empty list if there isn't one. */

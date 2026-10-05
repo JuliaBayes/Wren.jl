@@ -3,6 +3,8 @@
 export interface RunMeta {
     timestamp: string;
     git_sha: string | null;
+    /** Identifies the run, e.g. "WrenCore v0.2.0" or "PR #123". Missing in older files. */
+    label?: string;
     julia_version: string;
 }
 
@@ -21,6 +23,8 @@ export interface Run {
     /** Backend names, in the order they appear in the file. */
     backends: string[];
     models: Map<string, ModelResult>;
+    /** Package name => version, or null if the file has no manifest. */
+    manifest: Map<string, string | null> | null;
 }
 
 /** One line of `runs/index.json`. */
@@ -28,4 +32,5 @@ export interface IndexEntry {
     file: string;
     timestamp: string;
     git_sha: string | null;
+    label?: string;
 }

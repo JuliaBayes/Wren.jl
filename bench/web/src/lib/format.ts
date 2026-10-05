@@ -31,3 +31,8 @@ export function formatTimestamp(ts: string): string {
 export function shortSha(sha: string | null): string {
     return sha ? sha.slice(0, 7) : "unknown";
 }
+
+/** The label of a run, falling back to the short sha for files that don't have one. */
+export function runLabel(meta: { label?: string; git_sha: string | null }): string {
+    return meta.label ?? shortSha(meta.git_sha);
+}

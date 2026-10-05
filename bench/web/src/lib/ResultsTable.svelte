@@ -12,15 +12,17 @@
     // The backend that AD timings are divided by to get the "× primal" ratio.
     const PRIMAL = "primal";
 
-    // Sorting: by model name (null) or by the tip time of a backend.
-    let sortBackend: string | null = $state(null);
+    // Sorting: by model name, by dimension, or by the tip time of a backend. Backends
+    // are identified by `backend:<name>`.
+    type SortColumn = "name" | "dim" | `backend:${string}`;
+    let sortColumn: SortColumn = $state("name");
     let sortAscending = $state(true);
 
-    function setSort(backend: string | null) {
-        if (sortBackend === backend) {
+    function setSort(column: SortColumn) {
+        if (sortColumn === column) {
             sortAscending = !sortAscending;
         } else {
-            sortBackend = backend;
+            sortColumn = column;
             sortAscending = true;
         }
     }
@@ -29,25 +31,31 @@
         return entry !== undefined && "time" in entry ? entry.time : Infinity;
     }
 
+    // The value that a model is sorted by. Missing values (errors, no dim) are Infinity,
+    // so they go to the bottom when sorting in ascending order.
+    function sortValue(name: string, column: SortColumn): number {
+        const model = tip.models.get(name)!;
+        if (column === "dim") return model.dim ?? Infinity;
+        return timeOf(model.entries.get(column.slice("backend:".length)));
+    }
+
     const rows = $derived.by(() => {
         const names = [...tip.models.keys()];
         const sign = sortAscending ? 1 : -1;
-        if (sortBackend === null) {
-            names.sort((a, b) => sign * a.localeCompare(b));
-        } else {
-            const key = sortBackend;
-            names.sort(
-                (a, b) =>
-                    sign *
-                    (timeOf(tip.models.get(a)!.entries.get(key)) -
-                        timeOf(tip.models.get(b)!.entries.get(key))),
-            );
-        }
+        const column = sortColumn;
+        names.sort((a, b) => {
+            if (column !== "name") {
+                const [va, vb] = [sortValue(a, column), sortValue(b, column)];
+                // Ties (including two Infinitys) fall through to sorting by name.
+                if (va !== vb) return sign * (va < vb ? -1 : 1);
+            }
+            return sign * a.localeCompare(b);
+        });
         return names;
     });
 
-    function sortIndicator(backend: string | null): string {
-        if (sortBackend !== backend) return "";
+    function sortIndicator(column: SortColumn): string {
+        if (sortColumn !== column) return "";
         return sortAscending ? " ▲" : " ▼";
     }
 
@@ -75,13 +83,15 @@
     <thead>
         <tr>
             <th class="model">
-                <button onclick={() => setSort(null)}>Model{sortIndicator(null)}</button>
+                <button onclick={() => setSort("name")}>Model{sortIndicator("name")}</button>
             </th>
-            <th class="dim">dim</th>
+            <th class="dim">
+                <button onclick={() => setSort("dim")}>dim{sortIndicator("dim")}</button>
+            </th>
             {#each tip.backends as backend}
                 <th>
-                    <button onclick={() => setSort(backend)}>
-                        {backend}{sortIndicator(backend)}
+                    <button onclick={() => setSort(`backend:${backend}`)}>
+                        {backend}{sortIndicator(`backend:${backend}`)}
                     </button>
                 </th>
             {/each}
@@ -104,17 +114,25 @@
                             ? compare(entry, baseModel?.entries.get(backend))
                             : ({ kind: "no-base" } as Comparison)}
                         {@const err = "error" in entry ? entry.error : ""}
+                        {@const tooltipText = err
+                            ? `${err}${base ? "\n\n" + tooltip(entry, c) : ""}`
+                            : tooltip(entry, c)}
                         <td
                             style:background-color={changeColour(c)}
-                            title={err
-                                ? `${err}${base ? "\n\n" + tooltip(entry, c) : ""}`
-                                : tooltip(entry, c)}
+                            class:has-tooltip={tooltipText !== ""}
                         >
+                            {#if tooltipText !== ""}
+                                <div class="tooltip">{tooltipText}</div>
+                            {/if}
                             {#if "time" in entry}
                                 {formatTime(entry.time)}
-                                {#if backend !== PRIMAL && primal !== undefined && "time" in primal}
+                                <!-- Always present in AD columns (even if empty) and of fixed
+                                width, so that the times line up vertically. -->
+                                {#if backend !== PRIMAL}
                                     <span class="ratio">
-                                        ({(entry.time / primal.time).toFixed(1)}×)
+                                        {#if primal !== undefined && "time" in primal}
+                                            ({(entry.time / primal.time).toFixed(1)}×)
+                                        {/if}
                                     </span>
                                 {/if}
                             {:else}
@@ -166,11 +184,39 @@
     }
     .ratio {
         font-size: 0.8em;
+        display: inline-block;
+        /* Wide enough for e.g. "(123.4×)" */
+        min-width: 8ch;
+        text-align: right;
     }
     .error {
         color: var(--error-color);
     }
-    td[title]:not([title=""]) {
+    /* A CSS tooltip rather than `title`, because browsers delay showing `title`. */
+    td.has-tooltip {
+        position: relative;
         cursor: help;
+    }
+    .tooltip {
+        display: none;
+        position: absolute;
+        top: 100%;
+        right: 0;
+        z-index: 10;
+        width: max-content;
+        max-width: 400px;
+        padding: 6px 10px;
+        text-align: left;
+        white-space: pre-wrap;
+        font-size: 0.8rem;
+        color: var(--text-primary);
+        background-color: var(--bg-secondary);
+        border: 1px solid var(--table-border);
+        border-radius: 6px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
+        pointer-events: none;
+    }
+    td.has-tooltip:hover .tooltip {
+        display: block;
     }
 </style>
