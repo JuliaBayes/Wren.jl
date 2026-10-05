@@ -10,7 +10,7 @@ A Wren model.
 
 $(TYPEDFIELDS)
 """
-struct Model{A<:NamedTuple,C<:VarNamedTuple,F}
+struct Model{A<:NamedTuple,C<:VarNamedTuple,F,CA<:Val}
     "Name of the function declared with @wren"
     name::Symbol
     "Positional and keyword arguments passed to the model."
@@ -24,23 +24,45 @@ struct Model{A<:NamedTuple,C<:VarNamedTuple,F}
     conditioned::C
     "The cached evaluation function."
     evaluation_fn::F
+    "The names of the arguments which are copied on every evaluation when differentiating
+    with Enzyme. This must be a `Val` of a tuple of symbols (preferably sorted to
+    deduplicate compilation).
+
+    Whether they are actually copied is decided by the [EvalContext](@ref) that the model is
+    evaluated with. That struct allows us to differentiate code being run with Enzyme (where
+    the copy is needed) from other code (where the copy is not needed)."
+    enzyme_copy_argnames::CA
 
     function Model(
         name::Symbol,
         args::NamedTuple,
-        stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}},
+        stmts::Vector{<:Union{AbstractWrenExpr,LineNumberNode}},
         mod::Module;
+        enzyme_copy_argnames::Val=Val{sort(keys(args))}(),
         conditioned::VarNamedTuple=VarNamedTuple(),
-        evaluation_fn=make_evaluation_fn(keys(args), stmts, mod),
+        _unsafe_reuse_evaluation_fn=nothing,
     )
+        # Copy arguments upon model construction.
         dealiased_args = map(_dealias, args)
-        return new{typeof(dealiased_args),typeof(conditioned),typeof(evaluation_fn)}(
+        # Regenerate the evaluation function if it wasn't provided.
+        evaluation_fn = if _unsafe_reuse_evaluation_fn === nothing
+            make_evaluation_fn(keys(args), stmts, mod)
+        else
+            _unsafe_reuse_evaluation_fn
+        end
+        return new{
+            typeof(dealiased_args),
+            typeof(conditioned),
+            typeof(evaluation_fn),
+            typeof(enzyme_copy_argnames),
+        }(
             name,
             dealiased_args,
             stmts,
             mod,
             conditioned,
             evaluation_fn,
+            enzyme_copy_argnames,
         )
     end
 end
@@ -49,38 +71,11 @@ end
     _dealias
 
 Create a copy of a model argument that has the same contents, but avoids aliasing the user's
-data. This is called on the model's arguments each time the model is evaluated.
+data.
 
-The main purpose of this is in fact to ensure correctness under AD with Enzyme.
-
-Specifically, the call to `DI.value_and_gradient` in `VecModel` passes the model's arguments
-as a `DI.Const`, which means that the model's arguments should never contain differentiable
-data. This is true at the start of the model (the differentiable data is in the active
-`params` argument), but if we then _write_ params into the model's arguments, then any
-gradients with respect to the model's arguments (i.e., gradients with respect to the params)
-will be lost.
-
-This is best illustrated with an example. Consider:
-
-```julia
-@wren function my_model(x)
-    x[1:4] ~ dist
-end
-```
-
-In the `VecModel` evaluation, this is lowered to something like:
-
-```julia
-function lp(params, x)
-    p14 = view(params, 1:4)
-    x[1:4] = p14  # Writing differentiable data into `x`!
-    return logdensityof(dist, x[1:4])
-end
-```
-
-Sometimes Enzyme does in fact return the correct gradient, but this relies on an LLVM
-optimisation and cannot be guaranteed. See
-https://github.com/EnzymeAD/Enzyme.jl/issues/2344.
+This is called on model construction, as well as on model evaluation (unless the argument
+has been proven or annotated to not require copying). See [the docs](@ref enzyme-copyargs)
+for why this matters.
 """
 function _dealias(v::SubArray{T}) where {T}
     v = collect(v)  # Avoid copying the entire parent array.
@@ -95,27 +90,134 @@ _dealias(v::T) where {T} = isbitstype(T) ? v : deepcopy(v)
 # models that are passed as arguments to models. However, this may need to be revisited.
 _dealias(model::Model) = model
 
+"""
+    _needs_copy(::Type{T})
+
+Whether a model argument of type `T` needs to be copied on every evaluation, assuming that
+the dataflow analysis (or the user) has not ruled it out. The only reason for these copies
+is to stop differentiable data being written into the model's arguments (see `_dealias`),
+so types that can't hold differentiable data, or that `_dealias` returns unchanged anyway,
+are never copied.
+
+Note that this is separate from the copy made when the model is constructed, which protects
+the user's data and always uses `_dealias`.
+"""
+_needs_copy(::Type{T}) where {T} = !isbitstype(T)
+# Integers can't hold differentiable data: writing a float into an integer array either
+# errors or creates a new array.
+_needs_copy(::Type{<:AbstractArray{<:Integer}}) = false
+_needs_copy(::Type{<:Model}) = false
+
+"""
+    _copied_args(::Model)
+
+Get the set of argument names that are marked for copying. NOTE: This is for internal use
+only. Be careful interpreting the results of this function! For example, even if
+`_copied_args(model)` returns a nonempty set, this does not mean that the model's arguments
+are actually copied. Outside of Enzyme contexts (i.e., in normal evaluation like
+`rand(model)`, the copies are always disabled. This includes AD with non-Enzyme backends.
+And with Enzyme, it's very possible that [`reduce_copies`](@ref) will prune this set of
+arguments down.
+"""
+_copied_args(::Model{A,C,F,Val{CA}}) where {A,C,F,CA} = CA
+
+"""
+    _with_copied_args(model::Model, copy_argnames)
+
+Return the same model, but with `copy_argnames` (an iterable of symbols) as its
+`enzyme_copy_argnames`. This reuses the evaluation function, so no new code is generated.
+The names are sorted so that the same set of arguments always gives the same type (as in the
+`@wren` macro).
+"""
+function _with_copied_args(model::Model, copy_argnames)
+    return Model(
+        model.name,
+        model.args,
+        model.stmts,
+        model.mod;
+        conditioned=model.conditioned,
+        enzyme_copy_argnames=Val(Tuple(sort!(collect(Symbol, copy_argnames)))),
+        _unsafe_reuse_evaluation_fn=model.evaluation_fn,
+    )
+end
+
+"""
+    EvalContext{Enzyme}
+
+Information about how a model is being evaluated. It is passed to the model's evaluation
+function, and from there on to any submodels, so that they are evaluated in the same way.
+
+`EnzymeCopies` is a `Bool` that says whether we are running under Enzyme AD. In such a case,
+the arguments in the model's `enzyme_copy_argnames` should be copied on evaluation (see
+`_maybe_dealias`).
+"""
+struct EvalContext{Enzyme} end
+
+"""
+    _maybe_dealias(::EvalContext, ::Val{S}, ::Val{name}, v)
+
+Return `_dealias(v)` if the following all hold true:
+
+- `EvalContext` tells us that we are running under Enzyme AD, which is the only situation where
+  copies need to be made for correctness;
+- `name` is in `S`, the set of argument names which must be copied (`S` can be pruned either through
+  Wren's dataflow analysis, or by [`reduce_copies`](@ref)); and
+- `v` is a type that needs copying (see `_needs_copy`).
+
+Otherwise, returns `v`.
+
+The decision only depends on types, so should be resolvable at compile-time.
+
+Apparently, making this a generated function means that it's impossible for e.g. extensions
+to overload `_needs_copy`, as the generated function only has access to the methods of
+`_needs_copy` that were present at the compilation world age.
+"""
+@inline _maybe_dealias(::EvalContext{true}, ::Val{S}, ::Val{name}, v::V) where {S,name,V} =
+    name in S && _needs_copy(V) ? _dealias(v) : v
+@inline _maybe_dealias(::EvalContext{false}, ::Val, ::Val, v) = v
+
 function make_evaluation_fn(
     argnames::Tuple{Vararg{Symbol}},
-    stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}},
+    stmts::Vector{<:Union{AbstractWrenExpr,LineNumberNode}},
     mod::Module,
 )
     body = Expr(:block)
-    @gensym model_args
+    @gensym model_args enzyme_copy_argnames ctx
     for k in argnames
-        push!(body.args, :($(k) = $(WrenCore._dealias)($model_args.$k)))
+        push!(
+            body.args,
+            :(
+                $(k) = $(WrenCore._maybe_dealias)(
+                    $ctx,
+                    $enzyme_copy_argnames,
+                    Val($(QuoteNode(k))),
+                    $model_args.$k,
+                )
+            ),
+        )
     end
 
     @gensym accs conditioned latent_source parameter_space retval
-    model_body = emit_statements(stmts, accs, conditioned, latent_source, parameter_space)
+    model_body =
+        emit_statements(stmts, accs, conditioned, latent_source, parameter_space, ctx)
     push!(body.args, :($retval = $model_body))
     push!(body.args, :(return ($retval, $accs)))
     return RuntimeGeneratedFunctions.RuntimeGeneratedFunction(
         mod,
         mod,
-        :(function ($latent_source, $parameter_space, $accs, $model_args, $conditioned)
-            $body
-        end),
+        :(
+            function (
+                $latent_source,
+                $parameter_space,
+                $accs,
+                $model_args,
+                $conditioned,
+                $enzyme_copy_argnames,
+                $ctx,
+            )
+                $body
+            end
+        ),
     )
 end
 
@@ -210,22 +312,37 @@ function Base.show(io::IO, ::MIME"text/plain", model::Model)
     return nothing
 end
 
-function to_namedtuple(args_expr::Expr)
+function extract_args(args_expr::Expr)
     args_expr.head == :tuple || error("@wren: expected a tuple of arguments")
     if isempty(args_expr.args)
-        :(NamedTuple())
+        :(NamedTuple()), Set{Symbol}()
     else
         new_expr = Expr(:tuple)
+        syms = Set{Symbol}()
         for arg in args_expr.args
+            # TODO(penelopeysm): support default positional arguments or keyword arguments.
             arg isa Symbol || error("@wren: expected function argument to be a symbol")
             push!(new_expr.args, :($arg = $(esc(arg))))
+            push!(syms, arg)
         end
-        new_expr
+        new_expr, syms
     end
 end
 
-macro wren(expr)
-    _wren(expr, __module__)
+macro wren(args...)
+    expr = last(args)
+    internal_to_ir = false
+    for opt in args[1:(end-1)]
+        # `internal_to_ir=true` is meant for internal testing only. It makes `@wren` return
+        # a tuple of the probabilistic IR (before dataflow analysis) and the set of the
+        # function's argument names, instead of defining a model.
+        if Meta.isexpr(opt, :(=)) && opt.args[1] === :internal_to_ir && opt.args[2] isa Bool
+            internal_to_ir = opt.args[2]
+        else
+            error("@wren: unexpected argument `$opt`")
+        end
+    end
+    _wren(expr, __module__; internal_to_ir)
 end
 
 macro observe(expr)
@@ -244,7 +361,7 @@ macro addloglikelihood(args...)
     error("@addloglikelihood must be used inside @wren")
 end
 
-function _wren(expr::Expr, mod::Module)
+function _wren(expr::Expr, mod::Module; internal_to_ir::Bool=false)
     # The short form `f(x) = body` has the same signature and body as the long form.
     if expr.head == :(=) && Meta.isexpr(expr.args[1], (:call, :where))
         expr = Expr(:function, expr.args...)
@@ -253,15 +370,20 @@ function _wren(expr::Expr, mod::Module)
     expr.head == :function || error("@wren: expected a function definition")
     length(expr.args) == 2 || error("@wren: expected function expr with 2 expr-args")
 
-    # Generate a new symbol for the model's body, since we want the original
-    # symbol to directly create the `Model`.
-    fname, fargs = get_function_name_and_args(expr.args[1])
-    fname isa Symbol || error("@wren: expected function name to be a symbol")
-    fargs_expr = Expr(:tuple, fargs...)
     signature, body = expr.args
 
-    model_args = to_namedtuple(fargs_expr)
-    model_exprs = run_dataflow_analysis(to_wren_exprs(body, mod))
+    # Generate a new symbol for the model's body, since we want the original
+    # symbol to directly create the `Model`.
+    fname, fargs = get_function_name_and_args(signature)
+    fname isa Symbol || error("@wren: expected function name to be a symbol")
+    fargs_expr = Expr(:tuple, fargs...)
+
+    model_args, model_arg_symbols = extract_args(fargs_expr)
+    ir = to_wren_exprs(body, mod)
+    internal_to_ir && return :(($ir, $model_arg_symbols))
+    model_exprs, args_to_copy = run_dataflow_analysis(ir, model_arg_symbols)
+    # Sorted so that the same set of arguments always gives the same type.
+    enzyme_copy_argnames = Val(Tuple(sort!(collect(args_to_copy))))
 
     # At macro definition time, we generate a new symbol to store the evaluation function
     # corresponding to the AST *as defined in the macro*. It's possible that users can
@@ -306,22 +428,12 @@ function _wren(expr::Expr, mod::Module)
         $model_args,
         $model_exprs,
         @__MODULE__;
-        evaluation_fn=($evaluation_fn_ref),
+        # Safe as the cached RGF is always correct for a given model instantiation, i.e.
+        # `f(arg1, arg2)` and `f(arg3, arg4)` should always use the same RGF.
+        _unsafe_reuse_evaluation_fn=($evaluation_fn_ref),
+        enzyme_copy_argnames=($enzyme_copy_argnames),
     ))
     function_expr = Expr(:function, esc(signature), function_body)
 
     return function_expr
-end
-
-# Parse into probabilistic IR. This is a helper macro meant for internal testing only.
-macro _to_ir(expr)
-    _macro_to_ir(expr, __module__)
-end
-function _macro_to_ir(expr::Expr, mod::Module)
-    # Sanity check
-    expr.head == :function || error("@_to_ir: expected a function definition")
-    length(expr.args) == 2 || error("@_to_ir: expected function expr with 2 expr-args")
-    _, body = expr.args
-    model_exprs = to_wren_exprs(body, mod)
-    return model_exprs
 end

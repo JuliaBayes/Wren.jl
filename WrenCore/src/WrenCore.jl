@@ -16,6 +16,10 @@ function _issue_error(str)
     )
 end
 
+function _docs_link(str)
+    return "https://juliabayes.org/Wren.jl/$str"
+end
+
 const WREN_COMPILATION_DEBUG = Ref(false)
 
 # Parameter spaces
@@ -110,6 +114,7 @@ export @wren,
     independent,
     rand_with_logp,
     evaluate,
+    EvalContext,
     get_latent,
     vectorised_params,
     logjac,
@@ -123,6 +128,7 @@ export @wren,
     @bmodel,
     benchmark_model,
     test_ad,
+    reduce_copies,
     target_transform
 
 # Reexports

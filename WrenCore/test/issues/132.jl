@@ -1,8 +1,10 @@
-using WrenCore, Distributions, Enzyme, Test
+module Issue132
+
+using WrenCore, WrenDists, Enzyme, Test
 
 @testset "#132 Enzyme failure with deepcopied Int" begin
     @wren function inner(n)
-        eps ~ MvNormal(zeros(n - 1), I)
+        eps ~ MvNormalScale(zeros(n - 1), I)
         return cumsum(eps)
     end
     @wren function outer(inner, cases)
@@ -14,4 +16,6 @@ using WrenCore, Distributions, Enzyme, Test
     end
     model = outer(inner(11), zeros(Int, 10)) | VarNamedTuple(; cases=rand(1:20, 10))
     @test VecModel(model, WrenCore.DEFAULT_AD) isa Any
+end
+
 end

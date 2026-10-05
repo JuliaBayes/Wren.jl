@@ -5,14 +5,11 @@ using WrenCore, Distributions, Test
         x ~ Normal()
         return (a, b, c)
     end
-    for (model, expected) in (
-        (f(1.0), (a=1.0, b=2.0, c=3.0)),
-        (f(1.0, 4.0; c=5.0), (a=1.0, b=4.0, c=5.0)),
-    )
+    for (model, expected) in
+        ((f(1.0), (a=1.0, b=2.0, c=3.0)), (f(1.0, 4.0; c=5.0), (a=1.0, b=4.0, c=5.0)))
         @test model.args == expected
-        retval, _ = evaluate(
-            model, FromPrior(), OriginalSpace(), WrenCore.default_accumulators()
-        )
+        retval, _ =
+            evaluate(model, FromPrior(), OriginalSpace(), WrenCore.default_accumulators())
         @test retval == values(expected)
     end
 end
