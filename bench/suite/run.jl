@@ -91,9 +91,11 @@ if SAVE
     run(`git -C $REPO fetch origin $RESULTS_BRANCH`)
 end
 
-println("Commit:  ", readchomp(`git -C $REPO rev-parse --short HEAD`))
-println("Label:   ", LABEL)
-println("Save to: ", SAVE ? RESULTS_BRANCH : "(not saving)")
+yesno(x::Bool) = x ? "Yes" : "No"
+println("Commit: ", readchomp(`git -C $REPO rev-parse --short HEAD`))
+println("Label: ", LABEL)
+println("Is release: ", yesno(RELEASE))
+println("Save to $RESULTS_BRANCH: ", yesno(SAVE))
 println()
 
 using WrenCore: benchmark_model, AutoEnzyme, AutoMooncake, Reverse
