@@ -17,7 +17,13 @@ using WrenCore: WrenCore
 Draw predictions from `model` for all iterations in `chain`.
 
 The returned `FlexiChain` by default will contain all the predicted variables, as well as the
-variables already present in the input `chain`.
+variables already present in the input `chain`, which implies that:
+
+- variables that are in the `chain` are fixed to their respective values;
+- variables that arent in the `chain` are resampled according to the model;
+- variables that are `@observe`d are never included.
+
+To move a variable from the first into the second category, subset `chain` to exclude that variable (more about subsetting chains [here](https://juliabayes.org/FlexiChains.jl/stable/api#Subsetting-chains)).
 
 The returned chain will also contain log-probabilities corresponding to the re-evaluation of
 the model. In particular, the log probability for the newly predicted variables are
