@@ -150,6 +150,53 @@ function bench(model, adtype)
     end
 end
 
+# Formats a time in seconds to 3 significant figures, e.g. `1.23 μs`. This matches
+# `formatTime` in `bench/web/src/lib/format.ts`.
+function format_time(seconds)
+    # Round before picking the unit, so that e.g. 999.7 ns is shown as 1 μs, not 1000 ns.
+    x = round(seconds; sigdigits=3)
+    value, unit = if x < 1e-6
+        x * 1e9, "ns"
+    elseif x < 1e-3
+        x * 1e6, "μs"
+    elseif x < 1
+        x * 1e3, "ms"
+    else
+        x, "s"
+    end
+    # Drop trailing zeros, so that e.g. 120.0 is shown as 120.
+    value = round(value; sigdigits=3)
+    str = isinteger(value) ? string(Int(value)) : string(value)
+    return "$str $unit"
+end
+
+# Prints the results as a table, with one row per model and one column per backend.
+function print_results(results)
+    header = ["model", "dim", first.(BACKENDS)...]
+    rows = map(MODELS) do mod
+        name = string(nameof(mod))
+        r = results[name]
+        times = [
+            haskey(r[b], "time") ? format_time(r[b]["time"]) : "error" for
+            b in first.(BACKENDS)
+        ]
+        [name, string(get(r, "dim", "?")), times...]
+    end
+    widths =
+        [maximum(row -> textwidth(row[i]), [header, rows...]) for i in eachindex(header)]
+    # The model name is left-aligned and everything else is right-aligned.
+    fmt(row) = join(
+        [i == 1 ? rpad(x, widths[i]) : lpad(x, widths[i]) for (i, x) in enumerate(row)],
+        "  ",
+    )
+    println()
+    println(fmt(header))
+    println(join(("-"^w for w in widths), "  "))
+    foreach(row -> println(fmt(row)), rows)
+    println()
+    return nothing
+end
+
 function main()
     results = Dict{String,Any}()
     for mod in MODELS
@@ -210,6 +257,7 @@ function main()
     outfile = joinpath(@__DIR__, "results", filename)
     mkpath(dirname(outfile))
     open(io -> JSON.json(io, output; pretty=true), outfile, "w")
+    print_results(results)
     println("Results written to $outfile")
     SAVE && save(outfile, short_sha)
     return nothing
