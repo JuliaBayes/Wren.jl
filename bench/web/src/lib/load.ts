@@ -1,0 +1,45 @@
+import type { Entry, IndexEntry, ModelResult, Run } from "./types";
+
+const SUPPORTED_SCHEMA_VERSION = 1;
+
+/** Turn the contents of a results JSON file into a `Run`. */
+export function parseRun(source: string, json: any): Run {
+    if (json.schema_version !== SUPPORTED_SCHEMA_VERSION) {
+        throw new Error(
+            `${source}: unsupported schema_version ${json.schema_version}`,
+        );
+    }
+    const backends: string[] = [];
+    const models = new Map<string, ModelResult>();
+    for (const [name, raw] of Object.entries<any>(json.results)) {
+        const entries = new Map<string, Entry>();
+        for (const [key, value] of Object.entries<any>(raw)) {
+            if (key === "dim") continue;
+            entries.set(key, value as Entry);
+            if (!backends.includes(key)) backends.push(key);
+        }
+        models.set(name, { dim: raw.dim ?? null, entries });
+    }
+    return { source, meta: json.meta, backends, models };
+}
+
+/** Fetch `runs/index.json`. Returns an empty list if there isn't one. */
+export async function fetchIndex(): Promise<IndexEntry[]> {
+    try {
+        const res = await fetch("runs/index.json");
+        if (!res.ok) return [];
+        return await res.json();
+    } catch {
+        return [];
+    }
+}
+
+export async function fetchRun(file: string): Promise<Run> {
+    const res = await fetch(`runs/${file}`);
+    if (!res.ok) throw new Error(`Could not fetch runs/${file} (${res.status})`);
+    return parseRun(file, await res.json());
+}
+
+export async function readRunFile(file: File): Promise<Run> {
+    return parseRun(file.name, JSON.parse(await file.text()));
+}

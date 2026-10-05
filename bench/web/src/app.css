@@ -1,0 +1,62 @@
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@300..700&family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+    --bg-primary: #f6f7f2;
+    --bg-secondary: #edeee5;
+    --text-primary: #1e293b;
+    --text-secondary: #475569;
+    --text-header: #0f172a;
+    --link-color: #2563eb;
+
+    --table-border: #cbd5e1;
+    --table-header-bg: #e8ecf1;
+
+    --error-color: #dc2626;
+    --faster: #4ade80;
+    --slower: #f87171;
+
+    --btn-bg: #e2e8f0;
+    --btn-text: #334155;
+    --btn-hover: #cbd5e1;
+}
+
+[data-theme="dark"] {
+    --bg-primary: #0f172a;
+    --bg-secondary: #1a2540;
+    --text-primary: #cbd5e1;
+    --text-secondary: #94a3b8;
+    --text-header: #e2e8f0;
+    --link-color: #60a5fa;
+
+    --table-border: #334155;
+    --table-header-bg: #1e293b;
+
+    --error-color: #f87171;
+    --faster: #15803d;
+    --slower: #b91c1c;
+
+    --btn-bg: #1e293b;
+    --btn-text: #e2e8f0;
+    --btn-hover: #334155;
+}
+
+html {
+    font-family: "Inter", sans-serif;
+    box-sizing: border-box;
+    font-size: 16px;
+    line-height: 1.6;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+*, *:before, *:after {
+    box-sizing: inherit;
+}
+
+a {
+    color: var(--link-color);
+}
+
+h1, h2, h3, h4, h5, h6 {
+    color: var(--text-header);
+}

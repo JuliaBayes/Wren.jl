@@ -1,0 +1,65 @@
+name: Benchmarks
+
+# Runs the benchmarks in `bench/suite` and saves the results to the `benchmark-results`
+# branch, in `runs/`. The website in `bench/web` reads them from there.
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  # needed to allow julia-actions/cache to delete old caches that it has created
+  actions: write
+  # needed to push to the benchmark-results branch
+  contents: write
+
+# Don't run two benchmarks at once, as they would race to push their results.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
+
+      - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # 3.0.2
+        with:
+          version: '1.12'
+
+      - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # 3.1.0
+
+      - name: Install dependencies
+        run: julia --color=yes --project=bench -e 'using Pkg; Pkg.instantiate()'
+
+      - name: Run benchmarks
+        id: run
+        run: |
+          file="$(date -u +%Y%m%dT%H%M%SZ)-$(git rev-parse --short HEAD).json"
+          echo "file=$file" >> "$GITHUB_OUTPUT"
+          julia --color=yes --project=bench bench/suite/run.jl "$RUNNER_TEMP/$file"
+        env:
+          DATADEPS_ALWAYS_ACCEPT: "true"
+
+      - name: Save results to the benchmark-results branch
+        env:
+          FILE: ${{ steps.run.outputs.file }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git fetch origin benchmark-results; then
+            git worktree add results origin/benchmark-results
+            git -C results switch -c benchmark-results
+          else
+            git worktree add --orphan -b benchmark-results results
+          fi
+          mkdir -p results/runs
+          cp "$RUNNER_TEMP/$FILE" results/runs/
+          bench/web/scripts/make-index.sh results/runs
+          git -C results add runs
+          git -C results commit -m "Add benchmark results for ${GITHUB_SHA::7}"
+          git -C results push origin benchmark-results
