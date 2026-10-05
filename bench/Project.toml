@@ -11,11 +11,4 @@ WrenCore = "008b59e7-bbda-4991-901b-b08f5cfc584d"
 WrenDists = "2ad4af40-d7c9-42b2-92b0-e09d37d1e75a"
 
 [compat]
-Enzyme = "0.13"
-JSON = "1"
-LogExpFunctions = "1"
-Mooncake = "0.5"
-PosteriorDB = "0.6, 0.7"
-WrenCore = "0.1"
-WrenDists = "0.1"
 julia = "1.12"
