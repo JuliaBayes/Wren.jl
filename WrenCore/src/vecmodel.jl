@@ -1,4 +1,4 @@
-using ADTypes: NoAutoDiff # DI doesn't export
+using ADTypes: AutoReactant, NoAutoDiff # DI doesn't export
 using EnzymeCore: Reverse
 
 const AUTO_RUNTIME_ACTIVITY = Ref{Union{Nothing,Bool}}(true)
@@ -378,6 +378,9 @@ model arguments, so the copies can be skipped.
 """
 _eval_context(::Union{DI.AbstractADType,Nothing}) = EvalContext{false}()
 _eval_context(::DI.AutoEnzyme) = EvalContext{true}()
+# Reactant differentiates with Enzyme-MLIR, so copy conservatively, as the Reactant
+# extension does when it builds its `_VecModelLP`.
+_eval_context(::AutoReactant) = EvalContext{true}()
 
 _copied_args(vm::VecModel) = _copied_args(vm.model)
 
@@ -547,7 +550,7 @@ function (b::BatchedLP)(params::AbstractMatrix)
 end
 
 """
-    batched_lp_function(vecmodel::VecModel)
+    batched_lp_function(vecmodel::VecModel; adtype=vecmodel.adtype)
 
 Return a callable `f` such that `f(params::AbstractMatrix)` is the vector of log-densities of
 `vecmodel` at each column of `params`.
@@ -556,10 +559,42 @@ Unlike [`lp_batch`](@ref), this is a plain Julia function that is not tied to `v
 backend, so it can be differentiated (to any order) or compiled by other packages. Columns
 are independent, so the gradient of `sum(f(params))` is the matrix of per-column gradients.
 
+`adtype` is the AD backend that will differentiate `f`, as for
+[`logdensity_function`](@ref).
+
 If `vecmodel` was constructed with `AutoReactant`, its model arguments are stored as Reactant
 arrays, and tracing `f` inside `Reactant.@compile` produces a single batched program.
 """
-batched_lp_function(vecmodel::VecModel) = BatchedLP(vecmodel.lp_func)
+function batched_lp_function(vecmodel::VecModel; adtype=vecmodel.adtype)
+    return BatchedLP(logdensity_function(vecmodel; adtype))
+end
+
+"""
+    logdensity_function(vecmodel::VecModel; adtype=vecmodel.adtype)
+
+Return a callable `f` such that `f(params::AbstractVector)` is the log-density of `vecmodel`
+at `params`. Like [`batched_lp_function`](@ref), it is a plain Julia function for other
+packages to differentiate or compile.
+
+`adtype` is the AD backend that will differentiate `f`. With Enzyme, the model's arguments
+must be copied on every evaluation for the gradient to be correct (see [the
+docs](@ref enzyme-copyargs)); other backends skip the copies. Pass `adtype=nothing` if `f`
+will not be differentiated.
+"""
+function logdensity_function(vecmodel::VecModel; adtype=vecmodel.adtype)
+    f = vecmodel.lp_func
+    return _VecModelLP(
+        f.evaluation_fn,
+        f.model_args,
+        f.conditioned,
+        f.enzyme_copy_argnames,
+        _eval_context(adtype),
+        f.lp_function,
+        f.parameter_space,
+        f.vecinfo,
+        f.accs,
+    )
+end
 
 function _check_batch_size(vecmodel::VecModel, params::AbstractMatrix)
     size(params, 1) == vecmodel.dimension || throw(
@@ -578,7 +613,8 @@ Calculate the log-density of `vecmodel` at each column of `params`, returning a 
 """
 function lp_batch(vecmodel::VecModel, params::AbstractMatrix)
     _check_batch_size(vecmodel, params)
-    return batched_lp_function(vecmodel)(params)
+    # Not differentiated, so the copies that Enzyme needs can be skipped.
+    return batched_lp_function(vecmodel; adtype=nothing)(params)
 end
 
 """

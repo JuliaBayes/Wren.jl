@@ -30,6 +30,15 @@ end
     end
 end
 
+# Writes its parameters into the model argument `m`, so Enzyme needs `m` to be copied on
+# every evaluation (see the "enzyme-copyargs" docs).
+@wren function writes_arg(m, y)
+    @batch for i in eachindex(y)
+        m[i] ~ WD.Normal(0, 1)
+        @observe y[i] ~ WD.Normal(m[i], 1)
+    end
+end
+
 function make_model(rng)
     N, D = 20, 3
     X = randn(rng, N, D)
@@ -90,6 +99,21 @@ end
             DI.hvp(summed, DI.SecondOrder(AutoForwardDiff(), AutoForwardDiff()), P, (V,)),
         )
         @test hvp ≈ reference_hvps(ref_vm, P, V)
+    end
+
+    @testset "Enzyme copies model arguments" begin
+        y = randn(rng, 4)
+        vm = VecModel(writes_arg(zeros(4), y), AutoEnzyme(; mode=Reverse))
+        Q = randn(rng, 4, T)
+        # log N(m; 0, 1) + log N(y; m, 1) has gradient -m + (y - m).
+        expected = -Q .+ (y .- Q)
+        enzyme = AutoEnzyme(; mode=Reverse, function_annotation=Enzyme.Const)
+
+        f = batched_lp_function(vm)
+        @test DI.gradient(x -> sum(f(x)), enzyme, Q) ≈ expected
+        g = logdensity_function(vm)
+        @test DI.gradient(g, enzyme, Q[:, 1]) ≈ expected[:, 1]
+        @test lp_batch(vm, Q) ≈ [lp(vm, q) for q in eachcol(Q)]
     end
 
     if RUN_REACTANT
