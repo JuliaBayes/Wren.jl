@@ -52,7 +52,7 @@ In addition to the three columns above, this will also benchmark `lp_and_grad`, 
 ## Pitfalls
 
 If you are trying to do comparative benchmarking i.e. comparing performance before and after, you may very well need to fix the number of BLAS threads to get consistent results.
-You can do so either via the `BLAS.set_num_threads` function, or by setting the `OPENBLAS_NUM_THREADS` environment variable before starting Julia.
+You can do so either by calling `LinearAlgebra.BLAS.set_num_threads(1)`, or by setting the `OPENBLAS_NUM_THREADS` environment variable before starting Julia.
 
 This recommendation in the context of Wren is mostly based on anecdotal evidence, but see also [this thread on Julia Discourse](https://discourse.julialang.org/t/regarding-the-multithreaded-performance-of-openblas/75450) for more info.
 
