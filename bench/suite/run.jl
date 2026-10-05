@@ -49,7 +49,8 @@ const ARG_LABEL, RELEASE, SAVE = parse_args(ARGS)
 
 using TOML: TOML
 
-const REPO = readchomp(`git -C $(@__DIR__) rev-parse --show-toplevel`)
+# Defines `REPO` and `RESULTS_BRANCH`, and the code for saving to the results branch.
+include("results_branch.jl")
 
 # The label for a release run, which is the release's tag, e.g. "WrenCore-v0.2.0". Checks
 # that the current commit has that tag (which TagBot creates when a release is made).
@@ -69,7 +70,6 @@ end
 
 # Changes to files that git doesn't track (e.g. old results) don't count.
 const DIRTY = !isempty(readchomp(`git -C $REPO status --porcelain --untracked-files=no`))
-const RESULTS_BRANCH = "benchmark-results"
 
 const LABEL = if RELEASE
     release_label()
@@ -88,7 +88,7 @@ if SAVE
         println(stderr, "There are uncommitted changes. Commit them, or use --no-save.")
         exit(1)
     end
-    run(`git -C $REPO fetch origin $RESULTS_BRANCH`)
+    fetch_results_branch()
 end
 
 yesno(x::Bool) = x ? "Yes" : "No"
@@ -105,6 +105,7 @@ using Mooncake: Mooncake
 using JSON: JSON
 using Dates: Dates, now, UTC, @dateformat_str
 using Pkg: Pkg
+using Printf: @sprintf
 
 # `nothing` means the primal (no AD). Add more backends here.
 const BACKENDS = [
@@ -150,50 +151,78 @@ function bench(model, adtype)
     end
 end
 
-# Formats a time in seconds to 3 significant figures, e.g. `1.23 μs`. This matches
-# `formatTime` in `bench/web/src/lib/format.ts`.
-function format_time(seconds)
+# Anything beyond 3 significant figures is just noise.
+const SIGFIGS = 3
+# `%g` drops trailing zeros, so that e.g. 120.0 is shown as 120.
+sigfigs(x::Real) = @sprintf("%g", round(x; sigdigits=SIGFIGS))
+
+# Formats a time in seconds, e.g. `1.23 μs`. This matches `formatTime` in
+# `bench/web/src/lib/format.ts`.
+function format_time(x::Real)
     # Round before picking the unit, so that e.g. 999.7 ns is shown as 1 μs, not 1000 ns.
-    x = round(seconds; sigdigits=3)
-    value, unit = if x < 1e-6
-        x * 1e9, "ns"
+    x = round(x; sigdigits=SIGFIGS)
+    return if x < 1e-6
+        "$(sigfigs(x * 1e9)) ns"
     elseif x < 1e-3
-        x * 1e6, "μs"
+        "$(sigfigs(x * 1e6)) μs"
     elseif x < 1
-        x * 1e3, "ms"
+        "$(sigfigs(x * 1e3)) ms"
     else
-        x, "s"
+        "$(sigfigs(x)) s"
     end
-    # Drop trailing zeros, so that e.g. 120.0 is shown as 120.
-    value = round(value; sigdigits=3)
-    str = isinteger(value) ? string(Int(value)) : string(value)
-    return "$str $unit"
 end
 
-# Prints the results as a table, with one row per model and one column per backend.
-function print_results(results)
-    header = ["model", "dim", first.(BACKENDS)...]
-    rows = map(MODELS) do mod
+# Prints the results as a table, with one row per model and one column per backend. Each
+# AD backend's time is followed by its ratio to the primal time. Errors are shown in the
+# table as `ERR [k]`, and listed in full after the table.
+function print_results(io::IO, results)
+    backends = first.(BACKENDS)
+    errors = Tuple{String,String,String}[]
+    header = ["Model"; "dim"; backends]
+    rows = map(collect(MODELS)) do mod
         name = string(nameof(mod))
         r = results[name]
-        times = [
-            haskey(r[b], "time") ? format_time(r[b]["time"]) : "error" for
-            b in first.(BACKENDS)
-        ]
-        [name, string(get(r, "dim", "?")), times...]
+        primal = get(r["primal"], "time", nothing)
+        cells = map(backends) do backend
+            entry = r[backend]
+            if haskey(entry, "error")
+                push!(errors, (name, backend, entry["error"]))
+                return "ERR [$(length(errors))]"
+            end
+            time = entry["time"]
+            # No ratio for the primal itself, or if the primal failed.
+            ratio =
+                backend == "primal" || primal === nothing ? "" :
+                " ($(sigfigs(time / primal))x)"
+            return format_time(time) * ratio
+        end
+        [name; string(get(r, "dim", "?")); cells]
     end
-    widths =
-        [maximum(row -> textwidth(row[i]), [header, rows...]) for i in eachindex(header)]
-    # The model name is left-aligned and everything else is right-aligned.
-    fmt(row) = join(
-        [i == 1 ? rpad(x, widths[i]) : lpad(x, widths[i]) for (i, x) in enumerate(row)],
-        "  ",
-    )
-    println()
-    println(fmt(header))
-    println(join(("-"^w for w in widths), "  "))
-    foreach(row -> println(fmt(row)), rows)
-    println()
+    widths = [
+        maximum(textwidth, [header[j]; [row[j] for row in rows]]) for j in eachindex(header)
+    ]
+    # Model names are left-aligned, everything else right-aligned.
+    pad(s, j) = j == 1 ? rpad(s, widths[j]) : lpad(s, widths[j])
+    line(cells) = "| " * join((pad(c, j) for (j, c) in enumerate(cells)), " | ") * " |"
+    println(io)
+    println(io, "Ratios are vs primal:")
+    println(io, line(header))
+    println(io, "|" * join(("-"^(w + 2) for w in widths), "|") * "|")
+    foreach(row -> println(io, line(row)), rows)
+    println(io)
+    if !isempty(errors)
+        println(io, "Errors:")
+        for (k, (name, backend, msg)) in enumerate(errors)
+            msg = join(split(msg, "\n"), "; ")
+            # Truncate long messages
+            MAX_LEN = 200
+            if length(msg) > MAX_LEN
+                msg = first(msg, MAX_LEN) * "…"
+            end
+            println(io, "  [$k] $name, $backend: $msg")
+        end
+        println(io)
+    end
     return nothing
 end
 
@@ -258,57 +287,16 @@ function main()
     outfile = joinpath(@__DIR__, "results", filename)
     mkpath(dirname(outfile))
     open(io -> JSON.json(io, output; pretty=true), outfile, "w")
-    print_results(results)
+    print_results(stdout, results)
     println("Results written to $outfile")
-    SAVE && save(outfile, short_sha)
-    return nothing
-end
-
-# Copies `outfile` to `runs/` on the results branch, updates `runs/index.json`, and pushes
-# the branch. This is done in a temporary worktree, so the current checkout isn't touched.
-function save(outfile, short_sha)
-    # Fetch again, in case the branch was pushed to while the benchmarks were running.
-    run(`git -C $REPO fetch origin $RESULTS_BRANCH`)
-    dir = mktempdir()
-    run(`git -C $REPO worktree add --detach $dir origin/$RESULTS_BRANCH`)
-    try
-        runs = joinpath(dir, "runs")
-        mkpath(runs)
-        cp(outfile, joinpath(runs, basename(outfile)))
-        write_index(runs)
-        run(`git -C $dir add runs`)
-        # The results branch has no pre-commit config, so tell pre-commit (if it's
-        # installed as a git hook) not to fail because of that.
-        commit = `git -C $dir commit -m "Add benchmark results for $short_sha"`
-        run(addenv(commit, "PRE_COMMIT_ALLOW_NO_CONFIG" => "1"))
-        run(`git -C $dir push origin HEAD:$RESULTS_BRANCH`)
-    finally
-        run(`git -C $REPO worktree remove --force $dir`)
-    end
-    println("Results saved to the $RESULTS_BRANCH branch")
-    return nothing
-end
-
-# Writes `<runs>/index.json`, which lists every run in `runs`, newest first. The website
-# reads it to find the runs.
-function write_index(runs)
-    entries = Dict{String,Any}[]
-    for file in readdir(runs)
-        (endswith(file, ".json") && file != "index.json") || continue
-        meta = JSON.parsefile(joinpath(runs, file))["meta"]
-        push!(
-            entries,
-            Dict(
-                "file" => file,
-                "timestamp" => meta["timestamp"],
-                "git_sha" => get(meta, "git_sha", nothing),
-                "commit_date" => get(meta, "commit_date", nothing),
-                "label" => get(meta, "label", nothing),
-            ),
+    if SAVE
+        message = "Add benchmark results for $short_sha"
+        update_results_branch(
+            runs -> cp(outfile, joinpath(runs, basename(outfile))),
+            message,
         )
+        println("Results saved to the $RESULTS_BRANCH branch")
     end
-    sort!(entries; by=e -> e["timestamp"], rev=true)
-    open(io -> JSON.json(io, entries; pretty=true), joinpath(runs, "index.json"), "w")
     return nothing
 end
 

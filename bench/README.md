@@ -40,6 +40,15 @@ These will be grouped specially at the top of the dropdown.
 
 This is kind of manual, but it's good enough, really.
 
+To remove runs from the `benchmark-results` branch (e.g. if one was noisy), run:
+
+```sh
+julia --project=bench bench/suite/remove.jl <file or sha> [<file or sha> ...]
+```
+
+A sha removes every run of that commit. It lists the matching runs and asks
+before removing them. Removed runs are still in the branch's history.
+
 Production benchmarks aren't currently run on CI because timings are too
 inconsistent. (If one day we have dedicated machines, we could do that
 instead.) Instead, the production benchmarks are currently manually run on
