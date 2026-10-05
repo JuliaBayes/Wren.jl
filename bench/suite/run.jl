@@ -18,9 +18,9 @@ else
     exit(1)
 end
 
-using Wren: benchmark_model
-using ADTypes: AutoEnzyme, AutoMooncake
-using Enzyme: Reverse
+using WrenCore: benchmark_model, AutoEnzyme, AutoMooncake, Reverse
+# Loaded so that WrenCore can use them as AD backends.
+using Enzyme: Enzyme
 using Mooncake: Mooncake
 using JSON: JSON
 using Dates: Dates, now, UTC, @dateformat_str

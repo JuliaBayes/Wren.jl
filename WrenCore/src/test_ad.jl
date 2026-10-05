@@ -395,11 +395,8 @@ _show_sample(s::Chairmarks.Sample) = sprint(show, MIME"text/plain"(), s)
 # handling follows DynamicPPL's `run_ad` (which in turn follows Mooncake's benchmarks).
 function _median_bench(f, seconds::Real)
     f() # warmup
-    # Start from a clean heap.
     GC.gc(true)
-    # A quick incremental collection after every sample stops garbage from building up and
-    # setting off a full collection partway through a sample, which would make that sample
-    # several times slower.
+    # Incremental collection after every sample.
     return median(Chairmarks.benchmark(nothing, f, _ -> GC.gc(false); seconds))
 end
 
@@ -467,6 +464,7 @@ function benchmark_model(
         latent_source=FromParams(vnt_params, nothing),
         lp_function,
         parameter_space,
+        reduce_copies=false,
     )
     params = vecmodel.sample
 

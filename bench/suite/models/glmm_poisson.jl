@@ -4,8 +4,7 @@
 module GLMMPoisson
 
 using PosteriorDB
-using Wren: Wren, @wren, @observe, @batch, @iid, @addloglikelihood, logdensityof
-using WrenCore: iid
+using WrenCore: @wren, @observe, @batch, @iid, @addloglikelihood, logdensityof, iid
 using WrenDists: WrenDists as WD
 
 const data = let
