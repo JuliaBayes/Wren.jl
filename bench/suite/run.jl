@@ -1,21 +1,53 @@
 # Benchmarks each model with each backend and writes the results to a JSON file in
-# `bench/suite/results/`, named `<UTC timestamp>-<short git sha>.json`.
+# `bench/suite/results/`, named `<UTC timestamp>-<short git sha>.json`. The file is then
+# saved to `runs/` on the `benchmark-results` branch, and the branch is pushed.
 #
-#     julia --project=bench bench/suite/run.jl [--label <text>]
+#     julia --project=bench bench/suite/run.jl [--label <text>] [--no-save]
 #
 # The label is shown on the website to identify the run (e.g. "WrenCore v0.2.0" or
 # "PR #123"). If not given, it defaults to the short git sha.
 #
+# With `--no-save`, the results are only written to `bench/suite/results/`. Runs with
+# uncommitted changes can't be saved, since the git sha wouldn't describe the code that was
+# benchmarked.
+#
 # The JSON files are read by the website in `bench/web`.
 
+const USAGE = "Usage: julia --project=bench bench/suite/run.jl [--label <text>] [--no-save]"
+
 # Check the arguments before loading anything, since that takes a while.
-const LABEL = if isempty(ARGS)
-    nothing
-elseif length(ARGS) == 2 && ARGS[1] == "--label"
-    ARGS[2]
-else
-    println(stderr, "Usage: julia --project=bench bench/suite/run.jl [--label <text>]")
-    exit(1)
+function parse_args(args)
+    label = nothing
+    save = true
+    i = 1
+    while i <= length(args)
+        if args[i] == "--label" && i < length(args)
+            label = args[i+1]
+            i += 2
+        elseif args[i] == "--no-save"
+            save = false
+            i += 1
+        else
+            println(stderr, USAGE)
+            exit(1)
+        end
+    end
+    return label, save
+end
+const LABEL, SAVE = parse_args(ARGS)
+
+const REPO = readchomp(`git -C $(@__DIR__) rev-parse --show-toplevel`)
+# Changes to files that git doesn't track (e.g. old results) don't count.
+const DIRTY = !isempty(readchomp(`git -C $REPO status --porcelain --untracked-files=no`))
+const RESULTS_BRANCH = "benchmark-results"
+
+# Likewise, check that the results can be saved before spending time on the benchmarks.
+if SAVE
+    if DIRTY
+        println(stderr, "There are uncommitted changes. Commit them, or use --no-save.")
+        exit(1)
+    end
+    run(`git -C $REPO fetch origin $RESULTS_BRANCH`)
 end
 
 using WrenCore: benchmark_model, AutoEnzyme, AutoMooncake, Reverse
@@ -85,26 +117,26 @@ function main()
         end
         results[name] = model_results
     end
-    git_sha = try
-        readchomp(`git -C $(@__DIR__) rev-parse HEAD`)
-    catch
-        nothing
-    end
+    git_sha = readchomp(`git -C $REPO rev-parse HEAD`)
     # When the benchmarked commit was made, in UTC. Unlike `timestamp` (when the benchmark
     # was run), this is still right if an old commit is benchmarked later.
-    commit_date = try
-        cmd = `git -C $(@__DIR__) log -1 --format=%cd --date=format-local:%Y-%m-%dT%H:%M:%SZ`
-        readchomp(addenv(cmd, "TZ" => "UTC"))
-    catch
-        nothing
-    end
+    cmd = `git -C $REPO log -1 --format=%cd --date=format-local:%Y-%m-%dT%H:%M:%SZ`
+    commit_date = readchomp(addenv(cmd, "TZ" => "UTC"))
     # The version of every package in the manifest, so that changes in dependencies can be
     # tracked across runs. Packages without a version (e.g. some stdlibs) are `nothing`.
     manifest = Dict(
         info.name => (info.version === nothing ? nothing : string(info.version)) for
         info in values(Pkg.dependencies())
     )
-    short_sha = git_sha === nothing ? "unknown" : first(git_sha, 7)
+    short_sha = first(git_sha, 7)
+    # Timings are only comparable between runs on the same kind of machine.
+    machine = Dict(
+        "cpu" => Sys.cpu_info()[1].model,
+        "cpu_threads" => Sys.CPU_THREADS,
+        "memory_gb" => round(Int, Sys.total_memory() / 2^30),
+        "os" => string(Sys.KERNEL),
+        "arch" => string(Sys.ARCH),
+    )
     timestamp = now(UTC)
     output = Dict(
         "schema_version" => 1,
@@ -112,8 +144,13 @@ function main()
             "timestamp" => string(timestamp) * "Z",
             "git_sha" => git_sha,
             "commit_date" => commit_date,
-            "label" => LABEL === nothing ? short_sha : LABEL,
+            "label" =>
+                LABEL === nothing ? (DIRTY ? "$short_sha-dirty" : short_sha) : LABEL,
+            # Whether there were uncommitted changes, i.e. whether `git_sha` describes the
+            # code that was benchmarked.
+            "dirty" => DIRTY,
             "julia_version" => string(VERSION),
+            "machine" => machine,
         ),
         # Lists the backends in order, since the keys in `results` get sorted.
         "backends" => first.(BACKENDS),
@@ -127,6 +164,52 @@ function main()
     mkpath(dirname(outfile))
     open(io -> JSON.json(io, output; pretty=true), outfile, "w")
     println("Results written to $outfile")
+    SAVE && save(outfile, short_sha)
+    return nothing
+end
+
+# Copies `outfile` to `runs/` on the results branch, updates `runs/index.json`, and pushes
+# the branch. This is done in a temporary worktree, so the current checkout isn't touched.
+function save(outfile, short_sha)
+    # Fetch again, in case the branch was pushed to while the benchmarks were running.
+    run(`git -C $REPO fetch origin $RESULTS_BRANCH`)
+    dir = mktempdir()
+    run(`git -C $REPO worktree add --detach $dir origin/$RESULTS_BRANCH`)
+    try
+        runs = joinpath(dir, "runs")
+        mkpath(runs)
+        cp(outfile, joinpath(runs, basename(outfile)))
+        write_index(runs)
+        run(`git -C $dir add runs`)
+        run(`git -C $dir commit -m "Add benchmark results for $short_sha"`)
+        run(`git -C $dir push origin HEAD:$RESULTS_BRANCH`)
+    finally
+        run(`git -C $REPO worktree remove --force $dir`)
+    end
+    println("Results saved to the $RESULTS_BRANCH branch")
+    return nothing
+end
+
+# Writes `<runs>/index.json`, which lists every run in `runs`, newest first. The website
+# reads it to find the runs.
+function write_index(runs)
+    entries = Dict{String,Any}[]
+    for file in readdir(runs)
+        (endswith(file, ".json") && file != "index.json") || continue
+        meta = JSON.parsefile(joinpath(runs, file))["meta"]
+        push!(
+            entries,
+            Dict(
+                "file" => file,
+                "timestamp" => meta["timestamp"],
+                "git_sha" => get(meta, "git_sha", nothing),
+                "commit_date" => get(meta, "commit_date", nothing),
+                "label" => get(meta, "label", nothing),
+            ),
+        )
+    end
+    sort!(entries; by=e -> e["timestamp"], rev=true)
+    open(io -> JSON.json(io, entries; pretty=true), joinpath(runs, "index.json"), "w")
     return nothing
 end
 

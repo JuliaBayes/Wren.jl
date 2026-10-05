@@ -8,7 +8,17 @@ export interface RunMeta {
     commit_date?: string | null;
     /** Identifies the run, e.g. "WrenCore v0.2.0" or "PR #123". Missing in older files. */
     label?: string;
+    /** Whether there were uncommitted changes. Missing in older files. */
+    dirty?: boolean;
     julia_version: string;
+    /** The machine the benchmarks were run on. Missing in older files. */
+    machine?: {
+        cpu: string;
+        cpu_threads: number;
+        memory_gb: number;
+        os: string;
+        arch: string;
+    };
 }
 
 /** The result of benchmarking one model with one backend. Times are in seconds. */
