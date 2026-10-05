@@ -66,11 +66,21 @@ function release_label()
     end
     return tag
 end
-const LABEL = RELEASE ? release_label() : ARG_LABEL
 
 # Changes to files that git doesn't track (e.g. old results) don't count.
 const DIRTY = !isempty(readchomp(`git -C $REPO status --porcelain --untracked-files=no`))
 const RESULTS_BRANCH = "benchmark-results"
+
+const LABEL = if RELEASE
+    release_label()
+elseif ARG_LABEL !== nothing
+    ARG_LABEL
+else
+    # The website already shows the sha next to the label, so use the commit message as the
+    # default label rather than the sha.
+    subject = readchomp(`git -C $REPO log -1 --format=%s`)
+    DIRTY ? "$subject (dirty)" : subject
+end
 
 # Likewise, check that the results can be saved before spending time on the benchmarks.
 if SAVE
@@ -80,6 +90,11 @@ if SAVE
     end
     run(`git -C $REPO fetch origin $RESULTS_BRANCH`)
 end
+
+println("Commit:  ", readchomp(`git -C $REPO rev-parse --short HEAD`))
+println("Label:   ", LABEL)
+println("Save to: ", SAVE ? RESULTS_BRANCH : "(not saving)")
+println()
 
 using WrenCore: benchmark_model, AutoEnzyme, AutoMooncake, Reverse
 # Loaded so that WrenCore can use them as AD backends.
@@ -160,14 +175,6 @@ function main()
         info in values(Pkg.dependencies())
     )
     short_sha = first(git_sha, 7)
-    # The website shows the sha next to the label, so use the commit message as the default
-    # label rather than the sha.
-    label = if LABEL === nothing
-        subject = readchomp(`git -C $REPO log -1 --format=%s`)
-        DIRTY ? "$subject (dirty)" : subject
-    else
-        LABEL
-    end
     # Timings are only comparable between runs on the same kind of machine.
     machine = Dict(
         "cpu" => Sys.cpu_info()[1].model,
@@ -183,7 +190,7 @@ function main()
             "timestamp" => string(timestamp) * "Z",
             "git_sha" => git_sha,
             "commit_date" => commit_date,
-            "label" => label,
+            "label" => LABEL,
             # Whether there were uncommitted changes, i.e. whether `git_sha` describes the
             # code that was benchmarked.
             "dirty" => DIRTY,
