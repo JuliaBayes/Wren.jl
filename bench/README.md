@@ -25,12 +25,16 @@ Generally, we'll want to run prod benchmarks on:
 By default, runs are labelled with just the short SHA. That's fine for main
 commits. However, for version releases we'll want to label the run with the
 version number, so that we can easily see the performance of each release. To
-do so, run:
+do so, check out the release tag and run:
 
 ```sh
 julia --project=bench -e 'import Pkg; Pkg.update()' # Don't forget this!
-julia --project=bench bench/suite/run.jl --label "WrenCore@X.Y.Z"
+julia --project=bench bench/suite/run.jl --release
 ```
+
+`--release` labels the run with the release's tag, `WrenCore-vX.Y.Z` (using the
+version in `WrenCore/Project.toml`), and checks that the current commit has
+that tag.
 
 These will be grouped specially at the top of the dropdown.
 

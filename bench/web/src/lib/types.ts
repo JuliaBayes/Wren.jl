@@ -6,7 +6,7 @@ export interface RunMeta {
     git_sha: string | null;
     /** When the benchmarked commit was made. Missing in older files. */
     commit_date?: string | null;
-    /** Identifies the run, e.g. "WrenCore v0.2.0" or "PR #123". Missing in older files. */
+    /** Identifies the run, e.g. "WrenCore-v0.2.0" or "PR #123". Missing in older files. */
     label?: string;
     /** Whether there were uncommitted changes. Missing in older files. */
     dirty?: boolean;

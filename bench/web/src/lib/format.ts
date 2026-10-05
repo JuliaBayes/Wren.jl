@@ -37,7 +37,7 @@ export function runLabel(meta: { label?: string; git_sha: string | null }): stri
     return meta.label ?? shortSha(meta.git_sha);
 }
 
-/** Whether a run is of a release, i.e. labelled e.g. "WrenCore v0.2.0". */
+/** Whether a run is of a release, i.e. labelled e.g. "WrenCore-v0.2.0". */
 export function isRelease(meta: { label?: string }): boolean {
     return meta.label?.startsWith("WrenCore") ?? false;
 }

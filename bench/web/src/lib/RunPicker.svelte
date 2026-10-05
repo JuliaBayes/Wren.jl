@@ -20,7 +20,7 @@
         onLoadFile,
     }: Props = $props();
 
-    // Release runs (labelled e.g. "WrenCore v0.2.0") are listed in their own group.
+    // Release runs (labelled e.g. "WrenCore-v0.2.0") are listed in their own group.
     let releases = $derived(index.filter((e) => isRelease(e)));
     let others = $derived(index.filter((e) => !isRelease(e)));
 

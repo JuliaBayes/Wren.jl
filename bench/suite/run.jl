@@ -2,10 +2,13 @@
 # `bench/suite/results/`, named `<UTC timestamp>-<short git sha>.json`. The file is then
 # saved to `runs/` on the `benchmark-results` branch, and the branch is pushed.
 #
-#     julia --project=bench bench/suite/run.jl [--label <text>] [--no-save]
+#     julia --project=bench bench/suite/run.jl [--label <text> | --release] [--no-save]
 #
-# The label is shown on the website to identify the run (e.g. "WrenCore v0.2.0" or
+# The label is shown on the website to identify the run (e.g. "WrenCore-v0.2.0" or
 # "PR #123"). If not given, it defaults to the short git sha.
+#
+# `--release` labels the run with the release's tag, `WrenCore-v<version>`, using the
+# version in `WrenCore/Project.toml`. The current commit must have that tag.
 #
 # With `--no-save`, the results are only written to `bench/suite/results/`. Runs with
 # uncommitted changes can't be saved, since the git sha wouldn't describe the code that was
@@ -13,17 +16,21 @@
 #
 # The JSON files are read by the website in `bench/web`.
 
-const USAGE = "Usage: julia --project=bench bench/suite/run.jl [--label <text>] [--no-save]"
+const USAGE = "Usage: julia --project=bench bench/suite/run.jl [--label <text> | --release] [--no-save]"
 
 # Check the arguments before loading anything, since that takes a while.
 function parse_args(args)
     label = nothing
+    release = false
     save = true
     i = 1
     while i <= length(args)
         if args[i] == "--label" && i < length(args)
             label = args[i+1]
             i += 2
+        elseif args[i] == "--release"
+            release = true
+            i += 1
         elseif args[i] == "--no-save"
             save = false
             i += 1
@@ -32,11 +39,35 @@ function parse_args(args)
             exit(1)
         end
     end
-    return label, save
+    if release && label !== nothing
+        println(stderr, "--label and --release can't be used together.")
+        exit(1)
+    end
+    return label, release, save
 end
-const LABEL, SAVE = parse_args(ARGS)
+const ARG_LABEL, RELEASE, SAVE = parse_args(ARGS)
+
+using TOML: TOML
 
 const REPO = readchomp(`git -C $(@__DIR__) rev-parse --show-toplevel`)
+
+# The label for a release run, which is the release's tag, e.g. "WrenCore-v0.2.0". Checks
+# that the current commit has that tag (which TagBot creates when a release is made).
+function release_label()
+    project = joinpath(REPO, "WrenCore", "Project.toml")
+    tag = "WrenCore-v" * TOML.parsefile(project)["version"]
+    if !(tag in split(readchomp(`git -C $REPO tag --points-at HEAD`)))
+        println(
+            stderr,
+            "The current commit doesn't have the tag $tag. Check out that tag (you may " *
+            "need to run `git fetch --tags` first).",
+        )
+        exit(1)
+    end
+    return tag
+end
+const LABEL = RELEASE ? release_label() : ARG_LABEL
+
 # Changes to files that git doesn't track (e.g. old results) don't count.
 const DIRTY = !isempty(readchomp(`git -C $REPO status --porcelain --untracked-files=no`))
 const RESULTS_BRANCH = "benchmark-results"
