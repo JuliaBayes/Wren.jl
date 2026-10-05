@@ -199,12 +199,13 @@ end
 
 function main()
     results = Dict{String,Any}()
-    for mod in MODELS
+    N = length(MODELS)
+    for (i, mod) in enumerate(MODELS)
         name = string(nameof(mod))
         model = mod.wren_model
         model_results = Dict{String,Any}()
         for (backend, adtype) in BACKENDS
-            println("Benchmarking $name with $backend...")
+            println("(model $i/$N) Benchmarking $name with $backend...")
             r = bench(model, adtype)
             # The dimension is the same for every backend, so store it once per model.
             haskey(r, "dim") && (model_results["dim"] = pop!(r, "dim"))
