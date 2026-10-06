@@ -6,7 +6,7 @@
 # Every variant takes `(p,)` as a tuple of parameter arrays and `x` as the observation,
 # and returns the summed log density of independent `Bernoulli(p[i])`.
 # The key question is whether the data-dependent branch in the ifelse formulation
-# prevents XLA from flattening the @trace for loop the way it does for DiagNormal.
+# prevents XLA from flattening the @trace for loop the way it does for BatchedNormal.
 
 include("common.jl")
 

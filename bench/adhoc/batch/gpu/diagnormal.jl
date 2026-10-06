@@ -1,4 +1,4 @@
-# Alternative formulations of the `DiagNormal` log density, for benchmarking on a GPU.
+# Alternative formulations of the `BatchedNormal` log density, for benchmarking on a GPU.
 # See common.jl for the harness. Run from the `bench` directory with
 #
 #     julia --project=. ./batch/gpu/diagnormal.jl
@@ -9,7 +9,7 @@
 
 include("common.jl")
 
-using WrenDists: WrenDists, DiagNormal
+using WrenDists: WrenDists, BatchedNormal
 using DensityInterface: logdensityof
 
 _lognorm(x) = length(x) * eltype(x)(WrenDists.log2π) / 2
@@ -46,7 +46,7 @@ function lp_invsigma((mu, sigma), x)
 end
 
 function lp_impl((mu, sigma), x)
-    @inline logdensityof(DiagNormal(mu, sigma), x)
+    @inline logdensityof(BatchedNormal(mu, sigma), x)
 end
 
 const VARIANTS = [
