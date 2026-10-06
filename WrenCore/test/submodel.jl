@@ -196,6 +196,23 @@ end
         @test parameters(accs) == in_pars
         @test logprior(accs) ≈ logdensityof(Normal(), a) + logdensityof(Normal(a), b)
         @test loglikelihood(accs) ≈ logdensityof(Normal(a), obs)
+
+        # https://github.com/JuliaBayes/Wren.jl/issues/162
+        # The parent's conditioned value reaches the child and overrides the child's own.
+        parent_conditioned = @vnt begin
+            x.obs := obs
+        end
+        for inner in (likelihood_inner(), likelihood_inner() | VarNamedTuple(; obs=0.9))
+            _, accs = @inferred evaluate(
+                likelihood_outer(inner) | parent_conditioned,
+                FromParams(in_pars),
+                OriginalSpace(),
+                WrenCore.default_accumulators(),
+                EvalContext{false}(),
+            )
+            @test parameters(accs) == in_pars
+            @test loglikelihood(accs) ≈ logdensityof(Normal(a), obs)
+        end
     end
 
     @testset "empty submodel" begin
