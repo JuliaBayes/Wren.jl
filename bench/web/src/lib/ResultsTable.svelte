@@ -73,7 +73,7 @@
             case "ratio":
                 return (
                     `tip: ${tipText}\nbase: ${formatTime(c.baseTime)}\n` +
-                    `change: ${formatChange(c.ratio)} (${c.ratio.toFixed(2)}×)`
+                    `change: ${formatChange(c.ratio)}`
                 );
         }
     }
