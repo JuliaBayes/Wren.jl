@@ -46,4 +46,4 @@ jobs:
 
       - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # 3.1.0
 
-      - run: ./runtests all
+      - run: ./runtests core

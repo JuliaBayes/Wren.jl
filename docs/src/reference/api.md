@@ -3,3 +3,10 @@
 ```@autodocs
 Modules = [Wren, WrenCore, WrenCore.Expressions]
 ```
+
+```@docs
+predict
+logjoint
+loglikelihood
+logprior
+```

@@ -69,12 +69,16 @@ end
         nchains::Integer=1;
         adtype::DI.AbstractADType=DI.AutoEnzyme(; mode=Enzyme.Reverse),
         progress::Bool=true,
+        reduce_copies::Bool=true,
         dynamichmc_kwargs...
     ) -> FlexiChains.VNChain
 
 No U-Turn Sampler (NUTS) for a Wren model. All `dynamichmc_kwargs` are passed to
 [`DynamicHMC.mcmc_with_warmup`](@extref), allowing you to customise the warmup and sampling
 behaviour.
+
+`reduce_copies` is passed to [`VecModel`](@ref): when sampling with Enzyme, it skips copies
+of model arguments that turn out not to be needed (see [`reduce_copies`](@ref)).
 """
 function nuts(
     model::WrenCore.Model,
@@ -82,6 +86,7 @@ function nuts(
     nchains::Integer=1;
     adtype::DI.AbstractADType=DI.AutoEnzyme(; mode=Reverse),
     progress::Bool=true,
+    reduce_copies::Bool=true,
     dynamichmc_kwargs...,
 )
     return nuts(
@@ -91,6 +96,7 @@ function nuts(
         nchains;
         adtype,
         progress,
+        reduce_copies,
         dynamichmc_kwargs...,
     )
 end
@@ -101,6 +107,7 @@ function nuts(
     nchains::Integer=1;
     adtype::DI.AbstractADType=DI.AutoEnzyme(; mode=Reverse),
     progress::Bool=true,
+    reduce_copies::Bool=true,
     dynamichmc_kwargs...,
 )
     # AD preparation
@@ -108,7 +115,7 @@ function nuts(
         t = time()
         print("Doing AD preparation... ")
     end
-    vm_single = WrenCore.VecModel(model, adtype)
+    vm_single = WrenCore.VecModel(model, adtype; reduce_copies)
     if progress
         println("done in $(round(time() - t, digits=2)) seconds.")
     end

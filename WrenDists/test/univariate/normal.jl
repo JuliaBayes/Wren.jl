@@ -32,7 +32,6 @@ test_dist(
     "IIDNormal",
     WrenDists.IIDNormal((3, 4), 1.0, 2.0),
     Distributions.product_distribution(fill(Distributions.Normal(1.0, 2.0), 3, 4));
-    test_reactant=false, # loop-based logdensityof is not traceable yet
     other_ad_testcases=(
         let
             f(x) = logdensityof(WrenDists.IIDNormal((3, 4), x[1], x[2]), ones(3, 4))
@@ -67,7 +66,6 @@ test_dist(
         Distributions.Normal(2.0, 1.0),
         Distributions.Normal(3.0, 1.0),
     ]);
-    test_reactant=false, # loop-based logdensityof is not traceable yet
     other_ad_testcases=(
         let
             f(x) = logdensityof(WrenDists.IsoNormal(x[1:3], x[4]), [0.5, 0.5, 0.5])
