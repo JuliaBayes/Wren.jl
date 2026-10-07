@@ -102,6 +102,73 @@ end
             @test logprior(accs) ≈ logdensityof(Normal(), pars[@vn(x)])
             @test loglikelihood(accs) ≈ logdensityof(Normal(pars[@vn(x)]), 1.0)
         end
+
+        @testset "conditioning an argument replaces it" begin
+            @wren function read_before_tilde(y)
+                before = copy(y)
+                y[1] ~ Normal()
+                return before
+            end
+            model = read_before_tilde([0.0]) | VarNamedTuple(; y=[1.0])
+            retval, accs = evaluate(
+                model,
+                FromPrior(),
+                OriginalSpace(),
+                WrenCore.default_accumulators(),
+                EvalContext{false}(),
+            )
+            @test retval == [1.0]
+            @test loglikelihood(accs) ≈ logdensityof(Normal(), 1.0)
+        end
+
+        @testset "a definition in the body is a template until its tilde" begin
+            @wren function template_before_tilde()
+                y = zeros(2)
+                before = copy(y)
+                for i in eachindex(y)
+                    y[i] ~ Normal()
+                end
+                return (before, y)
+            end
+            model = template_before_tilde() | VarNamedTuple(; y=[1.0, 2.0])
+            (before, after), _ = evaluate(
+                model,
+                FromPrior(),
+                OriginalSpace(),
+                WrenCore.default_accumulators(),
+                EvalContext{false}(),
+            )
+            @test before == zeros(2)
+            @test after == [1.0, 2.0]
+        end
+
+        @testset "whole-array conditioning" begin
+            @wren function observe_loop(N)
+                x ~ Normal()
+                y = zeros(N)
+                for i in 1:N
+                    y[i] ~ Normal(x)
+                end
+            end
+            data = [1.0, 2.0, 3.0]
+            _, accs = @inferred evaluate(
+                observe_loop(3) | VarNamedTuple(; y=data),
+                FromPrior(),
+                OriginalSpace(),
+                WrenCore.default_accumulators(),
+                EvalContext{false}(),
+            )
+            x = parameters(accs)[@vn(x)]
+            @test loglikelihood(accs) ≈ sum(logdensityof.(Normal(x), data))
+            # Indexing past the conditioned array is an error, not a new latent variable.
+            @test_throws BoundsError evaluate(
+                observe_loop(4) | VarNamedTuple(; y=data),
+                FromPrior(),
+                OriginalSpace(),
+                WrenCore.default_accumulators(),
+                EvalContext{false}(),
+            )
+        end
     end
 
     @testset "observe macro" begin

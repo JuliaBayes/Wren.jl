@@ -176,6 +176,16 @@ to overload `_needs_copy`, as the generated function only has access to the meth
     name in S && _needs_copy(V) ? _dealias(v) : v
 @inline _maybe_dealias(::EvalContext{false}, ::Val, ::Val, v) = v
 
+# Whether `sym` is conditioned as a whole (not partly). Decided from the type alone.
+@generated function _whole_conditioned(
+    ::VarNamedTuple{Names,Values},
+    ::Val{sym},
+) where {Names,Values,sym}
+    i = findfirst(==(sym), Names)
+    i === nothing && return false
+    return !(fieldtype(Values, i) <: Union{VarNamedTuple,VarNames.PartialArray})
+end
+
 function make_evaluation_fn(
     argnames::Tuple{Vararg{Symbol}},
     stmts::Vector{<:Union{AbstractWrenExpr,LineNumberNode}},
@@ -183,21 +193,26 @@ function make_evaluation_fn(
 )
     body = Expr(:block)
     @gensym model_args enzyme_copy_argnames ctx
+    @gensym accs conditioned latent_source parameter_space retval
     for k in argnames
+        # Conditioning an argument replaces it, so the model sees one value for `k`.
         push!(
             body.args,
             :(
-                $(k) = $(WrenCore._maybe_dealias)(
-                    $ctx,
-                    $enzyme_copy_argnames,
-                    Val($(QuoteNode(k))),
-                    $model_args.$k,
-                )
+                $(k) = if $(_whole_conditioned)($conditioned, Val($(QuoteNode(k))))
+                    $(getindex)($conditioned, $(VarName){$(QuoteNode(k))}())
+                else
+                    $(WrenCore._maybe_dealias)(
+                        $ctx,
+                        $enzyme_copy_argnames,
+                        Val($(QuoteNode(k))),
+                        $model_args.$k,
+                    )
+                end
             ),
         )
     end
 
-    @gensym accs conditioned latent_source parameter_space retval
     model_body =
         emit_statements(stmts, accs, conditioned, latent_source, parameter_space, ctx)
     push!(body.args, :($retval = $model_body))

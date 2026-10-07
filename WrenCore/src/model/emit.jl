@@ -84,9 +84,16 @@ function emit_model_expr(
                 $(stmt.lhs isa Symbol ? nothing : template),
             )
         else
-            if $(haskey)($conditioned, $vn)
+            # A wholly conditioned symbol is observed without a run-time check.
+            if $(_whole_conditioned)($conditioned, Val($(QuoteNode(template)))) ||
+               $(haskey)($conditioned, $vn)
                 $val = $(getindex)($conditioned, $vn)
-                $(assign_or_set!!(stmt.lhs, val, vn))
+                # Nothing reads an observed element back unless the symbol is reused. A
+                # plain symbol is always bound, since it is the template below.
+                $(
+                    stmt.lhs_is_reused || stmt.lhs isa Symbol ?
+                    assign_or_set!!(stmt.lhs, val, vn) : nothing
+                )
                 $accs = $(accumulate_observe!!)(
                     $accs,
                     $val,
