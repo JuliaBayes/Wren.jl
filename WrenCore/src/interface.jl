@@ -8,7 +8,7 @@ function default_accumulators(::Type{FloatT}=LogProbType) where {FloatT}
 end
 
 """
-    evaluate(model, latent_source, parameter_space, accs, ctx)
+    evaluate(model, latent_source, parameter_space, accs, ctx[, conditioned])
 
 Evaluate `model` in three stages for every latent variable:
 
@@ -23,6 +23,9 @@ method keeps the evaluation pipeline explicit.
 `ctx` is an [`EvalContext`](@ref), which says whether to make the copies of model arguments
 that Enzyme needs. Unless the model is being differentiated with Enzyme, this should be
 `EvalContext{false}()`.
+
+`conditioned` defaults to `conditioned(model)`. A parent model passes other values when it
+evaluates a submodel.
 """
 @inline function evaluate(
     model::Model,
@@ -30,13 +33,14 @@ that Enzyme needs. Unless the model is being differentiated with Enzyme, this sh
     parameter_space::AbstractParameterSpace,
     accs::AccumulatorTuple,
     ctx::EvalContext,
+    conditioned::VarNamedTuple=model.conditioned,
 )
     return model.evaluation_fn(
         latent_source,
         parameter_space,
         accs,
         model.args,
-        model.conditioned,
+        conditioned,
         model.enzyme_copy_argnames,
         ctx,
     )

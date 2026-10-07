@@ -71,6 +71,7 @@ function emit_model_expr(
                 $latent_source,
                 $parameter_space,
                 $accs,
+                $conditioned,
                 $vn,
                 $collect_submodel_params,
                 $ctx,
