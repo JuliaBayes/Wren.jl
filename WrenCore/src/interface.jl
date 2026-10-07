@@ -24,8 +24,8 @@ method keeps the evaluation pipeline explicit.
 that Enzyme needs. Unless the model is being differentiated with Enzyme, this should be
 `EvalContext{false}()`.
 
-`conditioned` holds extra conditioned values, which take precedence over
-`conditioned(model)`. A parent model uses it to pass its conditioned values for a submodel.
+`conditioned` defaults to `conditioned(model)`. A parent model passes other values when it
+evaluates a submodel.
 """
 @inline function evaluate(
     model::Model,
@@ -33,14 +33,14 @@ that Enzyme needs. Unless the model is being differentiated with Enzyme, this sh
     parameter_space::AbstractParameterSpace,
     accs::AccumulatorTuple,
     ctx::EvalContext,
-    conditioned::VarNamedTuple=VarNamedTuple(),
+    conditioned::VarNamedTuple=model.conditioned,
 )
     return model.evaluation_fn(
         latent_source,
         parameter_space,
         accs,
         model.args,
-        merge(model.conditioned, conditioned),
+        conditioned,
         model.enzyme_copy_argnames,
         ctx,
     )

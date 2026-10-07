@@ -45,10 +45,11 @@ struct DiscardSubmodelParams <: CollectOrDiscardSubmodelParams end
     )
 
 Evaluate a tilde-statement of the form `vn ~ rhs`, where `rhs` is a submodel. `conditioned`
-holds the parent model's conditioned values, and the submodel is conditioned on the values
-under `vn`. The `collect_params` argument indicates whether the parent model might require
-access to the parameters of the submodel as a top-level variable. `ctx` is the parent
-model's [`EvalContext`](@ref), which should be passed on when evaluating the submodel.
+holds the parent model's conditioned values. The values under `vn` take precedence over the
+submodel's own. The `collect_params` argument indicates whether the parent model might
+require access to the parameters of the submodel as a top-level variable. `ctx` is the
+parent model's [`EvalContext`](@ref), which should be passed on when evaluating the
+submodel.
 """
 @generated function evaluate_submodel(
     rhs,
@@ -67,7 +68,7 @@ model's [`EvalContext`](@ref), which should be passed on when evaluating the sub
     push!(expr.args, :(child_source = scope(latent_source, vn)))
     push!(expr.args, :(child_space = scope(parameter_space, vn)))
     push!(expr.args, :(child_accs = scope(map(split, accs), vn)))
-    push!(expr.args, :(child_conditioned = scope(conditioned, vn)))
+    push!(expr.args, :(child_conditioned = merge(rhs.conditioned, scope(conditioned, vn))))
     if !parent_has_params_acc
         push!(expr.args, :(child_accs = setacc!!(child_accs, ParamsAccumulator())))
     end
@@ -126,7 +127,7 @@ function evaluate_submodel(
     child_source = scope(latent_source, vn)
     child_space = scope(parameter_space, vn)
     child_accs = scope(map(split, accs), vn)
-    child_conditioned = scope(conditioned, vn)
+    child_conditioned = merge(rhs.conditioned, scope(conditioned, vn))
     retval, child_accs =
         evaluate(rhs, child_source, child_space, child_accs, ctx, child_conditioned)
     return retval, UncollectedParams(), child_accs
