@@ -31,3 +31,22 @@ timed under plain Enzyme on the CPU and under Reactant on whatever device it pic
 machine with a GPU only the Reactant backend runs by default; set `WREN_BENCH_BACKENDS`
 to `enzyme`, `reactant` or `enzyme,reactant` to override, and `WREN_BENCH_NS` to choose
 the sizes.
+
+`halfdists` compares `HalfNormal`, `HalfCauchy`, and `HalfTDist` with Distributions.jl
+truncations. It checks and times construction, density, sampling, and Enzyme/Reactant
+model densities and gradients. Run from `bench/adhoc` in a temporary environment:
+
+```julia
+using Pkg
+Pkg.activate(; temp=true)
+Pkg.develop([PackageSpec(path="../../WrenCore"), PackageSpec(path="../../WrenDists")])
+Pkg.add(["ADTypes", "Chairmarks", "Distributions", "Enzyme", "ForwardDiff", "Reactant"])
+include("halfdists/run.jl")
+```
+
+Set `WREN_BENCH_NS` (default `1,1000`), `WREN_BENCH_SECONDS` (`1.0`),
+`WREN_BENCH_BACKENDS` (`enzyme,reactant`), and `WREN_BENCH_DEVICE` (`auto`, `cpu`, or
+`gpu`; default `auto`) for Reactant. Models differentiate samples with fixed
+distribution parameters. Reactant timings include host transfers and name the actual
+device. Allocations measure host memory. `construct+density` creates one distribution
+for all `N` observations.
