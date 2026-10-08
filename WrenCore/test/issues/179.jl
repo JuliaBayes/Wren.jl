@@ -4,6 +4,7 @@ using ADTypes: AutoReactant
 using Enzyme
 using Reactant
 using Test
+using Wren
 using WrenCore
 using WrenDists
 
@@ -15,7 +16,7 @@ using WrenDists
         x ~ Normal(a, 1.0)
     end
     adtype = AutoReactant(AutoEnzyme(; mode=Enzyme.Reverse))
-    nuts(test123(1.0), 100, 4; adtype)
+    nuts(test123(1.0), 100, 4; adtype, progress=false)
 end
 
 end
