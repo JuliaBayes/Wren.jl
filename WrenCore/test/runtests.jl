@@ -25,6 +25,7 @@ using Test
     include("predict.jl")
     include("issues/69.jl")
     include("issues/132.jl")
+    include("issues/179.jl")
 end
 
 end # module WrenCoreTests
