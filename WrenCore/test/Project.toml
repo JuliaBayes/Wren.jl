@@ -20,7 +20,6 @@ ReverseDiff = "37e2e3b7-166d-5795-8a7a-e32c996b4267"
 StableRNGs = "860ef19b-820b-49d6-a774-d7a799459cd3"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 VarNames = "09a315b2-63fc-4165-8d7f-d59368e770cc"
-Wren = "bcabdda7-19af-429b-97ac-a6b557ca0f6c"
 WrenCore = "008b59e7-bbda-4991-901b-b08f5cfc584d"
 WrenDists = "2ad4af40-d7c9-42b2-92b0-e09d37d1e75a"
 
