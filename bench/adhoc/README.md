@@ -16,9 +16,9 @@ julia --project=. ./batch/run.jl
 
 `basic` compares three different models:
 
-  - a trivial `x ~ Normal()` model;
-  - eight-schools;
-  - a multinomial logistic regression model on MNIST data.
+- a trivial `x ~ Normal()` model;
+- eight-schools;
+- a multinomial logistic regression model on MNIST data.
 
 `posteriordb` compares 10 PosteriorDB models.
 
@@ -38,8 +38,8 @@ model densities and gradients. Run from `bench/adhoc` in a temporary environment
 
 ```julia
 using Pkg
-Pkg.activate(; temp=true)
-Pkg.develop([PackageSpec(path="../../WrenCore"), PackageSpec(path="../../WrenDists")])
+Pkg.activate(; temp = true)
+Pkg.develop([PackageSpec(path = "../../WrenCore"), PackageSpec(path = "../../WrenDists")])
 Pkg.add(["ADTypes", "Chairmarks", "Distributions", "Enzyme", "ForwardDiff", "Reactant"])
 include("halfdists/run.jl")
 ```
@@ -51,17 +51,17 @@ distribution parameters. Reactant timings include host transfers and name the ac
 device. Allocations measure host memory. `construct+density` creates one distribution
 for all `N` observations.
 
-`isonormal` compares three ways of evaluating a batched normal whose `sigma` is shared by
-every element: `IsoNormal`, a dedicated type with a scalar `sigma`; `DiagNormal+Fill`, the
-elementwise log density applied to a `Fill` array; and `BatchedNormal+Fill`, the WrenDists
-method for a `Fill` sigma. The first two types are defined in the script. It checks and
-times construction, density, sampling, and Enzyme/Reactant model densities and gradients.
-Run from `bench/adhoc` in a temporary environment:
+`isonormal` compares three ways of evaluating a batched normal whose `sigma` is the same
+for all elements: `IsoNormal`, using scalar `sigma`; `DiagNormal+Fill`, applying the
+elementwise logdensity to a `Fill` array; and `BatchedNormal+Fill`. The first two types
+are defined in the script because they were superseded by `BatchedNormal` in WrenDists.
+The benchmark checks and times construction, density, sampling, and Enzyme/Reactant model
+densities and gradients. Run from `bench/adhoc` in a temporary environment:
 
 ```julia
 using Pkg
-Pkg.activate(; temp=true)
-Pkg.develop([PackageSpec(path="../../WrenCore"), PackageSpec(path="../../WrenDists")])
+Pkg.activate(; temp = true)
+Pkg.develop([PackageSpec(path = "../../WrenCore"), PackageSpec(path = "../../WrenDists")])
 Pkg.add(["ADTypes", "Chairmarks", "Distributions", "Enzyme", "FillArrays", "Reactant"])
 include("isonormal/run.jl")
 ```
@@ -70,7 +70,5 @@ Set `WREN_BENCH_NS` (default `10,1000,100000`), `WREN_BENCH_SECONDS` (`1.0`),
 `WREN_BENCH_BACKENDS` (`enzyme,reactant`), and `WREN_BENCH_DEVICE` (`auto`, `cpu`, or
 `gpu`; default `auto`) for Reactant. The `vs IsoNormal` column divides each median time by
 the `IsoNormal` median of the same operation. `IsoNormal (repeat)` times `IsoNormal` a
-second time, so its ratio shows the drift between two measurements of the same code. The
-`sigma constant` model has a latent `mu` and a fixed `sigma`; `sigma latent` also samples
-`sigma`. Both models include the prior on `mu`, which costs the same for every candidate.
+second time, so its ratio shows the drift between two measurements of the same code.
 Reactant timings include host transfers. Allocations measure host memory.
