@@ -68,6 +68,9 @@ function WrenCore.VecModel(
     latent_source::WrenCore.AbstractLatentSource=WrenCore.FromPrior(),
     lp_function=WrenCore.logjoint_transformed,
     parameter_space::WrenCore.AbstractParameterSpace=WrenCore.UnconstrainedSpace(),
+    # Reactant doesn't use `WrenCore.reduce_copies`, but we still need this kwarg
+    # to avoid a MethodError
+    reduce_copies::Bool=true,
 )
     vecinfo, sample = WrenCore._prepare_vecmodel_info(model, latent_source, parameter_space)
 

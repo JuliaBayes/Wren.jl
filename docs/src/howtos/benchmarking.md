@@ -21,7 +21,7 @@ When passed a single argument, `@bmodel` will benchmark:
   - `logjoint`: the time it takes to compute the log joint probability of a set of parameters
   - `lp`: the time it takes to compute the log-joint probability, but with [a vectorised interface](@ref vectorisation) (this is the same as e.g. `LogDensityProblems.logdensity`, if you are familiar with that interface).
 
-Note that all of these are median benchmarks.
+Note that all of these report the **fastest** time out of all the samples, since that varies the least between runs.
 
 To access the data in this benchmark, you can directly access the fields of the [`BenchmarkResult`](@ref) object.
 The relevant fields are named `{function_name}_bench`:
@@ -48,6 +48,13 @@ using Enzyme
 ```
 
 In addition to the three columns above, this will also benchmark `lp_and_grad`, which is the time taken to compute the log-joint plus its gradient (i.e., `LogDensityProblems.logdensity_and_gradient`).
+
+## Pitfalls
+
+If you are trying to do comparative benchmarking i.e. comparing performance before and after, you may very well need to fix the number of BLAS threads to get consistent results.
+You can do so either by calling `LinearAlgebra.BLAS.set_num_threads(1)`, or by setting the `OPENBLAS_NUM_THREADS` environment variable before starting Julia.
+
+This recommendation in the context of Wren is mostly based on anecdotal evidence, but [BenchmarkTools.jl also recommends this](https://juliaci.github.io/BenchmarkTools.jl/stable/manual/#Miscellaneous-tips-and-info): see also [this thread on Julia Discourse](https://discourse.julialang.org/t/regarding-the-multithreaded-performance-of-openblas/75450) for more info.
 
 ## More control
 

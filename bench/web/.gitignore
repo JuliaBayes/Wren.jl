@@ -1,0 +1,7 @@
+node_modules
+dist
+*.local
+.DS_Store
+
+# Benchmark results, fetched from the benchmark-results branch by scripts/fetch-results.sh
+public/runs

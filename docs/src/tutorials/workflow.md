@@ -59,8 +59,8 @@ rand(model)
 !!! note
 
     You may have noticed that we did not use `@observe` in our model definition.
-    This is because it would prevent `bill_length` from being included in the prior draw `rand(model)`.
-    The rest of the workflow shown here is compatible with `@observe`.
+    This is because `@observe param ~ dist` will always treat `param` as an observed variable, even if it was not conditioned on.
+    The consequence would be that we could draw neither prior nor posterior predictions for it.
 
 Alternatively, we can use [`prior`](@ref) to create a [`FlexiChain`](@extref FlexiChains.FlexiChain) that contains as many prior draws as we specify, and summarise it with [`summarystats`](@extref FlexiChains :jl:method:`StatsBase.summarystats-Tuple{FlexiChains.FlexiChain}`).
 
