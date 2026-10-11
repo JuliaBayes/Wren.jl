@@ -16,9 +16,9 @@ julia --project=. ./batch/run.jl
 
 `basic` compares three different models:
 
-- a trivial `x ~ Normal()` model;
-- eight-schools;
-- a multinomial logistic regression model on MNIST data.
+  - a trivial `x ~ Normal()` model;
+  - eight-schools;
+  - a multinomial logistic regression model on MNIST data.
 
 `posteriordb` compares 10 PosteriorDB models.
 
@@ -38,8 +38,8 @@ model densities and gradients. Run from `bench/adhoc` in a temporary environment
 
 ```julia
 using Pkg
-Pkg.activate(; temp = true)
-Pkg.develop([PackageSpec(path = "../../WrenCore"), PackageSpec(path = "../../WrenDists")])
+Pkg.activate(; temp=true)
+Pkg.develop([PackageSpec(path="../../WrenCore"), PackageSpec(path="../../WrenDists")])
 Pkg.add(["ADTypes", "Chairmarks", "Distributions", "Enzyme", "ForwardDiff", "Reactant"])
 include("halfdists/run.jl")
 ```
@@ -60,8 +60,8 @@ densities and gradients. Run from `bench/adhoc` in a temporary environment:
 
 ```julia
 using Pkg
-Pkg.activate(; temp = true)
-Pkg.develop([PackageSpec(path = "../../WrenCore"), PackageSpec(path = "../../WrenDists")])
+Pkg.activate(; temp=true)
+Pkg.develop([PackageSpec(path="../../WrenCore"), PackageSpec(path="../../WrenDists")])
 Pkg.add(["ADTypes", "Chairmarks", "Distributions", "Enzyme", "FillArrays", "Reactant"])
 include("isonormal/run.jl")
 ```
