@@ -4,7 +4,7 @@
 module GLMMPoisson
 
 using PosteriorDB
-using WrenCore: @wren, @observe, @batch, @iid, @addloglikelihood, logdensityof, iid
+using WrenCore: @wren
 using WrenDists: WrenDists as WD
 
 const data = let
@@ -28,7 +28,7 @@ end
     @batch for i in eachindex(counts)
         @observe counts[i] ~ WD.PoissonLog(log_lambda[i])
     end
-    @addloglikelihood logdensityof(iid(WD.Normal(0.0, sigma), size(eps)), eps)
+    @observe @iid eps ~ WD.Normal(0.0, sigma) size=n
     return nothing
 end
 
