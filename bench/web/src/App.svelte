@@ -1,7 +1,8 @@
 <script lang="ts">
     import { fetchIndex, fetchRun, readRunFile } from "./lib/load";
     import { NOISE_THRESHOLD } from "./lib/compare";
-    import { formatTimestamp, runLabel, shortSha } from "./lib/format";
+    import { shortSha } from "./lib/format";
+    import { commitUrl, compareUrl, runSha } from "./lib/github";
     import type { IndexEntry, Run } from "./lib/types";
     import RunPicker from "./lib/RunPicker.svelte";
     import ResultsTable from "./lib/ResultsTable.svelte";
@@ -24,8 +25,8 @@
     let tipKey = $state(params.get("tip") ?? "");
     let baseKey = $state(params.get("base") ?? "");
 
-    let tip: Run | null = $state(null);
-    let base: Run | null = $state(null);
+    let tip = $state<Run | null>(null);
+    let base = $state<Run | null>(null);
     let error: string | null = $state(null);
 
     fetchIndex().then((entries) => {
@@ -79,9 +80,8 @@
         };
     }
 
-    function describe(run: Run): string {
-        return `${run.source} · ${shortSha(run.meta.git_sha)} · ${formatTimestamp(run.meta.timestamp)} · Julia ${run.meta.julia_version}`;
-    }
+    const tipSha = $derived(tip ? runSha(tip.meta) : null);
+    const baseSha = $derived(base ? runSha(base.meta) : null);
 </script>
 
 <main>
@@ -98,6 +98,7 @@
             {index}
             {localFiles}
             bind:value={tipKey}
+            run={tip}
             allowNone={false}
             onLoadFile={loadFile("tip")}
         />
@@ -106,6 +107,7 @@
             {index}
             {localFiles}
             bind:value={baseKey}
+            run={base}
             allowNone={true}
             onLoadFile={loadFile("base")}
         />
@@ -116,15 +118,24 @@
     {/if}
 
     {#if tip}
-        <ul class="run-info">
-            <li><b>Tip:</b> <b>{runLabel(tip.meta)}</b> · {describe(tip)}</li>
-            {#if base}
-                <li><b>Base:</b> <b>{runLabel(base.meta)}</b> · {describe(base)}</li>
-            {/if}
-        </ul>
+        {#if tipSha && baseSha && tipSha !== baseSha}
+            <p class="diff">
+                <a href={compareUrl(baseSha, tipSha)} target="_blank" rel="noreferrer">
+                    View diff on GitHub ({shortSha(baseSha)}...{shortSha(tipSha)})
+                </a>
+            </p>
+        {/if}
         <ul class="legend">
             <li>Times are the median of many evaluations of the log density (primal) or its gradient. Smaller is faster.</li>
             <li>Numbers in brackets are the gradient time divided by the primal time.</li>
+            <li>
+                Model names link to their definitions
+                {#if tipSha}
+                    at the tip commit (<a href={commitUrl(tipSha)} target="_blank" rel="noreferrer">{shortSha(tipSha)}</a>).
+                {:else}
+                    on <code>main</code>, since the tip commit is unknown.
+                {/if}
+            </li>
             {#if base}
                 <li>
                     <span class="swatch faster"></span> faster than base,
@@ -176,10 +187,12 @@
         gap: 8px;
         margin-bottom: 16px;
     }
-    .run-info,
     .legend {
         font-size: 0.9rem;
         padding-left: 18px;
+    }
+    .diff {
+        font-size: 0.9rem;
     }
     .legend {
         color: var(--text-secondary);
