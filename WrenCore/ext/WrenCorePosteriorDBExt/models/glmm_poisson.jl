@@ -1,6 +1,4 @@
 # PosteriorDB: GLMM_Poisson_data-GLMM_Poisson_model
-# Deviations: eps prior is Flat() in PDB, replaced with MvNormal(0, 100I)
-# as WrenDists doesn't have improper priors.
 module GLMMPoisson
 
 using PosteriorDB
@@ -22,7 +20,7 @@ end
     beta2 ~ WD.Uniform(-10.0, 20.0)
     beta3 ~ WD.Uniform(-10.0, 10.0)
     sigma ~ WD.Uniform(0.0, 5.0)
-    @iid eps ~ WD.Normal(0.0, 10.0) size=n
+    @iid eps ~ WD.Flat() size=n
     log_lambda =
         alpha .+ beta1 .* year .+ beta2 .* year_squared .+ beta3 .* year_cubed .+ eps
     @batch for i in eachindex(counts)
