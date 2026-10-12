@@ -17,7 +17,7 @@ end
 @wren function glmm_poisson_model(counts, year, year_squared, year_cubed, n)
     alpha ~ WD.Uniform(-20.0, 20.0)
     beta1 ~ WD.Uniform(-10.0, 10.0)
-    beta2 ~ WD.Uniform(-10.0, 20.0)
+    beta2 ~ WD.Uniform(-10.0, 10.0)
     beta3 ~ WD.Uniform(-10.0, 10.0)
     sigma ~ WD.Uniform(0.0, 5.0)
     @iid eps ~ WD.Flat() size=n
