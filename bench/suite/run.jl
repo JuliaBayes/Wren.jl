@@ -108,7 +108,6 @@ println()
 
 using WrenCore: benchmark_model, posteriordb_model, AutoEnzyme, AutoMooncake, Reverse
 # Loaded so that WrenCore can build the PosteriorDB models.
-using LogExpFunctions: LogExpFunctions
 using PosteriorDB: PosteriorDB
 using WrenDists: WrenDists
 # Loaded so that WrenCore can use them as AD backends.
@@ -127,7 +126,9 @@ const BACKENDS = [
 ]
 
 # Maps the names of the models to their PosteriorDB posterior names. The names are used to
-# match up models across runs, so don't change them.
+# match up models across runs, so don't change them. The website links each name to the
+# model's file, using `MODEL_FILES` in `bench/web/src/lib/github.ts`; update that when
+# adding a model.
 const MODELS = (
     "ArK" => "arK-arK",
     "EightSchoolsCentered" => "eight_schools-eight_schools_centered",

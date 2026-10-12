@@ -19,20 +19,21 @@ export function compareUrl(baseSha: string, tipSha: string): string {
     return `${REPO_URL}/compare/${baseSha}...${tipSha}`;
 }
 
-// Models are identified in the results by their module name (e.g. `ArK`), not their
-// file name, so read the model files at build time to match them up.
-const MODEL_SOURCES = import.meta.glob<string>("../../../../WrenCore/ext/WrenCorePosteriorDBExt/models/*.jl", {
-    query: "?raw",
-    import: "default",
-    eager: true,
-});
-const MODEL_FILES = new Map<string, string>();
-for (const [path, source] of Object.entries(MODEL_SOURCES)) {
-    const name = source.match(/^module\s+(\w+)/m)?.[1];
-    if (name !== undefined) {
-        MODEL_FILES.set(name, `WrenCore/ext/WrenCorePosteriorDBExt/models/${path.split("/").pop()}`);
-    }
-}
+// The file defining each model in the benchmark results. The names here must match the
+// names in `MODELS` in `bench/suite/run.jl`.
+const MODEL_DIR = "WrenCore/ext/WrenCorePosteriorDBExt/models";
+const MODEL_FILES = new Map<string, string>([
+    ["ArK", `${MODEL_DIR}/ark.jl`],
+    ["EightSchoolsCentered", `${MODEL_DIR}/eight_schools_centered.jl`],
+    ["GLMBinomial", `${MODEL_DIR}/glm_binomial.jl`],
+    ["GLMPoisson", `${MODEL_DIR}/glm_poisson.jl`],
+    ["GLMMPoisson", `${MODEL_DIR}/glmm_poisson.jl`],
+    ["GPRegr", `${MODEL_DIR}/gp_regr.jl`],
+    ["KidscoreInteraction", `${MODEL_DIR}/kidscore_interaction.jl`],
+    ["Mh", `${MODEL_DIR}/mh.jl`],
+    ["Rate1", `${MODEL_DIR}/rate1.jl`],
+    ["SblriBLR", `${MODEL_DIR}/sblri_blr.jl`],
+]);
 
 /**
  * Link to the definition of a model at the given commit (or on main if the commit is
