@@ -507,14 +507,3 @@ end
 macro bmodel(model, adtype)
     return :(benchmark_model($(esc(model)), $(esc(adtype))))
 end
-
-"""
-    posteriordb_model(name::AbstractString) -> WrenCore.Model
-
-Return a Wren model for the PosteriorDB posterior called `name`, e.g. `"arK-arK"`, using
-the data from PosteriorDB.
-
-This requires PosteriorDB.jl and WrenDists.jl to be loaded. Only some posteriors are
-available; an error is thrown for any others, which lists the available ones.
-"""
-function posteriordb_model end

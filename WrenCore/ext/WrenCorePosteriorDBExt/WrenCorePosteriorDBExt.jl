@@ -27,16 +27,19 @@ const MODELS = Dict(
     "Rate_1_data-Rate_1_model" => Rate1,
     "sblri-blr" => SblriBLR,
 )
+const MODEL_NAMES = sort!(collect(keys(MODELS)))
 
 function WrenCore.posteriordb_model(name::AbstractString)
     haskey(MODELS, name) || throw(
         ArgumentError(
             "no Wren model for the PosteriorDB posterior \"$name\". Available posteriors " *
             "are: " *
-            join(sort!(collect(keys(MODELS))), ", "),
+            join(MODEL_NAMES, ", "),
         ),
     )
     return MODELS[name].wren_model
 end
 
-end
+WrenCore.available_posteriordb_models() = MODEL_NAMES
+
+end # module
