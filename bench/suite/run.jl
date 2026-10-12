@@ -106,7 +106,11 @@ println("Save to $RESULTS_BRANCH: ", yesno(SAVE))
 println("Julia threads: ", Threads.nthreads())
 println()
 
-using WrenCore: benchmark_model, AutoEnzyme, AutoMooncake, Reverse
+using WrenCore: benchmark_model, posteriordb_model, AutoEnzyme, AutoMooncake, Reverse
+# Loaded so that WrenCore can build the PosteriorDB models.
+using LogExpFunctions: LogExpFunctions
+using PosteriorDB: PosteriorDB
+using WrenDists: WrenDists
 # Loaded so that WrenCore can use them as AD backends.
 using Enzyme: Enzyme
 using Mooncake: Mooncake
@@ -122,30 +126,19 @@ const BACKENDS = [
     "mooncake_reverse" => AutoMooncake(; config=nothing),
 ]
 
-include("models/ark.jl")
-include("models/eight_schools_centered.jl")
-include("models/glm_binomial.jl")
-include("models/glm_poisson.jl")
-include("models/glmm_poisson.jl")
-include("models/gp_regr.jl")
-include("models/kidscore_interaction.jl")
-include("models/mh.jl")
-include("models/rate1.jl")
-include("models/sblri_blr.jl")
-
-# Each module must define `wren_model`. The module names are used to match up models
-# across runs, so don't change them.
+# Maps the names of the models to their PosteriorDB posterior names. The names are used to
+# match up models across runs, so don't change them.
 const MODELS = (
-    ArK,
-    EightSchoolsCentered,
-    GLMBinomial,
-    GLMPoisson,
-    GLMMPoisson,
-    GPRegr,
-    KidscoreInteraction,
-    Mh,
-    Rate1,
-    SblriBLR,
+    "ArK" => "arK-arK",
+    "EightSchoolsCentered" => "eight_schools-eight_schools_centered",
+    "GLMBinomial" => "GLM_Binomial_data-GLM_Binomial_model",
+    "GLMPoisson" => "GLM_Poisson_Data-GLM_Poisson_model",
+    "GLMMPoisson" => "GLMM_Poisson_data-GLMM_Poisson_model",
+    "GPRegr" => "gp_pois_regr-gp_regr",
+    "KidscoreInteraction" => "kidiq-kidscore_interaction",
+    "Mh" => "Mh_data-Mh_model",
+    "Rate1" => "Rate_1_data-Rate_1_model",
+    "SblriBLR" => "sblri-blr",
 )
 
 function bench(model, adtype)
@@ -187,8 +180,7 @@ function print_results(io::IO, results)
     backends = first.(BACKENDS)
     errors = Tuple{String,String,String}[]
     header = ["Model"; "dim"; backends]
-    rows = map(collect(MODELS)) do mod
-        name = string(nameof(mod))
+    rows = map(collect(first.(MODELS))) do name
         r = results[name]
         primal = get(r["primal"], "time", nothing)
         cells = map(backends) do backend
@@ -237,9 +229,8 @@ end
 function main()
     results = Dict{String,Any}()
     N = length(MODELS)
-    for (i, mod) in enumerate(MODELS)
-        name = string(nameof(mod))
-        model = mod.wren_model
+    for (i, (name, pdb_name)) in enumerate(MODELS)
+        model = posteriordb_model(pdb_name)
         model_results = Dict{String,Any}()
         for (backend, adtype) in BACKENDS
             println("(model $i/$N) Benchmarking $name with $backend...")

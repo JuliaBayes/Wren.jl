@@ -21,7 +21,7 @@ export function compareUrl(baseSha: string, tipSha: string): string {
 
 // Models are identified in the results by their module name (e.g. `ArK`), not their
 // file name, so read the model files at build time to match them up.
-const MODEL_SOURCES = import.meta.glob<string>("../../../suite/models/*.jl", {
+const MODEL_SOURCES = import.meta.glob<string>("../../../../WrenCore/ext/WrenCorePosteriorDBExt/models/*.jl", {
     query: "?raw",
     import: "default",
     eager: true,
@@ -30,7 +30,7 @@ const MODEL_FILES = new Map<string, string>();
 for (const [path, source] of Object.entries(MODEL_SOURCES)) {
     const name = source.match(/^module\s+(\w+)/m)?.[1];
     if (name !== undefined) {
-        MODEL_FILES.set(name, `bench/suite/models/${path.split("/").pop()}`);
+        MODEL_FILES.set(name, `WrenCore/ext/WrenCorePosteriorDBExt/models/${path.split("/").pop()}`);
     }
 }
 
