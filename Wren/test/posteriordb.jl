@@ -24,6 +24,9 @@ pdb = PosteriorDB.database()
 
         display(summarystats(new_chain))
         display(summarystats(reference_chain))
+
+        # TODO: actually test that they're the same. I'm not immediately sure how to choose
+        # tolerances though.
     end
 
 end
