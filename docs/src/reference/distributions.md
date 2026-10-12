@@ -17,6 +17,7 @@ WrenDists.Normal
 WrenDists.Laplace
 WrenDists.Cauchy
 WrenDists.TDist
+WrenDists.Flat
 ```
 
 ### Continuous $\mathbb{R}^+$
