@@ -1,6 +1,4 @@
 # PosteriorDB: kidiq-kidscore_interaction
-# Deviations: beta prior is Flat() in PDB, replaced with MvNormal(0, 100I) as WrenDists
-# doesn't have improper priors.
 module KidscoreInteraction
 
 using PosteriorDB
@@ -15,7 +13,7 @@ const data = let
 end
 
 @wren function kidscore_interaction(kid_score, X)
-    @iid beta ~ WD.Normal(0.0, 10.0) size=size(X, 2)
+    @iid beta ~ WD.Flat() size=size(X, 2)
     sigma ~ WD.HalfCauchy(0.0, 2.5)
     mu = X * beta
     @batch for i in eachindex(kid_score)

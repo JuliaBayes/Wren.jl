@@ -72,6 +72,24 @@ include("draw.jl")
 include("test_ad.jl")
 include("test_utils.jl")
 
+"""
+    posteriordb_model(name::AbstractString) -> WrenCore.Model
+
+Return a Wren model for the PosteriorDB posterior called `name`, e.g. `"arK-arK"`, using the
+data from PosteriorDB.
+
+This requires PosteriorDB.jl and WrenDists.jl to be loaded. Only some posteriors are
+available; an error is thrown for any others, which lists the available ones.
+"""
+function posteriordb_model end
+
+"""
+    available_posteriordb_models() -> Vector{String}
+
+Return a vector of PosteriorDB model names which WrenCore has implementations for.
+"""
+function available_posteriordb_models end
+
 export @wren,
     @addloglikelihood,
     @iid,
@@ -129,7 +147,9 @@ export @wren,
     benchmark_model,
     test_ad,
     reduce_copies,
-    target_transform
+    target_transform,
+    posteriordb_model,
+    available_posteriordb_models
 
 # Reexports
 using VarNames: @vn, @vnt, VarNamedTuple, VarName, Draw, parameters, extras
