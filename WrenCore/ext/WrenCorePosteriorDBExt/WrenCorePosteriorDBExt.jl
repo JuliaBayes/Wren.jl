@@ -29,6 +29,7 @@ include("models/seeds_centered.jl")
 include("models/seeds_stanified.jl")
 include("models/sesame_one_pred.jl")
 include("models/surgical_model.jl")
+include("models/prophet.jl")
 
 # Maps PosteriorDB posterior names to the modules defining the models. Each module must
 # define `wren_model`.
@@ -60,6 +61,7 @@ const MODELS = Dict(
     "seeds_data-seeds_stanified_model" => SeedsStanified,
     "sesame_data-sesame_one_pred_a" => SesameOnePred,
     "surgical_data-surgical_model" => SurgicalModel,
+    "rstan_downloads-prophet" => Prophet,
 )
 const MODEL_NAMES = sort!(collect(keys(MODELS)))
 

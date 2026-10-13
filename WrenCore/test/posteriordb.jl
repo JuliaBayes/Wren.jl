@@ -4,7 +4,7 @@ module WrenPosteriorDBTests
 
 import DifferentiationInterface as DI
 import ForwardDiff
-using Distributions: Beta, Binomial, Cauchy, Gamma, InverseGamma, LocationScale, LogNormal, Normal,
+using Distributions: Beta, Binomial, Cauchy, Gamma, InverseGamma, Laplace, LocationScale, LogNormal, Normal,
     Poisson, TDist, logpdf
 using Enzyme
 using LinearAlgebra: Symmetric, I, cholesky
@@ -193,6 +193,37 @@ using WrenDists: WrenDists
         check("surgical_data-surgical_model", 14, surgical_reference,
             [vcat(-3.0, 0.0, -3.0 .+ 0.1 .* sin.(1:12)),
              vcat(-2.5, -0.5, -2.5 .+ 0.1 .* cos.(1:12))])
+
+        prophet_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+            PosteriorDB.database(), "rstan_downloads-prophet",
+        )))
+        n_changes, n_beta = prophet_data["S"], prophet_data["K"]
+        function prophet_reference(v)
+            k, m = v[1], v[2]
+            delta = view(v, 3:(2 + n_changes))
+            log_sigma = v[3 + n_changes]
+            sigma = exp(log_sigma)
+            beta = view(v, (4 + n_changes):length(v))
+            t, t_change = prophet_data["t"], prophet_data["t_change"]
+            X = prophet_data["X"]
+            A = Float64.(t .>= t_change')
+            trend = (k .+ A * delta) .* t .+ m .- A * (t_change .* delta)
+            mu = trend .* (1 .+ X * (beta .* prophet_data["s_m"])) .+
+                X * (beta .* prophet_data["s_a"])
+            return logpdf(Normal(0, 5), k) + logpdf(Normal(0, 5), m) +
+                sum(logpdf(Laplace(0, prophet_data["tau"]), d) for d in delta) +
+                logpdf(Normal(0, 0.5), sigma) + log_sigma +
+                sum(logpdf(Normal(0, prophet_data["sigmas"][j]), beta[j])
+                    for j in eachindex(beta)) +
+                sum(logpdf(Normal(mu[i], sigma), prophet_data["y"][i])
+                    for i in eachindex(mu))
+        end
+        check("rstan_downloads-prophet", 3 + n_changes + n_beta,
+            prophet_reference,
+            [vcat(0.1, 0.5, 0.01 .* sin.(1:n_changes), log(0.3),
+                0.01 .* cos.(1:n_beta)),
+             vcat(-0.1, 0.6, 0.02 .* cos.(1:n_changes), log(0.5),
+                -0.01 .* sin.(1:n_beta))])
     end
 
     @testset "additional Gaussian mixture densities and native Enzyme gradients" begin
