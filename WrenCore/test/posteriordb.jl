@@ -3,8 +3,8 @@ module WrenPosteriorDBTests
 @info "testing posteriordb.jl"
 
 import DifferentiationInterface as DI
-using Distributions: Bernoulli, Beta, Binomial, Cauchy, Exponential, Logistic,
-    LogNormal, Normal, TDist, logpdf
+using Distributions: Bernoulli, Beta, Binomial, Cauchy, Exponential, InverseGamma,
+    Logistic, LogNormal, Normal, TDist, logpdf
 using Enzyme
 import ForwardDiff
 using PosteriorDB: PosteriorDB
@@ -24,7 +24,8 @@ using WrenDists: WrenDists
             "science_irt-grsm_latent_reg_irt",
             "timssAusTwn_irt-gpcm_latent_reg_irt",
             "three_men1-ldaK2", "three_men2-ldaK2", "three_men3-ldaK2",
-            "traffic_accident_nyc-bym2_offset_only") ?
+            "traffic_accident_nyc-bym2_offset_only",
+            "mnist_100-nn_rbm1bJ10") ?
             AutoEnzyme(; mode=Reverse) :
             DI.AutoForwardDiff()
         vm = VecModel(model, adtype)
@@ -32,6 +33,13 @@ using WrenDists: WrenDists
         # prior draw need not lie in their finite-density support.
         if name == "dogs-dogs_log"
             v = [-0.2, 0.3]
+            @test isfinite(lp(vm, v))
+        elseif name == "mnist_100-nn_rbm1bJ10"
+            M, J, K = 784, 10, 10
+            s2_alpha = (0.05 / M^2)^2
+            s2_beta = (0.05 / J^2)^2
+            v = vcat([log(s2_alpha), log(s2_beta)],
+                zeros(M * J + J * (K - 1) + J + K - 1))
             @test isfinite(lp(vm, v))
         else
             @test isfinite(logjoint(model, rand(StableRNG(468), model)))
@@ -675,6 +683,70 @@ using WrenDists: WrenDists
             traffic_point[traffic_selected])
         @test isapprox(traffic_gradient[traffic_selected],
             traffic_selected_gradient; atol=1e-5, rtol=1e-8)
+
+        mnist_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+            PosteriorDB.database(), "mnist_100-nn_rbm1bJ10",
+        )))
+        mnist_M, mnist_J, mnist_K = mnist_data["M"], 10, mnist_data["K"]
+        mnist_x = Float64.(mnist_data["x"])
+        mnist_s2_alpha = (0.05 / mnist_M^2)^2
+        mnist_s2_beta = (0.05 / mnist_J^2)^2
+        mnist_alpha_end = 2 + mnist_M * mnist_J
+        mnist_beta_end = mnist_alpha_end + mnist_J * (mnist_K - 1)
+        mnist_alpha1_end = mnist_beta_end + mnist_J
+        mnist_dimension = mnist_alpha1_end + mnist_K - 1
+        function mnist_oracle(v)
+            sigma2_alpha, sigma2_beta = exp(v[1]), exp(v[2])
+            alpha = reshape(view(v, 3:mnist_alpha_end), mnist_M, mnist_J)
+            beta = reshape(view(v, (mnist_alpha_end + 1):mnist_beta_end),
+                mnist_J, mnist_K - 1)
+            alpha1 = view(v, (mnist_beta_end + 1):mnist_alpha1_end)
+            beta1 = view(v, (mnist_alpha1_end + 1):mnist_dimension)
+            prior = logpdf(InverseGamma(0.25, 0.25 * mnist_s2_alpha),
+                sigma2_alpha) + v[1] +
+                logpdf(InverseGamma(0.25, 0.25 * mnist_s2_beta),
+                    sigma2_beta) + v[2] +
+                sum(logpdf(Normal(0, sqrt(sigma2_alpha)), a) for a in alpha) +
+                sum(logpdf(Normal(0, sqrt(sigma2_beta)), b) for b in beta) +
+                sum(logpdf(Normal(), a) for a in alpha1) +
+                sum(logpdf(Normal(), b) for b in beta1)
+            likelihood = zero(prior)
+            for n in 1:mnist_data["N"]
+                hidden = [tanh(alpha1[j] + sum(mnist_x[n, m] * alpha[m, j]
+                    for m in 1:mnist_M)) for j in 1:mnist_J]
+                logits = vcat(1.0, [beta1[k] + sum(hidden[j] * beta[j, k]
+                    for j in 1:mnist_J) for k in 1:(mnist_K - 1)])
+                likelihood += logits[mnist_data["y"][n]] - log(sum(exp, logits))
+            end
+            return prior + likelihood
+        end
+        mnist_point = vcat([log(mnist_s2_alpha), log(mnist_s2_beta)],
+            1e-8 .* sin.(1:(mnist_M * mnist_J)),
+            1e-4 .* cos.(1:(mnist_J * (mnist_K - 1))),
+            0.02 .* sin.(1:mnist_J),
+            0.02 .* cos.(1:(mnist_K - 1)))
+        mnist_vm = VecModel(posteriordb_model("mnist_100-nn_rbm1bJ10"),
+            AutoEnzyme(; mode=Reverse))
+        @test mnist_vm.dimension == mnist_dimension
+        mnist_value, mnist_gradient = lp_and_grad(mnist_vm, mnist_point)
+        @test isapprox(mnist_value, mnist_oracle(mnist_point);
+            atol=1e-5, rtol=1e-8)
+        mnist_selected = [1, 2, 3, mnist_alpha_end,
+            mnist_alpha_end + 1, mnist_beta_end,
+            mnist_beta_end + 1, mnist_dimension]
+        mnist_positions = zeros(Int, mnist_dimension)
+        for (k, i) in enumerate(mnist_selected)
+            mnist_positions[i] = k
+        end
+        function mnist_selected_oracle(z)
+            full = [mnist_positions[i] == 0 ? convert(eltype(z), mnist_point[i]) :
+                z[mnist_positions[i]] for i in eachindex(mnist_point)]
+            return mnist_oracle(full)
+        end
+        mnist_selected_gradient = ForwardDiff.gradient(mnist_selected_oracle,
+            mnist_point[mnist_selected])
+        @test isapprox(mnist_gradient[mnist_selected], mnist_selected_gradient;
+            atol=1e-5, rtol=1e-6)
 
         dog_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
             PosteriorDB.database(), "dogs-dogs",
