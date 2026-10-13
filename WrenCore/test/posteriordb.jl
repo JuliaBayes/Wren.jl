@@ -3,7 +3,8 @@ module WrenPosteriorDBTests
 @info "testing posteriordb.jl"
 
 import DifferentiationInterface as DI
-using Distributions: Beta, Binomial, Cauchy, Exponential, LogNormal, Normal, logpdf
+using Distributions: Bernoulli, Beta, Binomial, Cauchy, Exponential, Logistic,
+    LogNormal, Normal, logpdf
 using Enzyme
 import ForwardDiff
 using PosteriorDB: PosteriorDB
@@ -271,6 +272,44 @@ using WrenDists: WrenDists
             0.03 .* sin.(1:butterfly_S), 0.03 .* cos.(1:butterfly_S))
         check("butterfly-multi_occupancy", 6 + 2butterfly_S,
             butterfly_oracle, [butterfly_point])
+
+        dog_nonhier_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+            PosteriorDB.database(), "dogs-dogs_nonhierarchical",
+        )))
+        function dog_nonhier_oracle(v)
+            mu1, mu2 = v[1], v[2]
+            sigma1, sigma2 = exp(v[3]), exp(v[4])
+            rho = tanh(v[5])
+            J = dog_nonhier_data["n_dogs"]
+            z1 = view(v, 6:(5 + J))
+            z2 = view(v, (6 + J):length(v))
+            prior = logpdf(Logistic(), mu1) + logpdf(Logistic(), mu2) +
+                logpdf(Normal(), sigma1) + v[3] +
+                logpdf(Normal(), sigma2) + v[4] +
+                log(0.75) + 2 * log1p(-rho^2) +
+                sum(logpdf(Normal(), zi) for zi in z1) +
+                sum(logpdf(Normal(), zi) for zi in z2)
+            likelihood = zero(prior)
+            for j in 1:J
+                logit_a = mu1 + sigma1 * z1[j] + sigma2 * rho * z2[j]
+                logit_b = mu2 + sigma2 * sqrt(1 - rho^2) * z2[j]
+                a, b = logistic(logit_a), logistic(logit_b)
+                shocks = 0
+                avoids = 0
+                for t in 1:dog_nonhier_data["n_trials"]
+                    likelihood += logpdf(Bernoulli(a^shocks * b^avoids),
+                        dog_nonhier_data["y"][j, t])
+                    shocks += dog_nonhier_data["y"][j, t]
+                    avoids += 1 - dog_nonhier_data["y"][j, t]
+                end
+            end
+            return prior + likelihood
+        end
+        dog_nonhier_J = dog_nonhier_data["n_dogs"]
+        dog_nonhier_point = vcat([-0.3, 0.2, log(0.5), log(0.6), 0.1],
+            0.05 .* sin.(1:dog_nonhier_J), 0.05 .* cos.(1:dog_nonhier_J))
+        check("dogs-dogs_nonhierarchical", 5 + 2dog_nonhier_J,
+            dog_nonhier_oracle, [dog_nonhier_point])
 
         dog_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
             PosteriorDB.database(), "dogs-dogs",
