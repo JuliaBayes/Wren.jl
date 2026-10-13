@@ -141,6 +141,53 @@ using WrenDists: WrenDists
         end
     end
 
+    @testset "Mesquite regression densities and native Enzyme gradients" begin
+        data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+            PosteriorDB.database(), "mesquite-mesquite",
+        )))
+        d1, d2 = data["diam1"], data["diam2"]
+        canopy, height = data["canopy_height"], data["total_height"]
+        density, group = data["density"], data["group"]
+        weight, N = data["weight"], data["N"]
+        logvolume = log.(d1 .* d2 .* canopy)
+        logarea = log.(d1 .* d2)
+        logshape = log.(d1 ./ d2)
+        cases = (
+            ("mesquite-mesquite", weight,
+                hcat(ones(N), d1, d2, canopy, height, density, group)),
+            ("mesquite-logmesquite", log.(weight),
+                hcat(ones(N), log.(d1), log.(d2), log.(canopy),
+                    log.(height), log.(density), group)),
+            ("mesquite-logmesquite_logva", log.(weight),
+                hcat(ones(N), logvolume, logarea, group)),
+            ("mesquite-logmesquite_logvas", log.(weight),
+                hcat(ones(N), logvolume, logarea, logshape,
+                    log.(height), log.(density), group)),
+            ("mesquite-logmesquite_logvash", log.(weight),
+                hcat(ones(N), logvolume, logarea, logshape, log.(height), group)),
+            ("mesquite-logmesquite_logvolume", log.(weight),
+                hcat(ones(N), logvolume)),
+        )
+        for (name, y, X) in cases
+            vm = VecModel(posteriordb_model(name), AutoEnzyme(; mode=Reverse))
+            dimension = size(X, 2) + 1
+            @test vm.dimension == dimension
+            function reference(v)
+                mu = X * view(v, 1:(dimension - 1))
+                sigma = exp(v[end])
+                return v[end] + sum(logpdf(Normal(mu[i], sigma), y[i])
+                    for i in eachindex(y))
+            end
+            for scale in (0.1, -0.2)
+                point = vcat(scale .* sin.(1:(dimension - 1)), log(20.0))
+                value, gradient = lp_and_grad(vm, point)
+                @test isapprox(value, reference(point); atol=1e-6)
+                @test isapprox(gradient, ForwardDiff.gradient(reference, point);
+                    atol=1e-6)
+            end
+        end
+    end
+
     @testset "Rate posteriors: Stan density and unconstrained gradient" begin
         pdb = PosteriorDB.database()
         for (number, point) in (

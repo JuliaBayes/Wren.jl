@@ -17,6 +17,7 @@ include("models/kidscore_momhs.jl")
 include("models/kidscore_momhsiq.jl")
 include("models/kidscore_momiq.jl")
 include("models/mh.jl")
+include("models/mesquite.jl")
 include("models/nes_years.jl")
 include("models/radon_pooled_all.jl")
 include("models/radon_pooled_mn.jl")
@@ -43,6 +44,12 @@ const MODELS = Dict(
     "GLM_Binomial_data-GLM_Binomial_model" => GLMBinomial,
     "GLM_Poisson_Data-GLM_Poisson_model" => GLMPoisson,
     "Mh_data-Mh_model" => Mh,
+    "mesquite-mesquite" => MesquiteRaw,
+    "mesquite-logmesquite" => LogMesquite,
+    "mesquite-logmesquite_logva" => LogMesquiteLogVA,
+    "mesquite-logmesquite_logvas" => LogMesquiteLogVAS,
+    "mesquite-logmesquite_logvash" => LogMesquiteLogVASH,
+    "mesquite-logmesquite_logvolume" => LogMesquiteLogVolume,
     "nes1972-nes" => NES1972,
     "nes1976-nes" => NES1976,
     "nes1980-nes" => NES1980,
