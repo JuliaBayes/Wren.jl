@@ -23,6 +23,12 @@ using WrenDists: WrenDists
             # Gamma(shape=0.0001) prior draws commonly underflow in Float64.
             v = [2.0, 1.0, 0.0, 0.0]
             @test isfinite(lp(vm, v))
+        elseif name == "mcycle_splines-accel_splines"
+            # An unconstrained prior draw can produce extreme spline predictors
+            # with -Inf Normal likelihood in Float64. Use a finite reference point.
+            v = vcat([-12.0, 0.1], zeros(38), [log(5.0), 0.5, -0.1],
+                     zeros(38), [log(2.0)])
+            @test isfinite(lp(vm, v))
         else
             @test isfinite(logjoint(model, rand(StableRNG(468), model)))
             v = rand(StableRNG(468), vm)
@@ -262,6 +268,42 @@ using WrenDists: WrenDists
         check("gp_pois_regr-gp_pois_regr", 13, gp_pois_reference,
             [vcat([log(5.0), log(2.0)], zeros(11)),
              vcat([log(6.0), log(1.5)], 0.1 .* sin.(1:11))])
+
+        spline_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+            PosteriorDB.database(), "mcycle_splines-accel_splines",
+        )))
+        function spline_reference(v)
+            intercept = v[1]
+            bs = view(v, 2:2)
+            zs = view(v, 3:40)
+            sds = exp(v[41])
+            intercept_sigma = v[42]
+            bs_sigma = view(v, 43:43)
+            zs_sigma = view(v, 44:81)
+            sds_sigma = exp(v[82])
+            total = logpdf(LocationScale(-13, 36, TDist(3)), intercept) +
+                sum(logpdf(Normal(), z) for z in zs) +
+                logpdf(LocationScale(0, 36, TDist(3)), sds) + log(2) + v[41] +
+                logpdf(LocationScale(0, 10, TDist(3)), intercept_sigma) +
+                sum(logpdf(Normal(), z) for z in zs_sigma) +
+                logpdf(LocationScale(0, 36, TDist(3)), sds_sigma) + log(2) + v[82]
+            if spline_data["prior_only"] == 0
+                mu = intercept .+ spline_data["Xs"] * bs .+
+                    spline_data["Zs_1_1"] * (sds .* zs)
+                log_sigma = intercept_sigma .+ spline_data["Xs_sigma"] * bs_sigma .+
+                    spline_data["Zs_sigma_1_1"] * (sds_sigma .* zs_sigma)
+                total += sum(logpdf(Normal(mu[i], exp(log_sigma[i])),
+                    spline_data["Y"][i]) for i in eachindex(mu))
+            end
+            return total
+        end
+        @test spline_data["Ks"] == spline_data["Ks_sigma"] == 1
+        @test spline_data["knots_1"] == spline_data["knots_sigma_1"] == 38
+        check("mcycle_splines-accel_splines", 82, spline_reference,
+            [vcat([-12.0, 0.1], zeros(38), [log(5.0), 0.5, -0.1],
+                  zeros(38), [log(2.0)]),
+             vcat([-10.0, -0.1], 0.01 .* sin.(1:38),
+                  [log(4.0), 0.2, 0.05], 0.01 .* cos.(1:38), [log(1.5)])])
 
         arma_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
             PosteriorDB.database(), "arma-arma11",

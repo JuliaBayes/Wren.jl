@@ -3,6 +3,7 @@ module WrenCorePosteriorDBExt
 using WrenCore: WrenCore
 
 include("models/ark.jl")
+include("models/accel_splines.jl")
 include("models/arma11.jl")
 include("models/diamonds.jl")
 include("models/dugongs.jl")
@@ -30,6 +31,7 @@ include("models/seeds_stanified.jl")
 # define `wren_model`.
 const MODELS = Dict(
     "arK-arK" => ArK,
+    "mcycle_splines-accel_splines" => AccelSplines,
     "arma-arma11" => ARMA11,
     "diamonds-diamonds" => Diamonds,
     "dugongs_data-dugongs_model" => Dugongs,
