@@ -20,7 +20,8 @@ using WrenDists: WrenDists
         # LSAT has 1000 person effects; ForwardDiff's full Jacobian is too large
         # for the generic smoke test. Its targeted checks use native Enzyme below.
         adtype = name in ("lsat_data-lsat_model", "election88-election88_full",
-            "sat-hier_2pl", "fims_Aus_Jpn_irt-2pl_latent_reg_irt") ?
+            "sat-hier_2pl", "fims_Aus_Jpn_irt-2pl_latent_reg_irt",
+            "science_irt-grsm_latent_reg_irt") ?
             AutoEnzyme(; mode=Reverse) :
             DI.AutoForwardDiff()
         vm = VecModel(model, adtype)
@@ -422,6 +423,66 @@ using WrenDists: WrenDists
             fims_point[fims_selected])
         @test isapprox(fims_gradient[fims_selected], fims_selected_gradient;
             atol=1e-5)
+
+        science_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+            PosteriorDB.database(), "science_irt-grsm_latent_reg_irt",
+        )))
+        science_I, science_J = science_data["I"], science_data["J"]
+        science_m = maximum(science_data["y"])
+        @test science_data["K"] == 1
+        @test all(science_data["W"] .== 1)
+        function science_oracle(v)
+            alpha = exp.(view(v, 1:science_I))
+            beta_free = view(v, (science_I + 1):(2science_I - 1))
+            beta = vcat(beta_free, -sum(beta_free))
+            kappa_free = view(v, (2science_I):(2science_I + science_m - 2))
+            kappa = vcat(kappa_free, -sum(kappa_free))
+            theta = view(v, (2science_I + science_m - 1):
+                (2science_I + science_m + science_J - 2))
+            lambda = v[end]
+            prior = sum(logpdf(LogNormal(1, 1), alpha[i]) + v[i]
+                for i in eachindex(alpha)) +
+                sum(logpdf(Normal(0, 3), b) for b in beta) +
+                sum(logpdf(Normal(0, 3), k) for k in kappa) +
+                logpdf(TDist(3), lambda) +
+                sum(logpdf(Normal(lambda, 1), t) for t in theta)
+            likelihood = zero(prior)
+            for n in 1:science_data["N"]
+                i, j = science_data["ii"][n], science_data["jj"][n]
+                eta = theta[j] * alpha[i] - beta[i]
+                scores = cumsum(vcat(0.0, eta .- kappa))
+                likelihood += scores[science_data["y"][n] + 1] -
+                    log(sum(exp, scores))
+            end
+            return prior + likelihood
+        end
+        science_point = vcat(1 .+ 0.03 .* sin.(1:science_I),
+            0.05 .* cos.(1:(science_I - 1)),
+            0.05 .* sin.(1:(science_m - 1)),
+            0.1 .* sin.(1:science_J), [0.1])
+        science_vm = VecModel(posteriordb_model(
+            "science_irt-grsm_latent_reg_irt"), AutoEnzyme(; mode=Reverse))
+        @test science_vm.dimension == length(science_point)
+        science_value, science_gradient = lp_and_grad(science_vm, science_point)
+        @test isapprox(science_value, science_oracle(science_point); atol=1e-5)
+        science_selected = [1, science_I, science_I + 1, 2science_I - 1,
+            2science_I, 2science_I + science_m - 2,
+            2science_I + science_m - 1,
+            2science_I + science_m + science_J - 2, length(science_point)]
+        science_positions = zeros(Int, length(science_point))
+        for (k, i) in enumerate(science_selected)
+            science_positions[i] = k
+        end
+        function science_selected_oracle(z)
+            full = [science_positions[i] == 0 ?
+                convert(eltype(z), science_point[i]) : z[science_positions[i]]
+                for i in eachindex(science_point)]
+            return science_oracle(full)
+        end
+        science_selected_gradient = ForwardDiff.gradient(science_selected_oracle,
+            science_point[science_selected])
+        @test isapprox(science_gradient[science_selected],
+            science_selected_gradient; atol=1e-5)
 
         dog_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
             PosteriorDB.database(), "dogs-dogs",

@@ -2,9 +2,9 @@
 module FIMS2PL
 
 using PosteriorDB
-using Statistics: mean, std
 using WrenCore: @wren, @addloglikelihood, @iid, logdensityof
 using WrenDists: WrenDists as WD
+using ..IRTCommon: adjusted_covariates, beta_theta_logdensity
 
 const data = let
     pdb = PosteriorDB.database()
@@ -13,35 +13,10 @@ const data = let
     )))
 end
 
-function adjusted_covariates(W)
-    J, K = size(W)
-    W_adj = Matrix{Float64}(undef, J, K)
-    W_adj[:, 1] .= W[:, 1]
-    for k in 2:K
-        column = view(W, :, k)
-        lo, hi = extrema(column)
-        scale = all(x -> x == lo || x == hi, column) ? hi - lo : 2 * std(column)
-        center = mean(column)
-        W_adj[:, k] .= (column .- center) ./ scale
-    end
-    return W_adj
-end
-
 function fims_logdensity(y, ii, jj, W_adj, alpha, beta_free, theta, lambda_adj)
-    I, J = length(alpha), length(theta)
-    total = zero(alpha[1] + beta_free[1] + theta[1] + lambda_adj[1])
+    I = length(alpha)
+    total = beta_theta_logdensity(W_adj, beta_free, theta, lambda_adj)
     beta_last = -sum(beta_free)
-    for i in eachindex(beta_free)
-        total += logdensityof(WD.Normal(0.0, 3.0), beta_free[i])
-    end
-    total += logdensityof(WD.Normal(0.0, 3.0), beta_last)
-    for j in 1:J
-        location = zero(total)
-        for k in eachindex(lambda_adj)
-            location += W_adj[j, k] * lambda_adj[k]
-        end
-        total += logdensityof(WD.Normal(location, 1.0), theta[j])
-    end
     for n in eachindex(y)
         i = ii[n]
         beta_i = i == I ? beta_last : beta_free[i]

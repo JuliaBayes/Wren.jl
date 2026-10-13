@@ -25,7 +25,9 @@ include("models/iohmm_reg.jl")
 include("models/butterfly_occupancy.jl")
 include("models/dogs_nonhierarchical.jl")
 include("models/sat_2pl.jl")
+include("models/irt_common.jl")
 include("models/fims_2pl.jl")
+include("models/science_grsm.jl")
 include("models/glmm_poisson.jl")
 include("models/glmm1.jl")
 include("models/gp_regr.jl")
@@ -65,6 +67,7 @@ const MODELS = Dict(
     "dogs-dogs_nonhierarchical" => DogsNonhierarchical,
     "sat-hier_2pl" => SAT2PL,
     "fims_Aus_Jpn_irt-2pl_latent_reg_irt" => FIMS2PL,
+    "science_irt-grsm_latent_reg_irt" => ScienceGRSM,
     "GLMM_Poisson_data-GLMM_Poisson_model" => GLMMPoisson,
     "gp_pois_regr-gp_regr" => GPRegr,
     "irt_2pl-irt_2pl" => IRT2PL,
