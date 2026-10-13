@@ -10,7 +10,7 @@ using Enzyme
 using LinearAlgebra: Symmetric, I, cholesky
 using PosteriorDB: PosteriorDB
 using StableRNGs
-using Statistics: mean
+using Statistics: mean, std
 using Test
 using WrenCore
 using WrenDists: WrenDists
@@ -264,6 +264,37 @@ using WrenDists: WrenDists
         check("mcycle_gp-accel_gp", 66, mcycle_gp_reference,
             [vcat([-13.0, log(10.0), log(0.05)], 0.05 .* sin.(1:40),
                 [3.0, log(2.0), log(0.05)], 0.05 .* cos.(1:20))])
+
+        uk_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+            PosteriorDB.database(),
+            "uk_drivers-state_space_stochastic_level_stochastic_seasonal",
+        )))
+        function uk_drivers_reference(v)
+            n = uk_data["n"]
+            y, x, w = uk_data["y"], uk_data["x"], uk_data["w"]
+            lower = mean(y) - 3 * std(y)
+            width = 6 * std(y)
+            mu = lower .+ width .* logistic.(view(v, 1:n))
+            seasonal = view(v, (n + 1):(2n))
+            beta, lambda = v[2n + 1], v[2n + 2]
+            sigma1 = exp(v[2n + 3])
+            sigma2 = sigma1 + exp(v[2n + 4])
+            sigma3 = sigma2 + exp(v[2n + 5])
+            prior = sum(log(width) + logit_jacobian(v[t]) for t in 1:n) +
+                sum(logpdf(Normal(-sum(seasonal[(t - 11):(t - 1)]), sigma1),
+                    seasonal[t]) for t in 12:n) +
+                sum(logpdf(Normal(mu[t - 1], sigma2), mu[t]) for t in 2:n) +
+                sum(logpdf(Normal(mu[t] + beta * x[t] + lambda * w[t] +
+                    seasonal[t], sigma3), y[t]) for t in 1:n)
+            prior += sum(logpdf(TDist(4), s) for s in (sigma1, sigma2, sigma3)) +
+                sum(v[(2n + 3):(2n + 5)])
+            return prior
+        end
+        n_uk = uk_data["n"]
+        uk_point = vcat(0.02 .* sin.(1:n_uk), 0.01 .* cos.(1:n_uk),
+            [0.0, 0.0, log(0.05), log(0.05), log(0.1)])
+        check("uk_drivers-state_space_stochastic_level_stochastic_seasonal",
+            2n_uk + 5, uk_drivers_reference, [uk_point])
     end
 
     @testset "additional Gaussian mixture densities and native Enzyme gradients" begin

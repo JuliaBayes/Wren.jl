@@ -31,6 +31,7 @@ include("models/sesame_one_pred.jl")
 include("models/surgical_model.jl")
 include("models/prophet.jl")
 include("models/mcycle_gp.jl")
+include("models/uk_drivers.jl")
 
 # Maps PosteriorDB posterior names to the modules defining the models. Each module must
 # define `wren_model`.
@@ -64,6 +65,7 @@ const MODELS = Dict(
     "surgical_data-surgical_model" => SurgicalModel,
     "rstan_downloads-prophet" => Prophet,
     "mcycle_gp-accel_gp" => McycleGP,
+    "uk_drivers-state_space_stochastic_level_stochastic_seasonal" => UKDrivers,
 )
 const MODEL_NAMES = sort!(collect(keys(MODELS)))
 
