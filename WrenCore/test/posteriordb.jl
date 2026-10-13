@@ -4,10 +4,12 @@ module WrenPosteriorDBTests
 
 import DifferentiationInterface as DI
 import ForwardDiff
-using Distributions: Beta, Binomial, Cauchy, Gamma, Normal, logpdf
+using Distributions: Beta, Binomial, Cauchy, Gamma, LocationScale, LogNormal, Normal,
+    TDist, logpdf
 using Enzyme
 using PosteriorDB: PosteriorDB
 using StableRNGs
+using Statistics: mean
 using Test
 using WrenCore
 using WrenDists: WrenDists
@@ -181,6 +183,88 @@ using WrenDists: WrenDists
             @test isapprox(gradient, ForwardDiff.gradient(
                 v -> lp(forward_vm, v), point); atol=1e-6)
         end
+    end
+
+    @testset "continuous PosteriorDB densities and native Enzyme gradients" begin
+        function check(name, dimension, reference, points)
+            vm = VecModel(posteriordb_model(name), AutoEnzyme(; mode=Reverse))
+            @test vm.dimension == dimension
+            for point in points
+                value, gradient = lp_and_grad(vm, point)
+                @test isapprox(value, reference(point); atol=1e-6)
+                @test isapprox(gradient, ForwardDiff.gradient(reference, point);
+                    atol=1e-6)
+            end
+        end
+
+        arma_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+            PosteriorDB.database(), "arma-arma11",
+        )))
+        function arma_reference(v)
+            mu, phi, theta, sigma = v[1], v[2], v[3], exp(v[4])
+            y = arma_data["y"]
+            errors = [y[1] - (mu + phi * mu)]
+            for t in 2:length(y)
+                push!(errors, y[t] - (mu + phi * y[t - 1] + theta * errors[end]))
+            end
+            return logpdf(Normal(0, 10), mu) + logpdf(Normal(0, 2), phi) +
+                logpdf(Normal(0, 2), theta) + logpdf(Cauchy(0, 2.5), sigma) +
+                log(2) + v[4] + sum(logpdf(Normal(0, sigma), e) for e in errors)
+        end
+        check("arma-arma11", 4, arma_reference,
+            [[0.2, 0.5, -0.3, -0.2], [-0.1, 0.3, 0.2, 0.1]])
+
+        loss_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+            PosteriorDB.database(), "loss_curves-losscurve_sislob",
+        )))
+        function loss_reference(v)
+            omega, theta = exp(v[1]), exp(v[2])
+            mu_LR, sd_LR = v[3], exp(v[4])
+            LR = exp.(view(v, 5:14))
+            loss_sd = exp(v[15])
+            total = logpdf(LogNormal(0, 0.5), omega) + v[1] +
+                logpdf(LogNormal(0, 0.5), theta) + v[2] +
+                logpdf(Normal(0, 0.5), mu_LR) +
+                logpdf(LogNormal(0, 0.5), sd_LR) + v[4] +
+                sum(logpdf(LogNormal(mu_LR, sd_LR), LR[i]) + v[i + 4]
+                    for i in eachindex(LR)) +
+                logpdf(LogNormal(0, 0.7), loss_sd) + v[15]
+            for i in eachindex(loss_data["loss"])
+                cohort = loss_data["cohort_id"][i]
+                t = loss_data["t_value"][loss_data["t_idx"][i]]
+                growth = 1 - exp(-(t / theta)^omega)
+                total += logpdf(Normal(LR[cohort] * loss_data["premium"][cohort] *
+                    growth, loss_sd * loss_data["premium"][cohort]),
+                    loss_data["loss"][i])
+            end
+            return total
+        end
+        @test loss_data["growthmodel_id"] == 1
+        check("loss_curves-losscurve_sislob", 15, loss_reference,
+            [vcat([0.0, 0.2, -0.1, -0.3], zeros(10), [-0.4]),
+             vcat([0.1, -0.2, 0.2, 0.1], fill(-0.2, 10), [0.2])])
+
+        diamonds_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+            PosteriorDB.database(), "diamonds-diamonds",
+        )))
+        X = diamonds_data["X"]
+        Xc = X[:, 2:end] .- mean(X[:, 2:end]; dims=1)
+        function diamonds_reference(v)
+            b = view(v, 1:24)
+            intercept, sigma = v[25], exp(v[26])
+            total = sum(logpdf(Normal(), bi) for bi in b) +
+                logpdf(LocationScale(8, 10, TDist(3)), intercept) +
+                logpdf(LocationScale(0, 10, TDist(3)), sigma) + log(2) + v[26]
+            if diamonds_data["prior_only"] == 0
+                total += sum(logpdf(Normal(intercept + sum(Xc[i, j] * b[j]
+                    for j in eachindex(b)), sigma), diamonds_data["Y"][i])
+                    for i in eachindex(diamonds_data["Y"]))
+            end
+            return total
+        end
+        @test diamonds_data["K"] == 25
+        check("diamonds-diamonds", 26, diamonds_reference,
+            [vcat(zeros(24), [8.0, log(10.0)])])
     end
 end
 

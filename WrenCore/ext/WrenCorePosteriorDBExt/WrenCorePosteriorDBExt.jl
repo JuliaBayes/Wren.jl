@@ -3,6 +3,8 @@ module WrenCorePosteriorDBExt
 using WrenCore: WrenCore
 
 include("models/ark.jl")
+include("models/arma11.jl")
+include("models/diamonds.jl")
 include("models/dugongs.jl")
 include("models/eight_schools_centered.jl")
 include("models/glm_binomial.jl")
@@ -11,6 +13,7 @@ include("models/glmm_poisson.jl")
 include("models/gp_regr.jl")
 include("models/kidscore_interaction.jl")
 include("models/low_dim_gauss_mix_collapse.jl")
+include("models/losscurve_sislob.jl")
 include("models/mh.jl")
 include("models/normal_mixture.jl")
 include("models/normal_mixture_k.jl")
@@ -24,6 +27,8 @@ include("models/seeds_stanified.jl")
 # define `wren_model`.
 const MODELS = Dict(
     "arK-arK" => ArK,
+    "arma-arma11" => ARMA11,
+    "diamonds-diamonds" => Diamonds,
     "dugongs_data-dugongs_model" => Dugongs,
     "eight_schools-eight_schools_centered" => EightSchoolsCentered,
     "GLM_Binomial_data-GLM_Binomial_model" => GLMBinomial,
@@ -32,6 +37,7 @@ const MODELS = Dict(
     "gp_pois_regr-gp_regr" => GPRegr,
     "kidiq-kidscore_interaction" => KidscoreInteraction,
     "low_dim_gauss_mix_collapse-low_dim_gauss_mix_collapse" => LowDimGaussMixCollapse,
+    "loss_curves-losscurve_sislob" => LossCurveSislob,
     "Mh_data-Mh_model" => Mh,
     "normal_2-normal_mixture" => NormalMixture,
     "normal_5-normal_mixture_k" => NormalMixtureK,
