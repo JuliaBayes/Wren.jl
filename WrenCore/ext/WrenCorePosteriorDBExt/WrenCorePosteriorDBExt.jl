@@ -24,6 +24,11 @@ include("models/rate5.jl")
 include("models/sblri_blr.jl")
 include("models/wells_dist.jl")
 include("models/wells_dist100.jl")
+include("models/wells_dist100ars.jl")
+include("models/wells_dae.jl")
+include("models/wells_dae_c.jl")
+include("models/wells_dae_inter.jl")
+include("models/wells_daae_c.jl")
 include("models/wells_interaction.jl")
 include("models/wells_interaction_c.jl")
 
@@ -52,6 +57,11 @@ const MODELS = Dict(
     "sblri-blr" => SblriBLR,
     "wells_data-wells_dist" => WellsDist,
     "wells_data-wells_dist100_model" => WellsDist100,
+    "wells_data-wells_dist100ars_model" => WellsDist100Ars,
+    "wells_data-wells_dae_model" => WellsDAE,
+    "wells_data-wells_dae_c_model" => WellsDAEC,
+    "wells_data-wells_dae_inter_model" => WellsDAEInter,
+    "wells_data-wells_daae_c_model" => WellsDAAEC,
     "wells_data-wells_interaction_c_model" => WellsInteractionC,
     "wells_data-wells_interaction_model" => WellsInteraction,
 )

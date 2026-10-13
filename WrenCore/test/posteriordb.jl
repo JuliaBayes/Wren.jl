@@ -126,12 +126,24 @@ using WrenDists: WrenDists
             PosteriorDB.database(), "wells_data-wells_dist",
         )))
         y, dist, arsenic = data["switched"], data["dist"], data["arsenic"]
+        educ, assoc = data["educ"], data["assoc"]
         dist100 = dist ./ 100.0
         c_dist100 = (dist .- sum(dist) / length(dist)) ./ 100.0
         c_arsenic = arsenic .- sum(arsenic) / length(arsenic)
+        educ4 = educ ./ 4.0
+        c_educ4 = (educ .- sum(educ) / length(educ)) ./ 4.0
         cases = (
             ("wells_data-wells_dist", hcat(ones(length(dist)), dist), false),
             ("wells_data-wells_dist100_model", hcat(dist100), true),
+            ("wells_data-wells_dist100ars_model", hcat(dist100, arsenic), true),
+            ("wells_data-wells_dae_model", hcat(dist100, arsenic, educ4), true),
+            ("wells_data-wells_dae_c_model",
+                hcat(c_dist100, c_arsenic, c_dist100 .* c_arsenic, educ4), true),
+            ("wells_data-wells_dae_inter_model",
+                hcat(c_dist100, c_arsenic, c_educ4, c_dist100 .* c_arsenic,
+                    c_dist100 .* c_educ4, c_arsenic .* c_educ4), true),
+            ("wells_data-wells_daae_c_model",
+                hcat(c_dist100, c_arsenic, c_dist100 .* c_arsenic, assoc, educ4), true),
             ("wells_data-wells_interaction_model",
                 hcat(dist100, arsenic, dist100 .* arsenic), true),
             ("wells_data-wells_interaction_c_model",
