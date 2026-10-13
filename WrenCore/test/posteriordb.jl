@@ -114,6 +114,41 @@ using WrenDists: WrenDists
             [[0.8, -1.2, log(3.0), log(7.0)],
              [-0.3, 0.4, log(2.5), log(6.5)]])
 
+        hmm_gaussian_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+            PosteriorDB.database(), "hmm_gaussian_simulated-hmm_gaussian",
+        )))
+        function simplex3_oracle(a, b)
+            z1 = logistic(a - log(2))
+            z2 = logistic(b)
+            probabilities = [z1, (1 - z1) * z2, (1 - z1) * (1 - z2)]
+            jacobian = logit_jacobian(a - log(2)) + log1p(-z1) +
+                logit_jacobian(b)
+            return probabilities, jacobian
+        end
+        function hmm_gaussian_oracle(v)
+            pi, jacobian = simplex3_oracle(v[1], v[2])
+            rows = [simplex3_oracle(v[2i + 1], v[2i + 2]) for i in 1:3]
+            A = [rows[i][1][j] for i in 1:3, j in 1:3]
+            jacobian += sum(row[2] for row in rows)
+            mu = [v[9], v[9] + exp(v[10]), v[9] + exp(v[10]) + exp(v[11])]
+            sigma = exp.(v[12:14])
+            jacobian += v[10] + v[11] + sum(v[12:14])
+            y = hmm_gaussian_data["y"]
+            alpha = [log(pi[j]) + logpdf(Normal(mu[j], sigma[j]), y[1]) for j in 1:3]
+            for t in 2:length(y)
+                alpha = [logpdf(Normal(mu[j], sigma[j]), y[t]) +
+                    logaddexp(logaddexp(alpha[1] + log(A[1, j]),
+                        alpha[2] + log(A[2, j])), alpha[3] + log(A[3, j]))
+                    for j in 1:3]
+            end
+            return jacobian + logaddexp(logaddexp(alpha[1], alpha[2]), alpha[3])
+        end
+        check("hmm_gaussian_simulated-hmm_gaussian", 14, hmm_gaussian_oracle,
+            [[0.2, -0.4, 0.5, -0.3, -0.2, 0.4, 0.1, -0.1,
+              10.0, log(10.0), log(10.0), log(5.0), log(5.0), log(5.0)],
+             [-0.2, 0.3, -0.4, 0.2, 0.3, -0.5, -0.1, 0.4,
+              11.0, log(10.0), log(10.0), log(6.0), log(5.0), log(4.0)]])
+
         dog_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
             PosteriorDB.database(), "dogs-dogs",
         )))
