@@ -65,3 +65,11 @@ This recommendation in the context of Wren is mostly based on anecdotal evidence
 To check that an AD backend gives the right log-density and gradient, use [`test_ad`](@ref).
 By default this compares against ForwardDiff, but you can also compare against another backend with [`WithBackend`](@ref), or against known values with [`WithExpectedResult`](@ref).
 If the results don't match, an [`ADIncorrectException`](@ref) is thrown.
+
+## Benchmarks over time
+
+Wren has a benchmarking suite which runs several PosteriorDB models, plus their gradients under Enzyme and Mooncake.
+The code for this is in `bench/suite`, and you can view the results at https://pysm.dev/Wren.jl/bench.
+
+This suite is currently run manually by the maintainers in order to guarantee that the results are at least somewhat consistent from run to run.
+(On GitHub Actions, the results are not consistent enough to be useful, since the underlying hardware is not guaranteed to be the same from run to run.)

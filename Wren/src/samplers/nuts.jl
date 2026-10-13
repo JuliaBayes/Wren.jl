@@ -120,7 +120,7 @@ function nuts(
         println("done in $(round(time() - t, digits=2)) seconds.")
     end
 
-    copy!(Random.TaskLocalRNG(), rng)
+    Random.seed!(Random.TaskLocalRNG(), rand(rng, UInt64))
 
     if progress
         pbar = ProgressBar(; columns=:default, transient=false)

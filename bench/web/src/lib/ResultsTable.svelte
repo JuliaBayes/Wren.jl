@@ -1,6 +1,7 @@
 <script lang="ts">
     import { changeColour, compare, type Comparison } from "./compare";
     import { formatChange, formatTime } from "./format";
+    import { modelUrl, runSha } from "./github";
     import type { Entry, Run } from "./types";
 
     interface Props {
@@ -102,8 +103,15 @@
             {@const model = tip.models.get(name)!}
             {@const baseModel = base?.models.get(name)}
             {@const primal = model.entries.get(PRIMAL)}
+            {@const url = modelUrl(name, runSha(tip.meta))}
             <tr>
-                <td class="model">{name}</td>
+                <td class="model">
+                    {#if url !== null}
+                        <a href={url} target="_blank" rel="noreferrer">{name}</a>
+                    {:else}
+                        {name}
+                    {/if}
+                </td>
                 <td class="dim">{model.dim ?? ""}</td>
                 {#each tip.backends as backend}
                     {@const entry = model.entries.get(backend)}
