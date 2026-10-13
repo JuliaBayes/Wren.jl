@@ -159,6 +159,32 @@ using WrenDists: WrenDists
                 atol=1e-6)
         end
 
+        ordered_name = "low_dim_gauss_mix-low_dim_gauss_mix"
+        ordered_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+            PosteriorDB.database(), ordered_name,
+        )))
+        function ordered_reference(v)
+            mu = [v[1], v[1] + exp(v[2])]
+            sigma = exp.(view(v, 3:4))
+            theta = logistic(v[5])
+            return sum(logpdf(Normal(0, 2), m) for m in mu) + v[2] +
+                sum(logpdf(Normal(0, 2), sigma[i]) + log(2) + v[i + 2]
+                    for i in 1:2) +
+                logpdf(Beta(5, 5), theta) + logit_jacobian(v[5]) +
+                sum(log(theta * exp(logpdf(Normal(mu[1], sigma[1]), yi)) +
+                        (1 - theta) * exp(logpdf(Normal(mu[2], sigma[2]), yi)))
+                    for yi in ordered_data["y"])
+        end
+        ordered_vm = VecModel(posteriordb_model(ordered_name), AutoEnzyme(; mode=Reverse))
+        @test ordered_vm.dimension == 5
+        for point in ([0.0, 0.0, -0.1, 0.2, 0.0],
+                      [-0.4, 0.3, 0.1, -0.2, 0.5])
+            value, gradient = lp_and_grad(ordered_vm, point)
+            @test isapprox(value, ordered_reference(point); atol=1e-6)
+            @test isapprox(gradient, ForwardDiff.gradient(ordered_reference, point);
+                atol=1e-6)
+        end
+
         mixture_name = "normal_5-normal_mixture_k"
         mixture_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
             PosteriorDB.database(), mixture_name,

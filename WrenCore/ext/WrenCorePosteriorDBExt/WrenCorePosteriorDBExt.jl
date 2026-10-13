@@ -14,6 +14,7 @@ include("models/gp_regr.jl")
 include("models/gp_pois_regr.jl")
 include("models/kidscore_interaction.jl")
 include("models/low_dim_gauss_mix_collapse.jl")
+include("models/low_dim_gauss_mix.jl")
 include("models/losscurve_sislob.jl")
 include("models/mh.jl")
 include("models/normal_mixture.jl")
@@ -40,6 +41,7 @@ const MODELS = Dict(
     "gp_pois_regr-gp_pois_regr" => GPPoissonRegression,
     "kidiq-kidscore_interaction" => KidscoreInteraction,
     "low_dim_gauss_mix_collapse-low_dim_gauss_mix_collapse" => LowDimGaussMixCollapse,
+    "low_dim_gauss_mix-low_dim_gauss_mix" => LowDimGaussMix,
     "loss_curves-losscurve_sislob" => LossCurveSislob,
     "Mh_data-Mh_model" => Mh,
     "normal_2-normal_mixture" => NormalMixture,
