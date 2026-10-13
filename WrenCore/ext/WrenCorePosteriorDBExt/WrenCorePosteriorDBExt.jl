@@ -9,6 +9,9 @@ include("models/glm_poisson.jl")
 include("models/glmm_poisson.jl")
 include("models/gp_regr.jl")
 include("models/kidscore_interaction.jl")
+include("models/kidscore_momhs.jl")
+include("models/kidscore_momiq.jl")
+include("models/kidscore_momhsiq.jl")
 include("models/mh.jl")
 include("models/rate1.jl")
 include("models/sblri_blr.jl")
@@ -23,6 +26,9 @@ const MODELS = Dict(
     "GLMM_Poisson_data-GLMM_Poisson_model" => GLMMPoisson,
     "gp_pois_regr-gp_regr" => GPRegr,
     "kidiq-kidscore_interaction" => KidscoreInteraction,
+    "kidiq-kidscore_momhs" => KidscoreMomhs,
+    "kidiq-kidscore_momiq" => KidscoreMomiq,
+    "kidiq-kidscore_momhsiq" => KidscoreMomhsiq,
     "Mh_data-Mh_model" => Mh,
     "Rate_1_data-Rate_1_model" => Rate1,
     "sblri-blr" => SblriBLR,
