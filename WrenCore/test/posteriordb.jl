@@ -21,7 +21,8 @@ using WrenDists: WrenDists
         # for the generic smoke test. Its targeted checks use native Enzyme below.
         adtype = name in ("lsat_data-lsat_model", "election88-election88_full",
             "sat-hier_2pl", "fims_Aus_Jpn_irt-2pl_latent_reg_irt",
-            "science_irt-grsm_latent_reg_irt") ?
+            "science_irt-grsm_latent_reg_irt",
+            "timssAusTwn_irt-gpcm_latent_reg_irt") ?
             AutoEnzyme(; mode=Reverse) :
             DI.AutoForwardDiff()
         vm = VecModel(model, adtype)
@@ -483,6 +484,71 @@ using WrenDists: WrenDists
             science_point[science_selected])
         @test isapprox(science_gradient[science_selected],
             science_selected_gradient; atol=1e-5)
+
+        timss_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+            PosteriorDB.database(), "timssAusTwn_irt-gpcm_latent_reg_irt",
+        )))
+        timss_I, timss_J, timss_K = (timss_data[k] for k in ("I", "J", "K"))
+        timss_m = [maximum(timss_data["y"][n]
+            for n in 1:timss_data["N"] if timss_data["ii"][n] == i)
+            for i in 1:timss_I]
+        timss_pos = cumsum([1; timss_m[1:(end - 1)]])
+        timss_steps = sum(timss_m)
+        @test all(timss_data["W"][:, 1] .== 1)
+        @test all(k -> all(x -> x == 0 || x == 1, timss_data["W"][:, k]),
+            2:timss_K)
+        timss_W_adj = Float64.(timss_data["W"])
+        for k in 2:timss_K
+            timss_W_adj[:, k] .-= sum(timss_data["W"][:, k]) / timss_J
+        end
+        function timss_oracle(v)
+            alpha = exp.(view(v, 1:timss_I))
+            beta_free = view(v, (timss_I + 1):(timss_I + timss_steps - 1))
+            beta = vcat(beta_free, -sum(beta_free))
+            theta = view(v, (timss_I + timss_steps):
+                (timss_I + timss_steps + timss_J - 1))
+            lambda = view(v, (timss_I + timss_steps + timss_J):length(v))
+            prior = sum(logpdf(LogNormal(1, 1), alpha[i]) + v[i]
+                for i in eachindex(alpha)) +
+                sum(logpdf(Normal(0, 3), b) for b in beta) +
+                sum(logpdf(TDist(3), l) for l in lambda) +
+                sum(logpdf(Normal(sum(timss_W_adj[j, k] * lambda[k]
+                    for k in 1:timss_K), 1), theta[j]) for j in 1:timss_J)
+            likelihood = zero(prior)
+            for n in 1:timss_data["N"]
+                i, j = timss_data["ii"][n], timss_data["jj"][n]
+                steps = view(beta, timss_pos[i]:(timss_pos[i] + timss_m[i] - 1))
+                scores = cumsum(vcat(0.0, theta[j] * alpha[i] .- steps))
+                likelihood += scores[timss_data["y"][n] + 1] -
+                    log(sum(exp, scores))
+            end
+            return prior + likelihood
+        end
+        timss_point = vcat(1 .+ 0.03 .* sin.(1:timss_I),
+            0.05 .* cos.(1:(timss_steps - 1)),
+            0.1 .* sin.(1:timss_J), 0.1 .* cos.(1:timss_K))
+        timss_vm = VecModel(posteriordb_model(
+            "timssAusTwn_irt-gpcm_latent_reg_irt"), AutoEnzyme(; mode=Reverse))
+        @test timss_vm.dimension == length(timss_point)
+        timss_value, timss_gradient = lp_and_grad(timss_vm, timss_point)
+        @test isapprox(timss_value, timss_oracle(timss_point); atol=1e-5)
+        timss_selected = [1, timss_I, timss_I + 1,
+            timss_I + timss_steps - 1, timss_I + timss_steps,
+            timss_I + timss_steps + timss_J - 1,
+            timss_I + timss_steps + timss_J, length(timss_point)]
+        timss_positions = zeros(Int, length(timss_point))
+        for (k, i) in enumerate(timss_selected)
+            timss_positions[i] = k
+        end
+        function timss_selected_oracle(z)
+            full = [timss_positions[i] == 0 ? convert(eltype(z), timss_point[i]) :
+                z[timss_positions[i]] for i in eachindex(timss_point)]
+            return timss_oracle(full)
+        end
+        timss_selected_gradient = ForwardDiff.gradient(timss_selected_oracle,
+            timss_point[timss_selected])
+        @test isapprox(timss_gradient[timss_selected], timss_selected_gradient;
+            atol=1e-5)
 
         dog_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
             PosteriorDB.database(), "dogs-dogs",
