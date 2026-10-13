@@ -599,6 +599,50 @@ using WrenDists: WrenDists
         @test diamonds_data["K"] == 25
         check("diamonds-diamonds", 26, diamonds_reference,
             [vcat(zeros(24), [8.0, log(10.0)])])
+
+        soil_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+            PosteriorDB.database(), "soil_carbon-soil_incubation",
+        )))
+        # Integrate the original two-pool equations independently of the
+        # closed-form implementation. RK4 with a 0.05-day step resolves this
+        # public 42-day fixture well below the density tolerance.
+        function soil_reference(v)
+            k1, k2, alpha21, alpha12 = exp.(view(v, 1:4))
+            gamma, sigma = inv(1 + exp(-v[5])), exp(v[6])
+            total = soil_data["totalC_t0"]
+            c1, c2 = gamma * total, (1 - gamma) * total
+            previous = soil_data["t0"]
+            function rate(a, b)
+                return (-k1 * a + alpha12 * k2 * b,
+                    alpha21 * k1 * a - k2 * b)
+            end
+            density = sum(logpdf(Normal(), p) + raw for (p, raw) in
+                zip((k1, k2, alpha21, alpha12), view(v, 1:4))) +
+                logpdf(Beta(10, 1), gamma) - log1p(exp(-v[5])) -
+                log1p(exp(v[5])) +
+                logpdf(Cauchy(0, 1), sigma) + v[6]
+            for i in eachindex(soil_data["ts"])
+                current = soil_data["ts"][i]
+                steps = ceil(Int, (current - previous) / 0.05)
+                h = (current - previous) / steps
+                for _ in 1:steps
+                    a1, b1 = rate(c1, c2)
+                    a2, b2 = rate(c1 + h * a1 / 2, c2 + h * b1 / 2)
+                    a3, b3 = rate(c1 + h * a2 / 2, c2 + h * b2 / 2)
+                    a4, b4 = rate(c1 + h * a3, c2 + h * b3)
+                    c1 += h * (a1 + 2a2 + 2a3 + a4) / 6
+                    c2 += h * (b1 + 2b2 + 2b3 + b4) / 6
+                end
+                density += logpdf(Normal(total - c1 - c2, sigma),
+                    soil_data["eCO2mean"][i])
+                previous = current
+            end
+            return density
+        end
+        @test soil_data["N_t"] == 25
+        check("soil_carbon-soil_incubation", 6, soil_reference,
+            [[log(0.2), log(0.02), log(0.3), log(0.1), 1.0, log(0.4)],
+             [log(0.1), log(0.03), log(0.2), log(0.15), 0.8, log(0.6)]])
     end
 end
 
