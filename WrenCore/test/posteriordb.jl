@@ -51,6 +51,40 @@ using WrenDists: WrenDists
         end
     end
 
+    @testset "Rats growth density and native Enzyme gradient" begin
+        name = "rats_data-rats_model"
+        data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+            PosteriorDB.database(), name,
+        )))
+        N = data["N"]
+        vm = VecModel(posteriordb_model(name), AutoEnzyme(; mode=Reverse))
+        @test vm.dimension == 5 + 2N
+        function reference(v)
+            mu_alpha, mu_beta = v[1], v[2]
+            log_sigma_y, log_sigma_alpha, log_sigma_beta = view(v, 3:5)
+            sigma_y = exp(log_sigma_y)
+            sigma_alpha = exp(log_sigma_alpha)
+            sigma_beta = exp(log_sigma_beta)
+            alpha = view(v, 6:(5 + N))
+            beta = view(v, (6 + N):(5 + 2N))
+            return logpdf(Normal(0, 100), mu_alpha) +
+                logpdf(Normal(0, 100), mu_beta) +
+                log_sigma_y + log_sigma_alpha + log_sigma_beta +
+                sum(logpdf(Normal(mu_alpha, sigma_alpha), a) for a in alpha) +
+                sum(logpdf(Normal(mu_beta, sigma_beta), b) for b in beta) +
+                sum(logpdf(Normal(alpha[data["rat"][i]] +
+                    beta[data["rat"][i]] * (data["x"][i] - data["xbar"]),
+                    sigma_y), data["y"][i]) for i in eachindex(data["y"]))
+        end
+        for offset in (0.0, 0.2)
+            point = vcat(250.0 + offset, 6.0 - offset, log(25.0), log(35.0),
+                log(2.0), 250.0 .+ sin.(1:N), 6.0 .+ cos.(1:N))
+            value, gradient = lp_and_grad(vm, point)
+            @test isapprox(value, reference(point); atol=1e-5)
+            @test isapprox(gradient, ForwardDiff.gradient(reference, point); atol=1e-5)
+        end
+    end
+
     @testset "flat-prior Kidscore densities and native Enzyme gradients" begin
         data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
             PosteriorDB.database(), "kidiq_with_mom_work-kidscore_interaction_c",

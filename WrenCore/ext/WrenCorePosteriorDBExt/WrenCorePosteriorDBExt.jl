@@ -27,6 +27,7 @@ include("models/rate2.jl")
 include("models/rate3.jl")
 include("models/rate4.jl")
 include("models/rate5.jl")
+include("models/rats_model.jl")
 include("models/sblri_blr.jl")
 include("models/wells_dist.jl")
 include("models/wells_dist100.jl")
@@ -65,6 +66,7 @@ const MODELS = Dict(
     "Rate_4_data-Rate_4_model" => Rate4,
     "Rate_5_data-Rate_5_model" => Rate5,
     "arK-arK" => ArK,
+    "rats_data-rats_model" => RatsModel,
     "eight_schools-eight_schools_centered" => EightSchoolsCentered,
     "eight_schools-eight_schools_noncentered" => EightSchoolsNoncentered,
     "earnings-earn_height" => EarnHeight,
