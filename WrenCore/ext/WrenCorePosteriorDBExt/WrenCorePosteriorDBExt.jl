@@ -11,6 +11,10 @@ include("models/gp_regr.jl")
 include("models/kidscore_interaction.jl")
 include("models/mh.jl")
 include("models/rate1.jl")
+include("models/rate2.jl")
+include("models/rate3.jl")
+include("models/rate4.jl")
+include("models/rate5.jl")
 include("models/sblri_blr.jl")
 
 # Maps PosteriorDB posterior names to the modules defining the models. Each module must
@@ -25,6 +29,10 @@ const MODELS = Dict(
     "kidiq-kidscore_interaction" => KidscoreInteraction,
     "Mh_data-Mh_model" => Mh,
     "Rate_1_data-Rate_1_model" => Rate1,
+    "Rate_2_data-Rate_2_model" => Rate2,
+    "Rate_3_data-Rate_3_model" => Rate3,
+    "Rate_4_data-Rate_4_model" => Rate4,
+    "Rate_5_data-Rate_5_model" => Rate5,
     "sblri-blr" => SblriBLR,
 )
 const MODEL_NAMES = sort!(collect(keys(MODELS)))
