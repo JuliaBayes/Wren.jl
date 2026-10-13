@@ -5,8 +5,9 @@ module WrenPosteriorDBTests
 import DifferentiationInterface as DI
 import ForwardDiff
 using Distributions: Beta, Binomial, Cauchy, Gamma, LocationScale, LogNormal, Normal,
-    TDist, logpdf
+    Poisson, TDist, logpdf
 using Enzyme
+using LinearAlgebra: Symmetric, I, cholesky
 using PosteriorDB: PosteriorDB
 using StableRNGs
 using Statistics: mean
@@ -214,6 +215,27 @@ using WrenDists: WrenDists
         check("sblrc-blr", 6, sblrc_reference,
             [[0.1, -0.2, 0.3, 0.05, -0.1, -0.2],
              [-0.1, 0.15, -0.05, 0.2, 0.1, 0.3]])
+
+        gp_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+            PosteriorDB.database(), "gp_pois_regr-gp_pois_regr",
+        )))
+        gp_dist_sq = (gp_data["x"] .- gp_data["x"]') .^ 2
+        function gp_pois_reference(v)
+            rho, alpha = exp(v[1]), exp(v[2])
+            f_tilde = view(v, 3:length(v))
+            covariance = alpha^2 .* exp.(-0.5 .* gp_dist_sq ./ rho^2) +
+                1e-10I
+            f = cholesky(Symmetric(covariance)).L * f_tilde
+            return logpdf(Gamma(25, 1 / 4), rho) + v[1] +
+                logpdf(Normal(0, 2), alpha) + log(2) + v[2] +
+                sum(logpdf(Normal(), ft) for ft in f_tilde) +
+                sum(logpdf(Poisson(exp(f[i])), gp_data["k"][i])
+                    for i in eachindex(f))
+        end
+        @test gp_data["N"] == 11
+        check("gp_pois_regr-gp_pois_regr", 13, gp_pois_reference,
+            [vcat([log(5.0), log(2.0)], zeros(11)),
+             vcat([log(6.0), log(1.5)], 0.1 .* sin.(1:11))])
 
         arma_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
             PosteriorDB.database(), "arma-arma11",

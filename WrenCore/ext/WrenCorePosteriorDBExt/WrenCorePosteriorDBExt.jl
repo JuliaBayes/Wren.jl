@@ -11,6 +11,7 @@ include("models/glm_binomial.jl")
 include("models/glm_poisson.jl")
 include("models/glmm_poisson.jl")
 include("models/gp_regr.jl")
+include("models/gp_pois_regr.jl")
 include("models/kidscore_interaction.jl")
 include("models/low_dim_gauss_mix_collapse.jl")
 include("models/losscurve_sislob.jl")
@@ -36,6 +37,7 @@ const MODELS = Dict(
     "GLM_Poisson_Data-GLM_Poisson_model" => GLMPoisson,
     "GLMM_Poisson_data-GLMM_Poisson_model" => GLMMPoisson,
     "gp_pois_regr-gp_regr" => GPRegr,
+    "gp_pois_regr-gp_pois_regr" => GPPoissonRegression,
     "kidiq-kidscore_interaction" => KidscoreInteraction,
     "low_dim_gauss_mix_collapse-low_dim_gauss_mix_collapse" => LowDimGaussMixCollapse,
     "loss_curves-losscurve_sislob" => LossCurveSislob,
