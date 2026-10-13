@@ -146,6 +146,30 @@ using WrenDists: WrenDists
         end
         check("sesame_data-sesame_one_pred_a", 3, sesame_reference,
             [[0.2, 0.3, log(0.8)], [-0.1, 0.5, log(1.2)]])
+
+        garch_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+            PosteriorDB.database(), "garch-garch11",
+        )))
+        function garch_reference(v)
+            mu = v[1]
+            alpha0 = exp(v[2])
+            alpha1 = logistic(v[3])
+            beta_ratio = logistic(v[4])
+            beta1 = (1 - alpha1) * beta_ratio
+            jacobian = v[2] + log(alpha1) + 2 * log1p(-alpha1) +
+                log(beta_ratio) + log1p(-beta_ratio)
+            y = garch_data["y"]
+            sigma = garch_data["sigma1"]
+            density = logpdf(Normal(mu, sigma), y[1])
+            for t in 2:length(y)
+                sigma = sqrt(alpha0 + alpha1 * (y[t - 1] - mu)^2 +
+                    beta1 * sigma^2)
+                density += logpdf(Normal(mu, sigma), y[t])
+            end
+            return jacobian + density
+        end
+        check("garch-garch11", 4, garch_reference,
+            [[0.0, log(0.2), -0.2, 0.1], [0.15, log(0.5), 0.3, -0.4]])
     end
 
     @testset "additional Gaussian mixture densities and native Enzyme gradients" begin
