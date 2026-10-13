@@ -10,8 +10,10 @@ include("models/glm_poisson.jl")
 include("models/glmm_poisson.jl")
 include("models/gp_regr.jl")
 include("models/kidscore_interaction.jl")
+include("models/low_dim_gauss_mix_collapse.jl")
 include("models/mh.jl")
 include("models/normal_mixture.jl")
+include("models/normal_mixture_k.jl")
 include("models/rate1.jl")
 include("models/sblri_blr.jl")
 include("models/seeds.jl")
@@ -29,8 +31,10 @@ const MODELS = Dict(
     "GLMM_Poisson_data-GLMM_Poisson_model" => GLMMPoisson,
     "gp_pois_regr-gp_regr" => GPRegr,
     "kidiq-kidscore_interaction" => KidscoreInteraction,
+    "low_dim_gauss_mix_collapse-low_dim_gauss_mix_collapse" => LowDimGaussMixCollapse,
     "Mh_data-Mh_model" => Mh,
     "normal_2-normal_mixture" => NormalMixture,
+    "normal_5-normal_mixture_k" => NormalMixtureK,
     "Rate_1_data-Rate_1_model" => Rate1,
     "sblri-blr" => SblriBLR,
     "seeds_data-seeds_model" => Seeds,

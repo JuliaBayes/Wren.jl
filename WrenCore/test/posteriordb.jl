@@ -4,7 +4,7 @@ module WrenPosteriorDBTests
 
 import DifferentiationInterface as DI
 import ForwardDiff
-using Distributions: Binomial, Cauchy, Gamma, Normal, logpdf
+using Distributions: Beta, Binomial, Cauchy, Gamma, Normal, logpdf
 using Enzyme
 using PosteriorDB: PosteriorDB
 using StableRNGs
@@ -125,6 +125,62 @@ using WrenDists: WrenDists
         end
         check("normal_2-normal_mixture", 3, normal_mixture_reference,
             [[0.2, -0.8, 0.9], [-0.3, 0.4, -0.5]])
+    end
+
+    @testset "additional Gaussian mixture densities and native Enzyme gradients" begin
+        logistic(x) = inv(1 + exp(-x))
+        logit_jacobian(x) = -log1p(exp(-x)) - log1p(exp(x))
+        low_dim_name = "low_dim_gauss_mix_collapse-low_dim_gauss_mix_collapse"
+        low_dim_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+            PosteriorDB.database(), low_dim_name,
+        )))
+        function low_dim_reference(v)
+            mu = view(v, 1:2)
+            sigma = exp.(view(v, 3:4))
+            theta = logistic(v[5])
+            return sum(logpdf(Normal(0, 2), m) for m in mu) +
+                sum(logpdf(Normal(0, 2), sigma[i]) + log(2) + v[i + 2]
+                    for i in 1:2) +
+                logpdf(Beta(5, 5), theta) + logit_jacobian(v[5]) +
+                sum(log(theta * exp(logpdf(Normal(mu[1], sigma[1]), yi)) +
+                        (1 - theta) * exp(logpdf(Normal(mu[2], sigma[2]), yi)))
+                    for yi in low_dim_data["y"])
+        end
+        low_dim_vm = VecModel(posteriordb_model(low_dim_name), AutoEnzyme(; mode=Reverse))
+        @test low_dim_vm.dimension == 5
+        for point in (zeros(5), [0.2, -0.7, -0.1, 0.3, -0.4],
+                      [-0.5, 0.6, 0.2, -0.2, 0.3])
+            value, gradient = lp_and_grad(low_dim_vm, point)
+            @test isapprox(value, low_dim_reference(point); atol=1e-6)
+            @test isapprox(gradient, ForwardDiff.gradient(low_dim_reference, point);
+                atol=1e-6)
+        end
+
+        mixture_name = "normal_5-normal_mixture_k"
+        mixture_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+            PosteriorDB.database(), mixture_name,
+        )))
+        extension = Base.get_extension(WrenCore, :WrenCorePosteriorDBExt)
+        theta = [0.08, 0.12, 0.20, 0.25, 0.35]
+        mu = [-1.1, -0.4, 0.3, 0.9, 1.5]
+        sigma = [0.7, 0.8, 1.0, 1.2, 1.4]
+        expected_likelihood = sum(log(sum(theta[k] *
+            exp(logpdf(Normal(mu[k], sigma[k]), yi)) for k in eachindex(theta)))
+            for yi in mixture_data["y"])
+        @test isapprox(extension.NormalMixtureK.mixture_k_logp(
+            theta, mu, sigma, mixture_data["y"]), expected_likelihood; atol=1e-6)
+        model = posteriordb_model(mixture_name)
+        enzyme_vm = VecModel(model, AutoEnzyme(; mode=Reverse))
+        forward_vm = VecModel(model, DI.AutoForwardDiff())
+        @test enzyme_vm.dimension == forward_vm.dimension == 14
+        for point in (zeros(14), vcat([0.2, -0.1, 0.15, -0.2], mu,
+                                    [-0.1, 0.2, -0.2, 0.1, 0.3]))
+            value, gradient = lp_and_grad(enzyme_vm, point)
+            @test isfinite(value)
+            @test isapprox(value, lp(forward_vm, point); atol=1e-6)
+            @test isapprox(gradient, ForwardDiff.gradient(
+                v -> lp(forward_vm, v), point); atol=1e-6)
+        end
     end
 end
 
