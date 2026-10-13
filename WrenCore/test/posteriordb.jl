@@ -4,7 +4,7 @@ module WrenPosteriorDBTests
 
 import DifferentiationInterface as DI
 import ForwardDiff
-using Distributions: Beta, Binomial, Cauchy, Gamma, LocationScale, LogNormal, Normal,
+using Distributions: Beta, Binomial, Cauchy, Gamma, InverseGamma, LocationScale, LogNormal, Normal,
     Poisson, TDist, logpdf
 using Enzyme
 using LinearAlgebra: Symmetric, I, cholesky
@@ -22,6 +22,10 @@ using WrenDists: WrenDists
         if name == "dugongs_data-dugongs_model"
             # Gamma(shape=0.0001) prior draws commonly underflow in Float64.
             v = [2.0, 1.0, 0.0, 0.0]
+            @test isfinite(lp(vm, v))
+        elseif name == "surgical_data-surgical_model"
+            # Gamma(shape=0.001) precision draws can underflow to zero.
+            v = vcat(-3.0, 0.0, fill(-3.0, 12))
             @test isfinite(lp(vm, v))
         elseif name == "mcycle_splines-accel_splines"
             # An unconstrained prior draw can produce extreme spline predictors
@@ -170,6 +174,25 @@ using WrenDists: WrenDists
         end
         check("garch-garch11", 4, garch_reference,
             [[0.0, log(0.2), -0.2, 0.1], [0.15, log(0.5), 0.3, -0.4]])
+
+        surgical_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+            PosteriorDB.database(), "surgical_data-surgical_model",
+        )))
+        function surgical_reference(v)
+            mu = v[1]
+            log_precision = v[2]
+            sigmasq = exp(-log_precision)
+            sigma = sqrt(sigmasq)
+            b = view(v, 3:length(v))
+            return logpdf(Normal(0, 1000), mu) +
+                logpdf(InverseGamma(0.001, 0.001), sigmasq) - log_precision +
+                sum(logpdf(Normal(mu, sigma), bi) for bi in b) +
+                sum(logpdf(Binomial(surgical_data["n"][i], logistic(b[i])),
+                    surgical_data["r"][i]) for i in eachindex(b))
+        end
+        check("surgical_data-surgical_model", 14, surgical_reference,
+            [vcat(-3.0, 0.0, -3.0 .+ 0.1 .* sin.(1:12)),
+             vcat(-2.5, -0.5, -2.5 .+ 0.1 .* cos.(1:12))])
     end
 
     @testset "additional Gaussian mixture densities and native Enzyme gradients" begin
