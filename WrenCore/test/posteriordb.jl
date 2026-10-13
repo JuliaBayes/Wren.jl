@@ -3,7 +3,7 @@ module WrenPosteriorDBTests
 @info "testing posteriordb.jl"
 
 import DifferentiationInterface as DI
-using Distributions: Binomial, logpdf
+using Distributions: Binomial, Normal, logpdf
 using Enzyme
 import ForwardDiff
 using PosteriorDB: PosteriorDB
@@ -133,6 +133,106 @@ using WrenDists: WrenDists
             return mixture + logit_jacobian(v[1])
         end
         check("Survey_data-Survey_model", 1, survey_oracle, [[0.2], [-0.3]])
+    end
+
+    @testset "capture-recapture densities and native Enzyme gradients" begin
+        logistic(x) = inv(1 + exp(-x))
+        logit_jacobian(x) = -log1p(exp(-x)) - log1p(exp(x))
+        bernoulli_logit(y, eta) = y * eta - log1p(exp(eta))
+        logsumexp2(a, b) = max(a, b) + log1p(exp(-abs(a - b)))
+
+        function check(name, dimension, reference, points)
+            vm = VecModel(posteriordb_model(name), AutoEnzyme(; mode=Reverse))
+            @test vm.dimension == dimension
+            for point in points
+                value, gradient = lp_and_grad(vm, point)
+                @test isapprox(value, reference(point); atol=1e-6)
+                @test isapprox(gradient, ForwardDiff.gradient(reference, point); atol=1e-6)
+            end
+        end
+
+        function capture_data(name)
+            data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+                PosteriorDB.database(), name,
+            )))
+            y = data["y"]
+            return y, vec(sum(y; dims=2))
+        end
+
+        function marginalized(omega, rowlogp, counts)
+            present, absent = log(omega), log1p(-omega)
+            return sum(counts[i] > 0 ? present + rowlogp[i] :
+                logsumexp2(present + rowlogp[i], absent) for i in eachindex(counts))
+        end
+
+        y0, counts0 = capture_data("M0_data-M0_model")
+        trials0 = size(y0, 2)
+        function m0_reference(v)
+            omega, p = logistic.(v)
+            rowlogp = [logpdf(Binomial(trials0, p), count) for count in counts0]
+            return sum(logit_jacobian, v) + marginalized(omega, rowlogp, counts0)
+        end
+        check("M0_data-M0_model", 2, m0_reference, [[0.1, -0.2], [-0.3, 0.2]])
+
+        yb, countsb = capture_data("Mb_data-Mb_model")
+        function mb_reference(v)
+            omega, p, c = logistic.(v)
+            rowlogp = [sum(begin
+                prob = j == 1 || yb[i, j - 1] == 0 ? p : c
+                yb[i, j] == 1 ? log(prob) : log1p(-prob)
+            end for j in axes(yb, 2)) for i in axes(yb, 1)]
+            return sum(logit_jacobian, v) + marginalized(omega, rowlogp, countsb)
+        end
+        check("Mb_data-Mb_model", 3, mb_reference,
+            [[0.1, -0.2, 0.3], [-0.3, 0.2, -0.1]])
+
+        yt, countst = capture_data("Mt_data-Mt_model")
+        trials_t = size(yt, 2)
+        function mt_reference(v)
+            omega = logistic(v[1])
+            p = logistic.(view(v, 2:length(v)))
+            rowlogp = [sum(yt[i, j] == 1 ? log(p[j]) : log1p(-p[j])
+                for j in axes(yt, 2)) for i in axes(yt, 1)]
+            return sum(logit_jacobian, v) + marginalized(omega, rowlogp, countst)
+        end
+        check("Mt_data-Mt_model", trials_t + 1, mt_reference,
+            [0.2 .* sin.(1:(trials_t + 1)), -0.2 .* cos.(1:(trials_t + 1))])
+
+        yh, countsh = capture_data("Mth_data-Mth_model")
+        m_h, t_h = size(yh)
+        function mth_reference(v)
+            omega = logistic(v[1])
+            mean_lp = view(v, 2:(t_h + 1))
+            sigma = 5logistic(v[t_h + 2])
+            eps_raw = view(v, (t_h + 3):length(v))
+            rowlogp = [sum(bernoulli_logit(yh[i, j], mean_lp[j] + sigma * eps_raw[i])
+                for j in axes(yh, 2)) for i in axes(yh, 1)]
+            return sum(logit_jacobian, view(v, 1:(t_h + 2))) +
+                sum(logpdf(Normal(), e) for e in eps_raw) +
+                marginalized(omega, rowlogp, countsh)
+        end
+        check("Mth_data-Mth_model", m_h + t_h + 2, mth_reference,
+            [vcat(0.2 .* sin.(1:(t_h + 2)), 0.03 .* cos.(1:m_h))])
+
+        ybh, countsbh = capture_data("Mtbh_data-Mtbh_model")
+        m_bh, t_bh = size(ybh)
+        function mtbh_reference(v)
+            omega = logistic(v[1])
+            mean_lp = view(v, 2:(t_bh + 1))
+            gamma = v[t_bh + 2]
+            sigma = 3logistic(v[t_bh + 3])
+            eps_raw = view(v, (t_bh + 4):length(v))
+            rowlogp = [sum(bernoulli_logit(ybh[i, j],
+                mean_lp[j] + sigma * eps_raw[i] +
+                (j == 1 ? 0.0 : gamma * ybh[i, j - 1]))
+                for j in axes(ybh, 2)) for i in axes(ybh, 1)]
+            return sum(logit_jacobian, view(v, 1:(t_bh + 1))) +
+                logpdf(Normal(0, 10), gamma) + logit_jacobian(v[t_bh + 3]) +
+                sum(logpdf(Normal(), e) for e in eps_raw) +
+                marginalized(omega, rowlogp, countsbh)
+        end
+        check("Mtbh_data-Mtbh_model", m_bh + t_bh + 3, mtbh_reference,
+            [vcat(0.2 .* cos.(1:(t_bh + 3)), 0.03 .* sin.(1:m_bh))])
     end
 end
 

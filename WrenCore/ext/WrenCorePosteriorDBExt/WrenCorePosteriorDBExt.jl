@@ -3,6 +3,12 @@ module WrenCorePosteriorDBExt
 using WrenCore: WrenCore
 
 include("models/ark.jl")
+include("models/capture_common.jl")
+include("models/capture_m0.jl")
+include("models/capture_mb.jl")
+include("models/capture_mt.jl")
+include("models/capture_mth.jl")
+include("models/capture_mtbh.jl")
 include("models/dogs.jl")
 include("models/dogs_hierarchical.jl")
 include("models/dogs_log.jl")
@@ -23,6 +29,11 @@ include("models/survey.jl")
 # define `wren_model`.
 const MODELS = Dict(
     "arK-arK" => ArK,
+    "M0_data-M0_model" => CaptureM0,
+    "Mb_data-Mb_model" => CaptureMb,
+    "Mt_data-Mt_model" => CaptureMt,
+    "Mth_data-Mth_model" => CaptureMth,
+    "Mtbh_data-Mtbh_model" => CaptureMtbh,
     "dogs-dogs" => Dogs,
     "dogs-dogs_hierarchical" => DogsHierarchical,
     "dogs-dogs_log" => DogsLog,
