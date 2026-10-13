@@ -224,6 +224,46 @@ using WrenDists: WrenDists
                 0.01 .* cos.(1:n_beta)),
              vcat(-0.1, 0.6, 0.02 .* cos.(1:n_changes), log(0.5),
                 -0.01 .* sin.(1:n_beta))])
+
+        mcycle_gp_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+            PosteriorDB.database(), "mcycle_gp-accel_gp",
+        )))
+        function mcycle_gp_reference(v)
+            intercept, sdgp, lscale = v[1], exp(v[2]), exp(v[3])
+            zgp = view(v, 4:43)
+            intercept_sigma, sdgp_sigma, lscale_sigma =
+                v[44], exp(v[45]), exp(v[46])
+            zgp_sigma = view(v, 47:66)
+            alpha, beta = 1.124909, 0.0177
+            student_t(mu, scale, x) = logpdf(TDist(3), (x - mu) / scale) - log(scale)
+            prior = student_t(-13, 36, intercept) +
+                student_t(0, 36, sdgp) + log(2.0) + v[2] +
+                logpdf(InverseGamma(alpha, beta), lscale) + v[3] +
+                sum(logpdf(Normal(), zi) for zi in zgp) +
+                student_t(0, 10, intercept_sigma) +
+                student_t(0, 36, sdgp_sigma) + log(2.0) + v[45] +
+                logpdf(InverseGamma(alpha, beta), lscale_sigma) + v[46] +
+                sum(logpdf(Normal(), zi) for zi in zgp_sigma)
+            function gp_values(X, frequencies, z, sd, lengthscale)
+                weights = [sqrt(sd^2 * sqrt(2 * pi) * lengthscale *
+                    exp(-0.5 * lengthscale^2 * frequencies[m]^2)) * z[m]
+                    for m in eachindex(z)]
+                return [sum(X[n, m] * weights[m] for m in eachindex(z))
+                    for n in axes(X, 1)]
+            end
+            mean_gp = gp_values(mcycle_gp_data["Xgp_1"],
+                vec(mcycle_gp_data["slambda_1"]), zgp, sdgp, lscale)
+            scale_gp = gp_values(mcycle_gp_data["Xgp_sigma_1"],
+                vec(mcycle_gp_data["slambda_sigma_1"]), zgp_sigma,
+                sdgp_sigma, lscale_sigma)
+            likelihood = sum(logpdf(Normal(intercept + mean_gp[n],
+                exp(intercept_sigma + scale_gp[n])), mcycle_gp_data["Y"][n])
+                for n in eachindex(mean_gp))
+            return prior + likelihood
+        end
+        check("mcycle_gp-accel_gp", 66, mcycle_gp_reference,
+            [vcat([-13.0, log(10.0), log(0.05)], 0.05 .* sin.(1:40),
+                [3.0, log(2.0), log(0.05)], 0.05 .* cos.(1:20))])
     end
 
     @testset "additional Gaussian mixture densities and native Enzyme gradients" begin
