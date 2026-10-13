@@ -8,6 +8,7 @@ using Enzyme
 import ForwardDiff
 using PosteriorDB: PosteriorDB
 using StableRNGs
+using Statistics: mean, std
 using Test
 using WrenCore
 using WrenDists: WrenDists
@@ -27,6 +28,49 @@ using WrenDists: WrenDists
     end
 
     @test_throws ArgumentError posteriordb_model("not-a-posterior")
+
+    @testset "flat-prior Kidscore densities and native Enzyme gradients" begin
+        data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+            PosteriorDB.database(), "kidiq_with_mom_work-kidscore_interaction_c",
+        )))
+        hs = data["mom_hs"]
+        iq = data["mom_iq"]
+        work = data["mom_work"]
+        centered_hs = hs .- mean(hs)
+        centered_iq = iq .- mean(iq)
+        scaled_hs = centered_hs ./ (2 * std(hs))
+        scaled_iq = centered_iq ./ (2 * std(iq))
+        cases = (
+            ("kidiq_with_mom_work-kidscore_interaction_c",
+                hcat(ones(length(hs)), centered_hs, centered_iq,
+                    centered_hs .* centered_iq)),
+            ("kidiq_with_mom_work-kidscore_interaction_c2",
+                hcat(ones(length(hs)), hs .- 0.5, iq .- 100.0,
+                    (hs .- 0.5) .* (iq .- 100.0))),
+            ("kidiq_with_mom_work-kidscore_interaction_z",
+                hcat(ones(length(hs)), scaled_hs, scaled_iq,
+                    scaled_hs .* scaled_iq)),
+            ("kidiq_with_mom_work-kidscore_mom_work",
+                hcat(ones(length(work)), work .== 2, work .== 3, work .== 4)),
+        )
+        for (name, X) in cases
+            vm = VecModel(posteriordb_model(name), AutoEnzyme(; mode=Reverse))
+            @test vm.dimension == 5
+            function reference(v)
+                mu = X * view(v, 1:4)
+                sigma = exp(v[5])
+                return v[5] + sum(logpdf(Normal(mu[i], sigma), data["kid_score"][i])
+                    for i in eachindex(mu))
+            end
+            for point in ([100.0, 2.0, 0.2, 0.1, log(15.0)],
+                          [95.0, -1.0, 0.3, -0.1, log(20.0)])
+                value, gradient = lp_and_grad(vm, point)
+                @test isapprox(value, reference(point); atol=1e-5)
+                @test isapprox(gradient, ForwardDiff.gradient(reference, point);
+                    atol=1e-5)
+            end
+        end
+    end
 
     @testset "Rate posteriors: Stan density and unconstrained gradient" begin
         pdb = PosteriorDB.database()

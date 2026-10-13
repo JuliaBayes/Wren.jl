@@ -10,6 +10,7 @@ include("models/glm_poisson.jl")
 include("models/glmm_poisson.jl")
 include("models/gp_regr.jl")
 include("models/kidscore_interaction.jl")
+include("models/kidscore_flat.jl")
 include("models/kidscore_momhs.jl")
 include("models/kidscore_momhsiq.jl")
 include("models/kidscore_momiq.jl")
@@ -49,6 +50,10 @@ const MODELS = Dict(
     "eight_schools-eight_schools_noncentered" => EightSchoolsNoncentered,
     "gp_pois_regr-gp_regr" => GPRegr,
     "kidiq-kidscore_interaction" => KidscoreInteraction,
+    "kidiq_with_mom_work-kidscore_interaction_c" => KidscoreInteractionC,
+    "kidiq_with_mom_work-kidscore_interaction_c2" => KidscoreInteractionC2,
+    "kidiq_with_mom_work-kidscore_interaction_z" => KidscoreInteractionZ,
+    "kidiq_with_mom_work-kidscore_mom_work" => KidscoreMomWork,
     "kidiq-kidscore_momhs" => KidscoreMomhs,
     "kidiq-kidscore_momhsiq" => KidscoreMomhsiq,
     "kidiq-kidscore_momiq" => KidscoreMomiq,
