@@ -4,10 +4,11 @@ module WrenPosteriorDBTests
 
 import DifferentiationInterface as DI
 using Distributions: Bernoulli, Beta, Binomial, Cauchy, Exponential, Logistic,
-    LogNormal, Normal, logpdf
+    LogNormal, Normal, TDist, logpdf
 using Enzyme
 import ForwardDiff
 using PosteriorDB: PosteriorDB
+using Statistics: mean
 using StableRNGs
 using Test
 using WrenCore
@@ -19,7 +20,7 @@ using WrenDists: WrenDists
         # LSAT has 1000 person effects; ForwardDiff's full Jacobian is too large
         # for the generic smoke test. Its targeted checks use native Enzyme below.
         adtype = name in ("lsat_data-lsat_model", "election88-election88_full",
-            "sat-hier_2pl") ?
+            "sat-hier_2pl", "fims_Aus_Jpn_irt-2pl_latent_reg_irt") ?
             AutoEnzyme(; mode=Reverse) :
             DI.AutoForwardDiff()
         vm = VecModel(model, adtype)
@@ -366,6 +367,61 @@ using WrenDists: WrenDists
         sat_selected_gradient = ForwardDiff.gradient(sat_selected_oracle,
             sat_point[selected])
         @test isapprox(sat_gradient[selected], sat_selected_gradient; atol=1e-5)
+
+        fims_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+            PosteriorDB.database(), "fims_Aus_Jpn_irt-2pl_latent_reg_irt",
+        )))
+        fims_I, fims_J, fims_K = (fims_data[k] for k in ("I", "J", "K"))
+        fims_W = fims_data["W"]
+        @test all(fims_W[:, 1] .== 1)
+        @test all(k -> all(x -> x == 0 || x == 1, fims_W[:, k]), 2:fims_K)
+        fims_W_adj = Float64.(fims_W)
+        for k in 2:fims_K
+            fims_W_adj[:, k] .-= sum(fims_W[:, k]) / fims_J
+        end
+        function fims_oracle(v)
+            alpha = exp.(view(v, 1:fims_I))
+            beta_free = view(v, (fims_I + 1):(2fims_I - 1))
+            beta = vcat(beta_free, -sum(beta_free))
+            theta = view(v, (2fims_I):(2fims_I + fims_J - 1))
+            lambda = view(v, (2fims_I + fims_J):length(v))
+            prior = sum(logpdf(LogNormal(1, 1), alpha[i]) + v[i]
+                for i in eachindex(alpha)) +
+                sum(logpdf(Normal(0, 3), b) for b in beta) +
+                sum(logpdf(TDist(3), l) for l in lambda) +
+                sum(logpdf(Normal(sum(fims_W_adj[j, k] * lambda[k]
+                    for k in 1:fims_K), 1), theta[j]) for j in 1:fims_J)
+            likelihood = sum(logpdf(Bernoulli(logistic(
+                alpha[fims_data["ii"][n]] * theta[fims_data["jj"][n]] -
+                beta[fims_data["ii"][n]])), fims_data["y"][n])
+                for n in 1:fims_data["N"])
+            return prior + likelihood
+        end
+        fims_point = vcat(0.03 .* sin.(1:fims_I),
+            0.1 .* cos.(1:(fims_I - 1)),
+            0.1 .* sin.(1:fims_J), [0.1, -0.2, 0.3, -0.1])
+        fims_vm = VecModel(posteriordb_model(
+            "fims_Aus_Jpn_irt-2pl_latent_reg_irt"), AutoEnzyme(; mode=Reverse))
+        @test fims_vm.dimension == length(fims_point)
+        fims_value, fims_gradient = lp_and_grad(fims_vm, fims_point)
+        @test isapprox(fims_value, fims_oracle(fims_point); atol=1e-5)
+        fims_selected = [1, fims_I, fims_I + 1, 2fims_I - 1,
+            2fims_I, 2fims_I + fims_J - 1,
+            2fims_I + fims_J, 2fims_I + fims_J + 1,
+            2fims_I + fims_J + 2, 2fims_I + fims_J + 3]
+        fims_positions = zeros(Int, length(fims_point))
+        for (k, i) in enumerate(fims_selected)
+            fims_positions[i] = k
+        end
+        function fims_selected_oracle(z)
+            full = [fims_positions[i] == 0 ? convert(eltype(z), fims_point[i]) :
+                z[fims_positions[i]] for i in eachindex(fims_point)]
+            return fims_oracle(full)
+        end
+        fims_selected_gradient = ForwardDiff.gradient(fims_selected_oracle,
+            fims_point[fims_selected])
+        @test isapprox(fims_gradient[fims_selected], fims_selected_gradient;
+            atol=1e-5)
 
         dog_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
             PosteriorDB.database(), "dogs-dogs",
