@@ -190,6 +190,38 @@ using WrenDists: WrenDists
             [[0.7, -0.5, -1.8, log(1.5), 3.9, log(1.0)],
              [-0.1, 0.3, -1.7, log(1.4), 3.8, log(1.2)]])
 
+        iohmm_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+            PosteriorDB.database(), "iohmm_reg_simulated-iohmm_reg",
+        )))
+        function iohmm_oracle(v)
+            pi, jacobian = simplex3_oracle(v[1], v[2])
+            w = reshape(v[3:14], 4, 3)
+            b = reshape(v[15:26], 4, 3)
+            sigma = exp.(v[27:29])
+            jacobian += sum(v[27:29])
+            prior = sum(logpdf(Normal(0, 5), vi) for vi in v[3:26]) +
+                sum(logpdf(Normal(0, 3), si) for si in sigma)
+            u, y = iohmm_data["u"], iohmm_data["y"]
+            regress(t, coefficients, j) =
+                sum(u[t, m] * coefficients[m, j] for m in 1:4)
+            g = [log(pi[j]) + logpdf(Normal(regress(1, b, j), sigma[j]), y[1])
+                for j in 1:3]
+            for t in 2:length(y)
+                logits = [regress(t, w, j) for j in 1:3]
+                norm = logaddexp(logaddexp(logits[1], logits[2]), logits[3])
+                # Match the Stan source's destination-independent logA[t][i].
+                common = logaddexp(logaddexp(g[1] + logits[1] - norm,
+                    g[2] + logits[2] - norm), g[3] + logits[3] - norm)
+                g = [common + logpdf(Normal(regress(t, b, j), sigma[j]), y[t])
+                    for j in 1:3]
+            end
+            return prior + jacobian + logaddexp(logaddexp(g[1], g[2]), g[3])
+        end
+        check("iohmm_reg_simulated-iohmm_reg", 29, iohmm_oracle,
+            [vcat([0.2, -0.4], 0.1 .* sin.(1:24), fill(log(3.0), 3)),
+             vcat([-0.3, 0.5], 0.15 .* cos.(1:24),
+                 [log(2.5), log(3.5), log(4.0)])])
+
         dog_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
             PosteriorDB.database(), "dogs-dogs",
         )))
