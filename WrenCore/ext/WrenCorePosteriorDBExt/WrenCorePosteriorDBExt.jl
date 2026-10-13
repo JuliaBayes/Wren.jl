@@ -11,6 +11,8 @@ include("models/gp_regr.jl")
 include("models/kidscore_interaction.jl")
 include("models/mh.jl")
 include("models/rate1.jl")
+include("models/radon_hierarchical_intercept_noncentered_all.jl")
+include("models/radon_hierarchical_intercept_noncentered_mn.jl")
 include("models/sblri_blr.jl")
 
 # Maps PosteriorDB posterior names to the modules defining the models. Each module must
@@ -25,6 +27,8 @@ const MODELS = Dict(
     "kidiq-kidscore_interaction" => KidscoreInteraction,
     "Mh_data-Mh_model" => Mh,
     "Rate_1_data-Rate_1_model" => Rate1,
+    "radon_all-radon_hierarchical_intercept_noncentered" => RadonHierarchicalInterceptNoncenteredAll,
+    "radon_mn-radon_hierarchical_intercept_noncentered" => RadonHierarchicalInterceptNoncenteredMn,
     "sblri-blr" => SblriBLR,
 )
 const MODEL_NAMES = sort!(collect(keys(MODELS)))
