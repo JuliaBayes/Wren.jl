@@ -3,6 +3,7 @@ module WrenCorePosteriorDBExt
 using WrenCore: WrenCore
 
 include("models/ark.jl")
+include("models/bones.jl")
 include("models/capture_common.jl")
 include("models/capture_m0.jl")
 include("models/capture_mb.jl")
@@ -18,7 +19,9 @@ include("models/glm_poisson.jl")
 include("models/glmm_poisson.jl")
 include("models/glmm1.jl")
 include("models/gp_regr.jl")
+include("models/irt_2pl.jl")
 include("models/kidscore_interaction.jl")
+include("models/lsat.jl")
 include("models/mh.jl")
 include("models/nes_logit.jl")
 include("models/rate1.jl")
@@ -29,6 +32,7 @@ include("models/survey.jl")
 # define `wren_model`.
 const MODELS = Dict(
     "arK-arK" => ArK,
+    "bones_data-bones_model" => Bones,
     "M0_data-M0_model" => CaptureM0,
     "Mb_data-Mb_model" => CaptureMb,
     "Mt_data-Mt_model" => CaptureMt,
@@ -43,7 +47,9 @@ const MODELS = Dict(
     "GLM_Poisson_Data-GLM_Poisson_model" => GLMPoisson,
     "GLMM_Poisson_data-GLMM_Poisson_model" => GLMMPoisson,
     "gp_pois_regr-gp_regr" => GPRegr,
+    "irt_2pl-irt_2pl" => IRT2PL,
     "kidiq-kidscore_interaction" => KidscoreInteraction,
+    "lsat_data-lsat_model" => LSAT,
     "Mh_data-Mh_model" => Mh,
     "nes_logit_data-nes_logit_model" => NESLogit,
     "Rate_1_data-Rate_1_model" => Rate1,

@@ -3,7 +3,7 @@ module WrenPosteriorDBTests
 @info "testing posteriordb.jl"
 
 import DifferentiationInterface as DI
-using Distributions: Binomial, Normal, logpdf
+using Distributions: Binomial, Cauchy, LogNormal, Normal, logpdf
 using Enzyme
 import ForwardDiff
 using PosteriorDB: PosteriorDB
@@ -15,7 +15,11 @@ using WrenDists: WrenDists
 @testset "posteriordb.jl" begin
     @testset "$name" for name in available_posteriordb_models()
         model = posteriordb_model(name)
-        vm = VecModel(model, DI.AutoForwardDiff())
+        # LSAT has 1000 person effects; ForwardDiff's full Jacobian is too large
+        # for the generic smoke test. Its targeted checks use native Enzyme below.
+        adtype = name == "lsat_data-lsat_model" ? AutoEnzyme(; mode=Reverse) :
+            DI.AutoForwardDiff()
+        vm = VecModel(model, adtype)
         # dogs_log uses flat coordinates with bounded likelihood factors; a
         # prior draw need not lie in their finite-density support.
         if name == "dogs-dogs_log"
@@ -233,6 +237,113 @@ using WrenDists: WrenDists
         end
         check("Mtbh_data-Mtbh_model", m_bh + t_bh + 3, mtbh_reference,
             [vcat(0.2 .* cos.(1:(t_bh + 3)), 0.03 .* sin.(1:m_bh))])
+    end
+
+    @testset "item-response densities and native Enzyme gradients" begin
+        logistic(x) = inv(1 + exp(-x))
+        logit_jacobian(x) = -log1p(exp(-x)) - log1p(exp(x))
+        bernoulli_logit(y, eta) = y * eta - log1p(exp(eta))
+        function check(name, dimension, reference, points)
+            vm = VecModel(posteriordb_model(name), AutoEnzyme(; mode=Reverse))
+            @test vm.dimension == dimension
+            for point in points
+                value, gradient = lp_and_grad(vm, point)
+                @test isapprox(value, reference(point); atol=1e-6)
+                @test isapprox(gradient, ForwardDiff.gradient(reference, point);
+                    atol=1e-6)
+            end
+        end
+
+        irt_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+            PosteriorDB.database(), "irt_2pl-irt_2pl",
+        )))
+        I, J = irt_data["I"], irt_data["J"]
+        function irt_reference(v)
+            sigma_theta = exp(v[1])
+            theta = view(v, 2:(J + 1))
+            sigma_a = exp(v[J + 2])
+            a = exp.(view(v, (J + 3):(J + I + 2)))
+            mu_b = v[J + I + 3]
+            sigma_b = exp(v[J + I + 4])
+            b = view(v, (J + I + 5):length(v))
+            total = logpdf(Cauchy(0, 2), sigma_theta) + log(2) + v[1] +
+                sum(logpdf(Normal(0, sigma_theta), x) for x in theta) +
+                logpdf(Cauchy(0, 2), sigma_a) + log(2) + v[J + 2] +
+                sum(logpdf(LogNormal(0, sigma_a), a[i]) + v[J + i + 2]
+                    for i in eachindex(a)) +
+                logpdf(Normal(0, 5), mu_b) +
+                logpdf(Cauchy(0, 2), sigma_b) + log(2) + v[J + I + 4] +
+                sum(logpdf(Normal(mu_b, sigma_b), x) for x in b)
+            for j in 1:J, i in 1:I
+                total += bernoulli_logit(irt_data["y"][i, j],
+                    a[i] * (theta[j] - b[i]))
+            end
+            return total
+        end
+        irt_dimension = J + 2I + 4
+        check("irt_2pl-irt_2pl", irt_dimension, irt_reference,
+            [vcat([0.1], 0.1 .* sin.(1:J), [-0.2], 0.1 .* cos.(1:I),
+                  [0.2, -0.1], 0.1 .* sin.(1:I))])
+
+        bones_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+            PosteriorDB.database(), "bones_data-bones_model",
+        )))
+        function bones_reference(v)
+            total = sum(logpdf(Normal(0, 36), x) for x in v)
+            grade, gamma, delta, ncat = (bones_data[k] for k in
+                ("grade", "gamma", "delta", "ncat"))
+            for j in axes(grade, 2), i in axes(grade, 1)
+                category = grade[i, j]
+                category == -1 && continue
+                q = [logistic(delta[j] * (v[i] - gamma[j, k]))
+                    for k in 1:(ncat[j] - 1)]
+                probabilities = [1 - q[1]; [q[k - 1] - q[k]
+                    for k in 2:length(q)]; q[end]]
+                total += log(probabilities[category])
+            end
+            return total
+        end
+        check("bones_data-bones_model", bones_data["nChild"], bones_reference,
+            [0.1 .* sin.(1:bones_data["nChild"]),
+             0.2 .* cos.(1:bones_data["nChild"])])
+
+        lsat_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+            PosteriorDB.database(), "lsat_data-lsat_model",
+        )))
+        T, N = lsat_data["T"], lsat_data["N"]
+        function lsat_reference(v)
+            alpha = view(v, 1:T)
+            theta = view(v, (T + 1):(T + N))
+            beta = exp(v[end])
+            total = sum(logpdf(Normal(0, 100), x) for x in alpha) +
+                sum(logpdf(Normal(), x) for x in theta) +
+                logpdf(Normal(0, 100), beta) + log(2) + v[end]
+            previous = 0
+            for pattern in 1:lsat_data["R"]
+                for student in (previous + 1):lsat_data["culm"][pattern]
+                    for question in 1:T
+                        eta = beta * theta[student] - alpha[question]
+                        total += bernoulli_logit(
+                            lsat_data["response"][pattern, question], eta)
+                    end
+                end
+                previous = lsat_data["culm"][pattern]
+            end
+            return total
+        end
+        lsat_vm = VecModel(posteriordb_model("lsat_data-lsat_model"),
+            AutoEnzyme(; mode=Reverse))
+        @test lsat_vm.dimension == T + N + 1
+        point = vcat(0.1 .* sin.(1:T), 0.05 .* cos.(1:N), [0.2])
+        value, gradient = lp_and_grad(lsat_vm, point)
+        @test isapprox(value, lsat_reference(point); atol=1e-6)
+        for index in (1, T, T + 1, T + 500, T + N, T + N + 1)
+            plus, minus = copy(point), copy(point)
+            plus[index] += 1e-5
+            minus[index] -= 1e-5
+            finite_difference = (lsat_reference(plus) - lsat_reference(minus)) / 2e-5
+            @test isapprox(gradient[index], finite_difference; atol=1e-4, rtol=1e-4)
+        end
     end
 end
 
