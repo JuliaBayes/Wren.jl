@@ -3,29 +3,41 @@ module WrenCorePosteriorDBExt
 using WrenCore: WrenCore
 
 include("models/ark.jl")
+include("models/dogs.jl")
+include("models/dogs_hierarchical.jl")
+include("models/dogs_log.jl")
 include("models/eight_schools_centered.jl")
 include("models/glm_binomial.jl")
 include("models/glm_poisson.jl")
 include("models/glmm_poisson.jl")
+include("models/glmm1.jl")
 include("models/gp_regr.jl")
 include("models/kidscore_interaction.jl")
 include("models/mh.jl")
+include("models/nes_logit.jl")
 include("models/rate1.jl")
 include("models/sblri_blr.jl")
+include("models/survey.jl")
 
 # Maps PosteriorDB posterior names to the modules defining the models. Each module must
 # define `wren_model`.
 const MODELS = Dict(
     "arK-arK" => ArK,
+    "dogs-dogs" => Dogs,
+    "dogs-dogs_hierarchical" => DogsHierarchical,
+    "dogs-dogs_log" => DogsLog,
     "eight_schools-eight_schools_centered" => EightSchoolsCentered,
+    "GLMM_data-GLMM1_model" => GLMM1,
     "GLM_Binomial_data-GLM_Binomial_model" => GLMBinomial,
     "GLM_Poisson_Data-GLM_Poisson_model" => GLMPoisson,
     "GLMM_Poisson_data-GLMM_Poisson_model" => GLMMPoisson,
     "gp_pois_regr-gp_regr" => GPRegr,
     "kidiq-kidscore_interaction" => KidscoreInteraction,
     "Mh_data-Mh_model" => Mh,
+    "nes_logit_data-nes_logit_model" => NESLogit,
     "Rate_1_data-Rate_1_model" => Rate1,
     "sblri-blr" => SblriBLR,
+    "Survey_data-Survey_model" => Survey,
 )
 const MODEL_NAMES = sort!(collect(keys(MODELS)))
 
