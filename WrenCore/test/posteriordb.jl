@@ -42,6 +42,7 @@ using WrenDists: WrenDists
     @testset "discrete PosteriorDB densities and native Enzyme gradients" begin
         logistic(x) = inv(1 + exp(-x))
         logit_jacobian(x) = -log1p(exp(-x)) - log1p(exp(x))
+        logaddexp(a, b) = a > b ? a + log1p(exp(b - a)) : b + log1p(exp(a - b))
         bernoulli_logit(y, eta) = y * eta - log1p(exp(eta))
         function check(name, dimension, oracle, points)
             vm = VecModel(posteriordb_model(name), AutoEnzyme(; mode=Reverse))
@@ -87,6 +88,31 @@ using WrenDists: WrenDists
             fill(log(1.0 / 99.0), 5), 0.05 .* sin.(1:(na + nb + nc + nd + ne)))
         check("election88-election88_full", 10 + na + nb + nc + nd + ne,
             election_oracle, [election_point])
+
+        hmm_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+            PosteriorDB.database(), "hmm_example-hmm_example",
+        )))
+        function hmm_oracle(v)
+            p11, p21 = logistic(v[1]), logistic(v[2])
+            mu1 = exp(v[3])
+            mu2 = mu1 + exp(v[4])
+            y = hmm_data["y"]
+            g1 = logpdf(Normal(mu1, 1), y[1])
+            g2 = logpdf(Normal(mu2, 1), y[1])
+            for t in 2:length(y)
+                next1 = logaddexp(g1 + log(p11), g2 + log(p21)) +
+                    logpdf(Normal(mu1, 1), y[t])
+                next2 = logaddexp(g1 + log1p(-p11), g2 + log1p(-p21)) +
+                    logpdf(Normal(mu2, 1), y[t])
+                g1, g2 = next1, next2
+            end
+            return logit_jacobian(v[1]) + logit_jacobian(v[2]) +
+                v[3] + v[4] + logpdf(Normal(3, 1), mu1) +
+                logpdf(Normal(10, 1), mu2) + logaddexp(g1, g2)
+        end
+        check("hmm_example-hmm_example", 4, hmm_oracle,
+            [[0.8, -1.2, log(3.0), log(7.0)],
+             [-0.3, 0.4, log(2.5), log(6.5)]])
 
         dog_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
             PosteriorDB.database(), "dogs-dogs",

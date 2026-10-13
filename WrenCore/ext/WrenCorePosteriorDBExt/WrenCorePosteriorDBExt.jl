@@ -17,6 +17,7 @@ include("models/eight_schools_centered.jl")
 include("models/glm_binomial.jl")
 include("models/glm_poisson.jl")
 include("models/election88.jl")
+include("models/hmm_example.jl")
 include("models/glmm_poisson.jl")
 include("models/glmm1.jl")
 include("models/gp_regr.jl")
@@ -47,6 +48,7 @@ const MODELS = Dict(
     "GLM_Binomial_data-GLM_Binomial_model" => GLMBinomial,
     "GLM_Poisson_Data-GLM_Poisson_model" => GLMPoisson,
     "election88-election88_full" => Election88,
+    "hmm_example-hmm_example" => HMMExample,
     "GLMM_Poisson_data-GLMM_Poisson_model" => GLMMPoisson,
     "gp_pois_regr-gp_regr" => GPRegr,
     "irt_2pl-irt_2pl" => IRT2PL,
