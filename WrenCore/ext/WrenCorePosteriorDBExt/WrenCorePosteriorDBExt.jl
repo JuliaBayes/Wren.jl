@@ -5,6 +5,8 @@ using WrenCore: WrenCore
 include("models/ark.jl")
 include("models/eight_schools_centered.jl")
 include("models/eight_schools_noncentered.jl")
+include("models/flat_gaussian_regression.jl")
+include("models/earnings.jl")
 include("models/glm_binomial.jl")
 include("models/glm_poisson.jl")
 include("models/glmm_poisson.jl")
@@ -57,6 +59,13 @@ const MODELS = Dict(
     "arK-arK" => ArK,
     "eight_schools-eight_schools_centered" => EightSchoolsCentered,
     "eight_schools-eight_schools_noncentered" => EightSchoolsNoncentered,
+    "earnings-earn_height" => EarnHeight,
+    "earnings-log10earn_height" => Log10EarnHeight,
+    "earnings-logearn_height" => LogEarnHeight,
+    "earnings-logearn_height_male" => LogEarnHeightMale,
+    "earnings-logearn_interaction" => LogEarnInteraction,
+    "earnings-logearn_interaction_z" => LogEarnInteractionZ,
+    "earnings-logearn_logheight_male" => LogEarnLogheightMale,
     "gp_pois_regr-gp_regr" => GPRegr,
     "kidiq-kidscore_interaction" => KidscoreInteraction,
     "kidiq_with_mom_work-kidscore_interaction_c" => KidscoreInteractionC,

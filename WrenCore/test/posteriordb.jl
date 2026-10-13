@@ -102,6 +102,45 @@ using WrenDists: WrenDists
         end
     end
 
+    @testset "earnings regression densities and native Enzyme gradients" begin
+        data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+            PosteriorDB.database(), "earnings-earn_height",
+        )))
+        earn, height, male = data["earn"], data["height"], data["male"]
+        N = data["N"]
+        zheight = (height .- mean(height)) ./ std(height)
+        cases = (
+            ("earnings-earn_height", earn, hcat(ones(N), height)),
+            ("earnings-log10earn_height", log10.(earn), hcat(ones(N), height)),
+            ("earnings-logearn_height", log.(earn), hcat(ones(N), height)),
+            ("earnings-logearn_height_male", log.(earn), hcat(ones(N), height, male)),
+            ("earnings-logearn_interaction", log.(earn),
+                hcat(ones(N), height, male, height .* male)),
+            ("earnings-logearn_interaction_z", log.(earn),
+                hcat(ones(N), zheight, male, zheight .* male)),
+            ("earnings-logearn_logheight_male", log.(earn),
+                hcat(ones(N), log.(height), male)),
+        )
+        for (name, y, X) in cases
+            vm = VecModel(posteriordb_model(name), AutoEnzyme(; mode=Reverse))
+            dimension = size(X, 2) + 1
+            @test vm.dimension == dimension
+            function reference(v)
+                mu = X * view(v, 1:(dimension - 1))
+                sigma = exp(v[end])
+                return v[end] + sum(logpdf(Normal(mu[i], sigma), y[i])
+                    for i in eachindex(y))
+            end
+            for scale in (0.1, -0.2)
+                point = vcat(scale .* sin.(1:(dimension - 1)), log(20.0))
+                value, gradient = lp_and_grad(vm, point)
+                @test isapprox(value, reference(point); atol=1e-4)
+                @test isapprox(gradient, ForwardDiff.gradient(reference, point);
+                    atol=1e-4)
+            end
+        end
+    end
+
     @testset "Rate posteriors: Stan density and unconstrained gradient" begin
         pdb = PosteriorDB.database()
         for (number, point) in (

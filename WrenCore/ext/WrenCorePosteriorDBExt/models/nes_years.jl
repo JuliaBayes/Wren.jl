@@ -2,20 +2,7 @@
 module NESCommon
 
 using PosteriorDB
-using WrenCore: @wren, @observe, @batch, @iid, @addloglikelihood
-using WrenDists: WrenDists as WD
-
-@wren function nes(partyid7, X)
-    @iid beta ~ WD.Flat() size=9
-    log_sigma ~ WD.Flat()
-    sigma = exp(log_sigma)
-    @addloglikelihood log_sigma
-    mu = X * beta
-    @batch for i in eachindex(partyid7)
-        @observe partyid7[i] ~ WD.Normal(mu[i], sigma)
-    end
-    return nothing
-end
+using ..FlatGaussianRegression: flat_gaussian
 
 function fixture(year)
     pdb = PosteriorDB.database()
@@ -26,7 +13,7 @@ function fixture(year)
     X = hcat(ones(data["N"]), data["real_ideo"], data["race_adj"],
         age .== 2, age .== 3, age .== 4, data["educ1"], data["gender"],
         data["income"])
-    return nes(data["partyid7"], X)
+    return flat_gaussian(data["partyid7"], X)
 end
 
 end
