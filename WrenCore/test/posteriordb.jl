@@ -17,7 +17,8 @@ using WrenDists: WrenDists
         model = posteriordb_model(name)
         # LSAT has 1000 person effects; ForwardDiff's full Jacobian is too large
         # for the generic smoke test. Its targeted checks use native Enzyme below.
-        adtype = name == "lsat_data-lsat_model" ? AutoEnzyme(; mode=Reverse) :
+        adtype = name in ("lsat_data-lsat_model", "election88-election88_full") ?
+            AutoEnzyme(; mode=Reverse) :
             DI.AutoForwardDiff()
         vm = VecModel(model, adtype)
         # dogs_log uses flat coordinates with bounded likelihood factors; a
@@ -51,6 +52,41 @@ using WrenDists: WrenDists
                 @test isapprox(gradient, ForwardDiff.gradient(oracle, point); atol=1e-5)
             end
         end
+
+        election_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+            PosteriorDB.database(), "election88-election88_full",
+        )))
+        na, nb, nc, nd, ne = (election_data[k] for k in
+            ("n_age", "n_edu", "n_age_edu", "n_state", "n_region_full"))
+        function election_oracle(v)
+            beta = view(v, 1:5)
+            raw = view(v, 6:10)
+            scales = 100 ./ (1 .+ exp.(-raw))
+            a = view(v, 11:(10 + na))
+            b = view(v, (11 + na):(10 + na + nb))
+            c = view(v, (11 + na + nb):(10 + na + nb + nc))
+            d = view(v, (11 + na + nb + nc):(10 + na + nb + nc + nd))
+            e = view(v, (11 + na + nb + nc + nd):length(v))
+            eta = beta[1] .+ beta[2] .* election_data["black"] .+
+                beta[3] .* election_data["female"] .+
+                beta[5] .* (election_data["female"] .* election_data["black"]) .+
+                beta[4] .* election_data["v_prev_full"] .+
+                a[election_data["age"]] .+ b[election_data["edu"]] .+
+                c[election_data["age_edu"]] .+ d[election_data["state"]] .+
+                e[election_data["region_full"]]
+            prior = sum(logpdf(Normal(0, 100), bi) for bi in beta) +
+                5 * log(100.0) + sum(logit_jacobian(ui) for ui in raw) +
+                sum(logpdf(Normal(0, scales[1]), ai) for ai in a) +
+                sum(logpdf(Normal(0, scales[2]), bi) for bi in b) +
+                sum(logpdf(Normal(0, scales[3]), ci) for ci in c) +
+                sum(logpdf(Normal(0, scales[4]), di) for di in d) +
+                sum(logpdf(Normal(0, scales[5]), ei) for ei in e)
+            return prior + sum(bernoulli_logit.(election_data["y"], eta))
+        end
+        election_point = vcat([0.2, 0.1, -0.1, 0.2, 0.1],
+            fill(log(1.0 / 99.0), 5), 0.05 .* sin.(1:(na + nb + nc + nd + ne)))
+        check("election88-election88_full", 10 + na + nb + nc + nd + ne,
+            election_oracle, [election_point])
 
         dog_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
             PosteriorDB.database(), "dogs-dogs",
