@@ -30,6 +30,7 @@ include("models/fims_2pl.jl")
 include("models/science_grsm.jl")
 include("models/timss_gpcm.jl")
 include("models/lda_three_docs.jl")
+include("models/lda_three_men.jl")
 include("models/glmm_poisson.jl")
 include("models/glmm1.jl")
 include("models/gp_regr.jl")
@@ -42,8 +43,7 @@ include("models/rate1.jl")
 include("models/sblri_blr.jl")
 include("models/survey.jl")
 
-# Maps PosteriorDB posterior names to the modules defining the models. Each module must
-# define `wren_model`.
+# Maps PosteriorDB posterior names to containers with a `wren_model` property.
 const MODELS = Dict(
     "arK-arK" => ArK,
     "bones_data-bones_model" => Bones,
@@ -72,6 +72,9 @@ const MODELS = Dict(
     "science_irt-grsm_latent_reg_irt" => ScienceGRSM,
     "timssAusTwn_irt-gpcm_latent_reg_irt" => TIMSSGPCM,
     "three_docs1200-ldaK2" => LDAThreeDocs,
+    "three_men1-ldaK2" => LDAThreeMen.case1,
+    "three_men2-ldaK2" => LDAThreeMen.case2,
+    "three_men3-ldaK2" => LDAThreeMen.case3,
     "GLMM_Poisson_data-GLMM_Poisson_model" => GLMMPoisson,
     "gp_pois_regr-gp_regr" => GPRegr,
     "irt_2pl-irt_2pl" => IRT2PL,

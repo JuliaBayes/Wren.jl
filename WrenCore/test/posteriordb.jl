@@ -22,7 +22,8 @@ using WrenDists: WrenDists
         adtype = name in ("lsat_data-lsat_model", "election88-election88_full",
             "sat-hier_2pl", "fims_Aus_Jpn_irt-2pl_latent_reg_irt",
             "science_irt-grsm_latent_reg_irt",
-            "timssAusTwn_irt-gpcm_latent_reg_irt") ?
+            "timssAusTwn_irt-gpcm_latent_reg_irt",
+            "three_men1-ldaK2", "three_men2-ldaK2", "three_men3-ldaK2") ?
             AutoEnzyme(; mode=Reverse) :
             DI.AutoForwardDiff()
         vm = VecModel(model, adtype)
@@ -567,6 +568,59 @@ using WrenDists: WrenDists
         end
         check("three_docs1200-ldaK2", 7, lda_docs_oracle,
             [[0.2, -0.3, 0.4, -0.2, 0.1, 0.3, -0.4]])
+
+        function lda_simplex_oracle(raw, V)
+            probabilities = Vector{eltype(raw)}(undef, V)
+            remaining = one(eltype(raw))
+            jacobian = zero(eltype(raw))
+            for r in 1:(V - 1)
+                z = logistic(raw[r] - log(V - r))
+                probabilities[r] = remaining * z
+                jacobian += log(z) + log1p(-z) + log(remaining)
+                remaining *= 1 - z
+            end
+            probabilities[V] = remaining
+            return probabilities, jacobian
+        end
+        for (name, M) in (("three_men1-ldaK2", 6),
+                ("three_men2-ldaK2", 14), ("three_men3-ldaK2", 9))
+            data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+                PosteriorDB.database(), name,
+            )))
+            V = data["V"]
+            dimension = M + 2(V - 1)
+            function men_lda_oracle(v)
+                theta1 = logistic.(view(v, 1:M))
+                phi1, jac1 = lda_simplex_oracle(view(v, (M + 1):(M + V - 1)), V)
+                phi2, jac2 = lda_simplex_oracle(view(v,
+                    (M + V):(M + 2(V - 1))), V)
+                prior = sum(logit_jacobian(v[m]) for m in 1:M) +
+                    jac1 + jac2 + 2sum(log, 1:(V - 1))
+                likelihood = sum(log(theta1[data["doc"][n]] * phi1[data["w"][n]] +
+                    (1 - theta1[data["doc"][n]]) * phi2[data["w"][n]])
+                    for n in 1:data["N"])
+                return prior + likelihood
+            end
+            point = 0.01 .* sin.(1:dimension)
+            vm = VecModel(posteriordb_model(name), AutoEnzyme(; mode=Reverse))
+            @test vm.dimension == dimension
+            value, gradient = lp_and_grad(vm, point)
+            @test isapprox(value, men_lda_oracle(point); atol=1e-5, rtol=1e-8)
+            selected = [1, M, M + 1, M + V - 1, M + V, dimension]
+            positions = zeros(Int, dimension)
+            for (k, i) in enumerate(selected)
+                positions[i] = k
+            end
+            function men_lda_selected_oracle(z)
+                full = [positions[i] == 0 ? convert(eltype(z), point[i]) :
+                    z[positions[i]] for i in eachindex(point)]
+                return men_lda_oracle(full)
+            end
+            selected_gradient = ForwardDiff.gradient(men_lda_selected_oracle,
+                point[selected])
+            @test isapprox(gradient[selected], selected_gradient;
+                atol=1e-5, rtol=1e-8)
+        end
 
         dog_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
             PosteriorDB.database(), "dogs-dogs",
