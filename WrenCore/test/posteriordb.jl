@@ -3,7 +3,7 @@ module WrenPosteriorDBTests
 @info "testing posteriordb.jl"
 
 import DifferentiationInterface as DI
-using Distributions: Binomial, Cauchy, LogNormal, Normal, logpdf
+using Distributions: Beta, Binomial, Cauchy, Exponential, LogNormal, Normal, logpdf
 using Enzyme
 import ForwardDiff
 using PosteriorDB: PosteriorDB
@@ -148,6 +148,47 @@ using WrenDists: WrenDists
               10.0, log(10.0), log(10.0), log(5.0), log(5.0), log(5.0)],
              [-0.2, 0.3, -0.4, 0.2, 0.3, -0.5, -0.1, 0.4,
               11.0, log(10.0), log(10.0), log(6.0), log(5.0), log(4.0)]])
+
+        bball_data = [PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+            PosteriorDB.database(), "bball_drive_event_$(i)-hmm_drive_$(i)",
+        ))) for i in 0:1]
+        function bball_oracle(v, fixture, gaussian)
+            p11, p21 = logistic(v[1]), logistic(v[2])
+            phi1 = gaussian ? v[3] : exp(v[3])
+            phi2 = phi1 + exp(v[4])
+            lambda1 = gaussian ? v[5] : exp(v[5])
+            lambda2 = lambda1 + exp(v[6])
+            prior = logpdf(Beta(4, 2), p11) + logpdf(Beta(2, 4), p21) +
+                logit_jacobian(v[1]) + logit_jacobian(v[2]) +
+                v[4] + v[6] + (gaussian ? zero(v[3]) : v[3] + v[5]) +
+                logpdf(Normal(0, 1), phi1) + logpdf(Normal(3, 1), phi2) +
+                logpdf(Normal(0, 1), lambda1) + logpdf(Normal(3, 1), lambda2)
+            function emission(t, k)
+                phi, lambda = k == 1 ? (phi1, lambda1) : (phi2, lambda2)
+                if gaussian
+                    return logpdf(Normal(phi, fixture["tau"]), fixture["u"][t]) +
+                        logpdf(Normal(lambda, fixture["rho"]), fixture["v"][t])
+                end
+                return logpdf(Exponential(inv(phi)), fixture["u"][t]) +
+                    logpdf(Exponential(inv(lambda)), fixture["v"][t])
+            end
+            g1, g2 = emission(1, 1), emission(1, 2)
+            for t in 2:fixture["N"]
+                next1 = emission(t, 1) + logaddexp(g1 + log(p11), g2 + log(p21))
+                next2 = emission(t, 2) +
+                    logaddexp(g1 + log1p(-p11), g2 + log1p(-p21))
+                g1, g2 = next1, next2
+            end
+            return prior + logaddexp(g1, g2)
+        end
+        check("bball_drive_event_0-hmm_drive_0", 6,
+            v -> bball_oracle(v, bball_data[1], false),
+            [[0.7, -0.5, log(6.0), log(2.0), log(0.02), log(0.03)],
+             [-0.1, 0.3, log(5.0), log(2.5), log(0.025), log(0.02)]])
+        check("bball_drive_event_1-hmm_drive_1", 6,
+            v -> bball_oracle(v, bball_data[2], true),
+            [[0.7, -0.5, -1.8, log(1.5), 3.9, log(1.0)],
+             [-0.1, 0.3, -1.7, log(1.4), 3.8, log(1.2)]])
 
         dog_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
             PosteriorDB.database(), "dogs-dogs",
