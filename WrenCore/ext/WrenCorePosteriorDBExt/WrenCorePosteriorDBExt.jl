@@ -20,6 +20,7 @@ include("models/kilpisjarvi.jl")
 include("models/mh.jl")
 include("models/mesquite.jl")
 include("models/nes_years.jl")
+include("models/pilots.jl")
 include("models/radon_pooled_all.jl")
 include("models/radon_pooled_mn.jl")
 include("models/rate1.jl")
@@ -60,6 +61,7 @@ const MODELS = Dict(
     "nes1992-nes" => NES1992,
     "nes1996-nes" => NES1996,
     "nes2000-nes" => NES2000,
+    "pilots-pilots" => Pilots,
     "Rate_1_data-Rate_1_model" => Rate1,
     "Rate_2_data-Rate_2_model" => Rate2,
     "Rate_3_data-Rate_3_model" => Rate3,

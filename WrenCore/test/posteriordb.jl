@@ -85,6 +85,40 @@ using WrenDists: WrenDists
         end
     end
 
+    @testset "Pilots bounded-scale density and native Enzyme gradient" begin
+        name = "pilots-pilots"
+        data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+            PosteriorDB.database(), name,
+        )))
+        G, S = data["n_groups"], data["n_scenarios"]
+        vm = VecModel(posteriordb_model(name), AutoEnzyme(; mode=Reverse))
+        @test vm.dimension == 5 + G + S
+        function reference(v)
+            mu_a, mu_b = v[1], v[2]
+            raw = view(v, 3:5)
+            sigma = 100 ./ (1 .+ exp.(-raw))
+            a = view(v, 6:(5 + G))
+            b = view(v, (6 + G):(5 + G + S))
+            jacobian = sum(log(100.0) - log1p(exp(-u)) - log1p(exp(u))
+                for u in raw)
+            return logpdf(Normal(), mu_a) + logpdf(Normal(), mu_b) +
+                jacobian +
+                sum(logpdf(Normal(10mu_a, sigma[1]), value) for value in a) +
+                sum(logpdf(Normal(10mu_b, sigma[2]), value) for value in b) +
+                sum(logpdf(Normal(a[data["group_id"][i]] +
+                    b[data["scenario_id"][i]], sigma[3]), data["y"][i])
+                    for i in eachindex(data["y"]))
+        end
+        for offset in (0.0, 0.1)
+            point = vcat(0.04 + offset, 0.02 - offset,
+                log(0.5 / 99.5), log(0.8 / 99.2), log(0.4 / 99.6),
+                0.4 .+ 0.1 .* sin.(1:G), 0.2 .+ 0.1 .* cos.(1:S))
+            value, gradient = lp_and_grad(vm, point)
+            @test isapprox(value, reference(point); atol=1e-5)
+            @test isapprox(gradient, ForwardDiff.gradient(reference, point); atol=1e-5)
+        end
+    end
+
     @testset "flat-prior Kidscore densities and native Enzyme gradients" begin
         data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
             PosteriorDB.database(), "kidiq_with_mom_work-kidscore_interaction_c",
