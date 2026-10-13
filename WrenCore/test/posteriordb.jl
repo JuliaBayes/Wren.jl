@@ -3,7 +3,7 @@ module WrenPosteriorDBTests
 @info "testing posteriordb.jl"
 
 import DifferentiationInterface as DI
-using Distributions: Binomial, logpdf
+using Distributions: Binomial, Cauchy, Normal, logpdf
 using Enzyme
 import ForwardDiff
 using PosteriorDB: PosteriorDB
@@ -67,6 +67,126 @@ using WrenDists: WrenDists
             value, gradient = lp_and_grad(vm, point)
             @test isapprox(value, expected; atol=1e-9)
             @test isapprox(gradient, expected_grad; atol=1e-9)
+        end
+    end
+
+    @testset "noncentered schools: Stan density and gradient" begin
+        data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+            PosteriorDB.database(), "eight_schools-eight_schools_noncentered",
+        )))
+        J, y, sigma = data["J"], data["y"], data["sigma"]
+        vm = VecModel(posteriordb_model("eight_schools-eight_schools_noncentered"),
+            AutoEnzyme(; mode=Reverse))
+        @test vm.dimension == J + 2
+
+        function reference(v)
+            theta_trans, mu, logtau = view(v, 1:J), v[J+1], v[J+2]
+            tau = exp(logtau)
+            theta = theta_trans .* tau .+ mu
+            return sum(logpdf(Normal(), x) for x in theta_trans) +
+                logpdf(Normal(0, 5), mu) + logpdf(Cauchy(0, 5), tau) + log(2) +
+                logtau + sum(logpdf(Normal(theta[i], sigma[i]), y[i]) for i in eachindex(y))
+        end
+        for point in (
+            vcat(collect(range(-0.8, 0.8; length=J)), 0.4, -0.3),
+            vcat(sin.(1:J), -1.1, 0.5),
+        )
+            value, gradient = lp_and_grad(vm, point)
+            @test isapprox(value, reference(point); atol=1e-9)
+            @test isapprox(gradient, ForwardDiff.gradient(reference, point); atol=1e-8)
+        end
+    end
+
+    @testset "pooled radon: Stan density and gradient" begin
+        pdb = PosteriorDB.database()
+        for name in ("radon_all-radon_pooled", "radon_mn-radon_pooled")
+            data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(pdb, name)))
+            y, floor_measure = data["log_radon"], data["floor_measure"]
+            vm = VecModel(posteriordb_model(name), AutoEnzyme(; mode=Reverse))
+            @test vm.dimension == 3
+
+            function reference(v)
+                alpha, beta, logsigma = v
+                sigma_y = exp(logsigma)
+                return logpdf(Normal(0, 10), alpha) + logpdf(Normal(0, 10), beta) +
+                    logpdf(Normal(), sigma_y) + log(2) + logsigma +
+                    sum(logpdf(Normal(alpha + beta * floor_measure[i], sigma_y), y[i])
+                        for i in eachindex(y))
+            end
+            for point in ([0.2, -0.5, log(0.8)], [1.1, 0.4, log(1.4)])
+                value, gradient = lp_and_grad(vm, point)
+                @test isapprox(value, reference(point); atol=1e-6)
+                @test isapprox(gradient, ForwardDiff.gradient(reference, point); atol=1e-6)
+            end
+        end
+    end
+
+    @testset "wells logistic posteriors: Stan density and gradient" begin
+        data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+            PosteriorDB.database(), "wells_data-wells_dist",
+        )))
+        y, dist, arsenic = data["switched"], data["dist"], data["arsenic"]
+        dist100 = dist ./ 100.0
+        c_dist100 = (dist .- sum(dist) / length(dist)) ./ 100.0
+        c_arsenic = arsenic .- sum(arsenic) / length(arsenic)
+        cases = (
+            ("wells_data-wells_dist", hcat(ones(length(dist)), dist), false),
+            ("wells_data-wells_dist100_model", hcat(dist100), true),
+            ("wells_data-wells_interaction_model",
+                hcat(dist100, arsenic, dist100 .* arsenic), true),
+            ("wells_data-wells_interaction_c_model",
+                hcat(c_dist100, c_arsenic, c_dist100 .* c_arsenic), true),
+        )
+        for (name, X, has_alpha) in cases
+            vm = VecModel(posteriordb_model(name), AutoEnzyme(; mode=Reverse))
+            dimension = size(X, 2) + has_alpha
+            @test vm.dimension == dimension
+            for scale in (0.2, -0.3)
+                point = scale .* sin.(1:dimension)
+                logit_p = has_alpha ? point[1] .+ X * view(point, 2:dimension) : X * point
+                p = @. inv(1 + exp(-logit_p))
+                expected = sum(y[i] * logit_p[i] - log1p(exp(logit_p[i])) for i in eachindex(y))
+                residual = y .- p
+                expected_grad = has_alpha ? vcat(sum(residual), X' * residual) : X' * residual
+                value, gradient = lp_and_grad(vm, point)
+                @test isapprox(value, expected; atol=1e-6)
+                @test isapprox(gradient, expected_grad; atol=1e-6)
+            end
+        end
+    end
+
+    @testset "kidscore linear posteriors: density and gradient" begin
+        data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+            PosteriorDB.database(), "kidiq-kidscore_momhs",
+        )))
+        y, mom_hs, mom_iq = data["kid_score"], data["mom_hs"], data["mom_iq"]
+        intercept = ones(length(y))
+        cases = (
+            ("kidiq-kidscore_momhs", hcat(intercept, mom_hs)),
+            ("kidiq-kidscore_momiq", hcat(intercept, mom_iq)),
+            ("kidiq-kidscore_momhsiq", hcat(intercept, mom_hs, mom_iq)),
+        )
+        for (name, X) in cases
+            vm = VecModel(posteriordb_model(name), AutoEnzyme(; mode=Reverse))
+            k = size(X, 2)
+            @test vm.dimension == k + 1
+            for log_sigma in (log(50.0), log(85.0))
+                beta = 0.2 .* cos.(1:k)
+                point = vcat(beta, log_sigma)
+                sigma = exp(log_sigma)
+                residual = y - X * beta
+                expected = -length(y) * log(sigma * sqrt(2π)) -
+                    sum(abs2, residual) / (2sigma^2) +
+                    log(2 / (π * 2.5)) - log1p((sigma / 2.5)^2) + log_sigma
+                expected_grad = vcat(
+                    X' * residual / sigma^2,
+                    -length(y) + sum(abs2, residual) / sigma^2 -
+                        2sigma^2 / (2.5^2 + sigma^2) + 1,
+                )
+                value, gradient = lp_and_grad(vm, point)
+                @test isapprox(value, expected; atol=1e-6)
+                @test isapprox(gradient, expected_grad; atol=1e-6)
+            end
         end
     end
 end
