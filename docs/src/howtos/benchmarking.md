@@ -73,3 +73,19 @@ The code for this is in `bench/suite`, and you can view the results at https://p
 
 This suite is currently run manually by the maintainers in order to guarantee that the results are at least somewhat consistent from run to run.
 (On GitHub Actions, the results are not consistent enough to be useful, since the underlying hardware is not guaranteed to be the same from run to run.)
+
+## Benchmarking a PosteriorDB model
+
+In an environment with WrenCore, WrenDists, PosteriorDB, and Enzyme installed, load them to activate the PosteriorDB and Enzyme extensions. Use the registered posterior name, including its dataset prefix:
+
+```julia
+using WrenCore, WrenDists, PosteriorDB, Enzyme
+
+names = available_posteriordb_models()
+model = posteriordb_model("arK-arK")
+vecmodel = VecModel(model, AutoEnzyme(; mode=Reverse))
+v = rand(vecmodel)
+log_density, gradient = lp_and_grad(vecmodel, v)
+```
+
+`available_posteriordb_models()` lists the implemented fixtures; not every PosteriorDB posterior has a WrenCore implementation. Each returned model uses the public data associated with that posterior. For a reproducible performance comparison, fix the Julia environment, random seed, and BLAS thread count alongside the model name.
