@@ -197,6 +197,24 @@ using WrenDists: WrenDists
             end
         end
 
+        sblrc_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+            PosteriorDB.database(), "sblrc-blr",
+        )))
+        function sblrc_reference(v)
+            beta = view(v, 1:5)
+            sigma = exp(v[6])
+            mu = sblrc_data["X"] * beta
+            return sum(logpdf(Normal(0, 10), b) for b in beta) +
+                logpdf(Normal(0, 10), sigma) + log(2) + v[6] +
+                sum(logpdf(Normal(mu[i], sigma), sblrc_data["y"][i])
+                    for i in eachindex(mu))
+        end
+        @test sblrc_data["D"] == 5
+        @test sblrc_data["N"] == length(sblrc_data["y"]) == 100
+        check("sblrc-blr", 6, sblrc_reference,
+            [[0.1, -0.2, 0.3, 0.05, -0.1, -0.2],
+             [-0.1, 0.15, -0.05, 0.2, 0.1, 0.3]])
+
         arma_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
             PosteriorDB.database(), "arma-arma11",
         )))

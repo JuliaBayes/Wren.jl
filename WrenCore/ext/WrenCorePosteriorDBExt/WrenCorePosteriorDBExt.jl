@@ -19,6 +19,7 @@ include("models/normal_mixture.jl")
 include("models/normal_mixture_k.jl")
 include("models/rate1.jl")
 include("models/sblri_blr.jl")
+include("models/sblrc_blr.jl")
 include("models/seeds.jl")
 include("models/seeds_centered.jl")
 include("models/seeds_stanified.jl")
@@ -43,6 +44,7 @@ const MODELS = Dict(
     "normal_5-normal_mixture_k" => NormalMixtureK,
     "Rate_1_data-Rate_1_model" => Rate1,
     "sblri-blr" => SblriBLR,
+    "sblrc-blr" => SblrcBLR,
     "seeds_data-seeds_model" => Seeds,
     "seeds_data-seeds_centered_model" => SeedsCentered,
     "seeds_data-seeds_stanified_model" => SeedsStanified,
