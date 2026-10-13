@@ -18,7 +18,10 @@ using WrenDists: WrenDists
 @testset "posteriordb.jl" begin
     @testset "$name" for name in available_posteriordb_models()
         model = posteriordb_model(name)
-        vm = VecModel(model, DI.AutoForwardDiff())
+        adtype = name in ("ovarian-logistic_regression_rhs",
+            "prostate-logistic_regression_rhs") ?
+            AutoEnzyme(; mode=Reverse) : DI.AutoForwardDiff()
+        vm = VecModel(model, adtype)
         if name == "dugongs_data-dugongs_model"
             # Gamma(shape=0.0001) prior draws commonly underflow in Float64.
             v = [2.0, 1.0, 0.0, 0.0]
@@ -32,6 +35,14 @@ using WrenDists: WrenDists
             # with -Inf Normal likelihood in Float64. Use a finite reference point.
             v = vcat([-12.0, 0.1], zeros(38), [log(5.0), 0.5, -0.1],
                      zeros(38), [log(2.0)])
+            @test isfinite(lp(vm, v))
+        elseif name in ("ovarian-logistic_regression_rhs",
+                "prostate-logistic_regression_rhs")
+            posterior = PosteriorDB.posterior(PosteriorDB.database(), name)
+            data = PosteriorDB.load(PosteriorDB.dataset(posterior))
+            d = data["d"]
+            v = vcat(0.0, zeros(d), log(2 * data["scale_global"]),
+                zeros(d), 0.0)
             @test isfinite(lp(vm, v))
         else
             @test isfinite(logjoint(model, rand(StableRNG(468), model)))
@@ -295,6 +306,60 @@ using WrenDists: WrenDists
             [0.0, 0.0, log(0.05), log(0.05), log(0.1)])
         check("uk_drivers-state_space_stochastic_level_stochastic_seasonal",
             2n_uk + 5, uk_drivers_reference, [uk_point])
+
+        for name in ("ovarian-logistic_regression_rhs",
+                "prostate-logistic_regression_rhs")
+            data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+                PosteriorDB.database(), name,
+            )))
+            d, n = data["d"], data["n"]
+            function rhs_reference(v)
+                beta0 = v[1]
+                z = view(v, 2:(d + 1))
+                tau = exp(v[d + 2])
+                lambda = exp.(view(v, (d + 3):(2d + 2)))
+                caux = exp(v[end])
+                prior = logpdf(Normal(0, data["scale_icept"]), beta0) +
+                    sum(logpdf(Normal(), zj) for zj in z) +
+                    logpdf(TDist(data["nu_global"]),
+                        tau / (2 * data["scale_global"])) -
+                    log(2 * data["scale_global"]) + v[d + 2] +
+                    sum(logpdf(TDist(data["nu_local"]), lambda[j]) +
+                        v[d + 2 + j] for j in 1:d) +
+                    logpdf(InverseGamma(data["slab_df"] / 2,
+                        data["slab_df"] / 2), caux) + v[end]
+                c2 = data["slab_scale"]^2 * caux
+                beta = [z[j] * tau * sqrt(c2 * lambda[j]^2 /
+                    (c2 + tau^2 * lambda[j]^2)) for j in 1:d]
+                likelihood = zero(prior)
+                for i in 1:n
+                    eta = beta0 + sum(data["x"][i, j] * beta[j] for j in 1:d)
+                    likelihood += data["y"][i] * eta - log1p(exp(eta))
+                end
+                return prior + likelihood
+            end
+            point = vcat(0.1, 0.01 .* sin.(1:d),
+                log(2 * data["scale_global"]),
+                0.02 .* cos.(1:d), 0.0)
+            vm = VecModel(posteriordb_model(name), AutoEnzyme(; mode=Reverse))
+            @test vm.dimension == length(point)
+            value, gradient = lp_and_grad(vm, point)
+            @test isapprox(value, rhs_reference(point); atol=1e-5, rtol=1e-8)
+            selected = [1, 2, d + 1, d + 2, d + 3, 2d + 2, 2d + 3]
+            positions = zeros(Int, length(point))
+            for (k, i) in enumerate(selected)
+                positions[i] = k
+            end
+            function rhs_selected_reference(s)
+                full = [positions[i] == 0 ? convert(eltype(s), point[i]) :
+                    s[positions[i]] for i in eachindex(point)]
+                return rhs_reference(full)
+            end
+            selected_gradient = ForwardDiff.gradient(rhs_selected_reference,
+                point[selected])
+            @test isapprox(gradient[selected], selected_gradient;
+                atol=1e-5, rtol=1e-6)
+        end
     end
 
     @testset "additional Gaussian mixture densities and native Enzyme gradients" begin

@@ -32,9 +32,9 @@ include("models/surgical_model.jl")
 include("models/prophet.jl")
 include("models/mcycle_gp.jl")
 include("models/uk_drivers.jl")
+include("models/logistic_rhs.jl")
 
-# Maps PosteriorDB posterior names to the modules defining the models. Each module must
-# define `wren_model`.
+# Maps PosteriorDB posterior names to containers with a `wren_model` property.
 const MODELS = Dict(
     "arK-arK" => ArK,
     "mcycle_splines-accel_splines" => AccelSplines,
@@ -66,6 +66,8 @@ const MODELS = Dict(
     "rstan_downloads-prophet" => Prophet,
     "mcycle_gp-accel_gp" => McycleGP,
     "uk_drivers-state_space_stochastic_level_stochastic_seasonal" => UKDrivers,
+    "ovarian-logistic_regression_rhs" => LogisticRHS.ovarian,
+    "prostate-logistic_regression_rhs" => LogisticRHS.prostate,
 )
 const MODEL_NAMES = sort!(collect(keys(MODELS)))
 
