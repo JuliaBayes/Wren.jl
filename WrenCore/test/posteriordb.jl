@@ -550,6 +550,24 @@ using WrenDists: WrenDists
         @test isapprox(timss_gradient[timss_selected], timss_selected_gradient;
             atol=1e-5)
 
+        lda_docs_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+            PosteriorDB.database(), "three_docs1200-ldaK2",
+        )))
+        function lda_docs_oracle(v)
+            theta1 = logistic.(view(v, 1:3))
+            phi1, jac1 = simplex3_oracle(v[4], v[5])
+            phi2, jac2 = simplex3_oracle(v[6], v[7])
+            prior = sum(logit_jacobian(v[m]) for m in 1:3) +
+                jac1 + jac2 + 2log(2)
+            likelihood = sum(log(theta1[lda_docs_data["doc"][n]] *
+                phi1[lda_docs_data["w"][n]] +
+                (1 - theta1[lda_docs_data["doc"][n]]) *
+                phi2[lda_docs_data["w"][n]]) for n in 1:lda_docs_data["N"])
+            return prior + likelihood
+        end
+        check("three_docs1200-ldaK2", 7, lda_docs_oracle,
+            [[0.2, -0.3, 0.4, -0.2, 0.1, 0.3, -0.4]])
+
         dog_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
             PosteriorDB.database(), "dogs-dogs",
         )))
