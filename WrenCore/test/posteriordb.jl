@@ -18,7 +18,8 @@ using WrenDists: WrenDists
         model = posteriordb_model(name)
         # LSAT has 1000 person effects; ForwardDiff's full Jacobian is too large
         # for the generic smoke test. Its targeted checks use native Enzyme below.
-        adtype = name in ("lsat_data-lsat_model", "election88-election88_full") ?
+        adtype = name in ("lsat_data-lsat_model", "election88-election88_full",
+            "sat-hier_2pl") ?
             AutoEnzyme(; mode=Reverse) :
             DI.AutoForwardDiff()
         vm = VecModel(model, adtype)
@@ -310,6 +311,61 @@ using WrenDists: WrenDists
             0.05 .* sin.(1:dog_nonhier_J), 0.05 .* cos.(1:dog_nonhier_J))
         check("dogs-dogs_nonhierarchical", 5 + 2dog_nonhier_J,
             dog_nonhier_oracle, [dog_nonhier_point])
+
+        sat_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+            PosteriorDB.database(), "sat-hier_2pl",
+        )))
+        function sat_oracle(v)
+            I, J = sat_data["I"], sat_data["J"]
+            theta = view(v, 1:J)
+            xi1 = view(v, (J + 1):(J + I))
+            xi2 = view(v, (J + I + 1):(J + 2I))
+            mu1, mu2 = v[J + 2I + 1], v[J + 2I + 2]
+            tau1, tau2 = exp(v[J + 2I + 3]), exp(v[J + 2I + 4])
+            rho = tanh(v[J + 2I + 5])
+            prior = sum(logpdf(Normal(), tj) for tj in theta) +
+                logpdf(Normal(), mu1) + logpdf(Normal(0, 5), mu2) +
+                logpdf(Exponential(10), tau1) + v[J + 2I + 3] +
+                logpdf(Exponential(10), tau2) + v[J + 2I + 4] +
+                log(35 / 32) + 4 * log1p(-rho^2)
+            for i in 1:I
+                z1 = (xi1[i] - mu1) / tau1
+                z2 = ((xi2[i] - mu2) / tau2 - rho * z1) / sqrt(1 - rho^2)
+                prior += logpdf(Normal(), z1) + logpdf(Normal(), z2) -
+                    log(tau1) - log(tau2) - 0.5 * log1p(-rho^2)
+            end
+            likelihood = sum(logpdf(Bernoulli(logistic(
+                exp(xi1[sat_data["ii"][n]]) *
+                (theta[sat_data["jj"][n]] - xi2[sat_data["ii"][n]]))),
+                sat_data["y"][n]) for n in 1:sat_data["N"])
+            return prior + likelihood
+        end
+        sat_I, sat_J = sat_data["I"], sat_data["J"]
+        sat_point = vcat(0.2 .* sin.(1:sat_J),
+            0.03 .* sin.(1:sat_I), 0.03 .* cos.(1:sat_I),
+            [0.0, 0.0, log(0.5), log(1.0), 0.1])
+        sat_vm = VecModel(posteriordb_model("sat-hier_2pl"),
+            AutoEnzyme(; mode=Reverse))
+        @test sat_vm.dimension == length(sat_point)
+        sat_value, sat_gradient = lp_and_grad(sat_vm, sat_point)
+        @test isapprox(sat_value, sat_oracle(sat_point); atol=1e-5)
+        selected = [1, sat_J, sat_J + 1, sat_J + sat_I,
+            sat_J + sat_I + 1, sat_J + 2sat_I,
+            sat_J + 2sat_I + 1, sat_J + 2sat_I + 2,
+            sat_J + 2sat_I + 3, sat_J + 2sat_I + 4,
+            sat_J + 2sat_I + 5]
+        positions = zeros(Int, length(sat_point))
+        for (k, i) in enumerate(selected)
+            positions[i] = k
+        end
+        function sat_selected_oracle(z)
+            full = [positions[i] == 0 ? convert(eltype(z), sat_point[i]) :
+                z[positions[i]] for i in eachindex(sat_point)]
+            return sat_oracle(full)
+        end
+        sat_selected_gradient = ForwardDiff.gradient(sat_selected_oracle,
+            sat_point[selected])
+        @test isapprox(sat_gradient[selected], sat_selected_gradient; atol=1e-5)
 
         dog_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
             PosteriorDB.database(), "dogs-dogs",
