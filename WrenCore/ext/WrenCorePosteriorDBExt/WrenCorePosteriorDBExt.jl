@@ -13,6 +13,7 @@ include("models/mh.jl")
 include("models/rate1.jl")
 include("models/radon_hierarchical_intercept_centered_all.jl")
 include("models/radon_hierarchical_intercept_centered_mn.jl")
+include("models/radon_county.jl")
 include("models/radon_partially_pooled_centered_all.jl")
 include("models/radon_partially_pooled_centered_mn.jl")
 include("models/radon_variable_intercept_centered_all.jl")
@@ -45,6 +46,7 @@ const MODELS = Dict(
     "radon_mn-radon_variable_intercept_centered" => RadonVariableInterceptCenteredMn,
     "radon_mn-radon_variable_intercept_slope_centered" => RadonVariableInterceptSlopeCenteredMn,
     "radon_mn-radon_variable_slope_centered" => RadonVariableSlopeCenteredMn,
+    "radon_mod-radon_county" => RadonCounty,
     "sblri-blr" => SblriBLR,
 )
 const MODEL_NAMES = sort!(collect(keys(MODELS)))

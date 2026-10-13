@@ -27,6 +27,38 @@ using WrenDists: WrenDists
 
     @test_throws ArgumentError posteriordb_model("not-a-posterior")
 
+    @testset "radon county bounded-scale density and native Enzyme gradient" begin
+        name = "radon_mod-radon_county"
+        data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+            PosteriorDB.database(), name,
+        )))
+        J = data["J"]
+        vm = VecModel(posteriordb_model(name), AutoEnzyme(; mode=Reverse))
+        @test vm.dimension == J + 3
+        normal_logp(x, mu, sigma) =
+            -log(sigma * sqrt(2π)) - (x - mu)^2 / (2 * sigma^2)
+        function reference(v)
+            mu_a = v[1]
+            ratio_a = inv(1 + exp(-v[2]))
+            ratio_y = inv(1 + exp(-v[3]))
+            sigma_a, sigma_y = 100 * ratio_a, 100 * ratio_y
+            a = view(v, 4:length(v))
+            jacobian = 2 * log(100.0) + log(ratio_a) + log1p(-ratio_a) +
+                log(ratio_y) + log1p(-ratio_y)
+            return normal_logp(mu_a, 0.0, 1.0) + jacobian +
+                sum(normal_logp(value, mu_a, sigma_a) for value in a) +
+                sum(normal_logp(data["y"][i], a[data["county"][i]], sigma_y)
+                    for i in eachindex(data["y"]))
+        end
+        for offset in (0.0, 0.1)
+            point = vcat(0.2 + offset, log(1.0 / 99.0), log(0.8 / 99.2),
+                0.1 .* sin.(1:J))
+            value, gradient = lp_and_grad(vm, point)
+            @test isapprox(value, reference(point); atol=1e-5)
+            @test isapprox(gradient, ForwardDiff.gradient(reference, point); atol=1e-5)
+        end
+    end
+
     @testset "centered radon: density and native Enzyme gradients" begin
         normal_sum(x, mu, sigma) =
             -length(x) * log(sigma * sqrt(2π)) - sum(abs2, x .- mu) / (2sigma^2)
