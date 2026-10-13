@@ -134,6 +134,18 @@ using WrenDists: WrenDists
         end
         check("normal_2-normal_mixture", 3, normal_mixture_reference,
             [[0.2, -0.8, 0.9], [-0.3, 0.4, -0.5]])
+
+        sesame_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+            PosteriorDB.database(), "sesame_data-sesame_one_pred_a",
+        )))
+        function sesame_reference(v)
+            sigma = exp(v[3])
+            return v[3] + sum(logpdf(Normal(v[1] + v[2] *
+                sesame_data["encouraged"][i], sigma), sesame_data["watched"][i])
+                for i in eachindex(sesame_data["watched"]))
+        end
+        check("sesame_data-sesame_one_pred_a", 3, sesame_reference,
+            [[0.2, 0.3, log(0.8)], [-0.1, 0.5, log(1.2)]])
     end
 
     @testset "additional Gaussian mixture densities and native Enzyme gradients" begin
