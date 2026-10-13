@@ -15,6 +15,7 @@ include("models/kidscore_momhs.jl")
 include("models/kidscore_momhsiq.jl")
 include("models/kidscore_momiq.jl")
 include("models/mh.jl")
+include("models/nes_years.jl")
 include("models/radon_pooled_all.jl")
 include("models/radon_pooled_mn.jl")
 include("models/rate1.jl")
@@ -40,6 +41,14 @@ const MODELS = Dict(
     "GLM_Binomial_data-GLM_Binomial_model" => GLMBinomial,
     "GLM_Poisson_Data-GLM_Poisson_model" => GLMPoisson,
     "Mh_data-Mh_model" => Mh,
+    "nes1972-nes" => NES1972,
+    "nes1976-nes" => NES1976,
+    "nes1980-nes" => NES1980,
+    "nes1984-nes" => NES1984,
+    "nes1988-nes" => NES1988,
+    "nes1992-nes" => NES1992,
+    "nes1996-nes" => NES1996,
+    "nes2000-nes" => NES2000,
     "Rate_1_data-Rate_1_model" => Rate1,
     "Rate_2_data-Rate_2_model" => Rate2,
     "Rate_3_data-Rate_3_model" => Rate3,

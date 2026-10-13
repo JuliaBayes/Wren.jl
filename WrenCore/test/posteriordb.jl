@@ -72,6 +72,36 @@ using WrenDists: WrenDists
         end
     end
 
+    @testset "eight NES regression densities and native Enzyme gradients" begin
+        for year in 1972:4:2000
+            name = "nes$(year)-nes"
+            data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+                PosteriorDB.database(), name,
+            )))
+            age = data["age_discrete"]
+            X = hcat(ones(data["N"]), data["real_ideo"], data["race_adj"],
+                age .== 2, age .== 3, age .== 4, data["educ1"], data["gender"],
+                data["income"])
+            vm = VecModel(posteriordb_model(name), AutoEnzyme(; mode=Reverse))
+            @test vm.dimension == 10
+            function reference(v)
+                mu = X * view(v, 1:9)
+                sigma = exp(v[10])
+                return v[10] + sum(logpdf(Normal(mu[i], sigma), data["partyid7"][i])
+                    for i in eachindex(mu))
+            end
+            for point in (
+                [3.0, 0.2, 0.1, -0.1, 0.2, 0.1, -0.1, 0.2, 0.1, log(1.5)],
+                [4.0, -0.1, 0.2, 0.1, -0.1, 0.2, 0.1, -0.1, 0.2, log(2.0)],
+            )
+                value, gradient = lp_and_grad(vm, point)
+                @test isapprox(value, reference(point); atol=1e-5)
+                @test isapprox(gradient, ForwardDiff.gradient(reference, point);
+                    atol=1e-5)
+            end
+        end
+    end
+
     @testset "Rate posteriors: Stan density and unconstrained gradient" begin
         pdb = PosteriorDB.database()
         for (number, point) in (
