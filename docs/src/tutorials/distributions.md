@@ -43,3 +43,23 @@ You can also use any distribution from Distributions.jl as they already obey the
 
 This is useful if you just want a familiar interface and don't need any of the features of Wren's built-in distributions.
 Indeed, Wren promises that `@batch` will still work _correctly_ with these distributions; it's just that it will fall back to using `product_distribution`, which won't give you any speedups over the unbatched loop.
+
+For example, WrenDists does not define `InverseGamma`, but you can use the
+shape-and-scale `InverseGamma(α, β)` from Distributions.jl for a positive
+variance prior:
+
+```julia
+using WrenCore
+using Distributions: InverseGamma
+
+@wren function variance_prior()
+    variance ~ InverseGamma(2.0, 3.0)
+end
+
+model = variance_prior()
+rand(model)
+```
+
+This uses Wren's usual positive-support transform. Its log density is
+differentiable with ForwardDiff and Enzyme; `@batch` uses the generic product
+fallback described above.
