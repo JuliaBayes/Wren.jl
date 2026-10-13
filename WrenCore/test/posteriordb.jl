@@ -29,6 +29,28 @@ using WrenDists: WrenDists
 
     @test_throws ArgumentError posteriordb_model("not-a-posterior")
 
+    @testset "Kilpisjarvi Gaussian regression density and native Enzyme gradient" begin
+        name = "kilpisjarvi_mod-kilpisjarvi"
+        data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+            PosteriorDB.database(), name,
+        )))
+        vm = VecModel(posteriordb_model(name), AutoEnzyme(; mode=Reverse))
+        @test vm.dimension == 3
+        function reference(v)
+            alpha, beta, log_sigma = v
+            sigma = exp(log_sigma)
+            return logpdf(Normal(data["pmualpha"], data["psalpha"]), alpha) +
+                logpdf(Normal(data["pmubeta"], data["psbeta"]), beta) +
+                log_sigma + sum(logpdf(Normal(alpha + beta * data["x"][i], sigma),
+                    data["y"][i]) for i in eachindex(data["y"]))
+        end
+        for point in ([0.0, 0.0, log(1.0)], [1.5, -0.3, log(2.0)])
+            value, gradient = lp_and_grad(vm, point)
+            @test isapprox(value, reference(point); atol=1e-5)
+            @test isapprox(gradient, ForwardDiff.gradient(reference, point); atol=1e-5)
+        end
+    end
+
     @testset "flat-prior Kidscore densities and native Enzyme gradients" begin
         data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
             PosteriorDB.database(), "kidiq_with_mom_work-kidscore_interaction_c",

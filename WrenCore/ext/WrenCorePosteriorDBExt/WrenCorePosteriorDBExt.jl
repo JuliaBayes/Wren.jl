@@ -16,6 +16,7 @@ include("models/kidscore_flat.jl")
 include("models/kidscore_momhs.jl")
 include("models/kidscore_momhsiq.jl")
 include("models/kidscore_momiq.jl")
+include("models/kilpisjarvi.jl")
 include("models/mh.jl")
 include("models/mesquite.jl")
 include("models/nes_years.jl")
@@ -82,6 +83,7 @@ const MODELS = Dict(
     "kidiq-kidscore_momhs" => KidscoreMomhs,
     "kidiq-kidscore_momhsiq" => KidscoreMomhsiq,
     "kidiq-kidscore_momiq" => KidscoreMomiq,
+    "kilpisjarvi_mod-kilpisjarvi" => Kilpisjarvi,
     "radon_all-radon_pooled" => RadonPooledAll,
     "radon_mn-radon_pooled" => RadonPooledMN,
     "sblri-blr" => SblriBLR,
