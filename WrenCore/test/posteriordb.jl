@@ -222,6 +222,56 @@ using WrenDists: WrenDists
              vcat([-0.3, 0.5], 0.15 .* cos.(1:24),
                  [log(2.5), log(3.5), log(4.0)])])
 
+        butterfly_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+            PosteriorDB.database(), "butterfly-multi_occupancy",
+        )))
+        function butterfly_oracle(v)
+            alpha, beta = v[1], v[2]
+            omega = logistic(v[3])
+            rho_unit = logistic(v[4])
+            rho = 2 * rho_unit - 1
+            sigma1, sigma2 = exp(v[5]), exp(v[6])
+            S, n, J, K = (butterfly_data[key] for key in ("S", "n", "J", "K"))
+            uv1 = view(v, 7:(6 + S))
+            uv2 = view(v, (7 + S):length(v))
+            prior = logpdf(Cauchy(0, 2.5), alpha) +
+                logpdf(Cauchy(0, 2.5), beta) +
+                logpdf(Beta(2, 2), omega) + logit_jacobian(v[3]) +
+                logpdf(Beta(2, 2), rho_unit) + log(2.0) +
+                logit_jacobian(v[4]) +
+                logpdf(Cauchy(0, 2.5), sigma1) + v[5] +
+                logpdf(Cauchy(0, 2.5), sigma2) + v[6]
+            likelihood = zero(prior)
+            for i in 1:S
+                z1 = uv1[i] / sigma1
+                z2 = (uv2[i] / sigma2 - rho * z1) / sqrt(1 - rho^2)
+                prior += logpdf(Normal(), z1) + logpdf(Normal(), z2) -
+                    log(sigma1) - log(sigma2) - 0.5 * log1p(-rho^2)
+                psi = logistic(alpha + uv1[i])
+                theta = logistic(beta + uv2[i])
+                never_at_site = logaddexp(log(psi) +
+                    logpdf(Binomial(K, theta), 0), log1p(-psi))
+                if i <= n
+                    likelihood += log(omega)
+                    for j in 1:J
+                        count = butterfly_data["X"][i, j]
+                        likelihood += count > 0 ?
+                            log(psi) + logpdf(Binomial(K, theta), count) :
+                            never_at_site
+                    end
+                else
+                    likelihood += logaddexp(log1p(-omega),
+                        log(omega) + J * never_at_site)
+                end
+            end
+            return prior + likelihood
+        end
+        butterfly_S = butterfly_data["S"]
+        butterfly_point = vcat([0.1, -0.2, 0.2, 0.1, log(0.8), log(1.2)],
+            0.03 .* sin.(1:butterfly_S), 0.03 .* cos.(1:butterfly_S))
+        check("butterfly-multi_occupancy", 6 + 2butterfly_S,
+            butterfly_oracle, [butterfly_point])
+
         dog_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
             PosteriorDB.database(), "dogs-dogs",
         )))

@@ -22,6 +22,7 @@ include("models/hmm_gaussian.jl")
 include("models/bball_drive_0.jl")
 include("models/bball_drive_1.jl")
 include("models/iohmm_reg.jl")
+include("models/butterfly_occupancy.jl")
 include("models/glmm_poisson.jl")
 include("models/glmm1.jl")
 include("models/gp_regr.jl")
@@ -57,6 +58,7 @@ const MODELS = Dict(
     "bball_drive_event_0-hmm_drive_0" => BballDrive0,
     "bball_drive_event_1-hmm_drive_1" => BballDrive1,
     "iohmm_reg_simulated-iohmm_reg" => IOHMMReg,
+    "butterfly-multi_occupancy" => ButterflyOccupancy,
     "GLMM_Poisson_data-GLMM_Poisson_model" => GLMMPoisson,
     "gp_pois_regr-gp_regr" => GPRegr,
     "irt_2pl-irt_2pl" => IRT2PL,
