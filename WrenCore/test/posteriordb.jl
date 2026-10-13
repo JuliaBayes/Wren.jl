@@ -23,7 +23,8 @@ using WrenDists: WrenDists
             "sat-hier_2pl", "fims_Aus_Jpn_irt-2pl_latent_reg_irt",
             "science_irt-grsm_latent_reg_irt",
             "timssAusTwn_irt-gpcm_latent_reg_irt",
-            "three_men1-ldaK2", "three_men2-ldaK2", "three_men3-ldaK2") ?
+            "three_men1-ldaK2", "three_men2-ldaK2", "three_men3-ldaK2",
+            "traffic_accident_nyc-bym2_offset_only") ?
             AutoEnzyme(; mode=Reverse) :
             DI.AutoForwardDiff()
         vm = VecModel(model, adtype)
@@ -621,6 +622,59 @@ using WrenDists: WrenDists
             @test isapprox(gradient[selected], selected_gradient;
                 atol=1e-5, rtol=1e-8)
         end
+
+        traffic_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+            PosteriorDB.database(), "traffic_accident_nyc-bym2_offset_only",
+        )))
+        traffic_N = traffic_data["N"]
+        traffic_log_E = log.(traffic_data["E"])
+        traffic_log_factorial = [sum(log, 1:y; init=0.0)
+            for y in traffic_data["y"]]
+        function traffic_oracle(v)
+            beta0, sigma, rho = v[1], exp(v[2]), logistic(v[3])
+            theta = view(v, 4:(3 + traffic_N))
+            phi = view(v, (4 + traffic_N):(3 + 2traffic_N))
+            prior = logpdf(Normal(), beta0) +
+                logpdf(Normal(), sigma) + v[2] +
+                logpdf(Beta(0.5, 0.5), rho) + logit_jacobian(v[3]) +
+                sum(logpdf(Normal(), t) for t in theta) +
+                logpdf(Normal(0, 0.001 * traffic_N), sum(phi)) -
+                0.5 * sum((phi[traffic_data["node1"][e]] -
+                    phi[traffic_data["node2"][e]])^2
+                    for e in 1:traffic_data["N_edges"])
+            likelihood = sum(begin
+                eta = traffic_log_E[n] + beta0 + sigma *
+                    (sqrt(1 - rho) * theta[n] +
+                    sqrt(rho / traffic_data["scaling_factor"]) * phi[n])
+                traffic_data["y"][n] * eta - exp(eta) -
+                    traffic_log_factorial[n]
+            end for n in 1:traffic_N)
+            return prior + likelihood
+        end
+        traffic_point = vcat([-4.0, log(0.2), 0.3],
+            0.01 .* sin.(1:traffic_N), 0.01 .* cos.(1:traffic_N))
+        traffic_vm = VecModel(posteriordb_model(
+            "traffic_accident_nyc-bym2_offset_only"), AutoEnzyme(; mode=Reverse))
+        @test traffic_vm.dimension == length(traffic_point)
+        traffic_value, traffic_gradient = lp_and_grad(traffic_vm, traffic_point)
+        @test isapprox(traffic_value, traffic_oracle(traffic_point);
+            atol=1e-5, rtol=1e-8)
+        traffic_selected = [1, 2, 3, 4, 3 + traffic_N,
+            4 + traffic_N, 3 + 2traffic_N]
+        traffic_positions = zeros(Int, length(traffic_point))
+        for (k, i) in enumerate(traffic_selected)
+            traffic_positions[i] = k
+        end
+        function traffic_selected_oracle(z)
+            full = [traffic_positions[i] == 0 ?
+                convert(eltype(z), traffic_point[i]) : z[traffic_positions[i]]
+                for i in eachindex(traffic_point)]
+            return traffic_oracle(full)
+        end
+        traffic_selected_gradient = ForwardDiff.gradient(traffic_selected_oracle,
+            traffic_point[traffic_selected])
+        @test isapprox(traffic_gradient[traffic_selected],
+            traffic_selected_gradient; atol=1e-5, rtol=1e-8)
 
         dog_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
             PosteriorDB.database(), "dogs-dogs",

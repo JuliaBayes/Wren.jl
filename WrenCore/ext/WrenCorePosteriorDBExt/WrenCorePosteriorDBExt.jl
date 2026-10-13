@@ -31,6 +31,7 @@ include("models/science_grsm.jl")
 include("models/timss_gpcm.jl")
 include("models/lda_three_docs.jl")
 include("models/lda_three_men.jl")
+include("models/traffic_bym2.jl")
 include("models/glmm_poisson.jl")
 include("models/glmm1.jl")
 include("models/gp_regr.jl")
@@ -75,6 +76,7 @@ const MODELS = Dict(
     "three_men1-ldaK2" => LDAThreeMen.case1,
     "three_men2-ldaK2" => LDAThreeMen.case2,
     "three_men3-ldaK2" => LDAThreeMen.case3,
+    "traffic_accident_nyc-bym2_offset_only" => TrafficBYM2,
     "GLMM_Poisson_data-GLMM_Poisson_model" => GLMMPoisson,
     "gp_pois_regr-gp_regr" => GPRegr,
     "irt_2pl-irt_2pl" => IRT2PL,
