@@ -113,7 +113,7 @@ using WrenDists: WrenDists
                 c[election_data["age_edu"]] .+ d[election_data["state"]] .+
                 e[election_data["region_full"]]
             prior = sum(logpdf(Normal(0, 100), bi) for bi in beta) +
-                5 * log(100.0) + sum(logit_jacobian(ui) for ui in raw) +
+                sum(logit_jacobian(ui) for ui in raw) +
                 sum(logpdf(Normal(0, scales[1]), ai) for ai in a) +
                 sum(logpdf(Normal(0, scales[2]), bi) for bi in b) +
                 sum(logpdf(Normal(0, scales[3]), ci) for ci in c) +
@@ -274,10 +274,10 @@ using WrenDists: WrenDists
             prior = logpdf(Cauchy(0, 2.5), alpha) +
                 logpdf(Cauchy(0, 2.5), beta) +
                 logpdf(Beta(2, 2), omega) + logit_jacobian(v[3]) +
-                logpdf(Beta(2, 2), rho_unit) + log(2.0) +
+                logpdf(Beta(2, 2), rho_unit) +
                 logit_jacobian(v[4]) +
-                logpdf(Cauchy(0, 2.5), sigma1) + v[5] +
-                logpdf(Cauchy(0, 2.5), sigma2) + v[6]
+                logpdf(Cauchy(0, 2.5), sigma1) + log(2.0) + v[5] +
+                logpdf(Cauchy(0, 2.5), sigma2) + log(2.0) + v[6]
             likelihood = zero(prior)
             for i in 1:S
                 z1 = uv1[i] / sigma1
@@ -719,7 +719,7 @@ using WrenDists: WrenDists
             theta = view(v, 4:(3 + traffic_N))
             phi = view(v, (4 + traffic_N):(3 + 2traffic_N))
             prior = logpdf(Normal(), beta0) +
-                logpdf(Normal(), sigma) + v[2] +
+                logpdf(Normal(), sigma) + log(2.0) + v[2] +
                 logpdf(Beta(0.5, 0.5), rho) + logit_jacobian(v[3]) +
                 sum(logpdf(Normal(), t) for t in theta) +
                 logpdf(Normal(0, 0.001 * traffic_N), sum(phi)) -

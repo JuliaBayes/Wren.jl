@@ -12,9 +12,6 @@ const data = let
     )))
 end
 
-logistic(x) = inv(1 + exp(-x))
-logit_jacobian(x) = -log1p(exp(-x)) - log1p(exp(x))
-
 function traffic_logdensity(y, log_E, node1, node2, scaling_factor,
         beta0, sigma, rho, theta, phi)
     total = zero(beta0 + sigma + rho + theta[1] + phi[1])
@@ -34,15 +31,10 @@ end
 
 @wren function bym2(y, log_E, node1, node2, scaling_factor, N)
     beta0 ~ WD.Normal(0.0, 1.0)
-    raw_sigma ~ WD.Flat()
-    raw_rho ~ WD.Flat()
+    sigma ~ WD.HalfNormal(0.0, 1.0)
+    rho ~ WD.Beta(0.5, 0.5)
     @iid theta ~ WD.Normal(0.0, 1.0) size=N
     @iid phi ~ WD.Flat() size=N
-    sigma = exp(raw_sigma)
-    rho = logistic(raw_rho)
-    # Stan's positive Normal factor has no truncation normalizer.
-    @addloglikelihood logdensityof(WD.Normal(0.0, 1.0), sigma) + raw_sigma +
-        logdensityof(WD.Beta(0.5, 0.5), rho) + logit_jacobian(raw_rho)
     @addloglikelihood traffic_logdensity(y, log_E, node1, node2,
         scaling_factor, beta0, sigma, rho, theta, phi)
     return nothing

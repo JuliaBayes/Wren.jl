@@ -49,26 +49,14 @@ end
 @wren function multi_occupancy(X, K, J, n, S)
     alpha ~ WD.Cauchy(0.0, 2.5)
     beta ~ WD.Cauchy(0.0, 2.5)
-    raw_omega ~ WD.Flat()
-    raw_rho ~ WD.Flat()
-    raw_sigma1 ~ WD.Flat()
-    raw_sigma2 ~ WD.Flat()
+    omega ~ WD.Beta(2.0, 2.0)
+    rho_unit ~ WD.Beta(2.0, 2.0)
+    sigma1 ~ WD.HalfCauchy(0.0, 2.5)
+    sigma2 ~ WD.HalfCauchy(0.0, 2.5)
     @iid uv1 ~ WD.Flat() size=S
     @iid uv2 ~ WD.Flat() size=S
 
-    omega = inv(1 + exp(-raw_omega))
-    rho_unit = inv(1 + exp(-raw_rho))
     rho = 2 * rho_unit - 1
-    sigma1 = exp(raw_sigma1)
-    sigma2 = exp(raw_sigma2)
-    # The beta prior is on (rho + 1)/2; its factor has no extra transform
-    # Jacobian. The raw rho coordinate does carry Stan's [-1,1] Jacobian.
-    @addloglikelihood logdensityof(WD.Beta(2.0, 2.0), omega) +
-        log(omega) + log1p(-omega) +
-        logdensityof(WD.Beta(2.0, 2.0), rho_unit) +
-        log(2.0) + log(rho_unit) + log1p(-rho_unit) +
-        logdensityof(WD.Cauchy(0.0, 2.5), sigma1) + raw_sigma1 +
-        logdensityof(WD.Cauchy(0.0, 2.5), sigma2) + raw_sigma2
     @addloglikelihood occupancy_logdensity(X, K, J, n, S, alpha, beta,
         omega, rho, sigma1, sigma2, uv1, uv2)
     return nothing

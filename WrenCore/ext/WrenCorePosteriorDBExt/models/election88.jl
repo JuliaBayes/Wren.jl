@@ -2,7 +2,7 @@
 module Election88
 
 using PosteriorDB
-using WrenCore: @wren, @observe, @batch, @iid, @addloglikelihood
+using WrenCore: @wren, @observe, @batch, @iid
 using WrenDists: WrenDists as WD
 
 const data = let
@@ -15,28 +15,16 @@ end
 @wren function election88(age, edu, age_edu, state, region, black, female,
     v_prev_full, y, n_age, n_edu, n_age_edu, n_state, n_region)
     @iid beta ~ WD.Normal(0.0, 100.0) size=5
-    raw_sigma_a ~ WD.Flat()
-    raw_sigma_b ~ WD.Flat()
-    raw_sigma_c ~ WD.Flat()
-    raw_sigma_d ~ WD.Flat()
-    raw_sigma_e ~ WD.Flat()
-    ratio_a = inv(1 + exp(-raw_sigma_a))
-    ratio_b = inv(1 + exp(-raw_sigma_b))
-    ratio_c = inv(1 + exp(-raw_sigma_c))
-    ratio_d = inv(1 + exp(-raw_sigma_d))
-    ratio_e = inv(1 + exp(-raw_sigma_e))
-    # Stan's five (0, 100) group scales have no prior factors.
-    @addloglikelihood 5 * log(100.0) +
-        log(ratio_a) + log1p(-ratio_a) +
-        log(ratio_b) + log1p(-ratio_b) +
-        log(ratio_c) + log1p(-ratio_c) +
-        log(ratio_d) + log1p(-ratio_d) +
-        log(ratio_e) + log1p(-ratio_e)
-    @iid a ~ WD.Normal(0.0, 100 * ratio_a) size=n_age
-    @iid b ~ WD.Normal(0.0, 100 * ratio_b) size=n_edu
-    @iid c ~ WD.Normal(0.0, 100 * ratio_c) size=n_age_edu
-    @iid d ~ WD.Normal(0.0, 100 * ratio_d) size=n_state
-    @iid e ~ WD.Normal(0.0, 100 * ratio_e) size=n_region
+    sigma_a ~ WD.Uniform(0.0, 100.0)
+    sigma_b ~ WD.Uniform(0.0, 100.0)
+    sigma_c ~ WD.Uniform(0.0, 100.0)
+    sigma_d ~ WD.Uniform(0.0, 100.0)
+    sigma_e ~ WD.Uniform(0.0, 100.0)
+    @iid a ~ WD.Normal(0.0, sigma_a) size=n_age
+    @iid b ~ WD.Normal(0.0, sigma_b) size=n_edu
+    @iid c ~ WD.Normal(0.0, sigma_c) size=n_age_edu
+    @iid d ~ WD.Normal(0.0, sigma_d) size=n_state
+    @iid e ~ WD.Normal(0.0, sigma_e) size=n_region
     eta = beta[1] .+ beta[2] .* black .+ beta[3] .* female .+
         beta[5] .* (female .* black) .+ beta[4] .* v_prev_full .+
         a[age] .+ b[edu] .+ c[age_edu] .+ d[state] .+ e[region]
