@@ -1,0 +1,32 @@
+using WrenDists: WrenDists as WD
+using Plaice
+using Random: Xoshiro
+using Test
+
+@testset "truncated Flat" begin
+    for (bounds, u, x, logjac) in (
+        ((lower=0.0,), log(2.0), 2.0, log(2.0)),
+        ((upper=5.0,), log(2.0), 3.0, log(2.0)),
+        ((lower=-1.0, upper=3.0), log(2.0), 5 / 3, log(8 / 9)),
+    )
+        d = WD.truncated(WD.Flat(); bounds...)
+        @test WD.logdensityof(d, x) == 0.0
+        physical, jac = Plaice.with_logabsdet_jacobian(
+            Plaice.from_unconstrained_vec(d), [u])
+        @test physical ≈ x
+        @test jac ≈ logjac
+        @test all(z -> d.lower < z < d.upper,
+            [rand(Xoshiro(seed), d) for seed in 1:20])
+    end
+
+    lower = WD.truncated(WD.Flat(); lower=0.0)
+    @test WD.logdensityof(lower, -1.0) == -Inf
+    @test WD.logdensityof(lower, 0.0) == 0.0
+
+    bounded = WD.truncated(WD.Flat(); lower=-1.0, upper=3.0)
+    @test WD.logdensityof(bounded, 3.1) == -Inf
+    @test WD.logdensityof(bounded, 3.0) == 0.0
+    @test WD.logdensityof(bounded, 1.0) == 0.0 # No Uniform normaliser.
+
+    @test rand(Xoshiro(1), WD.truncated(WD.Flat{Float32}(); lower=0)) isa Float32
+end

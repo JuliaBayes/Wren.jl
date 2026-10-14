@@ -27,6 +27,7 @@ using Test
     include("posteriordb.jl")
     include("issues/69.jl")
     include("issues/132.jl")
+    include("issues/192.jl")
 end
 
 end # module WrenCoreTests
