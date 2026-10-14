@@ -2,7 +2,7 @@
 module LSAT
 
 using PosteriorDB
-using WrenCore: @wren, @addloglikelihood, @iid, logdensityof
+using WrenCore: @wren, @observe, @batch, @iid
 using WrenDists: WrenDists as WD
 
 const data = let
@@ -26,21 +26,18 @@ function expanded_responses(data)
     return r
 end
 
-function lsat_logp(r, alpha, theta, beta)
-    total = zero(alpha[1] + theta[1] + beta)
-    for student in axes(r, 2), question in axes(r, 1)
-        eta = beta * theta[student] - alpha[question]
-        total += logdensityof(WD.BernoulliLogit(eta), r[question, student])
-    end
-    return total
-end
-
 @wren function lsat(r, T, N)
     @iid alpha ~ WD.Normal(0.0, 100.0) size=T
     @iid theta ~ WD.Normal(0.0, 1.0) size=N
     # Stan's positive Normal factor differs by the constant log(2).
     beta ~ WD.HalfNormal(0.0, 100.0)
-    @addloglikelihood lsat_logp(r, alpha, theta, beta)
+    logits = Vector{typeof(beta + theta[1] + alpha[1])}(undef, length(r))
+    for n in eachindex(r)
+        logits[n] = beta * theta[cld(n, T)] - alpha[mod1(n, T)]
+    end
+    @batch for n in eachindex(r)
+        @observe r[n] ~ WD.BernoulliLogit(logits[n])
+    end
     return nothing
 end
 
