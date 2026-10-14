@@ -233,8 +233,10 @@ function _unindex(indexed::Indexed, i)
     _issue_error("cannot safely unindex type $(typeof(indexed))")
 end
 function batched(iters::I, ::Val{F}, args...; kwargs...) where {I,F}
-    # Default fallback for batching-unaware calls
-    return independent([F((_unindex(a, i) for a in args)...; kwargs...) for i in iters])
+    # Arguments are already sliced, so index their positions rather than the loop values.
+    return independent([
+        F((_unindex(a, i) for a in args)...; kwargs...) for i in LinearIndices(iters)
+    ])
 end
 
 # This returns `WrenCore.independent([$rhs for $loop_idx in $loop_iters])`.
