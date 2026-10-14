@@ -21,8 +21,8 @@ end
     beta1 = (1 - alpha1) * beta_ratio
     # Stan has flat density on alpha0 > 0, alpha1 in (0, 1), and
     # beta1 in (0, 1-alpha1). The joint transform is triangular.
-    # Constrained Flat support for alpha0 and the dependent beta1 bound is
-    # tracked in #192.
+    # Positive-flat alpha0 needs #192; the beta1 bound depending on alpha1
+    # needs #207. Both are temporary manual-target transforms.
     @addloglikelihood log_alpha0 + log(alpha1) + 2 * log1p(-alpha1) +
         log(beta_ratio) + log1p(-beta_ratio)
     sigma = Vector{typeof(alpha0 + mu)}(undef, length(y))

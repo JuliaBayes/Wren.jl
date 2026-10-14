@@ -50,6 +50,7 @@ end
     sigma3 = sigma2 + exp(raw_sigma_gap3)
     # Stan's positive_ordered[3] transform and the three untruncated
     # Student-t prior factors on its positive components.
+    # Native positive-ordered prior support is tracked in #207.
     @addloglikelihood raw_sigma1 + raw_sigma_gap2 + raw_sigma_gap3 +
         logdensityof(WD.TDist(4.0, 0.0, 1.0), sigma1) +
         logdensityof(WD.TDist(4.0, 0.0, 1.0), sigma2) +

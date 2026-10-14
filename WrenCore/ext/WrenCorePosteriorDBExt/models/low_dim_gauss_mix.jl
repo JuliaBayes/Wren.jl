@@ -18,6 +18,7 @@ end
     log_mu_gap ~ WD.Flat()
     mu2 = mu1 + exp(log_mu_gap)
     # Stan's ordered[2] mapping is (mu1, log(mu2-mu1)); include its Jacobian.
+    # Native ordered prior support is tracked in #207.
     @addloglikelihood (logdensityof(WD.Normal(0.0, 2.0), mu2) + log_mu_gap)
     @iid sigma ~ WD.HalfNormal(0.0, 2.0) size=2
     theta ~ WD.Beta(5.0, 5.0)
