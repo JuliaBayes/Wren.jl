@@ -45,6 +45,7 @@ end
     a = 0.25
     b_alpha = 0.25 * s2_alpha
     b_beta = 0.25 * s2_beta
+    # Reciprocal-Gamma encoding of two inverse-gamma variances; tracked in #204.
     @addloglikelihood logdensityof(WD.Gamma(a, inv(b_alpha)),
         inv(sigma2_alpha)) - raw_sigma2_alpha +
         logdensityof(WD.Gamma(a, inv(b_beta)),
