@@ -92,14 +92,12 @@ function DensityInterface.logdensityof(d::BatchedPoisson, x)
     # Benchmarks @ https://github.com/JuliaBayes/Wren.jl/issues/104
     λ = d.λ
     return if within_compile()
-        sum(@. x * log(λ) - λ - loggamma(x + one(x)))
+        sum(((λi, xi) -> logdensityof(Poisson(λi), xi)).(λ, x))
     else
         T = float(promote_type(eltype(x), eltype(λ)))
         s = zero(T)
         for i in eachindex(x, λ)
-            s +=
-                convert(T, x[i]) * log(convert(T, λ[i])) - convert(T, λ[i]) -
-                loggamma(convert(T, x[i]) + one(T))
+            s += logdensityof(Poisson(λ[i]), x[i])
         end
         s
     end
