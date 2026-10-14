@@ -4,9 +4,9 @@ module WrenPosteriorDBTests
 
 import DifferentiationInterface as DI
 import ForwardDiff
-using Distributions: Beta, Binomial, Cauchy, Exponential, Gamma, InverseGamma,
-    Laplace, LocationScale, LogNormal, NegativeBinomial, Normal, Poisson,
-    TDist, logpdf
+using Distributions: Beta, Binomial, Cauchy, Dirichlet, Exponential, Gamma,
+    InverseGamma, Laplace, LocationScale, LogNormal, NegativeBinomial, Normal,
+    Poisson, TDist, Weibull, logpdf
 using Enzyme
 using LinearAlgebra: Symmetric, I, cholesky
 using PosteriorDB: PosteriorDB
@@ -19,16 +19,26 @@ using WrenDists: WrenDists
 @testset "posteriordb.jl" begin
     covid_point() = vcat(fill(log(3.28), 14), fill(log(0.1), 6), [log(0.5)],
         fill(log(10.0), 14), [log(5.0), log(10.0)], zeros(14))
+    gp_point() = let point = 0.01 .* sin.(1:933)
+        point[912] = log(0.2)
+        point[929] = 0.5
+        point[930:933] .= log.([8.0, 8.0, 3.0, 3.0])
+        point
+    end
 
     @testset "$name" for name in available_posteriordb_models()
         model = posteriordb_model(name)
-        adtype = occursin("covid19imperial", name) || name in
+        adtype = name == "state_wide_presidential_votes-hierarchical_gp" ||
+            occursin("covid19imperial", name) || name in
             ("ovarian-logistic_regression_rhs",
             "prostate-logistic_regression_rhs") ?
             AutoEnzyme(; mode=Reverse) : DI.AutoForwardDiff()
-        vm = occursin("covid19imperial", name) ?
+        vm = (name == "state_wide_presidential_votes-hierarchical_gp" ||
+            occursin("covid19imperial", name)) ?
             VecModel(model, adtype; reduce_copies=false) : VecModel(model, adtype)
-        if occursin("covid19imperial", name)
+        if name == "state_wide_presidential_votes-hierarchical_gp"
+            v = gp_point()
+        elseif occursin("covid19imperial", name)
             v = covid_point()
         elseif name == "dugongs_data-dugongs_model"
             # Gamma(shape=0.0001) prior draws commonly underflow in Float64.
@@ -130,6 +140,90 @@ using WrenDists: WrenDists
                     atol=1e-4, rtol=1e-7)
             end
         end
+    end
+
+    @testset "presidential hierarchical GP density and gradient" begin
+        name = "state_wide_presidential_votes-hierarchical_gp"
+        data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+            PosteriorDB.database(), name,
+        )))
+        function gp_oracle(v)
+            gp_region_std = reshape(view(v, 1:140), 14, 10)
+            gp_state_std = reshape(view(v, 141:840), 14, 50)
+            year_std = view(v, 841:851)
+            state_std = view(v, 852:901)
+            region_std = view(v, 902:911)
+            tot_var = exp(v[912])
+            prop_var = Vector{eltype(v)}(undef, 17)
+            remaining = one(eltype(v))
+            jacobian = zero(eltype(v))
+            for r in 1:16
+                z = inv(1 + exp(-(v[912 + r] - log(17 - r))))
+                prop_var[r] = remaining * z
+                jacobian += log(z) + log1p(-z) + log(remaining)
+                remaining *= 1 - z
+            end
+            prop_var[17] = remaining
+            mu = v[929]
+            lengths = exp.(view(v, 930:933))
+            vars = 17 .* prop_var .* tot_var
+            function covariance(long_scale, short_scale, long_length,
+                    short_length)
+                matrix = Matrix{eltype(v)}(undef, 14, 14)
+                for j in 1:14, i in 1:14
+                    distance = i - j
+                    matrix[i, j] = long_scale^2 *
+                        exp(-0.5 * (distance / long_length)^2) +
+                        short_scale^2 * exp(-0.5 *
+                        (distance / short_length)^2) +
+                        (i == j ? 1e-6 : 0.0)
+                end
+                return matrix
+            end
+            gp_region = cholesky(Symmetric(covariance(sqrt(vars[13]),
+                sqrt(vars[15]), lengths[1], lengths[3]))).L * gp_region_std
+            gp_state = cholesky(Symmetric(covariance(sqrt(vars[14]),
+                sqrt(vars[16]), lengths[2], lengths[4]))).L * gp_state_std
+            density = sum(logpdf(Normal(), v[i]) for i in 1:911) +
+                logpdf(Gamma(3, 1 / 3), tot_var) + v[912] +
+                logpdf(Dirichlet(fill(2.0, 17)), prop_var) + jacobian +
+                logpdf(Normal(0.5, 0.5), mu)
+            for (r, prior) in enumerate((Weibull(30, 8), Weibull(30, 8),
+                    Weibull(30, 3), Weibull(30, 3)))
+                density += logpdf(prior, lengths[r]) + v[929 + r]
+            end
+            for n in 1:data["N"]
+                state, region, year = data["state_ind"][n],
+                    data["region_ind"][n], data["year_ind"][n]
+                state_region = data["state_region_ind"][state]
+                expected = mu + sqrt(vars[1]) * year_std[year] +
+                    sqrt(vars[2 + state_region]) * state_std[state] +
+                    sqrt(vars[2]) * region_std[region] +
+                    gp_region[year, region] + gp_state[year, state]
+                density += logpdf(Normal(expected, sqrt(vars[17])), data["y"][n])
+            end
+            return density
+        end
+        point = gp_point()
+        vm = VecModel(posteriordb_model(name), AutoEnzyme(; mode=Reverse);
+            reduce_copies=false)
+        @test vm.dimension == 933
+        value, gradient = lp_and_grad(vm, point)
+        @test isapprox(value, gp_oracle(point); atol=1e-5, rtol=1e-8)
+        selected = [1, 140, 141, 840, 912, 913, 928, 930, 933]
+        positions = zeros(Int, length(point))
+        for (k, i) in enumerate(selected)
+            positions[i] = k
+        end
+        function gp_selected_oracle(z)
+            full = [positions[i] == 0 ? convert(eltype(z), point[i]) :
+                z[positions[i]] for i in eachindex(point)]
+            return gp_oracle(full)
+        end
+        selected_gradient = ForwardDiff.gradient(gp_selected_oracle,
+            point[selected])
+        @test isapprox(gradient[selected], selected_gradient;
+            atol=1e-4, rtol=1e-7)
     end
 
     @testset "classical PosteriorDB densities and native Enzyme gradients" begin

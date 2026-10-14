@@ -31,6 +31,7 @@ include("models/sesame_one_pred.jl")
 include("models/surgical_model.jl")
 include("models/soil_incubation.jl")
 include("models/covid_imperial.jl")
+include("models/presidential_gp.jl")
 include("models/prophet.jl")
 include("models/mcycle_gp.jl")
 include("models/uk_drivers.jl")
@@ -70,6 +71,7 @@ const MODELS = Dict(
     "ecdc0401-covid19imperial_v3" => CovidImperial.ecdc0401_v3,
     "ecdc0501-covid19imperial_v2" => CovidImperial.ecdc0501_v2,
     "ecdc0501-covid19imperial_v3" => CovidImperial.ecdc0501_v3,
+    "state_wide_presidential_votes-hierarchical_gp" => PresidentialGP,
     "rstan_downloads-prophet" => Prophet,
     "mcycle_gp-accel_gp" => McycleGP,
     "uk_drivers-state_space_stochastic_level_stochastic_seasonal" => UKDrivers,
