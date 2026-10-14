@@ -21,6 +21,7 @@ end
     mu1 = exp(raw_mu1)
     mu2 = mu1 + exp(raw_gap)
     # Stan's positive_ordered[2] transform still needs its Jacobian.
+    # Native positive-ordered priors are tracked in #207.
     @addloglikelihood raw_mu1 + raw_gap +
         logdensityof(WD.Normal(3.0, 1.0), mu1) +
         logdensityof(WD.Normal(10.0, 1.0), mu2)

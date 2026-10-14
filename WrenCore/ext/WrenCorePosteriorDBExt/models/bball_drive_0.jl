@@ -27,6 +27,7 @@ end
     lambda2 = lambda1 + exp(raw_lambda_gap)
 
     # The ordered positive rates still require their transform Jacobians.
+    # Native positive-ordered priors are tracked in #207.
     @addloglikelihood raw_phi1 + raw_phi_gap + raw_lambda1 + raw_lambda_gap +
         logdensityof(WD.Normal(0.0, 1.0), phi1) +
         logdensityof(WD.Normal(3.0, 1.0), phi2) +

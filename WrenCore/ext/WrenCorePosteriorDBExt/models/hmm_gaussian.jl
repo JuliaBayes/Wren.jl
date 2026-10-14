@@ -31,7 +31,8 @@ end
     sigma1 = exp(raw_sigma1)
     sigma2 = exp(raw_sigma2)
     sigma3 = exp(raw_sigma3)
-    # Ordered means and positive flat scales still need Jacobians (#192).
+    # Ordered means and positive flat scales still need Jacobians.
+    # Native ordered priors are tracked in #207; positive-flat scales in #192.
     @addloglikelihood raw_gap2 + raw_gap3 + raw_sigma1 + raw_sigma2 + raw_sigma3
 
     g1 = log(pi[1]) + logdensityof(WD.Normal(mu1, sigma1), y[1])

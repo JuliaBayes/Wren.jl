@@ -42,7 +42,7 @@ end
     @iid z2 ~ WD.Normal(0.0, 1.0) size=size(y, 1)
 
     rho = 2 * rho_unit - 1
-    # Logistic priors on the two unconstrained locations.
+    # Logistic priors on the two unconstrained locations are tracked in #208.
     @addloglikelihood -log1pexp(-mu1) - log1pexp(mu1) -
         log1pexp(-mu2) - log1pexp(mu2)
     @addloglikelihood dog_loglikelihood(y, mu1, mu2, sigma1, sigma2,
