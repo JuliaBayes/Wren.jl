@@ -43,7 +43,7 @@ using WrenDists: WrenDists
             ratio_y = inv(1 + exp(-v[3]))
             sigma_a, sigma_y = 100 * ratio_a, 100 * ratio_y
             a = view(v, 4:length(v))
-            jacobian = 2 * log(100.0) + log(ratio_a) + log1p(-ratio_a) +
+            jacobian = log(ratio_a) + log1p(-ratio_a) +
                 log(ratio_y) + log1p(-ratio_y)
             return normal_logp(mu_a, 0.0, 1.0) + jacobian +
                 sum(normal_logp(value, mu_a, sigma_a) for value in a) +
