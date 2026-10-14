@@ -2,7 +2,7 @@
 module AccelSplines
 
 using PosteriorDB
-using WrenCore: @wren, @addloglikelihood, @iid, logdensityof
+using WrenCore: @wren, @observe, @batch, @iid
 using WrenDists: WrenDists as WD
 
 const data = let
@@ -10,19 +10,6 @@ const data = let
     PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
         pdb, "mcycle_splines-accel_splines",
     )))
-end
-
-function accel_splines_logp(y, Xs, Zs, Xs_sigma, Zs_sigma,
-                            intercept, bs, zs, sds,
-                            intercept_sigma, bs_sigma, zs_sigma, sds_sigma)
-    mu = intercept .+ Xs * bs .+ Zs * (sds .* zs)
-    log_sigma = intercept_sigma .+ Xs_sigma * bs_sigma .+
-        Zs_sigma * (sds_sigma .* zs_sigma)
-    total = zero(intercept + intercept_sigma)
-    for i in eachindex(y)
-        total += logdensityof(WD.Normal(mu[i], exp(log_sigma[i])), y[i])
-    end
-    return total
 end
 
 @wren function accel_splines(y, Xs, Zs, Xs_sigma, Zs_sigma, prior_only)
@@ -35,10 +22,13 @@ end
     @iid zs_sigma ~ WD.Normal(0.0, 1.0) size=size(Zs_sigma, 2)
     sds_sigma ~ WD.HalfTDist(3.0, 0.0, 36.0)
     if prior_only == 0
-        @addloglikelihood accel_splines_logp(
-            y, Xs, Zs, Xs_sigma, Zs_sigma,
-            Intercept, bs, zs, sds, Intercept_sigma, bs_sigma, zs_sigma, sds_sigma,
-        )
+        mu = Intercept .+ Xs * bs .+ Zs * (sds .* zs)
+        log_sigma = Intercept_sigma .+ Xs_sigma * bs_sigma .+
+            Zs_sigma * (sds_sigma .* zs_sigma)
+        sigma = exp.(log_sigma)
+        @batch for i in eachindex(y)
+            @observe y[i] ~ WD.Normal(mu[i], sigma[i])
+        end
     end
     return nothing
 end

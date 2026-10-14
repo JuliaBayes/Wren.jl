@@ -2,7 +2,7 @@
 module LossCurveSislob
 
 using PosteriorDB
-using WrenCore: @wren, @addloglikelihood, @iid, logdensityof
+using WrenCore: @wren, @observe, @batch, @iid
 using WrenDists: WrenDists as WD
 
 const data = let
@@ -10,23 +10,6 @@ const data = let
     PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
         pdb, "loss_curves-losscurve_sislob",
     )))
-end
-
-function losscurve_logp(loss, cohort_id, t_idx, t_value, premium,
-                        growthmodel_id, omega, theta, LR, loss_sd)
-    total = zero(omega + theta + LR[1] + loss_sd)
-    for i in eachindex(loss)
-        t = t_value[t_idx[i]]
-        growth = if growthmodel_id == 1
-            1 - exp(-(t / theta)^omega)
-        else
-            t^omega / (t^omega + theta^omega)
-        end
-        cohort = cohort_id[i]
-        mean_loss = LR[cohort] * premium[cohort] * growth
-        total += logdensityof(WD.Normal(mean_loss, loss_sd * premium[cohort]), loss[i])
-    end
-    return total
 end
 
 @wren function losscurve_sislob(loss, cohort_id, t_idx, t_value, premium,
@@ -38,8 +21,22 @@ end
     sd_LR ~ WD.LogNormal(0.0, 0.5)
     @iid LR ~ WD.LogNormal(mu_LR, sd_LR) size=n_cohort
     loss_sd ~ WD.LogNormal(0.0, 0.7)
-    @addloglikelihood losscurve_logp(loss, cohort_id, t_idx, t_value, premium,
-                                     growthmodel_id, omega, theta, LR, loss_sd)
+    mu = Vector{typeof(omega + theta + LR[1] + loss_sd)}(undef, length(loss))
+    sigma = similar(mu)
+    for i in eachindex(loss)
+        t = t_value[t_idx[i]]
+        growth = if growthmodel_id == 1
+            1 - exp(-(t / theta)^omega)
+        else
+            t^omega / (t^omega + theta^omega)
+        end
+        cohort = cohort_id[i]
+        mu[i] = LR[cohort] * premium[cohort] * growth
+        sigma[i] = loss_sd * premium[cohort]
+    end
+    @batch for i in eachindex(loss)
+        @observe loss[i] ~ WD.Normal(mu[i], sigma[i])
+    end
     return nothing
 end
 

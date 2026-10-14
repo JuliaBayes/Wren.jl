@@ -2,7 +2,7 @@
 module SoilIncubation
 
 using PosteriorDB
-using WrenCore: @wren, @addloglikelihood, logdensityof
+using WrenCore: @wren, @observe, @batch
 using WrenDists: WrenDists as WD
 
 # The two-pool ODE has a constant 2×2 coefficient matrix. Its total carbon
@@ -20,33 +20,22 @@ function evolved_carbon(t, total, gamma, k1, k2, alpha21, alpha12)
     return total - remaining
 end
 
-function soil_logdensity(ts, observed, total, t0, raw_k1, raw_k2,
-        raw_alpha21, raw_alpha12, gamma, raw_sigma)
-    k1, k2 = exp(raw_k1), exp(raw_k2)
-    alpha21, alpha12 = exp(raw_alpha21), exp(raw_alpha12)
-    sigma = exp(raw_sigma)
-    density = logdensityof(WD.Normal(0.0, 1.0), k1) + raw_k1 +
-        logdensityof(WD.Normal(0.0, 1.0), k2) + raw_k2 +
-        logdensityof(WD.Normal(0.0, 1.0), alpha21) + raw_alpha21 +
-        logdensityof(WD.Normal(0.0, 1.0), alpha12) + raw_alpha12 +
-        logdensityof(WD.Cauchy(0.0, 1.0), sigma) + raw_sigma
-    for i in eachindex(ts)
-        mean = evolved_carbon(ts[i] - t0, total, gamma, k1, k2,
-            alpha21, alpha12)
-        density += logdensityof(WD.Normal(mean, sigma), observed[i])
-    end
-    return density
-end
-
 @wren function soil_incubation(ts, observed, total, t0)
-    raw_k1 ~ WD.Flat()
-    raw_k2 ~ WD.Flat()
-    raw_alpha21 ~ WD.Flat()
-    raw_alpha12 ~ WD.Flat()
+    k1 ~ WD.HalfNormal(0.0, 1.0)
+    k2 ~ WD.HalfNormal(0.0, 1.0)
+    alpha21 ~ WD.HalfNormal(0.0, 1.0)
+    alpha12 ~ WD.HalfNormal(0.0, 1.0)
     gamma ~ WD.Beta(10.0, 1.0)
-    raw_sigma ~ WD.Flat()
-    @addloglikelihood soil_logdensity(ts, observed, total, t0, raw_k1,
-        raw_k2, raw_alpha21, raw_alpha12, gamma, raw_sigma)
+    sigma ~ WD.HalfCauchy(0.0, 1.0)
+    mu = Vector{typeof(k1 + k2 + alpha21 + alpha12 + gamma + sigma)}(
+        undef, length(ts))
+    for i in eachindex(ts)
+        mu[i] = evolved_carbon(ts[i] - t0, total, gamma, k1, k2,
+            alpha21, alpha12)
+    end
+    @batch for i in eachindex(ts)
+        @observe observed[i] ~ WD.Normal(mu[i], sigma)
+    end
     return nothing
 end
 

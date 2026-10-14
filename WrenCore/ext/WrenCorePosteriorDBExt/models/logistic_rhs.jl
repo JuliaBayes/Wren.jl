@@ -2,32 +2,8 @@
 module LogisticRHS
 
 using PosteriorDB
-using WrenCore: @wren, @addloglikelihood, @iid, logdensityof
+using WrenCore: @wren, @observe, @batch, @addloglikelihood, @iid, logdensityof
 using WrenDists: WrenDists as WD
-
-function rhs_logdensity(y, x, slab_scale, slab_df, beta0, z, tau, lambda,
-        raw_caux)
-    caux = exp(raw_caux)
-    shape = 0.5 * slab_df
-    # InverseGamma(shape, shape) on caux is Gamma(shape, 1/shape) on 1/caux.
-    # Temporary until the native-prior choice tracked in #204 is settled.
-    # The precision transform and caux = exp(raw_caux) leave -raw_caux.
-    total = logdensityof(WD.Gamma(shape, inv(shape)), inv(caux)) - raw_caux
-    c2 = slab_scale^2 * caux
-    beta = [begin
-        lambda_j = lambda[j]
-        z[j] * tau * sqrt(c2 * lambda_j^2 /
-            (c2 + tau^2 * lambda_j^2))
-    end for j in eachindex(z)]
-    for i in eachindex(y)
-        eta = beta0
-        for j in eachindex(beta)
-            eta += x[i, j] * beta[j]
-        end
-        total += logdensityof(WD.BernoulliLogit(eta), y[i])
-    end
-    return total
-end
 
 @wren function logistic_rhs(y, x, n, d, scale_icept, scale_global,
         nu_global, nu_local, slab_scale, slab_df)
@@ -36,8 +12,23 @@ end
     tau ~ WD.HalfTDist(nu_global, 0.0, 2 * scale_global)
     @iid lambda ~ WD.HalfTDist(nu_local, 0.0, 1.0) size=d
     raw_caux ~ WD.Flat()
-    @addloglikelihood rhs_logdensity(y, x, slab_scale, slab_df, beta0, z,
-        tau, lambda, raw_caux)
+    caux = exp(raw_caux)
+    shape = 0.5 * slab_df
+    # InverseGamma(shape, shape) on caux is Gamma(shape, 1/shape) on 1/caux.
+    # Temporary until the native-prior choice tracked in #204 is settled.
+    @addloglikelihood logdensityof(WD.Gamma(shape, inv(shape)), inv(caux)) -
+        raw_caux
+    c2 = slab_scale^2 * caux
+    beta = Vector{typeof(beta0 + tau + caux + z[1] + lambda[1])}(undef, d)
+    for j in eachindex(z)
+        lambda_j = lambda[j]
+        beta[j] = z[j] * tau * sqrt(c2 * lambda_j^2 /
+            (c2 + tau^2 * lambda_j^2))
+    end
+    eta = beta0 .+ x * beta
+    @batch for i in eachindex(y)
+        @observe y[i] ~ WD.BernoulliLogit(eta[i])
+    end
     return nothing
 end
 

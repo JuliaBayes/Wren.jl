@@ -790,7 +790,7 @@ using WrenDists: WrenDists
                 zip((k1, k2, alpha21, alpha12), view(v, 1:4))) +
                 logpdf(Beta(10, 1), gamma) - log1p(exp(-v[5])) -
                 log1p(exp(v[5])) +
-                logpdf(Cauchy(0, 1), sigma) + v[6]
+                logpdf(Cauchy(0, 1), sigma) + v[6] + 5log(2.0)
             for i in eachindex(soil_data["ts"])
                 current = soil_data["ts"][i]
                 steps = ceil(Int, (current - previous) / 0.05)
