@@ -5,7 +5,6 @@ using PosteriorDB
 using LogExpFunctions: logaddexp
 using WrenCore: @wren, @addloglikelihood, @iid, logdensityof
 using WrenDists: WrenDists as WD
-using ..HMMGaussian: simplex3
 
 const data = let
     pdb = PosteriorDB.database()
@@ -18,27 +17,17 @@ linear_predictor(u, t, w) =
     u[t, 1] * w[1] + u[t, 2] * w[2] + u[t, 3] * w[3] + u[t, 4] * w[4]
 
 @wren function iohmm_reg(y, u)
-    raw_pi1 ~ WD.Flat()
-    raw_pi2 ~ WD.Flat()
+    pi ~ WD.Dirichlet(fill(1.0, 3))
     @iid w1 ~ WD.Normal(0.0, 5.0) size=4
     @iid w2 ~ WD.Normal(0.0, 5.0) size=4
     @iid w3 ~ WD.Normal(0.0, 5.0) size=4
     @iid b1 ~ WD.Normal(0.0, 5.0) size=4
     @iid b2 ~ WD.Normal(0.0, 5.0) size=4
     @iid b3 ~ WD.Normal(0.0, 5.0) size=4
-    raw_sigma1 ~ WD.Flat()
-    raw_sigma2 ~ WD.Flat()
-    raw_sigma3 ~ WD.Flat()
+    sigma1 ~ WD.HalfNormal(0.0, 3.0)
+    sigma2 ~ WD.HalfNormal(0.0, 3.0)
+    sigma3 ~ WD.HalfNormal(0.0, 3.0)
 
-    pi, pi_jac = simplex3(raw_pi1, raw_pi2)
-    sigma1 = exp(raw_sigma1)
-    sigma2 = exp(raw_sigma2)
-    sigma3 = exp(raw_sigma3)
-    # Stan constrains the three sigmas but uses untruncated Normal prior factors.
-    @addloglikelihood pi_jac + raw_sigma1 + raw_sigma2 + raw_sigma3 +
-        logdensityof(WD.Normal(0.0, 3.0), sigma1) +
-        logdensityof(WD.Normal(0.0, 3.0), sigma2) +
-        logdensityof(WD.Normal(0.0, 3.0), sigma3)
 
     g1 = log(pi[1]) +
         logdensityof(WD.Normal(linear_predictor(u, 1, b1), sigma1), y[1])

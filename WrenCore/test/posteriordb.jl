@@ -166,7 +166,7 @@ using WrenDists: WrenDists
             pi, jacobian = simplex3_oracle(v[1], v[2])
             rows = [simplex3_oracle(v[2i + 1], v[2i + 2]) for i in 1:3]
             A = [rows[i][1][j] for i in 1:3, j in 1:3]
-            jacobian += sum(row[2] for row in rows)
+            jacobian += sum(row[2] for row in rows) + 4 * log(2.0)
             mu = [v[9], v[9] + exp(v[10]), v[9] + exp(v[10]) + exp(v[11])]
             sigma = exp.(v[12:14])
             jacobian += v[10] + v[11] + sum(v[12:14])
@@ -236,8 +236,9 @@ using WrenDists: WrenDists
             b = reshape(v[15:26], 4, 3)
             sigma = exp.(v[27:29])
             jacobian += sum(v[27:29])
-            prior = sum(logpdf(Normal(0, 5), vi) for vi in v[3:26]) +
-                sum(logpdf(Normal(0, 3), si) for si in sigma)
+            prior = log(2.0) +
+                sum(logpdf(Normal(0, 5), vi) for vi in v[3:26]) +
+                sum(logpdf(Normal(0, 3), si) + log(2.0) for si in sigma)
             u, y = iohmm_data["u"], iohmm_data["y"]
             regress(t, coefficients, j) =
                 sum(u[t, m] * coefficients[m, j] for m in 1:4)
@@ -315,14 +316,14 @@ using WrenDists: WrenDists
         function dog_nonhier_oracle(v)
             mu1, mu2 = v[1], v[2]
             sigma1, sigma2 = exp(v[3]), exp(v[4])
-            rho = tanh(v[5])
+            rho = 2 * logistic(v[5]) - 1
             J = dog_nonhier_data["n_dogs"]
             z1 = view(v, 6:(5 + J))
             z2 = view(v, (6 + J):length(v))
             prior = logpdf(Logistic(), mu1) + logpdf(Logistic(), mu2) +
-                logpdf(Normal(), sigma1) + v[3] +
-                logpdf(Normal(), sigma2) + v[4] +
-                log(0.75) + 2 * log1p(-rho^2) +
+                logpdf(Normal(), sigma1) + log(2.0) + v[3] +
+                logpdf(Normal(), sigma2) + log(2.0) + v[4] +
+                log(3 / 8) + 2 * log1p(-rho^2) +
                 sum(logpdf(Normal(), zi) for zi in z1) +
                 sum(logpdf(Normal(), zi) for zi in z2)
             likelihood = zero(prior)
@@ -357,12 +358,12 @@ using WrenDists: WrenDists
             xi2 = view(v, (J + I + 1):(J + 2I))
             mu1, mu2 = v[J + 2I + 1], v[J + 2I + 2]
             tau1, tau2 = exp(v[J + 2I + 3]), exp(v[J + 2I + 4])
-            rho = tanh(v[J + 2I + 5])
+            rho = 2 * logistic(v[J + 2I + 5]) - 1
             prior = sum(logpdf(Normal(), tj) for tj in theta) +
                 logpdf(Normal(), mu1) + logpdf(Normal(0, 5), mu2) +
                 logpdf(Exponential(10), tau1) + v[J + 2I + 3] +
                 logpdf(Exponential(10), tau2) + v[J + 2I + 4] +
-                log(35 / 32) + 4 * log1p(-rho^2)
+                log(35 / 64) + 4 * log1p(-rho^2)
             for i in 1:I
                 z1 = (xi1[i] - mu1) / tau1
                 z2 = ((xi2[i] - mu2) / tau2 - rho * z1) / sqrt(1 - rho^2)

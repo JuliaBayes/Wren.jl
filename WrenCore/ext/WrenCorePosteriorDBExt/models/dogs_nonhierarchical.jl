@@ -35,23 +35,16 @@ end
 @wren function dogs_nonhierarchical(y)
     mu1 ~ WD.Flat()
     mu2 ~ WD.Flat()
-    raw_sigma1 ~ WD.Flat()
-    raw_sigma2 ~ WD.Flat()
-    raw_corr ~ WD.Flat()
+    sigma1 ~ WD.HalfNormal(0.0, 1.0)
+    sigma2 ~ WD.HalfNormal(0.0, 1.0)
+    rho_unit ~ WD.Beta(2.0, 2.0)
     @iid z1 ~ WD.Normal(0.0, 1.0) size=size(y, 1)
     @iid z2 ~ WD.Normal(0.0, 1.0) size=size(y, 1)
 
-    sigma1 = exp(raw_sigma1)
-    sigma2 = exp(raw_sigma2)
-    rho = tanh(raw_corr)
-    # For K=2, LKJ-Cholesky(eta=2) induces rho ~ 2*Beta(2,2)-1.
-    # The final term is Stan's cholesky_factor_corr unconstraining Jacobian.
+    rho = 2 * rho_unit - 1
+    # Logistic priors on the two unconstrained locations.
     @addloglikelihood -log1pexp(-mu1) - log1pexp(mu1) -
-        log1pexp(-mu2) - log1pexp(mu2) +
-        logdensityof(WD.Normal(0.0, 1.0), sigma1) + raw_sigma1 +
-        logdensityof(WD.Normal(0.0, 1.0), sigma2) + raw_sigma2 +
-        logdensityof(WD.Beta(2.0, 2.0), (rho + 1) / 2) - log(2.0) +
-        log1p(-rho^2)
+        log1pexp(-mu2) - log1pexp(mu2)
     @addloglikelihood dog_loglikelihood(y, mu1, mu2, sigma1, sigma2,
         rho, z1, z2)
     return nothing

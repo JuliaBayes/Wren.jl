@@ -14,24 +14,18 @@ const data = let
 end
 
 @wren function hmm_drive_1(u, v, tau, rho)
-    raw_theta1 ~ WD.Flat()
-    raw_theta2 ~ WD.Flat()
+    p11 ~ WD.Beta(4.0, 2.0)
+    p21 ~ WD.Beta(2.0, 4.0)
     phi1 ~ WD.Flat()
     raw_phi_gap ~ WD.Flat()
     lambda1 ~ WD.Flat()
     raw_lambda_gap ~ WD.Flat()
 
-    p11 = inv(1 + exp(-raw_theta1))
-    p21 = inv(1 + exp(-raw_theta2))
     phi2 = phi1 + exp(raw_phi_gap)
     lambda2 = lambda1 + exp(raw_lambda_gap)
 
-    # The two Dirichlet prior normalizers, transition simplex Jacobians,
-    # and ordered-mean Jacobians are all part of the unconstrained density.
-    @addloglikelihood 2 * log(20.0) + 3 * log(p11) + log1p(-p11) +
-        log(p21) + 3 * log1p(-p21) +
-        log(p11) + log1p(-p11) + log(p21) + log1p(-p21) +
-        raw_phi_gap + raw_lambda_gap +
+    # The ordered means still require their transform Jacobians.
+    @addloglikelihood raw_phi_gap + raw_lambda_gap +
         logdensityof(WD.Normal(0.0, 1.0), phi1) +
         logdensityof(WD.Normal(3.0, 1.0), phi2) +
         logdensityof(WD.Normal(0.0, 1.0), lambda1) +

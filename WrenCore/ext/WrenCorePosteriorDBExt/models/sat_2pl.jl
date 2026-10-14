@@ -36,19 +36,11 @@ end
     @iid xi2 ~ WD.Flat() size=I
     mu1 ~ WD.Normal(0.0, 1.0)
     mu2 ~ WD.Normal(0.0, 5.0)
-    raw_tau1 ~ WD.Flat()
-    raw_tau2 ~ WD.Flat()
-    raw_corr ~ WD.Flat()
+    tau1 ~ WD.Exponential(10.0)
+    tau2 ~ WD.Exponential(10.0)
+    rho_unit ~ WD.Beta(4.0, 4.0)
 
-    tau1 = exp(raw_tau1)
-    tau2 = exp(raw_tau2)
-    rho = tanh(raw_corr)
-    # K=2 LKJ-Cholesky(4) is the transformed Beta(4,4) correlation prior.
-    # Exponential(10) uses the scale corresponding to Stan's rate 0.1.
-    @addloglikelihood logdensityof(WD.Exponential(10.0), tau1) + raw_tau1 +
-        logdensityof(WD.Exponential(10.0), tau2) + raw_tau2 +
-        logdensityof(WD.Beta(4.0, 4.0), (rho + 1) / 2) - log(2.0) +
-        log1p(-rho^2)
+    rho = 2 * rho_unit - 1
     @addloglikelihood sat_logdensity(y, ii, jj, theta, xi1, xi2,
         mu1, mu2, tau1, tau2, rho)
     return nothing
