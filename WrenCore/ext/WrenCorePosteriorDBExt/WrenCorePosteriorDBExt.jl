@@ -30,6 +30,7 @@ include("models/seeds_stanified.jl")
 include("models/sesame_one_pred.jl")
 include("models/surgical_model.jl")
 include("models/soil_incubation.jl")
+include("models/covid_imperial.jl")
 include("models/prophet.jl")
 include("models/mcycle_gp.jl")
 include("models/uk_drivers.jl")
@@ -65,6 +66,10 @@ const MODELS = Dict(
     "sesame_data-sesame_one_pred_a" => SesameOnePred,
     "surgical_data-surgical_model" => SurgicalModel,
     "soil_carbon-soil_incubation" => SoilIncubation,
+    "ecdc0401-covid19imperial_v2" => CovidImperial.ecdc0401_v2,
+    "ecdc0401-covid19imperial_v3" => CovidImperial.ecdc0401_v3,
+    "ecdc0501-covid19imperial_v2" => CovidImperial.ecdc0501_v2,
+    "ecdc0501-covid19imperial_v3" => CovidImperial.ecdc0501_v3,
     "rstan_downloads-prophet" => Prophet,
     "mcycle_gp-accel_gp" => McycleGP,
     "uk_drivers-state_space_stochastic_level_stochastic_seasonal" => UKDrivers,

@@ -4,8 +4,9 @@ module WrenPosteriorDBTests
 
 import DifferentiationInterface as DI
 import ForwardDiff
-using Distributions: Beta, Binomial, Cauchy, Gamma, InverseGamma, Laplace, LocationScale, LogNormal, Normal,
-    Poisson, TDist, logpdf
+using Distributions: Beta, Binomial, Cauchy, Exponential, Gamma, InverseGamma,
+    Laplace, LocationScale, LogNormal, NegativeBinomial, Normal, Poisson,
+    TDist, logpdf
 using Enzyme
 using LinearAlgebra: Symmetric, I, cholesky
 using PosteriorDB: PosteriorDB
@@ -16,13 +17,20 @@ using WrenCore
 using WrenDists: WrenDists
 
 @testset "posteriordb.jl" begin
+    covid_point() = vcat(fill(log(3.28), 14), fill(log(0.1), 6), [log(0.5)],
+        fill(log(10.0), 14), [log(5.0), log(10.0)], zeros(14))
+
     @testset "$name" for name in available_posteriordb_models()
         model = posteriordb_model(name)
-        adtype = name in ("ovarian-logistic_regression_rhs",
+        adtype = occursin("covid19imperial", name) || name in
+            ("ovarian-logistic_regression_rhs",
             "prostate-logistic_regression_rhs") ?
             AutoEnzyme(; mode=Reverse) : DI.AutoForwardDiff()
-        vm = VecModel(model, adtype)
-        if name == "dugongs_data-dugongs_model"
+        vm = occursin("covid19imperial", name) ?
+            VecModel(model, adtype; reduce_copies=false) : VecModel(model, adtype)
+        if occursin("covid19imperial", name)
+            v = covid_point()
+        elseif name == "dugongs_data-dugongs_model"
             # Gamma(shape=0.0001) prior draws commonly underflow in Float64.
             v = [2.0, 1.0, 0.0, 0.0]
             @test isfinite(lp(vm, v))
@@ -56,6 +64,73 @@ using WrenDists: WrenDists
     end
 
     @test_throws ArgumentError posteriordb_model("not-a-posterior")
+
+    @testset "Imperial COVID-19 densities and native Enzyme gradients" begin
+        for name in ("ecdc0401-covid19imperial_v2",
+                "ecdc0501-covid19imperial_v3")
+            data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+                PosteriorDB.database(), name,
+            )))
+            function covid_oracle(v)
+                mu = exp.(view(v, 1:14))
+                alpha_hier = exp.(view(v, 15:20))
+                kappa = exp(v[21])
+                infections = exp.(view(v, 22:35))
+                phi, tau = exp(v[36]), exp(v[37])
+                ifr_noise = exp.(view(v, 38:51))
+                alpha = alpha_hier .- log(1.05) / 6
+                density = logpdf(Exponential(inv(0.03)), tau) + v[37] +
+                    logpdf(Normal(0, 5), phi) + v[36] +
+                    logpdf(Normal(0, 0.5), kappa) + v[21]
+                density += sum(logpdf(Gamma(0.1667, 1), alpha_hier[j]) +
+                    v[14 + j] for j in 1:6)
+                for m in 1:14
+                    density += logpdf(Normal(3.28, kappa), mu[m]) + v[m] +
+                        logpdf(Exponential(tau), infections[m]) + v[21 + m] +
+                        logpdf(Normal(1, 0.1), ifr_noise[m]) + v[37 + m]
+                    prediction = fill(infections[m], data["N0"])
+                    for day in (data["N0"] + 1):data["N2"]
+                        convolution = sum(prediction[previous] *
+                            data["SI"][day - previous] for previous in 1:(day - 1))
+                        rt = mu[m] * exp(-sum(data["X"][m, day, j] * alpha[j]
+                            for j in 1:6))
+                        push!(prediction, (1 - sum(prediction) / data["pop"][m]) *
+                            rt * convolution)
+                    end
+                    for day in data["EpidemicStart"][m]:data["N"][m]
+                        expected = ifr_noise[m] * sum(prediction[previous] *
+                            data["f"][day - previous, m]
+                            for previous in 1:(day - 1))
+                        density += logpdf(NegativeBinomial(phi,
+                            phi / (phi + expected)), data["deaths"][day, m])
+                    end
+                end
+                return density
+            end
+            point = covid_point()
+            vm = VecModel(posteriordb_model(name), AutoEnzyme(; mode=Reverse);
+                reduce_copies=false)
+            @test vm.dimension == 51
+            value, gradient = lp_and_grad(vm, point)
+            @test isapprox(value, covid_oracle(point); atol=1e-5)
+            if name == "ecdc0401-covid19imperial_v2"
+                selected = [1, 15, 21, 22, 36, 37, 51]
+                positions = zeros(Int, length(point))
+                for (k, i) in enumerate(selected)
+                    positions[i] = k
+                end
+                function covid_selected_oracle(z)
+                    full = [positions[i] == 0 ? convert(eltype(z), point[i]) :
+                        z[positions[i]] for i in eachindex(point)]
+                    return covid_oracle(full)
+                end
+                selected_gradient = ForwardDiff.gradient(covid_selected_oracle,
+                    point[selected])
+                @test isapprox(gradient[selected], selected_gradient;
+                    atol=1e-4, rtol=1e-7)
+            end
+        end
+    end
 
     @testset "classical PosteriorDB densities and native Enzyme gradients" begin
         logistic(x) = inv(1 + exp(-x))
