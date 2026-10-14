@@ -1,6 +1,6 @@
 module WrenCorePredictTests
 
-@info "testing predict"
+@info "testing predict.jl"
 
 using AbstractMCMC: AbstractMCMC
 using Distributions

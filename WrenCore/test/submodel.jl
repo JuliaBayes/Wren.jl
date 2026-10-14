@@ -246,7 +246,7 @@ end
         end
         @test logjoint(empty_outer_with_latent(empty_inner()), VarNamedTuple(x=43.0)) ≈
               logdensityof(Normal(42), 43.0)
-        @test_throws ErrorException logjoint(cached_outer(), VarNamedTuple())
+        @test_throws ArgumentError logjoint(cached_outer(), VarNamedTuple())
     end
 
     @testset "nested submodels" begin
@@ -282,7 +282,8 @@ end
             x.y.a := a
         end
         nested_model = outer_model(middle_model(returning_inner()))
-        # TODO: not type stable, needs #5 before we can add inferred
+
+        # TODO(penelopeysm): not type stable
         @test_broken false
         retval, accs = evaluate(
             nested_model,

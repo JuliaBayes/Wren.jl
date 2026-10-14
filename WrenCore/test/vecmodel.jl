@@ -152,7 +152,7 @@ end
         @test any(xs .< 0)
 
         for X in [0.1, 1.0, 10.0]
-            prms = FromValues(VarNamedTuple(x=X), nothing)
+            prms = FromValues(VarNamedTuple(x=X))
             x = @inferred vectorise_latents(prms, vm)
             @test x ≈ [log(X)]
         end
