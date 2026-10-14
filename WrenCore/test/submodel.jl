@@ -237,6 +237,16 @@ end
         @test retval == 42
         @test parameters(accs) == VarNamedTuple()
         @test iszero(logjoint(accs))
+
+        @test iszero(logjoint(empty_outer(empty_inner()), VarNamedTuple()))
+
+        @wren function empty_outer_with_latent(inner)
+            mu = child ~ inner
+            x ~ Normal(mu)
+        end
+        @test logjoint(empty_outer_with_latent(empty_inner()), VarNamedTuple(x=43.0)) ≈
+              logdensityof(Normal(42), 43.0)
+        @test_throws ErrorException logjoint(cached_outer(), VarNamedTuple())
     end
 
     @testset "nested submodels" begin

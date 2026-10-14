@@ -35,6 +35,6 @@ function scope(source::FromParams, vn::VarName)
             throw(ArgumentError("the parameter $vn must contain a VarNamedTuple"))
         FromParams(child_params, child_fallback)
     else
-        child_fallback
+        something(child_fallback, FromParams(VarNamedTuple()))
     end
 end
