@@ -1,5 +1,12 @@
 [
   {
+    "commit_date": "2026-10-14T22:43:01Z",
+    "file": "20261014T224658Z-d528e32.json",
+    "git_sha": "d528e32488ceaf05976b069971ccdbde66ec4363",
+    "label": "Fix indices in generic batch fallback (#209)",
+    "timestamp": "2026-10-14T22:46:58.065Z"
+  },
+  {
     "commit_date": "2026-10-12T23:31:41Z",
     "file": "20261012T234402Z-fb99b88.json",
     "git_sha": "fb99b888cde376b96e85225ea7d4c125f8ea37e1",
