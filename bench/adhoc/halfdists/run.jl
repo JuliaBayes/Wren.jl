@@ -102,7 +102,7 @@ end
 function benchmark_model(Dist, params, N, xs)
     name = string(nameof(Dist))
     model = half_model(Dist(params...), xs)
-    source = FromParams(VarNamedTuple(x=xs), nothing)
+    source = FromValues(VarNamedTuple(x=xs), nothing)
     d_ref = reference(Dist, params...)
     # Both distributions use the log transform on [0, ∞), including its Jacobian.
     reference_term(t) = logpdf(d_ref, exp(t)) + t

@@ -1,5 +1,5 @@
 """
-    FromParams(
+    FromValues(
         params::VarNamedTuple,
         fallback::Union{AbstractLatentSource,Nothing}=nothing
     ) <: AbstractLatentSource
@@ -8,13 +8,13 @@ Take latent values from the given `VarNamedTuple`. If the `VarNamedTuple` does n
 value for a variable, then the `fallback` source is used, or an error thrown if `fallback`
 is `nothing`.
 """
-struct FromParams{P<:VarNamedTuple,S<:Union{AbstractLatentSource,Nothing}} <:
+struct FromValues{P<:VarNamedTuple,S<:Union{AbstractLatentSource,Nothing}} <:
        AbstractLatentSource
     params::P
     fallback::S
 end
-FromParams(params::VarNamedTuple) = FromParams(params, nothing)
-function get_latent(source::FromParams, vn::VarName, right, sitename::Val)
+FromValues(params::VarNamedTuple) = FromValues(params, nothing)
+function get_latent(source::FromValues, vn::VarName, right, sitename::Val)
     return if haskey(source.params, vn)
         value = source.params[vn]
         value isa TransformedValue ? value : TransformedValue(value, AsOriginal())
@@ -23,7 +23,7 @@ function get_latent(source::FromParams, vn::VarName, right, sitename::Val)
         get_latent(source.fallback, vn, right, sitename)
     end
 end
-function scope(source::FromParams, vn::VarName)
+function scope(source::FromValues, vn::VarName)
     child_fallback = if source.fallback === nothing
         nothing
     else
@@ -33,8 +33,8 @@ function scope(source::FromParams, vn::VarName)
         child_params = source.params[vn]
         child_params isa VarNamedTuple ||
             throw(ArgumentError("the parameter $vn must contain a VarNamedTuple"))
-        FromParams(child_params, child_fallback)
+        FromValues(child_params, child_fallback)
     else
-        something(child_fallback, FromParams(VarNamedTuple()))
+        something(child_fallback, FromValues(VarNamedTuple()))
     end
 end

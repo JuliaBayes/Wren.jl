@@ -181,7 +181,7 @@ since the mapping is invariant to the order in which the latent variables are en
   vector to latent variables. This is obtained by running the model once with an
   `AbstractLatentSource`, which you can pass here. If you want to control the RNG with which
   these parameters are drawn, you can use [`FromPrior(rng)`](@ref FromPrior). If you have a
-  `VarNamedTuple` of values, wrap it in [`FromParams`](@ref).
+  `VarNamedTuple` of values, wrap it in [`FromValues`](@ref).
 
   If you have already run the model once, you can avoid reevaluation entirely by calling the
   positional constructor with a `VecInfo` and a parameter vector. This is mostly

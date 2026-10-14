@@ -98,7 +98,7 @@ and recording the distributions that are present at each tilde statement.
 """
 function extract_priors(model::Model, varinfo::AbstractVarInfo)
     oavi = OnlyAccsVarInfo((PriorDistributionAccumulator(),))
-    init_strategy = InitFromParams(varinfo.values, nothing)
+    init_strategy = InitFromValues(varinfo.values, nothing)
     varinfo = last(init!!(model, oavi, init_strategy, UnlinkAll()))
     return getacc(varinfo, Val(PRIOR_ACCNAME)).values
 end

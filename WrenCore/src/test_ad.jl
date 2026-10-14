@@ -465,7 +465,7 @@ function benchmark_model(
     vecmodel = VecModel(
         model,
         adtype;
-        latent_source=FromParams(vnt_params, nothing),
+        latent_source=FromValues(vnt_params, nothing),
         lp_function,
         parameter_space,
     )
