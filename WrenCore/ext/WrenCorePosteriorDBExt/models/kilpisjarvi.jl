@@ -18,6 +18,7 @@ end
     log_sigma ~ WD.Flat()
     sigma = exp(log_sigma)
     # Stan's positive, unprioritized sigma is flat in sigma, not log sigma.
+    # Positive flat scale: the log-coordinate Jacobian is needed (#192).
     @addloglikelihood log_sigma
     mu = alpha .+ beta .* x
     @batch for i in eachindex(y)

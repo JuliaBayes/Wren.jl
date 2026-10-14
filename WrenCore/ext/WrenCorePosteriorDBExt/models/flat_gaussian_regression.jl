@@ -9,6 +9,7 @@ using WrenDists: WrenDists as WD
     log_sigma ~ WD.Flat()
     sigma = exp(log_sigma)
     # A flat density in positive sigma induces this Jacobian in log sigma.
+    # Temporary until the constrained Flat API in #192 is available here.
     @addloglikelihood log_sigma
     mu = X * beta
     @batch for i in eachindex(y)

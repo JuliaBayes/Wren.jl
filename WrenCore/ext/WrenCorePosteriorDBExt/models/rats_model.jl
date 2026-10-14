@@ -22,6 +22,7 @@ end
     sigma_alpha = exp(log_sigma_alpha)
     sigma_beta = exp(log_sigma_beta)
     # The three unprioritized positive scales are flat on their original scales.
+    # Positive flat scales: each log-coordinate Jacobian is needed (#192).
     @addloglikelihood log_sigma_y + log_sigma_alpha + log_sigma_beta
     @iid alpha ~ WD.Normal(mu_alpha, sigma_alpha) size=N
     @iid beta ~ WD.Normal(mu_beta, sigma_beta) size=N

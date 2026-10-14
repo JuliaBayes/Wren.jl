@@ -99,7 +99,7 @@ using WrenDists: WrenDists
             sigma = 100 ./ (1 .+ exp.(-raw))
             a = view(v, 6:(5 + G))
             b = view(v, (6 + G):(5 + G + S))
-            jacobian = sum(log(100.0) - log1p(exp(-u)) - log1p(exp(u))
+            jacobian = sum(-log1p(exp(-u)) - log1p(exp(u))
                 for u in raw)
             return logpdf(Normal(), mu_a) + logpdf(Normal(), mu_b) +
                 jacobian +
