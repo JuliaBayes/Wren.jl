@@ -61,3 +61,27 @@ test_dist(
         end,
     ),
 )
+
+@testset "BernoulliLogit batched tails" begin
+    for magnitude in (20.0, 40.0, 50.0, 100.0)
+        expected_value = -log1p(exp(-magnitude))
+        expected_gradient = exp(-magnitude) / (1 + exp(-magnitude))
+        for (η, y, sign) in ((magnitude, 1, 1), (-magnitude, 0, -1))
+            scalar(θ) = logdensityof(WrenDists.BernoulliLogit(θ), y)
+            batched(θ) = logdensityof(WrenDists.BatchedBernoulliLogit([θ]), [y])
+            for f in (scalar, batched)
+                (gradient,), value = Enzyme.autodiff(
+                    Enzyme.ReverseWithPrimal, f, Enzyme.Active, Enzyme.Active(η)
+                )
+                @test value ≈ expected_value rtol = 1e-12 atol = 0
+                @test gradient ≈ sign * expected_gradient rtol = 1e-12 atol = 0
+            end
+        end
+    end
+
+    @test logdensityof(WrenDists.BatchedBernoulliLogit([40.0, -50.0]), [1, 0]) ≈
+          -log1p(exp(-40.0)) - log1p(exp(-50.0)) rtol = 1e-12 atol = 0
+    for y in (-1, 2, 0.5)
+        @test logdensityof(WrenDists.BatchedBernoulliLogit([0.0]), [y]) == -Inf
+    end
+end
