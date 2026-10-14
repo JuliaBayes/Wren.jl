@@ -37,29 +37,22 @@ end
 
 @wren function accel_gp(Y, X, frequencies, Xsigma, frequencies_sigma)
     intercept ~ WD.TDist(3.0, -13.0, 36.0)
-    raw_sdgp ~ WD.Flat()
+    sdgp ~ WD.HalfTDist(3.0, 0.0, 36.0)
     raw_lscale ~ WD.Flat()
     @iid zgp ~ WD.Normal(0.0, 1.0) size=40
     intercept_sigma ~ WD.TDist(3.0, 0.0, 10.0)
-    raw_sdgp_sigma ~ WD.Flat()
+    sdgp_sigma ~ WD.HalfTDist(3.0, 0.0, 36.0)
     raw_lscale_sigma ~ WD.Flat()
     @iid zgp_sigma ~ WD.Normal(0.0, 1.0) size=20
 
-    sdgp = exp(raw_sdgp)
     lscale = exp(raw_lscale)
-    sdgp_sigma = exp(raw_sdgp_sigma)
     lscale_sigma = exp(raw_lscale_sigma)
-    # Stan's truncated Student-t prior contributes log(2) on each positive
-    # marginal scale. The Gamma precision terms are exactly the Stan inverse-
-    # gamma length-scale priors after its log support transform.
+    # The Gamma precision terms encode the inverse-gamma length-scale priors.
+    # Temporary until WrenDists provides the native prior tracked in #204.
     inverse_gamma_shape = 1.124909
     inverse_gamma_rate = 0.0177
-    @addloglikelihood logdensityof(WD.TDist(3.0, 0.0, 36.0), sdgp) +
-        log(2.0) + raw_sdgp +
-        logdensityof(WD.Gamma(inverse_gamma_shape, 1 / inverse_gamma_rate),
+    @addloglikelihood logdensityof(WD.Gamma(inverse_gamma_shape, 1 / inverse_gamma_rate),
             exp(-raw_lscale)) - raw_lscale +
-        logdensityof(WD.TDist(3.0, 0.0, 36.0), sdgp_sigma) +
-        log(2.0) + raw_sdgp_sigma +
         logdensityof(WD.Gamma(inverse_gamma_shape, 1 / inverse_gamma_rate),
             exp(-raw_lscale_sigma)) - raw_lscale_sigma
     @addloglikelihood accel_loglikelihood(Y, X, frequencies, Xsigma,

@@ -392,7 +392,7 @@ using WrenDists: WrenDists
                 X * (beta .* prophet_data["s_a"])
             return logpdf(Normal(0, 5), k) + logpdf(Normal(0, 5), m) +
                 sum(logpdf(Laplace(0, prophet_data["tau"]), d) for d in delta) +
-                logpdf(Normal(0, 0.5), sigma) + log_sigma +
+                logpdf(Normal(0, 0.5), sigma) + log(2.0) + log_sigma +
                 sum(logpdf(Normal(0, prophet_data["sigmas"][j]), beta[j])
                     for j in eachindex(beta)) +
                 sum(logpdf(Normal(mu[i], sigma), prophet_data["y"][i])

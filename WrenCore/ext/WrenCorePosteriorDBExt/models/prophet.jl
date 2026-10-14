@@ -2,7 +2,7 @@
 module Prophet
 
 using PosteriorDB
-using WrenCore: @wren, @observe, @batch, @iid, @addloglikelihood
+using WrenCore: @wren, @observe, @batch, @iid
 using WrenDists: WrenDists as WD
 
 const data = let
@@ -17,8 +17,6 @@ end
     m ~ WD.Normal(0.0, 5.0)
     @iid delta ~ WD.Laplace(0.0, tau) size=length(t_change)
     sigma_obs ~ WD.HalfNormal(0.0, 0.5)
-    # Stan uses normal_lpdf on its positive sigma, without truncation normalization.
-    @addloglikelihood -log(2.0)
     @iid beta ~ WD.Normal(0.0, sigmas[1]) size=length(sigmas)
     trend = (k .+ A * delta) .* t .+ m .- A * (t_change .* delta)
     mu = trend .* (1 .+ X * (beta .* s_m)) .+ X * (beta .* s_a)
