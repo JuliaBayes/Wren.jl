@@ -168,6 +168,29 @@ fcategorical(ps) = Categorical(ps)
             )
         end
 
+        @testset "runtime fallback indices (issue #157)" begin
+            @wren function batch_unknown_indices(y, indices)
+                mu ~ iid(Normal(), length(y))
+                @batch for i in indices
+                    @observe y[i] ~ fnormal(mu[i])
+                end
+            end
+            @wren function nobatch_unknown_indices(y, indices)
+                mu ~ iid(Normal(), length(y))
+                for i in indices
+                    @observe y[i] ~ fnormal(mu[i])
+                end
+            end
+            y = [0.0, 2.0, 3.0]
+            for indices in ([2, 1], 2:3)
+                test_model_equivalence(
+                    batch_unknown_indices(y, indices),
+                    nobatch_unknown_indices(y, indices),
+                    adtype,
+                )
+            end
+        end
+
         @testset "issue #79" begin
             # https://github.com/JuliaBayes/Wren.jl/issues/79
             @wren function batch_diagonal(x, y)
