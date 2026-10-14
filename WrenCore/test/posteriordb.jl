@@ -460,7 +460,7 @@ using WrenDists: WrenDists
             sigma1 = exp(v[2n + 3])
             sigma2 = sigma1 + exp(v[2n + 4])
             sigma3 = sigma2 + exp(v[2n + 5])
-            prior = sum(log(width) + logit_jacobian(v[t]) for t in 1:n) +
+            prior = sum(logit_jacobian(v[t]) for t in 1:n) +
                 sum(logpdf(Normal(-sum(seasonal[(t - 11):(t - 1)]), sigma1),
                     seasonal[t]) for t in 12:n) +
                 sum(logpdf(Normal(mu[t - 1], sigma2), mu[t]) for t in 2:n) +
@@ -495,6 +495,7 @@ using WrenDists: WrenDists
                     log(2 * data["scale_global"]) + v[d + 2] +
                     sum(logpdf(TDist(data["nu_local"]), lambda[j]) +
                         v[d + 2 + j] for j in 1:d) +
+                    (d + 1) * log(2.0) +
                     logpdf(InverseGamma(data["slab_df"] / 2,
                         data["slab_df"] / 2), caux) + v[end]
                 c2 = data["slab_scale"]^2 * caux

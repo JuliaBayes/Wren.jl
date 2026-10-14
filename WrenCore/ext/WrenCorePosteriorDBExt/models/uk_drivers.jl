@@ -13,16 +13,13 @@ const data = let
     )))
 end
 
-function state_space_loglikelihood(y, x, w, raw_mu, seasonal, beta, lambda,
-        sigma1, sigma2, sigma3, lower, width)
+function state_space_loglikelihood(y, x, w, mu, seasonal, beta, lambda,
+        sigma1, sigma2, sigma3)
     total = zero(beta + lambda + sigma1)
     previous_mu = zero(total)
     for t in eachindex(y)
-        p = inv(1 + exp(-raw_mu[t]))
-        mu = lower + width * p
-        total += log(width) + log(p) + log1p(-p)
         if t >= 2
-            total += logdensityof(WD.Normal(previous_mu, sigma2), mu)
+            total += logdensityof(WD.Normal(previous_mu, sigma2), mu[t])
         end
         if t >= 12
             previous_season = zero(total)
@@ -32,15 +29,15 @@ function state_space_loglikelihood(y, x, w, raw_mu, seasonal, beta, lambda,
             total += logdensityof(WD.Normal(-previous_season, sigma1),
                 seasonal[t])
         end
-        total += logdensityof(WD.Normal(mu + beta * x[t] + lambda * w[t] +
+        total += logdensityof(WD.Normal(mu[t] + beta * x[t] + lambda * w[t] +
             seasonal[t], sigma3), y[t])
-        previous_mu = mu
+        previous_mu = mu[t]
     end
     return total
 end
 
 @wren function uk_drivers(y, x, w, lower, width)
-    @iid raw_mu ~ WD.Flat() size=length(y)
+    @iid mu ~ WD.Uniform(lower, lower + width) size=length(y)
     @iid seasonal ~ WD.Flat() size=length(y)
     beta ~ WD.Flat()
     lambda ~ WD.Flat()
@@ -57,8 +54,8 @@ end
         logdensityof(WD.TDist(4.0, 0.0, 1.0), sigma1) +
         logdensityof(WD.TDist(4.0, 0.0, 1.0), sigma2) +
         logdensityof(WD.TDist(4.0, 0.0, 1.0), sigma3)
-    @addloglikelihood state_space_loglikelihood(y, x, w, raw_mu, seasonal,
-        beta, lambda, sigma1, sigma2, sigma3, lower, width)
+    @addloglikelihood state_space_loglikelihood(y, x, w, mu, seasonal,
+        beta, lambda, sigma1, sigma2, sigma3)
     return nothing
 end
 

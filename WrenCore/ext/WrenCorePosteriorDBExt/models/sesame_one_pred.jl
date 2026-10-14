@@ -16,6 +16,7 @@ end
     @iid beta ~ WD.Flat() size=2
     log_sigma ~ WD.Flat()
     sigma = exp(log_sigma)
+    # Temporary positive-flat scale transform pending #192.
     @addloglikelihood log_sigma
     mu = beta[1] .+ beta[2] .* encouraged
     @batch for i in eachindex(watched)

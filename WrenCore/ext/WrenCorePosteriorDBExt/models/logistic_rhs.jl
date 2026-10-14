@@ -5,22 +5,17 @@ using PosteriorDB
 using WrenCore: @wren, @addloglikelihood, @iid, logdensityof
 using WrenDists: WrenDists as WD
 
-function rhs_logdensity(y, x, scale_global, nu_global, nu_local,
-        slab_scale, slab_df, beta0, z, raw_tau, raw_lambda, raw_caux)
-    tau = exp(raw_tau)
+function rhs_logdensity(y, x, slab_scale, slab_df, beta0, z, tau, lambda,
+        raw_caux)
     caux = exp(raw_caux)
     shape = 0.5 * slab_df
-    total = logdensityof(WD.TDist(nu_global, 0.0, 2 * scale_global), tau) +
-        raw_tau
     # InverseGamma(shape, shape) on caux is Gamma(shape, 1/shape) on 1/caux.
+    # Temporary until the native-prior choice tracked in #204 is settled.
     # The precision transform and caux = exp(raw_caux) leave -raw_caux.
-    total += logdensityof(WD.Gamma(shape, inv(shape)), inv(caux)) - raw_caux
+    total = logdensityof(WD.Gamma(shape, inv(shape)), inv(caux)) - raw_caux
     c2 = slab_scale^2 * caux
-    for raw in raw_lambda
-        total += logdensityof(WD.TDist(nu_local, 0.0, 1.0), exp(raw)) + raw
-    end
     beta = [begin
-        lambda_j = exp(raw_lambda[j])
+        lambda_j = lambda[j]
         z[j] * tau * sqrt(c2 * lambda_j^2 /
             (c2 + tau^2 * lambda_j^2))
     end for j in eachindex(z)]
@@ -38,12 +33,11 @@ end
         nu_global, nu_local, slab_scale, slab_df)
     beta0 ~ WD.Normal(0.0, scale_icept)
     @iid z ~ WD.Normal(0.0, 1.0) size=d
-    raw_tau ~ WD.Flat()
-    @iid raw_lambda ~ WD.Flat() size=d
+    tau ~ WD.HalfTDist(nu_global, 0.0, 2 * scale_global)
+    @iid lambda ~ WD.HalfTDist(nu_local, 0.0, 1.0) size=d
     raw_caux ~ WD.Flat()
-    @addloglikelihood rhs_logdensity(y, x, scale_global, nu_global,
-        nu_local, slab_scale, slab_df, beta0, z, raw_tau, raw_lambda,
-        raw_caux)
+    @addloglikelihood rhs_logdensity(y, x, slab_scale, slab_df, beta0, z,
+        tau, lambda, raw_caux)
     return nothing
 end
 
