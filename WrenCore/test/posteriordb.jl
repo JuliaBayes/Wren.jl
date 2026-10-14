@@ -3,7 +3,7 @@ module WrenPosteriorDBTests
 @info "testing posteriordb.jl"
 
 import DifferentiationInterface as DI
-using Distributions: Bernoulli, Beta, Binomial, Cauchy, Exponential, InverseGamma,
+using Distributions: Bernoulli, Beta, Binomial, Cauchy, Dirichlet, Exponential, InverseGamma,
     Logistic, LogNormal, Normal, TDist, logpdf
 using Enzyme
 import ForwardDiff
@@ -15,6 +15,21 @@ using WrenCore
 using WrenDists: WrenDists
 
 @testset "posteriordb.jl" begin
+    function pride_lda_source(M)
+        # A Dirichlet(0.1) prior draw may round a simplex prefix above one in
+        # Plaice's inverse transform (Wren.jl #202). Start in vector space.
+        word_init = TransformedValue(zeros(1494), AsUnconstrainedVec())
+        params = VarNamedTuple(phi1=word_init, phi2=word_init, phi3=word_init,
+            phi4=word_init, phi5=word_init)
+        topic_init = TransformedValue(zeros(4), AsUnconstrainedVec())
+        topic_template = zeros(5, M)
+        for m in 1:M
+            params = WrenCore.VarNames.templated_setindex!!(params, topic_init,
+                @vn(theta[:, m]), topic_template)
+        end
+        return FromParams(params)
+    end
+
     @testset "$name" for name in available_posteriordb_models()
         model = posteriordb_model(name)
         # LSAT has 1000 person effects; ForwardDiff's full Jacobian is too large
@@ -24,16 +39,23 @@ using WrenDists: WrenDists
             "science_irt-grsm_latent_reg_irt",
             "timssAusTwn_irt-gpcm_latent_reg_irt",
             "three_men1-ldaK2", "three_men2-ldaK2", "three_men3-ldaK2",
+            "prideprejudice_chapter-ldaK5", "prideprejudice_paragraph-ldaK5",
             "traffic_accident_nyc-bym2_offset_only",
             "mnist_100-nn_rbm1bJ10") ?
             AutoEnzyme(; mode=Reverse) :
             DI.AutoForwardDiff()
-        vm = VecModel(model, adtype)
+        pride_m = name == "prideprejudice_chapter-ldaK5" ? 61 :
+            name == "prideprejudice_paragraph-ldaK5" ? 2025 : nothing
+        vm = pride_m === nothing ? VecModel(model, adtype) :
+            VecModel(model, adtype; latent_source=pride_lda_source(pride_m),
+                reduce_copies=false)
         # dogs_log uses flat coordinates with bounded likelihood factors; a
         # prior draw need not lie in their finite-density support.
         if name == "dogs-dogs_log"
             v = [-0.2, 0.3]
             @test isfinite(lp(vm, v))
+        elseif pride_m !== nothing
+            v = 0.01 .* sin.(1:vm.dimension)
         elseif name == "mnist_100-nn_rbm1bJ10"
             M, J, K = 784, 10, 10
             s2_alpha = (0.05 / M^2)^2
@@ -629,6 +651,60 @@ using WrenDists: WrenDists
                 point[selected])
             @test isapprox(gradient[selected], selected_gradient;
                 atol=1e-5, rtol=1e-8)
+        end
+
+        for (name, M) in (("prideprejudice_chapter-ldaK5", 61),
+                ("prideprejudice_paragraph-ldaK5", 2025))
+            data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
+                PosteriorDB.database(), name,
+            )))
+            V = data["V"]
+            dimension = 4M + 5(V - 1)
+            function pride_lda_oracle(v)
+                theta = Matrix{eltype(v)}(undef, 5, M)
+                phi = Vector{Vector{eltype(v)}}(undef, 5)
+                prior = zero(eltype(v))
+                alpha_dist, beta_dist = Dirichlet(data["alpha"]),
+                    Dirichlet(data["beta"])
+                for m in 1:M
+                    offset = 4(m - 1)
+                    topic, jac = lda_simplex_oracle(view(v,
+                        (offset + 1):(offset + 4)), 5)
+                    theta[:, m] = topic
+                    prior += logpdf(alpha_dist, topic) + jac
+                end
+                for k in 1:5
+                    offset = 4M + (k - 1) * (V - 1)
+                    phi[k], jac = lda_simplex_oracle(view(v,
+                        (offset + 1):(offset + V - 1)), V)
+                    prior += logpdf(beta_dist, phi[k]) + jac
+                end
+                likelihood = sum(log(sum(theta[k, data["doc"][n]] *
+                    phi[k][data["w"][n]] for k in 1:5)) for n in 1:data["N"])
+                return prior + likelihood
+            end
+            point = 0.01 .* sin.(1:dimension)
+            vm = VecModel(posteriordb_model(name), AutoEnzyme(; mode=Reverse);
+                latent_source=pride_lda_source(M), reduce_copies=false)
+            @test vm.dimension == dimension
+            value, gradient = lp_and_grad(vm, point)
+            @test isapprox(value, pride_lda_oracle(point); atol=1e-5, rtol=1e-8)
+            if M == 61
+                selected = [1, 4M, 4M + 1, 4M + V - 1, 4M + V, dimension]
+                positions = zeros(Int, dimension)
+                for (k, i) in enumerate(selected)
+                    positions[i] = k
+                end
+                function pride_lda_selected_oracle(z)
+                    full = [positions[i] == 0 ? convert(eltype(z), point[i]) :
+                        z[positions[i]] for i in eachindex(point)]
+                    return pride_lda_oracle(full)
+                end
+                selected_gradient = ForwardDiff.gradient(pride_lda_selected_oracle,
+                    point[selected])
+                @test isapprox(gradient[selected], selected_gradient;
+                    atol=1e-5, rtol=1e-8)
+            end
         end
 
         traffic_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(

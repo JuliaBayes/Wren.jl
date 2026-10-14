@@ -31,6 +31,7 @@ include("models/science_grsm.jl")
 include("models/timss_gpcm.jl")
 include("models/lda_three_docs.jl")
 include("models/lda_three_men.jl")
+include("models/lda_pride_prejudice.jl")
 include("models/traffic_bym2.jl")
 include("models/mnist_rbm10.jl")
 include("models/glmm_poisson.jl")
@@ -77,6 +78,8 @@ const MODELS = Dict(
     "three_men1-ldaK2" => LDAThreeMen.case1,
     "three_men2-ldaK2" => LDAThreeMen.case2,
     "three_men3-ldaK2" => LDAThreeMen.case3,
+    "prideprejudice_chapter-ldaK5" => LDAPridePrejudice.chapter,
+    "prideprejudice_paragraph-ldaK5" => LDAPridePrejudice.paragraph,
     "traffic_accident_nyc-bym2_offset_only" => TrafficBYM2,
     "mnist_100-nn_rbm1bJ10" => MNIST100RBM,
     "GLMM_Poisson_data-GLMM_Poisson_model" => GLMMPoisson,
