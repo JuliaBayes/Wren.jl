@@ -103,19 +103,22 @@ function _show_enzyme_error(io::IO, ::Enzyme.Compiler.IllegalTypeAnalysisExcepti
     print(
         io,
         """
-         1. Ideally, remove the type instability. This will also make your model faster.
+        1. Ideally, remove the type instability. This will also make your model faster.
 
-         2. Try setting `Enzyme.API.strictAliasing!(false)`
+        2. Try setting `Enzyme.API.strictAliasing!(false)`
 
-         3. If you are stuck, please open an issue at $(_ISSUES_LINK),
-            and include the definition of your model so that we can reproduce the error.
+        3. If you are stuck, please open an issue at
 
-         4. You can obtain a full stack trace by setting
+                $(_ISSUES_LINK)
 
-                WrenCore.WREN_COMPILATION_DEBUG[] = true
+           with the definition of your model to help reproduce the error.
 
-            Note however that this stack trace is often very long and quite unhelpful
-            (indeed, that is why we hide it by default).
+        4. You can obtain a full stack trace by setting
+
+               WrenCore.WREN_COMPILATION_DEBUG[] = true
+
+           Note however that this stack trace is often very long and quite unhelpful
+           (indeed, that is why we hide it by default).
         """,
     )
     return nothing
