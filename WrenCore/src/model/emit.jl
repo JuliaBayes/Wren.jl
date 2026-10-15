@@ -9,11 +9,18 @@ function remove_escapes(expr::Expr)
     return Expr(expr.head, map(remove_escapes, expr.args)...)
 end
 
+
+# In submodel.jl we override this when `val` is an `UncollectedParams` sentinel, so that we
+# don't ever actually try to set it into the parent object, which can cause type instability
+# issues (and consequently Enzyme errors) if the parent object is e.g. an array with a
+# eltype that `UncollectedParams` doesn't subtype.
+set_lhs!!(obj, optic, val) = Accessors.set(obj, optic, val)
+
 assign_or_set!!(lhs::Symbol, rhs, vn) = :($lhs = $rhs)
 function assign_or_set!!(lhs::Expr, rhs, vn)
     left_top_sym = get_top_level_symbol(lhs)
     return :(
-        $left_top_sym = $(Accessors.set)(
+        $left_top_sym = $(set_lhs!!)(
             $left_top_sym,
             $(VarNames.with_mutation)($(VarNames.getoptic)($vn)),
             $rhs,
