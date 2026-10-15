@@ -118,6 +118,7 @@ function nuts(
     vm_single = WrenCore.VecModel(model, adtype; reduce_copies)
     if progress
         println("done in $(round(time() - t, digits=2)) seconds.")
+        t = time()
     end
 
     Random.seed!(Random.TaskLocalRNG(), rand(rng, UInt64))
