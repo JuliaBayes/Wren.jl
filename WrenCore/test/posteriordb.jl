@@ -6,7 +6,7 @@ import DifferentiationInterface as DI
 import ForwardDiff
 using Distributions: Beta, Binomial, Cauchy, Dirichlet, Exponential, Gamma,
     InverseGamma, Laplace, LocationScale, LogNormal, NegativeBinomial, Normal,
-    Poisson, TDist, Weibull, logpdf
+    Poisson, TDist, Uniform, Weibull, logpdf
 using Enzyme
 using LinearAlgebra: Symmetric, I, cholesky
 using PosteriorDB: PosteriorDB
@@ -338,10 +338,11 @@ using WrenDists: WrenDists
             mu = v[1]
             alpha0 = exp(v[2])
             alpha1 = logistic(v[3])
-            beta_ratio = logistic(v[4])
-            beta1 = (1 - alpha1) * beta_ratio
-            jacobian = v[2] + log(alpha1) + 2 * log1p(-alpha1) +
-                log(beta_ratio) + log1p(-beta_ratio)
+            beta1 = (1 - alpha1) * logistic(v[4])
+            # Positive-flat alpha0, then the two scaled-logit coordinates.
+            prior = v[2] + logpdf(Beta(1, 2), alpha1) + logit_jacobian(v[3]) +
+                logpdf(Uniform(0, 1 - alpha1), beta1) + log1p(-alpha1) +
+                logit_jacobian(v[4])
             y = garch_data["y"]
             sigma = garch_data["sigma1"]
             density = logpdf(Normal(mu, sigma), y[1])
@@ -350,10 +351,11 @@ using WrenDists: WrenDists
                     beta1 * sigma^2)
                 density += logpdf(Normal(mu, sigma), y[t])
             end
-            return jacobian + density
+            return prior + density
         end
         check("garch-garch11", 4, garch_reference,
-            [[0.0, log(0.2), -0.2, 0.1], [0.15, log(0.5), 0.3, -0.4]])
+            [[0.0, log(0.2), -0.2, 0.1], [0.15, log(0.5), 0.3, -0.4],
+             [0.05, log(0.3), 4.0, 1.5]])
 
         surgical_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
             PosteriorDB.database(), "surgical_data-surgical_model",
