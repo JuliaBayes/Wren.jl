@@ -57,6 +57,15 @@ function WrenCore._handle_enzyme(
     end
 end
 
+function enable_runtime_activity(::DI.AutoEnzyme{Nothing,FA}) where {FA}
+    mode = set_runtime_activity(Reverse)  # promote to reverse mode if unknown.
+    return DI.AutoEnzyme{typeof(mode),FA}(mode)
+end
+function enable_runtime_activity(adt::DI.AutoEnzyme{Mode,FA}) where {Mode,FA}
+    mode = set_runtime_activity(adt.mode)
+    return DI.AutoEnzyme{typeof(mode),FA}(mode)
+end
+
 """
     WrenEnzymeError(err)
 
@@ -123,6 +132,49 @@ function _show_enzyme_error(io::IO, ::Enzyme.Compiler.IllegalTypeAnalysisExcepti
     )
     return nothing
 end
+
+function _show_enzyme_error(io::IO, ::Enzyme.Compiler.EnzymeRuntimeActivityError)
+    printstyled(
+        io,
+        "EnzymeRuntimeActivityError: potential need for runtime activity detected\n";
+        bold=true,
+    )
+
+    _print_heading(io, "Why?")
+    print(
+        io,
+        """
+        Enzyme requires runtime activity in order to correctly differentiate your
+        model. See https://pysm.dev/Wren.jl/explanations/enzyme/#Runtime-activity
+        for more information.
+        """,
+    )
+
+    _print_heading(io, "What can you do?")
+    print(
+        io,
+        """
+        1. Allow Wren to automatically enable runtime activity for you by setting
+
+               WrenCore.AUTO_RUNTIME_ACTIVITY[] = true
+
+        2. Use an explicit adtype that has runtime activity enabled, such as
+            
+               using Enzyme, ADTypes
+               AutoEnzyme(; mode=set_runtime_activity(Reverse))
+
+        3. If you don't think your model should require runtime activity, please open
+           an issue at
+
+                $(_ISSUES_LINK)
+
+           with the definition of your model to help reproduce the error.
+        """,
+    )
+    return nothing
+end
+
+# Fallback method for other Enzyme erorrs that we don't yet have a custom message for.
 function _show_enzyme_error(io::IO, err::Enzyme.Compiler.EnzymeError)
     # Enzyme's "Failure within method" section shows the method that failed, but for Wren
     # models this is always the model's RuntimeGeneratedFunction, whose very long type
@@ -139,14 +191,5 @@ function _show_enzyme_error(io::IO, err::Enzyme.Compiler.EnzymeError)
     return nothing
 end
 Base.showerror(io::IO, e::WrenEnzymeError, ::Any; backtrace=true) = showerror(io, e)
-
-function enable_runtime_activity(::DI.AutoEnzyme{Nothing,FA}) where {FA}
-    mode = set_runtime_activity(Reverse)  # promote to reverse mode if unknown.
-    return DI.AutoEnzyme{typeof(mode),FA}(mode)
-end
-function enable_runtime_activity(adt::DI.AutoEnzyme{Mode,FA}) where {Mode,FA}
-    mode = set_runtime_activity(adt.mode)
-    return DI.AutoEnzyme{typeof(mode),FA}(mode)
-end
 
 end # module
