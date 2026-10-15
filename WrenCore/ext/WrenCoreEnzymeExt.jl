@@ -1,7 +1,7 @@
 module WrenCoreEnzymeExt
 
 using WrenCore
-using WrenCore: _docs_link
+using WrenCore: _docs_link, Accessors
 using DifferentiationInterface: DifferentiationInterface as DI
 using Enzyme: Enzyme, Reverse, Forward, set_runtime_activity
 
@@ -26,32 +26,116 @@ Specifically, this:
 function WrenCore._handle_enzyme(
     vm::WrenCore.VecModel{M,<:DI.AutoEnzyme},
 ) where {M<:WrenCore.Model}
-    try
+    err = try
         lp_and_grad(vm, vm.sample)
+        # Successful
+        return vm
     catch e
-        if e isa Enzyme.Compiler.EnzymeRuntimeActivityError
-            if WrenCore.AUTO_RUNTIME_ACTIVITY[] === false
-                rethrow(e)
-            else
-                if WrenCore.AUTO_RUNTIME_ACTIVITY[] === nothing
-                    @info "enabling Enzyme runtime activity for model $(vm.model.name); this is not a cause for concern but see $(_docs_link("explanations/enzyme/#Runtime-activity")) for more info about what this means"
-                end
-                return WrenCore.VecModel(
-                    vm.model,
-                    enable_runtime_activity(vm.adtype),
-                    vm.lp_function,
-                    vm.parameter_space,
-                    vm.vecinfo,
-                    vm.sample,
-                )
-            end
-        else
-            rethrow(e)
+        e
+    end
+    if err isa Enzyme.Compiler.EnzymeRuntimeActivityError &&
+       WrenCore.AUTO_RUNTIME_ACTIVITY[] !== false
+        if WrenCore.AUTO_RUNTIME_ACTIVITY[] === nothing
+            @info "enabling Enzyme runtime activity for model $(vm.model.name)"
+        end
+        return WrenCore.VecModel(
+            vm.model,
+            enable_runtime_activity(vm.adtype),
+            vm.lp_function,
+            vm.parameter_space,
+            vm.vecinfo,
+            vm.sample,
+        )
+    end
+    # Throw outside the `catch` block so that the error isn't shown with Enzyme's
+    # internal stacktrace, or printed a second time as "caused by".
+    # In debug mode, throw the original error so that it's shown in full.
+    if err isa Enzyme.Compiler.EnzymeError && !WrenCore.WREN_COMPILATION_DEBUG[]
+        throw(WrenEnzymeError(err))
+    else
+        throw(err)
+    end
+end
+
+"""
+    WrenEnzymeError(err)
+
+Wraps an error thrown by Enzyme when differentiating a model. It is shown without a
+stacktrace, since the stacktrace only points into Wren internals; the useful information
+(including where in the model the error happened) is in Enzyme's own error message. The
+original error is stored in the `err` field.
+
+If `WrenCore.WREN_COMPILATION_DEBUG[]` is `true`, Enzyme errors are not wrapped, and are
+shown in full.
+"""
+struct WrenEnzymeError{E<:Exception} <: Exception
+    err::E
+end
+Base.showerror(io::IO, e::WrenEnzymeError) = _show_enzyme_error(io, e.err)
+
+const _ISSUES_LINK = "https://github.com/JuliaBayes/Wren.jl/issues"
+
+function _print_heading(io::IO, heading::String)
+    println(io)
+    printstyled(io, "━━━ ", heading, " ", "━"^(76 - length(heading)), "\n"; bold=true)
+    return nothing
+end
+
+# Improved Enzyme error messages.
+function _show_enzyme_error(io::IO, ::Enzyme.Compiler.IllegalTypeAnalysisException)
+    printstyled(
+        io,
+        "IllegalTypeAnalysisException: Enzyme compilation failed due to illegal type analysis.\n";
+        bold=true,
+    )
+
+    _print_heading(io, "Why?")
+    print(
+        io,
+        """
+        This error usually means that some value has a `Union` type (for example,
+        `Union{Nothing,Float64}`, or equivalently, that some part of your model is
+        type-unstable.
+        """,
+    )
+
+    _print_heading(io, "What can you do?")
+    print(
+        io,
+        """
+         1. Ideally, remove the type instability. This will also make your model faster.
+
+         2. Try setting `Enzyme.API.strictAliasing!(false)`
+
+         3. If you are stuck, please open an issue at $(_ISSUES_LINK),
+            and include the definition of your model so that we can reproduce the error.
+
+         4. You can obtain a full stack trace by setting
+
+                WrenCore.WREN_COMPILATION_DEBUG[] = true
+
+            Note however that this stack trace is often very long and quite unhelpful
+            (indeed, that is why we hide it by default).
+        """,
+    )
+    return nothing
+end
+function _show_enzyme_error(io::IO, err::Enzyme.Compiler.EnzymeError)
+    # Enzyme's "Failure within method" section shows the method that failed, but for Wren
+    # models this is always the model's RuntimeGeneratedFunction, whose very long type
+    # signature tells the user nothing. Setting `mi` to `nothing` makes Enzyme skip it.
+    if hasfield(typeof(err), :mi)
+        err = try
+            Accessors.@set err.mi = nothing
+        catch
+            # some error types don't allow `mi` to be `nothing`
+            err
         end
     end
-    # Successful
-    return vm
+    showerror(io, err)
+    return nothing
 end
+Base.showerror(io::IO, e::WrenEnzymeError, ::Any; backtrace=true) = showerror(io, e)
 
 function enable_runtime_activity(::DI.AutoEnzyme{Nothing,FA}) where {FA}
     mode = set_runtime_activity(Reverse)  # promote to reverse mode if unknown.
