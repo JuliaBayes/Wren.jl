@@ -45,7 +45,7 @@ using WrenCore:
     WithExpectedResult,
     # Initialisations for MCMC
     FromPrior,
-    FromParams
+    FromValues
 
 export WrenCore,
     # DSL
@@ -77,7 +77,7 @@ export WrenCore,
     WithExpectedResult,
     # Initialisations for MCMC
     FromPrior,
-    FromParams
+    FromValues
 
 using VarNames: @vn, @vnt, VarNamedTuple, VarName, Draw, parameters, extras
 export @vn, @vnt, VarNamedTuple, VarName, Draw, parameters, extras

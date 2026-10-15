@@ -55,7 +55,7 @@ function _reevaluate(model::WrenCore.Model, chain::VNChain, accs, fallback=nothi
     return map(FlexiChains.parameters_at(chain)) do vnt
         WrenCore.evaluate(
             model,
-            WrenCore.FromParams(vnt, fallback),
+            WrenCore.FromValues(vnt, fallback),
             WrenCore.OriginalSpace(),
             map(WrenCore.reset, accs),
             WrenCore.EvalContext{false}(),

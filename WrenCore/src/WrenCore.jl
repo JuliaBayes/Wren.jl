@@ -27,8 +27,9 @@ include("space.jl")
 
 # Latent sources
 include("latents/latents.jl")
+include("latents/void.jl")
 include("latents/prior.jl")
-include("latents/params.jl")
+include("latents/values.jl")
 
 # Accumulators
 include("accs/accs.jl")
@@ -110,7 +111,7 @@ export @wren,
     ADIncorrectException,
     ADTestResult,
     BenchmarkResult,
-    FromParams,
+    FromValues,
     FromPrior,
     FromVector,
     FixedTransform,

@@ -26,7 +26,7 @@ using WrenCore, WrenDists, Enzyme, Test
         @test initial[@vn(x)] == [2.0, 3.0]
 
         @testset "adtype=$adtype" for adtype in (nothing, WrenCore.DEFAULT_AD)
-            vm = VecModel(model, adtype; latent_source=FromParams(initial))
+            vm = VecModel(model, adtype; latent_source=FromValues(initial))
             @test initial[@vn(x)] == [2.0, 3.0]
             p = [2.0, 3.0]
             @test lp(vm, p) ≈ expected

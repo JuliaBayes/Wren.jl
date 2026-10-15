@@ -7,7 +7,7 @@ using ..WrenCore
 function get_lp_components(model::WrenCore.Model, params)
     _, accs = evaluate(
         model,
-        FromParams(params),
+        FromValues(params),
         OriginalSpace(),
         AccumulatorTuple(LogPriorAccumulator(), LogLikelihoodAccumulator()),
         WrenCore.EvalContext{false}(),
@@ -32,7 +32,7 @@ function test_model_equivalence(
     vm1 = VecModel(model1, adtype)
     vm2 = VecModel(model2, adtype)
     @test vm1.dimension == vm2.dimension
-    vparams = vectorise_latents(FromParams(params), vm1)
+    vparams = vectorise_latents(FromValues(params), vm1)
     if adtype === nothing
         lp1 = lp(vm1, vparams)
         lp2 = lp(vm2, vparams)
