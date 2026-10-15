@@ -158,12 +158,20 @@ function _show_enzyme_error(io::IO, ::Enzyme.Compiler.EnzymeRuntimeActivityError
 
                WrenCore.AUTO_RUNTIME_ACTIVITY[] = true
 
+           Although enabling runtime activity does make Enzyme slower, it will often still
+           be faster than other AD backends.
+
         2. Use an explicit adtype that has runtime activity enabled, such as
             
                using Enzyme, ADTypes
                AutoEnzyme(; mode=set_runtime_activity(Reverse))
 
-        3. If you don't think your model should require runtime activity, please open
+        3. Rewrite the model to not need runtime activity. Note that this is not always
+           possible; see https://pysm.dev/Wren.jl/explanations/enzyme/#Runtime-activity for
+           more information on this. Generally, it would be better to just enable runtime
+           activity instead of rewriting the model into a form that is harder to work with.
+
+        4. If you don't think your model should require runtime activity, please open
            an issue at
 
                 $(_ISSUES_LINK)
