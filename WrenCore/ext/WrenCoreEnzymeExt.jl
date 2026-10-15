@@ -114,7 +114,9 @@ function _show_enzyme_error(io::IO, ::Enzyme.Compiler.IllegalTypeAnalysisExcepti
         """
         1. Ideally, remove the type instability. This will also make your model faster.
 
-        2. Try setting `Enzyme.API.strictAliasing!(false)`
+        2. Try setting
+
+               Enzyme.API.strictAliasing!(false)
 
         3. If you are stuck, please open an issue at
 
@@ -145,7 +147,7 @@ function _show_enzyme_error(io::IO, ::Enzyme.Compiler.EnzymeRuntimeActivityError
         io,
         """
         Enzyme requires runtime activity in order to correctly differentiate your
-        model. See https://pysm.dev/Wren.jl/explanations/enzyme/#Runtime-activity
+        model. See $(WrenCore._docs_link("explanations/enzyme/#Runtime-activity"))
         for more information.
         """,
     )
@@ -167,9 +169,10 @@ function _show_enzyme_error(io::IO, ::Enzyme.Compiler.EnzymeRuntimeActivityError
                AutoEnzyme(; mode=set_runtime_activity(Reverse))
 
         3. Rewrite the model to not need runtime activity. Note that this is not always
-           possible; see https://pysm.dev/Wren.jl/explanations/enzyme/#Runtime-activity for
-           more information on this. Generally, it would be better to just enable runtime
-           activity instead of rewriting the model into a form that is harder to work with.
+           possible; see $(WrenCore._docs_link("explanations/enzyme/#Runtime-activity"))
+           for more information on this. Generally, it would be better to just enable
+           runtime activity instead of rewriting the model into a form that is harder to
+           work with.
 
         4. If you don't think your model should require runtime activity, please open
            an issue at
