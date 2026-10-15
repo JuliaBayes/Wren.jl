@@ -1,14 +1,3 @@
-get_top_level_symbol(expr::Symbol) = expr
-function get_top_level_symbol(expr::Expr)
-    return if Meta.isexpr(expr, :ref)
-        get_top_level_symbol(expr.args[1])
-    elseif Meta.isexpr(expr, :.)
-        get_top_level_symbol(expr.args[1])
-    else
-        _issue_error("get_top_level_symbol: unhandled expression $(expr)")
-    end
-end
-
 # VarNames.varname(:(xs[i])) returns something like
 #     VarName{:xs}(Index((esc(i),), ...))
 # which gets `i` from the caller's scope. However, when we insert this expression into a
@@ -32,10 +21,17 @@ function assign_or_set!!(lhs::Expr, rhs, vn)
     )
 end
 
-emit_model_expr(expr, accs, conditioned, latent_source, parameter_space) = expr
-function emit_model_expr(stmt::WrenExpr, accs, conditioned, latent_source, parameter_space)
+emit_model_expr(expr, accs, conditioned, latent_source, parameter_space, ctx) = expr
+function emit_model_expr(
+    stmt::WrenExpr,
+    accs,
+    conditioned,
+    latent_source,
+    parameter_space,
+    ctx,
+)
     args = map(
-        arg -> emit_model_expr(arg, accs, conditioned, latent_source, parameter_space),
+        arg -> emit_model_expr(arg, accs, conditioned, latent_source, parameter_space, ctx),
         stmt.args,
     )
     return Expr(stmt.head, args...)
@@ -46,21 +42,40 @@ function emit_model_expr(
     conditioned,
     latent_source,
     parameter_space,
+    ctx,
 )
     return stmt.expr
 end
 
-function emit_model_expr(stmt::Sample, accs, conditioned, latent_source, parameter_space)
+function emit_model_expr(
+    stmt::Sample,
+    accs,
+    conditioned,
+    latent_source,
+    parameter_space,
+    ctx,
+)
     @gensym rhs val tval init_tval logjac vn child_accs child_params
-    rhs_expr = emit_model_expr(stmt.rhs, accs, conditioned, latent_source, parameter_space)
+    rhs_expr =
+        emit_model_expr(stmt.rhs, accs, conditioned, latent_source, parameter_space, ctx)
     vn_expr = remove_escapes(varname(stmt.lhs, false))
     template = get_top_level_symbol(stmt.lhs)
+    collect_submodel_params =
+        stmt.lhs_is_reused ? CollectSubmodelParams() : DiscardSubmodelParams()
     return quote
         $rhs = $rhs_expr
         $vn = $vn_expr
         if $(WrenCore.is_submodel)(typeof($rhs))
-            $val, $child_params, $child_accs =
-                $(evaluate_submodel)($rhs, $latent_source, $parameter_space, $accs, $vn)
+            $val, $child_params, $child_accs = $(evaluate_submodel)(
+                $rhs,
+                $latent_source,
+                $parameter_space,
+                $accs,
+                $conditioned,
+                $vn,
+                $collect_submodel_params,
+                $ctx,
+            )
             $(assign_or_set!!(stmt.lhs, child_params, vn))
             $accs = $(combine_with_namespace)(
                 $accs,
@@ -102,9 +117,10 @@ function emit_model_expr(stmt::Sample, accs, conditioned, latent_source, paramet
     end
 end
 
-function emit_model_expr(stmt::IID, accs, conditioned, latent_source, parameter_space)
+function emit_model_expr(stmt::IID, accs, conditioned, latent_source, parameter_space, ctx)
     tilde = stmt.tilde
-    rhs_expr = emit_model_expr(tilde.rhs, accs, conditioned, latent_source, parameter_space)
+    rhs_expr =
+        emit_model_expr(tilde.rhs, accs, conditioned, latent_source, parameter_space, ctx)
     dims_expr = stmt.size === nothing ? :($(Base.size)($(tilde.lhs))) : stmt.size
     iid_rhs = :($(iid)($rhs_expr, $dims_expr))
     return emit_model_expr(
@@ -113,12 +129,21 @@ function emit_model_expr(stmt::IID, accs, conditioned, latent_source, parameter_
         conditioned,
         latent_source,
         parameter_space,
+        ctx,
     )
 end
-_with_rhs(stmt::Sample, rhs) = Sample(stmt.name, stmt.lhs, rhs)
+_with_rhs(stmt::Sample, rhs) =
+    Sample(stmt.name, stmt.lhs, rhs, stmt.lhs_top_level_symbol, stmt.lhs_is_reused)
 _with_rhs(stmt::Observe, rhs) = Observe(stmt.name, stmt.lhs, rhs)
 
-function emit_model_expr(stmt::Batch, accs, conditioned, latent_source, parameter_space)
+function emit_model_expr(
+    stmt::Batch,
+    accs,
+    conditioned,
+    latent_source,
+    parameter_space,
+    ctx,
+)
     # stmt.body isa block expr
     @gensym loop_iters loop_iters_size
     initialise_iter_expr = :($loop_iters = $(stmt.loop_iters))
@@ -133,6 +158,7 @@ function emit_model_expr(stmt::Batch, accs, conditioned, latent_source, paramete
             conditioned,
             latent_source,
             parameter_space,
+            ctx,
         ) for s in stmt.body.args
     ]
     return Expr(:block, initialise_iter_expr, initialise_size_expr, body_exprs...)
@@ -207,8 +233,10 @@ function _unindex(indexed::Indexed, i)
     _issue_error("cannot safely unindex type $(typeof(indexed))")
 end
 function batched(iters::I, ::Val{F}, args...; kwargs...) where {I,F}
-    # Default fallback for batching-unaware calls
-    return independent([F((_unindex(a, i) for a in args)...; kwargs...) for i in iters])
+    # Arguments are already sliced, so index their positions rather than the loop values.
+    return independent([
+        F((_unindex(a, i) for a in args)...; kwargs...) for i in LinearIndices(iters)
+    ])
 end
 
 # This returns `WrenCore.independent([$rhs for $loop_idx in $loop_iters])`.
@@ -479,36 +507,59 @@ function replace_loop_idx_with_iters(
     end
 end
 
-vectorise_batch_stmt(lnn::LineNumberNode, idx, iters, size, ax, cond, ls, ps) = lnn
-function vectorise_batch_stmt(::IID, idx, iters, size, ax, cond, ls, ps)
+vectorise_batch_stmt(lnn::LineNumberNode, idx, iters, size, ax, cond, ls, ps, ctx) = lnn
+function vectorise_batch_stmt(::IID, idx, iters, size, ax, cond, ls, ps, ctx)
     return error("@iid is not supported inside @batch")
 end
-for stmt_type in (Sample, Observe)
-    @eval begin
-        function vectorise_batch_stmt(
-            stmt::$stmt_type,
-            loop_idx,
-            loop_iters,
-            loop_iters_size,
-            accs,
-            conditioned,
-            latent_source,
-            parameter_space,
-        )
-            new_lhs =
-                replace_loop_idx_with_iters(stmt.lhs, loop_idx, loop_iters, false).new_expr
-            rhs_expr =
-                emit_model_expr(stmt.rhs, accs, conditioned, latent_source, parameter_space)
-            new_rhs = batch_expr(rhs_expr, loop_idx, loop_iters, loop_iters_size)
-            return emit_model_expr(
-                $(stmt_type)(stmt.name, new_lhs, new_rhs),
-                accs,
-                conditioned,
-                latent_source,
-                parameter_space,
-            )
-        end
-    end
+
+function vectorise_batch_stmt(
+    stmt::Sample,
+    loop_idx,
+    loop_iters,
+    loop_iters_size,
+    accs,
+    conditioned,
+    latent_source,
+    parameter_space,
+    ctx,
+)
+    new_lhs = replace_loop_idx_with_iters(stmt.lhs, loop_idx, loop_iters, false).new_expr
+    rhs_expr =
+        emit_model_expr(stmt.rhs, accs, conditioned, latent_source, parameter_space, ctx)
+    new_rhs = batch_expr(rhs_expr, loop_idx, loop_iters, loop_iters_size)
+    return emit_model_expr(
+        Sample(stmt.name, new_lhs, new_rhs, stmt.lhs_top_level_symbol, stmt.lhs_is_reused),
+        accs,
+        conditioned,
+        latent_source,
+        parameter_space,
+        ctx,
+    )
+end
+
+function vectorise_batch_stmt(
+    stmt::Observe,
+    loop_idx,
+    loop_iters,
+    loop_iters_size,
+    accs,
+    conditioned,
+    latent_source,
+    parameter_space,
+    ctx,
+)
+    new_lhs = replace_loop_idx_with_iters(stmt.lhs, loop_idx, loop_iters, false).new_expr
+    rhs_expr =
+        emit_model_expr(stmt.rhs, accs, conditioned, latent_source, parameter_space, ctx)
+    new_rhs = batch_expr(rhs_expr, loop_idx, loop_iters, loop_iters_size)
+    return emit_model_expr(
+        Observe(stmt.name, new_lhs, new_rhs),
+        accs,
+        conditioned,
+        latent_source,
+        parameter_space,
+        ctx,
+    )
 end
 
 function _maybe_view(v::AbstractArray, idxs...)
@@ -525,10 +576,11 @@ function emit_model_expr(
     conditioned,
     latent_source,
     parameter_space,
+    ctx,
 )
     @gensym value
     value_expr =
-        emit_model_expr(stmt.expr, accs, conditioned, latent_source, parameter_space)
+        emit_model_expr(stmt.expr, accs, conditioned, latent_source, parameter_space, ctx)
     return quote
         if $(hasacc)($accs, $(Val{LOG_LIKELIHOOD_ACCNAME}()))
             $value = $value_expr
@@ -537,9 +589,17 @@ function emit_model_expr(
     end
 end
 
-function emit_model_expr(stmt::Observe, accs, conditioned, latent_source, parameter_space)
+function emit_model_expr(
+    stmt::Observe,
+    accs,
+    conditioned,
+    latent_source,
+    parameter_space,
+    ctx,
+)
     @gensym rhs val vn
-    rhs_expr = emit_model_expr(stmt.rhs, accs, conditioned, latent_source, parameter_space)
+    rhs_expr =
+        emit_model_expr(stmt.rhs, accs, conditioned, latent_source, parameter_space, ctx)
     vn_expr = remove_escapes(varname(stmt.lhs, false))
     template = get_top_level_symbol(stmt.lhs)
     lhs_val = if stmt.lhs isa Expr && stmt.lhs.head == :ref
@@ -562,12 +622,19 @@ function emit_model_expr(
     conditioned,
     latent_source,
     parameter_space,
+    ctx,
 )
     body = Expr(:block)
     @gensym retval
     if stmt.expr !== nothing
-        return_expr =
-            emit_model_expr(stmt.expr, accs, conditioned, latent_source, parameter_space)
+        return_expr = emit_model_expr(
+            stmt.expr,
+            accs,
+            conditioned,
+            latent_source,
+            parameter_space,
+            ctx,
+        )
         push!(body.args, :($retval = $return_expr))
     else
         push!(body.args, :($retval = nothing))
@@ -576,12 +643,12 @@ function emit_model_expr(
     return body
 end
 
-function emit_statements(stmts, accs, conditioned, latent_source, parameter_space)
+function emit_statements(stmts, accs, conditioned, latent_source, parameter_space, ctx)
     body = Expr(:block)
     for stmt in stmts
         push!(
             body.args,
-            emit_model_expr(stmt, accs, conditioned, latent_source, parameter_space),
+            emit_model_expr(stmt, accs, conditioned, latent_source, parameter_space, ctx),
         )
     end
     return body

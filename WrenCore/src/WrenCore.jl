@@ -16,13 +16,20 @@ function _issue_error(str)
     )
 end
 
+function _docs_link(str)
+    return "https://juliabayes.org/Wren.jl/$str"
+end
+
+const WREN_COMPILATION_DEBUG = Ref(false)
+
 # Parameter spaces
 include("space.jl")
 
 # Latent sources
 include("latents/latents.jl")
+include("latents/void.jl")
 include("latents/prior.jl")
-include("latents/params.jl")
+include("latents/values.jl")
 
 # Accumulators
 include("accs/accs.jl")
@@ -46,8 +53,10 @@ using .Expressions:
     WrenExpr,
     _show_wren_exprs,
     _wren_expr_to_display_expr,
+    get_top_level_symbol,
     to_wren_exprs
 
+include("model/dataflow.jl")
 include("model/model.jl")
 include("model/submodel.jl")
 include("model/emit.jl")
@@ -63,6 +72,24 @@ include("interface.jl")
 include("draw.jl")
 include("test_ad.jl")
 include("test_utils.jl")
+
+"""
+    posteriordb_model(name::AbstractString) -> WrenCore.Model
+
+Return a Wren model for the PosteriorDB posterior called `name`, e.g. `"arK-arK"`, using the
+data from PosteriorDB.
+
+This requires PosteriorDB.jl and WrenDists.jl to be loaded. Only some posteriors are
+available; an error is thrown for any others, which lists the available ones.
+"""
+function posteriordb_model end
+
+"""
+    available_posteriordb_models() -> Vector{String}
+
+Return a vector of PosteriorDB model names which WrenCore has implementations for.
+"""
+function available_posteriordb_models end
 
 export @wren,
     @addloglikelihood,
@@ -82,12 +109,12 @@ export @wren,
     AsUnconstrainedVec,
     AsVec,
     ADIncorrectException,
-    ModelRunResult,
-    FromParams,
+    ADTestResult,
+    BenchmarkResult,
+    FromValues,
     FromPrior,
     FromVector,
     FixedTransform,
-    NoTest,
     UnconstrainedSpace,
     AsOriginal,
     TransformedValue,
@@ -101,10 +128,12 @@ export @wren,
     apply_parameter_space,
     condition,
     conditioned,
+    decondition,
     iid,
     independent,
     rand_with_logp,
     evaluate,
+    EvalContext,
     get_latent,
     vectorised_params,
     logjac,
@@ -116,10 +145,12 @@ export @wren,
     lp_and_grad,
     lp_and_grad!,
     @bmodel,
-    benchmark_ad,
-    benchmark_and_test,
+    benchmark_model,
     test_ad,
-    target_transform
+    reduce_copies,
+    target_transform,
+    posteriordb_model,
+    available_posteriordb_models
 
 # Reexports
 using VarNames: @vn, @vnt, VarNamedTuple, VarName, Draw, parameters, extras
@@ -128,8 +159,8 @@ export @vn, @vnt, VarNamedTuple, VarName, Draw, parameters, extras
 using DensityInterface: logdensityof
 export logdensityof
 
-using StatsAPI: loglikelihood
-export loglikelihood
+using StatsAPI: loglikelihood, predict
+export loglikelihood, predict
 
 using DifferentiationInterface: AutoForwardDiff, AutoReverseDiff, AutoMooncake, AutoEnzyme
 export AutoForwardDiff, AutoReverseDiff, AutoMooncake, AutoEnzyme

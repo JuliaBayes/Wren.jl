@@ -7,6 +7,7 @@ using Test
 using Distributions
 
 @testset "space.jl" begin
+    ctx = EvalContext{false}()
     @testset "every latent representation agrees in every parameter space" begin
         @wren function exp_model()
             x ~ Exponential(1.0)
@@ -25,8 +26,8 @@ using Distributions
         @testset "$(typeof(tval.transform)) in $space" for tval in representations,
             space in (UnconstrainedSpace(), OriginalSpace())
 
-            source = FromParams(VarNamedTuple(; x=tval))
-            _, accs = evaluate(model, source, space, WrenCore.default_accumulators())
+            source = FromValues(VarNamedTuple(; x=tval))
+            _, accs = evaluate(model, source, space, WrenCore.default_accumulators(), ctx)
             @test parameters(accs)[@vn(x)] ≈ x
             @test logprior(accs) ≈ -x
             if space isa UnconstrainedSpace
@@ -39,7 +40,7 @@ using Distributions
         end
     end
 
-    @testset "FromParams scoping and fallback in submodels" begin
+    @testset "FromValues scoping and fallback in submodels" begin
         @wren function inner()
             x ~ Normal()
             y ~ Normal()
@@ -51,29 +52,31 @@ using Distributions
         accs = WrenCore.default_accumulators()
 
         partial = VarNamedTuple(; a=VarNamedTuple(; x=0.5))
-        source = FromParams(partial, FromPrior())
-        _, new_accs = evaluate(model, source, OriginalSpace(), accs)
+        source = FromValues(partial, FromPrior())
+        _, new_accs = evaluate(model, source, OriginalSpace(), accs, ctx)
         pars = parameters(new_accs)
         @test pars[@vn(a.x)] == 0.5
         @test logprior(new_accs) ≈ logpdf(Normal(), 0.5) + logpdf(Normal(), pars[@vn(a.y)])
 
         # No params at all under `a`: the submodel is evaluated with the fallback only.
-        source = FromParams(VarNamedTuple(; b=1.0), FromPrior())
-        _, new_accs = evaluate(model, source, OriginalSpace(), accs)
+        source = FromValues(VarNamedTuple(; b=1.0), FromPrior())
+        _, new_accs = evaluate(model, source, OriginalSpace(), accs, ctx)
         @test haskey(parameters(new_accs), @vn(a.x))
         @test haskey(parameters(new_accs), @vn(a.y))
 
-        @test_throws "No value was provided for variable y" evaluate(
+        @test_throws "No latent value provided for variable y" evaluate(
             model,
-            FromParams(partial),
+            FromValues(partial),
             OriginalSpace(),
             accs,
+            ctx,
         )
         @test_throws ArgumentError evaluate(
             model,
-            FromParams(VarNamedTuple(; a=0.5)),
+            FromValues(VarNamedTuple(; a=0.5)),
             OriginalSpace(),
             accs,
+            ctx,
         )
     end
 end

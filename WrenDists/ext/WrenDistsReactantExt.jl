@@ -86,14 +86,4 @@ function WrenDists.test_halft_quantile_reactant(d::WrenDists.HalfTDist, us)
     end
 end
 
-# TODO(penelopeysm) This is piracy!! These were upstreamed in
-# https://github.com/EnzymeAD/Reactant.jl/pull/3273 but not yet released.
-# Remove this ASAP after the next Reactant release
-function SpecialFunctions.erfcinv(x::TracedRNumber{T}) where {T<:Base.IEEEFloat}
-    return Reactant.Ops.erf_inv(one(x) - x)
-end
-function SpecialFunctions.erfinv(x::TracedRNumber{T}) where {T<:Base.IEEEFloat}
-    return Reactant.Ops.erf_inv(x)
-end
-
 end

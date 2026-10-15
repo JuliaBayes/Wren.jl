@@ -13,6 +13,7 @@ using WrenDists:
     BatchedGamma,
     BatchedLogNormal,
     BatchedNegativeBinomial,
+    BatchedNormal,
     BatchedPoisson,
     BatchedPoissonLog,
     BatchedTDist,
@@ -23,13 +24,10 @@ using WrenDists:
     Binomial,
     BinomialLogit,
     Categorical,
-    DiagNormal,
     Exponential,
     Gamma,
-    IIDNormal,
     IIDTDist,
     Independent,
-    IsoNormal,
     LogNormal,
     MultivariateDist,
     NegativeBinomial,
@@ -54,48 +52,12 @@ function WrenCore.independent(dists::AbstractArray{<:MultivariateDist})
     )
 end
 
-# Normal(consts...)
-WrenCore.iid(dist::Normal, size::Dims) = IIDNormal(size, dist.μ, dist.σ)
-
 # TDist(consts...)
 WrenCore.iid(dist::TDist, size::Dims) = IIDTDist(size, dist.ν, dist.μ, dist.σ)
 
-# Normal(x[i], sigma[i]) -> DiagNormal(x, sigma)
-function WrenCore.batched(
-    iters,
-    ::Val{Normal},
-    indexed_mu::WrenCore.Indexed,
-    indexed_sigma::WrenCore.Indexed;
-    _kwargs...,
-)
-    return DiagNormal(indexed_mu.data, indexed_sigma.data)
-end
-
-# Normal(x[i], const_sigma) -> IsoNormal(x, const_sigma)
-function WrenCore.batched(
-    iters,
-    ::Val{Normal},
-    indexed_mu::WrenCore.Indexed,
-    sigma::Number;
-    _kwargs...,
-)
-    return IsoNormal(indexed_mu.data, sigma)
-end
-
-# Normal(const_mu, sigma[i]) -> DiagNormal(Fill(const_mu, ...), sigma)
-function WrenCore.batched(
-    iters,
-    ::Val{Normal},
-    mu::Number,
-    indexed_sigma::WrenCore.Indexed;
-    _kwargs...,
-)
-    return DiagNormal(Fill(mu, size(iters)), indexed_sigma.data)
-end
-
-# Normal(x[i]) --> IsoNormal(x, 1.0)
+# Normal(mu[i]) -> BatchedNormal(mu, Fill(1, ...))
 function WrenCore.batched(iters, ::Val{Normal}, indexed_mu::WrenCore.Indexed; _kwargs...)
-    return IsoNormal(indexed_mu.data, one(eltype(indexed_mu.data)))
+    return BatchedNormal(indexed_mu.data, Fill(one(eltype(indexed_mu.data)), size(iters)))
 end
 
 # Single-parameter distributions: Bernoulli(p[i]), Poisson(lambda[i]), Exponential(theta[i]),
@@ -155,6 +117,7 @@ end
 for (D, B) in (
     (:Binomial, :BatchedBinomial),
     (:BinomialLogit, :BatchedBinomialLogit),
+    (:Normal, :BatchedNormal),
     (:LogNormal, :BatchedLogNormal),
     (:Gamma, :BatchedGamma),
     (:Beta, :BatchedBeta),

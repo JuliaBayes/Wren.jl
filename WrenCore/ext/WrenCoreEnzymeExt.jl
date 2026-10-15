@@ -1,6 +1,7 @@
 module WrenCoreEnzymeExt
 
 using WrenCore
+using WrenCore: _docs_link
 using DifferentiationInterface: DifferentiationInterface as DI
 using Enzyme: Enzyme, Reverse, Forward, set_runtime_activity
 
@@ -33,7 +34,7 @@ function WrenCore._handle_enzyme(
                 rethrow(e)
             else
                 if WrenCore.AUTO_RUNTIME_ACTIVITY[] === nothing
-                    @info "enabling Enzyme runtime activity for model $(vm.model.name); this may lead to slightly worse performance but should generally not be a cause for concern."
+                    @info "enabling Enzyme runtime activity for model $(vm.model.name); this is not a cause for concern but see $(_docs_link("explanations/enzyme/#Runtime-activity")) for more info about what this means"
                 end
                 return WrenCore.VecModel(
                     vm.model,

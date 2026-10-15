@@ -1,5 +1,18 @@
 module Expressions
 
+using ..WrenCore: WrenCore
+
+get_top_level_symbol(expr::Symbol) = expr
+function get_top_level_symbol(expr::Expr)
+    return if Meta.isexpr(expr, :ref)
+        get_top_level_symbol(expr.args[1])
+    elseif Meta.isexpr(expr, :.)
+        get_top_level_symbol(expr.args[1])
+    else
+        WrenCore._issue_error("get_top_level_symbol: unhandled expression $(expr)")
+    end
+end
+
 """
     AbstractWrenExpr
 
@@ -25,6 +38,23 @@ struct Sample{L,R} <: AbstractWrenExpr
     name::Symbol
     lhs::L
     rhs::R
+    # This is (e.g.) `x` if `lhs == :(x[i])`. This is populated during the first traversal
+    # of the Julia AST. Technically this is redundant information but it makes the dataflow
+    # analysis pass a bit easier to implement.
+    lhs_top_level_symbol::Symbol
+    # This is `true` if `lhs_top_level_symbol` appears in the model body after this Sample
+    # statement. Note that this is quite a conservative check: for example, we could
+    # _reassign_ to the same variable which would not count as a 'reuse'. However, such
+    # situations are hopefully uncommon, so this is likely to be good enough for the
+    # majority of use cases.
+    #
+    # During the first pass (when the `Sample` is initially constructed) this is set to
+    # `true`. The dataflow analysis pass will then reconstruct `Sample` nodes with the
+    # correct value.
+    #
+    # TODO(penelopeysm): Add an escape hatch for users to manually declare that a variable
+    # is not reused.
+    lhs_is_reused::Bool
 end
 
 """
@@ -315,7 +345,8 @@ function lower_to_wren(expr::Expr, mod::Module, statement_position::Bool=false)
     if expr.head == :call && expr.args[1] == :~
         length(expr.args) == 3 || error("@wren: expected ~ to have 2 arguments")
         lhs, rhs = expr.args[2:3]
-        return Sample(Symbol(lhs), lhs, lower_to_wren(rhs, mod))
+        lhs_top_level_symbol = get_top_level_symbol(lhs)
+        return Sample(Symbol(lhs), lhs, lower_to_wren(rhs, mod), lhs_top_level_symbol, true)
     end
 
     if expr.head == :return

@@ -10,7 +10,18 @@ using WrenDists
 @testset "batch: WrenDists.Normal" begin
     # Each testset exercises one batched/iid overload from WrenCoreWrenDistsExt
 
-    @testset "iid: Normal(consts...) -> IIDNormal" begin
+    @testset "iid: four-dimensional size" begin
+        @wren function iid_4d()
+            @iid x ~ WrenDists.Normal(1.0, 2.0) size=(2, 3, 4, 5)
+        end
+        @wren function independent_4d()
+            x ~ WrenCore.independent(fill(WrenDists.Normal(1.0, 2.0), 2, 3, 4, 5))
+        end
+        @test size(rand(iid_4d())[@vn(x)]) == (2, 3, 4, 5)
+        test_model_equivalence(iid_4d(), independent_4d())
+    end
+
+    @testset "iid: Normal(consts...) -> iid(Normal)" begin
         # x[i] ~ Normal() with no indexed args => iid path
         @wren function iid_batch(x)
             @batch for i in 1:3
@@ -25,7 +36,7 @@ using WrenDists
         test_model_equivalence(iid_batch(zeros(3)), iid_nobatch(zeros(3)))
     end
 
-    @testset "batched: Normal(mu[i]) -> IsoNormal" begin
+    @testset "batched: Normal(mu[i]) -> BatchedNormal" begin
         @wren function mu_only_batch(x, mu)
             @batch for i in 1:3
                 x[i] ~ WrenDists.Normal(mu[i])
@@ -40,7 +51,7 @@ using WrenDists
         test_model_equivalence(mu_only_batch(zeros(3), mu), mu_only_nobatch(zeros(3), mu))
     end
 
-    @testset "batched: Normal(mu[i], const_sigma) -> IsoNormal" begin
+    @testset "batched: Normal(mu[i], const_sigma) -> BatchedNormal" begin
         @wren function iso_batch(x, mu)
             @batch for i in 1:3
                 x[i] ~ WrenDists.Normal(mu[i], 2.0)
@@ -55,7 +66,7 @@ using WrenDists
         test_model_equivalence(iso_batch(zeros(3), mu), iso_nobatch(zeros(3), mu))
     end
 
-    @testset "batched: Normal(const_mu, sigma[i]) -> DiagNormal" begin
+    @testset "batched: Normal(const_mu, sigma[i]) -> BatchedNormal" begin
         @wren function sigma_indexed_batch(x, sigma)
             @batch for i in 1:3
                 x[i] ~ WrenDists.Normal(0.0, sigma[i])
@@ -73,7 +84,7 @@ using WrenDists
         )
     end
 
-    @testset "batched: Normal(mu[i], sigma[i]) -> DiagNormal" begin
+    @testset "batched: Normal(mu[i], sigma[i]) -> BatchedNormal" begin
         @wren function diag_batch(x, mu, sigma)
             @batch for i in 1:3
                 x[i] ~ WrenDists.Normal(mu[i], sigma[i])

@@ -92,7 +92,7 @@ Here are a few motivations:
 
 !!! note
 
-        It's okay to use `@trace` in the definition of a function that Wren calls; you just can't use `@trace` at top-level in the model body itself.
+    It's okay to use `@trace` in the definition of a function that Wren calls; you just can't use `@trace` at top-level in the model body itself.
 
     Thus, part of the intent of `@batch` is to abstract away this problem from users: instead of having to figure out `@trace` and all its friends, users can just write `@batch` and have it work (ideally).
 

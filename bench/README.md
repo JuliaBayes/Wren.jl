@@ -1,32 +1,90 @@
 # Wren benchmarks
 
-This folder contains a couple of benchmarks of Wren vs Turing.
+## Benchmark suite
 
-Note that a lot of this is vibe coded, it will hopefully be cleaned up in the future!
-However it works more or less works as intended.
+`suite/` benchmarks Wren on a set of PosteriorDB models.
 
-To run the benchmarks, run the following from the `bench` directory:
+By default, this is intended to be used for 'production' benchmarking. In other
+words, the benchmarks used here are saved in the repo's history (specifically
+the `benchmark-results` branch) so that we can keep a record of performance
+over time.
+
+To run the benchmarks locally (e.g. to try out local changes), run:
 
 ```sh
-julia --project=. ./basic/run.jl
-julia --project=. ./posteriordb/run.jl
-julia --project=. ./batch/run.jl
+julia --project=bench bench/suite/run.jl --no-save
 ```
 
-`basic` compares three different models:
+### Instructions for production benchmarking
 
-  - a trivial `x ~ Normal()` model;
-  - eight-schools;
-  - a multinomial logistic regression model on MNIST data.
+Generally, we'll want to run prod benchmarks on:
 
-`posteriordb` compares 10 PosteriorDB models.
+  - Each commit to main.
+  - Each release (i.e. tag) of WrenCore.
 
-`batch` compares `@batch` loops against plain `for` loops for the likelihoods in
-WrenDists that have specialised `batched` methods.
+By default, runs are labelled with just the short SHA. That's fine for main
+commits. However, for version releases we'll want to label the run with the
+version number, so that we can easily see the performance of each release. To
+do so, check out the release tag and run:
 
-`batch/gpu` benchmarks alternative formulations of each batched log density, one script
-per distribution, e.g. `julia --project=. ./batch/gpu/diagnormal.jl`. Each variant is
-timed under plain Enzyme on the CPU and under Reactant on whatever device it picks. On a
-machine with a GPU only the Reactant backend runs by default; set `WREN_BENCH_BACKENDS`
-to `enzyme`, `reactant` or `enzyme,reactant` to override, and `WREN_BENCH_NS` to choose
-the sizes.
+```sh
+julia --project=bench -e 'import Pkg; Pkg.update()' # Don't forget this!
+julia --project=bench bench/suite/run.jl --release
+```
+
+`--release` labels the run with the release's tag, `WrenCore-vX.Y.Z` (using the
+version in `WrenCore/Project.toml`), and checks that the current commit has
+that tag.
+
+These will be grouped specially at the top of the dropdown.
+
+This is kind of manual, but it's good enough, really.
+
+To remove runs from the `benchmark-results` branch (e.g. if one was noisy), run:
+
+```sh
+julia --project=bench bench/suite/remove.jl <file or sha> [<file or sha> ...]
+```
+
+A sha removes every run of that commit. It lists the matching runs and asks
+before removing them. Removed runs are still in the branch's history.
+
+Production benchmarks aren't currently run on CI because timings are too
+inconsistent. (If one day we have dedicated machines, we could do that
+instead.) Instead, the production benchmarks are currently manually run on
+Penny's laptop.
+
+The suite can also be run on CI by hand, from the 'Benchmarks' workflow in the
+Actions tab. The results table is shown in the job summary and the JSON file
+is uploaded as an artifact; tick 'save' to also save it to the
+`benchmark-results` branch.
+
+### The website
+
+`web/` is a small website that shows one run as a table, or compares two runs
+(pick a 'tip' and a 'base'; cells are coloured by how much faster or slower tip
+is, and hovering shows the base time).
+
+Currently, because the repo is private, there are some limitations. In particular:
+
+  - It's not hosted online, you have to view it locally.
+  - You have to fetch the JSON benchmark results yourself.
+
+When the repo is public, we can host this on GitHub Pages, and make the website
+fetch results over HTTP from GitHub.
+
+Anyway, to view this locally:
+
+```sh
+cd bench/web
+pnpm install
+scripts/fetch-results.sh   # copy runs from the benchmark-results branch
+pnpm dev
+```
+
+You can also load JSON files from disk with the 'Load file…' buttons.
+
+## Ad hoc benchmarks
+
+`adhoc/` has other one-off benchmarks (e.g. Wren vs Turing), with their own environment.
+See `adhoc/README.md`.

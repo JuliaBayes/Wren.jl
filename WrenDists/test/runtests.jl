@@ -6,6 +6,7 @@ using Test
     include("univariate/laplace.jl")
     include("univariate/cauchy.jl")
     include("univariate/tdist.jl")
+    include("univariate/flat.jl")
 
     # Continuous positive
     include("univariate/lognormal.jl")
