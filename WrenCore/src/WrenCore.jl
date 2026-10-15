@@ -149,6 +149,7 @@ export @wren,
     test_ad,
     reduce_copies,
     target_transform,
+    # PosteriorDB
     posteriordb_model,
     available_posteriordb_models
 
