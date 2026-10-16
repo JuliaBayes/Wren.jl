@@ -8,6 +8,7 @@ using Mooncake
 using Enzyme
 using Plaice
 using Test
+using FillArrays: Fill
 
 const RUN_REACTANT = !Sys.iswindows()
 
@@ -38,6 +39,23 @@ test_dist(
             f(x) =
                 logdensityof(WrenDists.BatchedLogNormal(x[1:3], x[4:6]), [1.5, 1.5, 1.5])
             ADTestCase(f, [0.1, 0.5, 1.0, 0.3, 0.7, 1.2], (), ())
+        end,
+    ),
+)
+
+@test logdensityof(WrenDists.BatchedLogNormal(Float64[], Fill(-1.0, 0)), Float64[]) == 0.0
+
+test_dist(
+    "BatchedLogNormal shared scale",
+    WrenDists.BatchedLogNormal([0.1, 0.5, 1.0], Fill(0.7, 3)),
+    Distributions.product_distribution(Distributions.LogNormal.([0.1, 0.5, 1.0], 0.7));
+    other_ad_testcases=(
+        let
+            f(x) = logdensityof(
+                WrenDists.BatchedLogNormal(x[1:3], Fill(x[4], 3)),
+                [1.5, 2.0, 3.0],
+            )
+            ADTestCase(f, [0.1, 0.5, 1.0, 0.7], (), ())
         end,
     ),
 )

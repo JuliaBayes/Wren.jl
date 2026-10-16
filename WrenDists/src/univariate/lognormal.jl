@@ -36,6 +36,8 @@ end
 
 # --- Batched LogNormal ---
 
+using FillArrays: AbstractFill, getindex_value
+
 struct BatchedLogNormal{M<:AbstractArray,S<:AbstractArray} <: BatchedUnivariate
     μ::M
     σ::S
@@ -56,8 +58,24 @@ function _lognormal_loop(mu, sigma, x)
     s
 end
 
+# A shared scale needs only one logarithm for the whole batch.
+function _lognormal_loop(mu, sigma::AbstractFill, x)
+    T = float(promote_type(eltype(x), eltype(mu), eltype(sigma)))
+    s = zero(T)
+    indices = eachindex(x, mu, sigma)
+    isempty(indices) && return s
+    log_sigma = log(getindex_value(sigma))
+    for i in indices
+        lx = log(x[i])
+        z = (lx - mu[i]) / sigma[i]
+        s -= abs2(z) / 2 + log_sigma + lx
+    end
+    s
+end
+
+# The rule returns dense tangents. Differentiate the loop for Fill and other wrappers.
 EnzymeRules.@easy_rule(
-    _lognormal_loop(mu, sigma, x),
+    _lognormal_loop(mu::Array, sigma::Array, x::Array),
     @setup(z = (log.(x) .- mu) ./ sigma),
     (z ./ sigma, (abs2.(z) .- 1) ./ sigma, -(z ./ (x .* sigma) .+ inv.(x))),
 )
