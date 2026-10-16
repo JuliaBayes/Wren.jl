@@ -62,7 +62,7 @@ function emit_model_expr(
     parameter_space,
     ctx,
 )
-    @gensym rhs val tval init_tval logjac vn child_accs child_params
+    @gensym rhs val tval init_tval logjac vn child_accs child_params scoped_args
     rhs_expr =
         emit_model_expr(stmt.rhs, accs, conditioned, latent_source, parameter_space, ctx)
     vn_expr = remove_escapes(varname(stmt.lhs, false))
@@ -73,16 +73,34 @@ function emit_model_expr(
         $rhs = $rhs_expr
         $vn = $vn_expr
         if $(WrenCore.is_submodel)(typeof($rhs))
-            $val, $child_params, $child_accs = $(evaluate_submodel)(
-                $rhs,
-                $latent_source,
-                $parameter_space,
-                $accs,
-                $conditioned,
-                $vn,
-                $collect_submodel_params,
-                $ctx,
-            )
+            if $rhs isa $(Model)
+                # Scope before recursive evaluation can widen the site's VarName.
+                $scoped_args = $(_scope_submodel)(
+                    $rhs,
+                    $latent_source,
+                    $parameter_space,
+                    $accs,
+                    $conditioned,
+                    $vn,
+                )
+                $val, $child_params, $child_accs = $(_evaluate_scoped_submodel)(
+                    $rhs,
+                    $scoped_args...,
+                    $collect_submodel_params,
+                    $ctx,
+                )
+            else
+                $val, $child_params, $child_accs = $(evaluate_submodel)(
+                    $rhs,
+                    $latent_source,
+                    $parameter_space,
+                    $accs,
+                    $conditioned,
+                    $vn,
+                    $collect_submodel_params,
+                    $ctx,
+                )
+            end
             $(assign_or_set!!(stmt.lhs, child_params, vn))
             $accs = $(combine_with_namespace)(
                 $accs,
