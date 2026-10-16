@@ -55,8 +55,9 @@ struct BatchedNormal{M<:AbstractArray,S<:AbstractArray} <: BatchedUnivariate
     sigma::S
 end
 Base.size(d::BatchedNormal) = size(d.mu)
+# Convert noise so numeric wrappers need no typed randn method.
 Base.rand(rng::Random.AbstractRNG, d::BatchedNormal) =
-    randn(rng, size(d.mu)) .* d.sigma .+ d.mu
+    convert.(noisetype(d), randn(rng, size(d.mu))) .* d.sigma .+ d.mu
 
 function DensityInterface.logdensityof(d::BatchedNormal, x::AbstractArray{<:Number})
     # Benchmarks @ https://github.com/JuliaBayes/Wren.jl/issues/99
