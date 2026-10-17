@@ -271,30 +271,7 @@ function VecModel(
         vecinfo,
         accs,
     )
-    adprep = if adtype === nothing || adtype isa NoAutoDiff
-        nothing
-    elseif _use_closure(adtype)
-        # Compiled ReverseDiff mandates the closure, otherwise preparation is repeated on
-        # each evaluation.
-        DI.prepare_gradient(lp_func, adtype, params)
-    else
-        # Other AD backends can directly take multiple arguments, which can often be
-        # slightly better for performance.
-        DI.prepare_gradient(
-            _vecmodel_lp,
-            adtype,
-            params,
-            DI.Constant(model.evaluation_fn),
-            DI.Constant(model.args),
-            DI.Constant(model.conditioned),
-            DI.Constant(model.enzyme_copy_argnames),
-            DI.Constant(_eval_context(adtype)),
-            DI.Constant(lp_function),
-            DI.Constant(parameter_space),
-            DI.Constant(vecinfo),
-            DI.Constant(accs),
-        )
-    end
+    adprep = _prepare_gradient(lp_func, adtype, params)
     vm = VecModel(
         model,
         adtype,
@@ -308,6 +285,33 @@ function VecModel(
         params,
     )
     return _handle_enzyme(vm)
+end
+
+function _prepare_gradient(f::_VecModelLP, adtype, params::AbstractVector)
+    return if adtype === nothing || adtype isa NoAutoDiff
+        nothing
+    elseif _use_closure(adtype)
+        # Compiled ReverseDiff mandates the closure, otherwise preparation is repeated on
+        # each evaluation.
+        DI.prepare_gradient(f, adtype, params)
+    else
+        # Other AD backends can directly take multiple arguments, which can often be
+        # slightly better for performance.
+        DI.prepare_gradient(
+            _vecmodel_lp,
+            adtype,
+            params,
+            DI.Constant(f.evaluation_fn),
+            DI.Constant(f.model_args),
+            DI.Constant(f.conditioned),
+            DI.Constant(f.enzyme_copy_argnames),
+            DI.Constant(_eval_context(adtype)),
+            DI.Constant(f.lp_function),
+            DI.Constant(f.parameter_space),
+            DI.Constant(f.vecinfo),
+            DI.Constant(f.accs),
+        )
+    end
 end
 
 # Convenience constructor that calls the main one.
@@ -443,6 +447,20 @@ Calculate the log-density of `vecmodel` at `params`.
 """
 lp(vecmodel::VecModel, params::AbstractVector) = vecmodel.lp_func(params)
 
+function _prepare_gradient(vm::VecModel, params::AbstractVector)
+    T = eltype(params)
+    T =
+        isconcretetype(T) ? T :
+        mapreduce(x -> float(typeof(x)), promote_type, params; init=eltype(vm.sample))
+    T = promote_type(eltype(vm.sample), float(T))
+    if T === eltype(vm.sample)
+        return vm.adprep, convert(typeof(vm.sample), params)
+    end
+    # AD preparation depends on the input type. Keep its storage without narrowing values.
+    prepared_params = copyto!(similar(vm.sample, T, size(params)), params)
+    return _prepare_gradient(vm.lp_func, vm.adtype, prepared_params), prepared_params
+end
+
 """
     lp_and_grad(vecmodel::VecModel, params::AbstractVector)
 
@@ -450,18 +468,13 @@ Returns a tuple (log_density, grad) where `log_density` is the log-density of `v
 `grad` is its gradient at `params`.
 """
 function lp_and_grad(vecmodel::VecModel, params::AbstractVector)
-    prepared_params = convert(typeof(vecmodel.sample), params)
+    adprep, prepared_params = _prepare_gradient(vecmodel, params)
     return if _use_closure(vecmodel.adtype)
-        DI.value_and_gradient(
-            vecmodel.lp_func,
-            vecmodel.adprep,
-            vecmodel.adtype,
-            prepared_params,
-        )
+        DI.value_and_gradient(vecmodel.lp_func, adprep, vecmodel.adtype, prepared_params)
     else
         DI.value_and_gradient(
             _vecmodel_lp,
-            vecmodel.adprep,
+            adprep,
             vecmodel.adtype,
             prepared_params,
             DI.Constant(vecmodel.model.evaluation_fn),
@@ -487,12 +500,12 @@ Calculate the log-density and its gradient with respect to `params`, writing the
 into `grad`. Returns a tuple (log_density, grad).
 """
 function lp_and_grad!(grad::AbstractVector, vecmodel::VecModel, params::AbstractVector)
-    prepared_params = convert(typeof(vecmodel.sample), params)
+    adprep, prepared_params = _prepare_gradient(vecmodel, params)
     return if _use_closure(vecmodel.adtype)
         DI.value_and_gradient!(
             vecmodel.lp_func,
             grad,
-            vecmodel.adprep,
+            adprep,
             vecmodel.adtype,
             prepared_params,
         )
@@ -500,7 +513,7 @@ function lp_and_grad!(grad::AbstractVector, vecmodel::VecModel, params::Abstract
         DI.value_and_gradient!(
             _vecmodel_lp,
             grad,
-            vecmodel.adprep,
+            adprep,
             vecmodel.adtype,
             prepared_params,
             DI.Constant(vecmodel.model.evaluation_fn),

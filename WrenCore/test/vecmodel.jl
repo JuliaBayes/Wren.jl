@@ -111,6 +111,23 @@ end
         end
     end
 
+    @testset "gradient input precision" begin
+        @wren function f()
+            x ~ Normal(0.0f0, 1.0f0)
+        end
+        @testset "$name" for (name, adtype) in TESTED_ADTYPES
+            vm = VecModel(f(), adtype; latent_source=FromValues(VarNamedTuple(x=0.0f0)))
+            for params in (view([1e40], :), Real[1e40], Real[16_777_217])
+                expected_grad = -float.(params)
+                for (value, grad) in
+                    (lp_and_grad(vm, params), lp_and_grad!(zeros(1), vm, params))
+                    @test value ≈ -only(expected_grad)^2 / 2
+                    @test grad ≈ expected_grad
+                end
+            end
+        end
+    end
+
     @testset "construction without ad" begin
         @wren function f()
             x ~ Beta(2, 2)
