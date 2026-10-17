@@ -411,20 +411,21 @@ using WrenDists: WrenDists
             PosteriorDB.database(), "mcycle_gp-accel_gp",
         )))
         function mcycle_gp_reference(v)
-            intercept, sdgp, lscale = v[1], exp(v[2]), exp(v[3])
+            # The model samples 1/lscale, so v[3] and v[46] are -log(lscale).
+            intercept, sdgp, lscale = v[1], exp(v[2]), exp(-v[3])
             zgp = view(v, 4:43)
             intercept_sigma, sdgp_sigma, lscale_sigma =
-                v[44], exp(v[45]), exp(v[46])
+                v[44], exp(v[45]), exp(-v[46])
             zgp_sigma = view(v, 47:66)
             alpha, beta = 1.124909, 0.0177
             student_t(mu, scale, x) = logpdf(TDist(3), (x - mu) / scale) - log(scale)
             prior = student_t(-13, 36, intercept) +
                 student_t(0, 36, sdgp) + log(2.0) + v[2] +
-                logpdf(InverseGamma(alpha, beta), lscale) + v[3] +
+                logpdf(InverseGamma(alpha, beta), lscale) - v[3] +
                 sum(logpdf(Normal(), zi) for zi in zgp) +
                 student_t(0, 10, intercept_sigma) +
                 student_t(0, 36, sdgp_sigma) + log(2.0) + v[45] +
-                logpdf(InverseGamma(alpha, beta), lscale_sigma) + v[46] +
+                logpdf(InverseGamma(alpha, beta), lscale_sigma) - v[46] +
                 sum(logpdf(Normal(), zi) for zi in zgp_sigma)
             function gp_values(X, frequencies, z, sd, lengthscale)
                 weights = [sqrt(sd^2 * sqrt(2 * pi) * lengthscale *
@@ -444,8 +445,8 @@ using WrenDists: WrenDists
             return prior + likelihood
         end
         check("mcycle_gp-accel_gp", 66, mcycle_gp_reference,
-            [vcat([-13.0, log(10.0), log(0.05)], 0.05 .* sin.(1:40),
-                [3.0, log(2.0), log(0.05)], 0.05 .* cos.(1:20))])
+            [vcat([-13.0, log(10.0), -log(0.05)], 0.05 .* sin.(1:40),
+                [3.0, log(2.0), -log(0.05)], 0.05 .* cos.(1:20))])
 
         uk_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
             PosteriorDB.database(),

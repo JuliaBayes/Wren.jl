@@ -2,7 +2,7 @@
 module McycleGP
 
 using PosteriorDB
-using WrenCore: @wren, @addloglikelihood, @iid, logdensityof
+using WrenCore: @wren, @observe, @batch, @iid
 using WrenDists: WrenDists as WD
 
 const data = let
@@ -12,62 +12,38 @@ const data = let
     )))
 end
 
-function gp_basis_at(X, frequencies, z, sdgp, lscale, n)
-    total = zero(sdgp + z[1])
-    for m in eachindex(z)
-        total += X[n, m] * z[m] * exp(-0.25 * lscale^2 * frequencies[m]^2)
-    end
-    # Square root of the one-dimensional exponentiated quadratic spectral density.
-    return sdgp * sqrt(sqrt(2 * pi) * lscale) * total
+# brms' approximate GP: basis functions weighted by the square root of the
+# exponentiated-quadratic spectral density at the square-root eigenvalues.
+function approximate_gp(X, slambda, sdgp, lscale, z)
+    spd = sdgp^2 * sqrt(2pi) * lscale .* exp.(-0.5 * lscale^2 .* slambda .^ 2)
+    return X * (sqrt.(spd) .* z)
 end
 
-function accel_loglikelihood(Y, X, frequencies, Xsigma, frequencies_sigma,
-        intercept, sdgp, lscale, zgp, intercept_sigma, sdgp_sigma,
-        lscale_sigma, zgp_sigma)
-    total = zero(intercept + intercept_sigma)
-    for n in eachindex(Y)
-        mu = intercept + gp_basis_at(X, frequencies, zgp, sdgp, lscale, n)
-        log_sigma = intercept_sigma +
-            gp_basis_at(Xsigma, frequencies_sigma, zgp_sigma,
-                sdgp_sigma, lscale_sigma, n)
-        total += logdensityof(WD.Normal(mu, exp(log_sigma)), Y[n])
-    end
-    return total
-end
-
-@wren function accel_gp(Y, X, frequencies, Xsigma, frequencies_sigma)
-    intercept ~ WD.TDist(3.0, -13.0, 36.0)
+@wren function accel_gp(Y, Xgp, slambda, Xgp_sigma, slambda_sigma, prior_only)
+    Intercept ~ WD.TDist(3.0, -13.0, 36.0)
     sdgp ~ WD.HalfTDist(3.0, 0.0, 36.0)
-    raw_lscale ~ WD.Flat()
-    @iid zgp ~ WD.Normal(0.0, 1.0) size=40
-    intercept_sigma ~ WD.TDist(3.0, 0.0, 10.0)
+    # Stan's lscale ~ inv_gamma(1.124909, 0.0177) is exactly equivalent to
+    # 1/lscale ~ Gamma(shape=1.124909, scale=1/0.0177).
+    inv_lscale ~ WD.Gamma(1.124909, 1 / 0.0177)
+    @iid zgp ~ WD.Normal(0.0, 1.0) size=size(Xgp, 2)
+    Intercept_sigma ~ WD.TDist(3.0, 0.0, 10.0)
     sdgp_sigma ~ WD.HalfTDist(3.0, 0.0, 36.0)
-    raw_lscale_sigma ~ WD.Flat()
-    @iid zgp_sigma ~ WD.Normal(0.0, 1.0) size=20
-
-    lscale = exp(raw_lscale)
-    lscale_sigma = exp(raw_lscale_sigma)
-    # The Gamma precision terms encode the inverse-gamma length-scale priors.
-    # Temporary until WrenDists provides the native prior tracked in #204.
-    inverse_gamma_shape = 1.124909
-    inverse_gamma_rate = 0.0177
-    @addloglikelihood logdensityof(WD.Gamma(inverse_gamma_shape, 1 / inverse_gamma_rate),
-            exp(-raw_lscale)) - raw_lscale +
-        logdensityof(WD.Gamma(inverse_gamma_shape, 1 / inverse_gamma_rate),
-            exp(-raw_lscale_sigma)) - raw_lscale_sigma
-    @addloglikelihood accel_loglikelihood(Y, X, frequencies, Xsigma,
-        frequencies_sigma, intercept, sdgp, lscale, zgp, intercept_sigma,
-        sdgp_sigma, lscale_sigma, zgp_sigma)
+    inv_lscale_sigma ~ WD.Gamma(1.124909, 1 / 0.0177)
+    @iid zgp_sigma ~ WD.Normal(0.0, 1.0) size=size(Xgp_sigma, 2)
+    if prior_only == 0
+        mu = Intercept .+ approximate_gp(Xgp, slambda, sdgp, inv(inv_lscale), zgp)
+        sigma = exp.(Intercept_sigma .+ approximate_gp(Xgp_sigma, slambda_sigma,
+            sdgp_sigma, inv(inv_lscale_sigma), zgp_sigma))
+        @batch for i in eachindex(Y)
+            @observe Y[i] ~ WD.Normal(mu[i], sigma[i])
+        end
+    end
     return nothing
 end
 
-const wren_model = let
-    data["N"] == 133 && data["NBgp_1"] == 40 && data["NBgp_sigma_1"] == 20 &&
-        data["Dgp_1"] == 1 && data["Dgp_sigma_1"] == 1 &&
-        data["Kgp_1"] == 1 && data["Kgp_sigma_1"] == 1 &&
-        data["prior_only"] == 0 || error("unexpected public motorcycle GP fixture")
-    accel_gp(data["Y"], data["Xgp_1"], vec(data["slambda_1"]),
-        data["Xgp_sigma_1"], vec(data["slambda_sigma_1"]))
-end
+const wren_model = accel_gp(
+    data["Y"], data["Xgp_1"], vec(data["slambda_1"]),
+    data["Xgp_sigma_1"], vec(data["slambda_sigma_1"]), data["prior_only"],
+)
 
 end
