@@ -142,6 +142,13 @@ This is because when Wren _constructs_ a model (i.e., when calling `mutable(y_ou
 y_outside
 ```
 
+The same guarantee holds for sampled values: writing into one (e.g. `x ~ MvNormal(...); x[1] += 1`) never changes the parameter vector, or the conditioned value, that it came from.
+Wren copies a sampled value only if the model body might write into it.
+To decide this it assumes, following Julia's convention, that functions which mutate their arguments have names ending in `!`.
+A function that breaks this convention can therefore change the caller's parameters.
+
+Parameters recorded during evaluation (e.g. by `rand` or `Draw`) are the values as they were sampled, before the model writes into them.
+
 ## Conditioning
 
 Now, we would almost certainly like to progress from the starting point above where everything is a latent variable.

@@ -62,13 +62,14 @@ function emit_model_expr(
     parameter_space,
     ctx,
 )
-    @gensym rhs val tval init_tval logjac vn child_accs child_params
+    @gensym rhs val model_val tval init_tval logjac vn child_accs child_params
     rhs_expr =
         emit_model_expr(stmt.rhs, accs, conditioned, latent_source, parameter_space, ctx)
     vn_expr = remove_escapes(varname(stmt.lhs, false))
     template = get_top_level_symbol(stmt.lhs)
     collect_submodel_params =
         stmt.lhs_is_reused ? CollectSubmodelParams() : DiscardSubmodelParams()
+    lhs_is_mutated = Val(stmt.lhs_is_mutated)
     return quote
         $rhs = $rhs_expr
         $vn = $vn_expr
@@ -93,7 +94,8 @@ function emit_model_expr(
         else
             if $(haskey)($conditioned, $vn)
                 $val = $(getindex)($conditioned, $vn)
-                $(assign_or_set!!(stmt.lhs, val, vn))
+                $model_val = $(_unalias_latent)($lhs_is_mutated, nothing, $val)
+                $(assign_or_set!!(stmt.lhs, model_val, vn))
                 $accs = $(accumulate_observe!!)(
                     $accs,
                     $val,
@@ -102,11 +104,13 @@ function emit_model_expr(
                     $template,
                     $(Val{stmt.name}()),
                 )
+                $val = $model_val
             else
                 $init_tval = $(get_latent)($latent_source, $vn, $rhs, $(Val{stmt.name}()))
                 $val, $tval, $logjac =
                     $(apply_parameter_space)($parameter_space, $init_tval, $vn, $rhs)
-                $(assign_or_set!!(stmt.lhs, val, vn))
+                $model_val = $(_unalias_latent)($lhs_is_mutated, $latent_source, $val)
+                $(assign_or_set!!(stmt.lhs, model_val, vn))
                 $accs = $(accumulate_assume!!)(
                     $accs,
                     $val,
@@ -117,6 +121,7 @@ function emit_model_expr(
                     $template,
                     $(Val{stmt.name}()),
                 )
+                $val = $model_val
             end
         end
         # A tilde expression evaluates to the sampled value or submodel return value.
@@ -139,8 +144,14 @@ function emit_model_expr(stmt::IID, accs, conditioned, latent_source, parameter_
         ctx,
     )
 end
-_with_rhs(stmt::Sample, rhs) =
-    Sample(stmt.name, stmt.lhs, rhs, stmt.lhs_top_level_symbol, stmt.lhs_is_reused)
+_with_rhs(stmt::Sample, rhs) = Sample(
+    stmt.name,
+    stmt.lhs,
+    rhs,
+    stmt.lhs_top_level_symbol,
+    stmt.lhs_is_reused,
+    stmt.lhs_is_mutated,
+)
 _with_rhs(stmt::Observe, rhs) = Observe(stmt.name, stmt.lhs, rhs)
 
 function emit_model_expr(
@@ -535,7 +546,14 @@ function vectorise_batch_stmt(
         emit_model_expr(stmt.rhs, accs, conditioned, latent_source, parameter_space, ctx)
     new_rhs = batch_expr(rhs_expr, loop_idx, loop_iters, loop_iters_size)
     return emit_model_expr(
-        Sample(stmt.name, new_lhs, new_rhs, stmt.lhs_top_level_symbol, stmt.lhs_is_reused),
+        Sample(
+            stmt.name,
+            new_lhs,
+            new_rhs,
+            stmt.lhs_top_level_symbol,
+            stmt.lhs_is_reused,
+            stmt.lhs_is_mutated,
+        ),
         accs,
         conditioned,
         latent_source,
