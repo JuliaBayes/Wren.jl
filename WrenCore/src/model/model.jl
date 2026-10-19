@@ -344,7 +344,11 @@ macro wren(args...)
     _wren(expr, __module__; internal_to_ir)
 end
 
-macro observe(expr)
+macro sample(args...)
+    error("@sample must be used inside @wren")
+end
+
+macro observe(args...)
     error("@observe must be used inside @wren")
 end
 
