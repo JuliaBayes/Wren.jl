@@ -135,17 +135,11 @@ Keep every latent variable in original space.
 struct OriginalSpace <: AbstractParameterSpace end
 target_transform(::OriginalSpace, ::VarName) = AsVec()
 
-# The model is free to write into the value it receives (e.g. `x[1] += 1`). When the
-# transform passes the input through (as for `MvNormal`), that value is a view of the
-# caller's parameters, so it must be copied to keep the writes from leaking out. Values
-# supplied in original space are the caller's own objects, so those go through `_dealias`.
-#
-# The choice is made on the type rather than with `Base.mightalias`, because a runtime
-# choice returns a `Union`, which Enzyme rejects. Transforms that compute a new value
-# return an `Array`, and anything else may be a view.
-_unalias(value::Array) = value
-_unalias(value::AbstractArray) = copy(value)
-_unalias(value) = value
+# Copy a latent value that the model may write into (see `get_mutated_syms`), since it may
+# belong to the caller. The second argument is the latent source (`nothing` for conditioned
+# values).
+_unalias_latent(::Val{false}, source, value) = value
+_unalias_latent(::Val{true}, source, value) = _dealias(value)
 
 """
     apply_parameter_space(
@@ -182,7 +176,6 @@ function apply_parameter_space(
 )
     inverse_link = Plaice.from_unconstrained_vec(dist)
     raw_value, inverse_logjac = Plaice.with_logabsdet_jacobian(inverse_link, tval.value)
-    raw_value = _unalias(raw_value)
     target = target_transform(parameter_space, vn)
     return if target isa AsUnconstrainedVec
         raw_value, tval, -inverse_logjac
@@ -202,7 +195,7 @@ function apply_parameter_space(
     vn::VarName,
     dist,
 )
-    raw_value = _unalias(Plaice.from_vec(dist)(tval.value))
+    raw_value = Plaice.from_vec(dist)(tval.value)
     target = target_transform(parameter_space, vn)
     return if target isa AsUnconstrainedVec
         forward = Plaice.inverse(Plaice.from_unconstrained_vec(dist))
@@ -224,7 +217,7 @@ function apply_parameter_space(
     vn::VarName,
     dist,
 )
-    raw_value = _dealias(tval.value)
+    raw_value = tval.value
     target = target_transform(parameter_space, vn)
     return if target isa AsUnconstrainedVec
         forward = Plaice.inverse(Plaice.from_unconstrained_vec(dist))
@@ -248,19 +241,18 @@ function apply_parameter_space(
 )
     target = target_transform(parameter_space, vn)
     return if target isa AsUnconstrainedVec
-        raw_value = _unalias(tval.transform.transform(tval.value))
+        raw_value = tval.transform.transform(tval.value)
         forward = Plaice.inverse(Plaice.from_unconstrained_vec(dist))
         value, logjac = Plaice.with_logabsdet_jacobian(forward, raw_value)
         raw_value, TransformedValue(value, AsUnconstrainedVec()), logjac
     elseif target isa AsVec || target isa AsOriginal
-        raw_value = _unalias(tval.transform.transform(tval.value))
+        raw_value = tval.transform.transform(tval.value)
         raw_value, TransformedValue(raw_value, AsOriginal()), zero(LogProbType)
     elseif target isa FixedTransform
         target == tval.transform ||
             throw(ArgumentError("latent variable $vn has an incompatible fixed transform"))
         raw_value, inverse_logjac =
             Plaice.with_logabsdet_jacobian(tval.transform.transform, tval.value)
-        raw_value = _unalias(raw_value)
         raw_value, tval, -inverse_logjac
     else
         error("unknown target transform: $target")
