@@ -180,8 +180,3 @@ function scope(source::FromVector, vn::VarName)
     # instabilities.
     return FromVector(source.params, VecInfo(vi.sitename_to_rat[vn], vi.varname_to_rat[vn]))
 end
-
-# Only arrays can borrow the caller's storage here; anything else is built by a transform.
-# (`_dealias` would deepcopy e.g. a `Cholesky`, which breaks Enzyme's forward mode.)
-_unalias_latent(::Val{true}, ::Union{FromVector,FromPrior}, value) =
-    value isa AbstractArray ? copy(value) : value
