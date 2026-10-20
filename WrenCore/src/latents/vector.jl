@@ -66,20 +66,32 @@ to:
 The main inner constructor takes a `VarNamedTuple` and a [`SitenameCountAccumulator`](@ref).
 This guarantees that the actual information stored in both fields are consistent.
 """
-struct VecInfo{N<:VarNamedTuple,V<:VarNamedTuple}
+struct VecInfo{N<:VarNamedTuple,V<:VarNamedTuple,A<:Tuple,C}
     sitename_to_rat::N
     varname_to_rat::V
+    aliases::A
+    alias_check::C
 end
-function VecInfo(sca::SitenameCountAccumulator, varnames_to_rats::VarNamedTuple)
+VecInfo(sites::VarNamedTuple, names::VarNamedTuple) = VecInfo(sites, names, (), nothing)
+function VecInfo(
+    sca::SitenameCountAccumulator,
+    varnames_to_rats::VarNamedTuple,
+    aliases=();
+    check_aliases=true,
+)
     sitenames_to_varnames = sca.entries
     # TODO: This means that sitenames_to_rats will actually be a mapping of sitenames to
     # either RATs or SeenMultipleTimes. Do we want to get rid of the latter?
     sitenames_to_rats = VarNames.map_values!!(sitenames_to_varnames) do v
         v isa SeenMultipleTimes ? v : varnames_to_rats[v]
     end
-    return VecInfo(sitenames_to_rats, varnames_to_rats)
+    check = check_aliases && !isempty(aliases) ? AliasAccumulator(aliases) : nothing
+    return VecInfo(sitenames_to_rats, varnames_to_rats, aliases, check)
 end
-Base.:(==)(a::VecInfo, b::VecInfo) = a.varname_to_rat == b.varname_to_rat
+Base.:(==)(a::VecInfo, b::VecInfo) =
+    a.varname_to_rat == b.varname_to_rat &&
+    a.aliases == b.aliases &&
+    a.alias_check == b.alias_check
 
 """
     FromVector(
@@ -143,6 +155,7 @@ still be stored in the VNT!)
 """
 function get_latent(source::FromVector, vn::VarName, right, sitename::Val)
     rt = _get_range_and_transform(source.vecinfo, vn, sitename)
+    _check_alias_block(source.vecinfo.aliases, vn, right, rt)
     range, tfm = rt.range, rt.transform
     return TransformedValue(view(source.params, range), tfm)
 end

@@ -18,6 +18,7 @@ using Test
     include("batch/two_parameter.jl")
     include("batch/typestability.jl")
     include("aliasing.jl")
+    include("branch_aliases.jl")
     include("submodel.jl")
     include("vecmodel.jl")
     include("draw.jl")
