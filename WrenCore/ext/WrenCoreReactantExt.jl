@@ -5,6 +5,8 @@ using Enzyme: Enzyme
 using Reactant: Reactant
 using WrenCore: WrenCore
 
+include("reactant_model.jl")
+
 """
     ReactantPrep
 
@@ -27,19 +29,67 @@ function (f::ValueAndGradientCallable)(params)
     result = Enzyme.gradient(_with_primal(f.adtype.mode), f.f, params)
     return result.val, only(result.derivs)
 end
+
+const _COMPILE_SCOPE = gensym(:wren_reactant_compile)
+_within_wren_compile()::Bool = get(task_local_storage(), _COMPILE_SCOPE, false)
+function _compile_vecmodel(f, params)
+    return task_local_storage(_COMPILE_SCOPE, true) do
+        Reactant.@compile f(params)
+    end
+end
+
+# Numeric buffers must hold traced values, including matmul destinations (#3195).
+# Integer metadata stays on the host; other Reactant callers retain native allocation.
+_traced_buffer(::Type{T}) where {T} =
+    T <: Reactant.TracedRNumber || (T <: AbstractFloat && T <: Reactant.ReactantPrimitive)
+Reactant.@reactant_overlay function Base.similar(
+    a::Array,
+    ::Type{S},
+    dims::Dims{N},
+) where {S,N}
+    if Reactant.call_with_native(_within_wren_compile) && _traced_buffer(S)
+        return Reactant.call_with_native(
+            similar,
+            Reactant.TracedRArray{Reactant.unwrapped_eltype(S)},
+            dims,
+        )
+    end
+    return Reactant.call_with_native(similar, a, S, dims)
+end
+# Array's shorter forms allocate directly, so route them through the same policy.
+Reactant.@reactant_overlay function Base.similar(a::Array)
+    return Reactant.call_with_reactant(similar, a, eltype(a), size(a))
+end
+Reactant.@reactant_overlay function Base.similar(a::Array, ::Type{S}) where {S}
+    return Reactant.call_with_reactant(similar, a, S, size(a))
+end
+Reactant.@reactant_overlay function Base.similar(a::Array, dims::Dims)
+    return Reactant.call_with_reactant(similar, a, eltype(a), dims)
+end
+Reactant.@reactant_overlay function Base.similar(a::Array, n::Int)
+    return Reactant.call_with_reactant(similar, a, eltype(a), (n,))
+end
+Reactant.@reactant_overlay function Base.copy(a::Array{T}) where {T}
+    if Reactant.call_with_native(_within_wren_compile) && _traced_buffer(T)
+        tensor = Reactant.call_with_native(Reactant.promote_to, Reactant.TracedRArray, a)
+        return Reactant.call_with_native(copy, tensor)
+    end
+    return Reactant.call_with_native(copy, a)
+end
+
 function WrenCore.VecModel(
     model::WrenCore.Model,
     adtype::AutoReactant;
     latent_source::WrenCore.AbstractLatentSource=WrenCore.FromPrior(),
     lp_function=WrenCore.logjoint_transformed,
     parameter_space::WrenCore.AbstractParameterSpace=WrenCore.UnconstrainedSpace(),
-    # Reactant doesn't use `WrenCore.reduce_copies`, but we still need this kwarg
-    # to avoid a MethodError
+    # Accepted for compatibility; Reactant does not use WrenCore.reduce_copies.
     reduce_copies::Bool=true,
     aliases=nothing,
 )
     vecinfo, sample =
         WrenCore._prepare_vecmodel_info(model, latent_source, parameter_space; aliases)
+    _reactant_check_aliases(model, vecinfo)
 
     accs = WrenCore.AccumulatorTuple(
         WrenCore.LogPriorAccumulator(),
@@ -47,20 +97,10 @@ function WrenCore.VecModel(
         WrenCore.LogLikelihoodAccumulator(),
     )
 
-    # TODO(penelopeysm): This **shouldn't** be necessary, in an ideal world. The model
-    # arguments should be 'constant' data that Reactant doesn't need to trace -- only
-    # the parameters should be traced.
-    # However, Reactant gets incredibly slow when doing some matmuls with untraced arrays.
-    # See e.g.
-    #  - https://github.com/EnzymeAD/Reactant.jl/issues/3167
-    #  - https://github.com/EnzymeAD/Reactant.jl/issues/3195
-    # and there are probably more examples which we haven't found. So we just blanket-trace
-    # the model args here.
-    model_args = Reactant.to_rarray(model.args)
-
     lp_func = WrenCore._VecModelLP(
-        model.evaluation_fn,
-        model_args,
+        _reactant_evaluation_fn(model),
+        # Index vectors must stay on the host for VarName cache checks and lookup.
+        model.args,
         model.conditioned,
         model.enzyme_copy_argnames,
         # TODO(penelopeysm): We'll conservatively copy the model args here just like we do
@@ -74,8 +114,8 @@ function WrenCore.VecModel(
 
     reactant_sample = Reactant.to_rarray(sample)
     value_and_gradient_at = ValueAndGradientCallable(lp_func, adtype)
-    compiled_lp = Reactant.@compile lp_func(reactant_sample)
-    compiled_value_and_gradient = Reactant.@compile value_and_gradient_at(reactant_sample)
+    compiled_lp = _compile_vecmodel(lp_func, reactant_sample)
+    compiled_value_and_gradient = _compile_vecmodel(value_and_gradient_at, reactant_sample)
     adprep = ReactantPrep(compiled_lp, compiled_value_and_gradient)
 
     return WrenCore.VecModel(

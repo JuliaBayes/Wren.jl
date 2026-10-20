@@ -302,3 +302,9 @@ Each group must sample exactly one member per evaluation, with the same vector w
 Aliases support plain top-level distribution latents in `OriginalSpace()` or `UnconstrainedSpace()`.
 An explicit tuple replaces inference; `aliases=()` disables it.
 Names outside these groups must remain fixed, and the total vector dimension must remain constant.
+
+With `AutoReactant`, use [Reactant-compatible distributions](@ref distributions).
+Simple `if`/`else` branches can carry numeric scalars, numeric arrays, tuples, and named tuples.
+Custom host state and nested conditionals are not supported.
+Explicit alias groups must be provably sampled once in every arm.
+Index arrays and other model data remain fixed when the model is compiled.

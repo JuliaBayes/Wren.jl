@@ -668,12 +668,20 @@ function emit_model_expr(
     return body
 end
 
-function emit_statements(stmts, accs, conditioned, latent_source, parameter_space, ctx)
+function emit_statements(
+    stmts,
+    accs,
+    conditioned,
+    latent_source,
+    parameter_space,
+    ctx,
+    emitter=emit_model_expr,
+)
     body = Expr(:block)
     for stmt in stmts
         push!(
             body.args,
-            emit_model_expr(stmt, accs, conditioned, latent_source, parameter_space, ctx),
+            emitter(stmt, accs, conditioned, latent_source, parameter_space, ctx),
         )
     end
     return body
