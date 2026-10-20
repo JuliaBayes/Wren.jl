@@ -179,7 +179,8 @@ to overload `_needs_copy`, as the generated function only has access to the meth
 function make_evaluation_fn(
     argnames::Tuple{Vararg{Symbol}},
     stmts::Vector{<:Union{AbstractWrenExpr,LineNumberNode}},
-    mod::Module,
+    mod::Module;
+    emitter=emit_model_expr,
 )
     body = Expr(:block)
     @gensym model_args enzyme_copy_argnames ctx
@@ -198,8 +199,15 @@ function make_evaluation_fn(
     end
 
     @gensym accs conditioned latent_source parameter_space retval
-    model_body =
-        emit_statements(stmts, accs, conditioned, latent_source, parameter_space, ctx)
+    model_body = emit_statements(
+        stmts,
+        accs,
+        conditioned,
+        latent_source,
+        parameter_space,
+        ctx,
+        emitter,
+    )
     push!(body.args, :($retval = $model_body))
     push!(body.args, :(return ($retval, $accs)))
     return RuntimeGeneratedFunctions.RuntimeGeneratedFunction(
