@@ -13,10 +13,12 @@ Base.isequal(a::RangeAndTransform, b::RangeAndTransform) =
 All the information needed to derive a vectorised form of a model.
 
 This struct holds a `VarNamedTuple` mapping `VarName => RangeAndTransform`, together with a
-fast-path `VarNamedTuple` mapping `sitename => RangeAndTransform`.
+fast-path `VarNamedTuple` mapping `sitename => (key => RangeAndTransform)`. The key is
+usually a `VarName`; direct integer-vector leaves store their root, length, and first index.
 
 The fast path is only hit for sampling sites that are encountered once and only once during
-model evaluation. This allows us to completely elide VarNamedTuple lookups for these sites.
+model evaluation, provided the site's current `VarName` matches its cached key. This
+allows us to elide VarNamedTuple lookups when the site still refers to the same variable.
 Usually the VNT lookup is not a problem, but VarNames like `x[1:100000]` can be very slow
 due to PartialArray and ArrayLikeBlock checks.
 
@@ -36,8 +38,9 @@ end
 ```
 
 then the first VNT stores `@vn(a.x) => RangeAndTransform(...)`, and the second VNT stores
-`@vn(a.norm) => RangeAndTransform(...)`, **not** `@vn(myinner.norm)`. This design allows us
-to:
+`@vn(a.norm) => (@vn(x) => RangeAndTransform(...))`, **not** `@vn(myinner.norm)`. The
+cached name is local to the submodel, so it can be compared without its prefix during
+evaluation. This design allows us to:
 
 - avoid passing the submodel site name into functions such as `scope`, which would pollute
   the signature with something that is only relevant for Wren (i.e., making it harder to
@@ -64,7 +67,7 @@ to:
   to have a different entry.
 
 The main inner constructor takes a `VarNamedTuple` and a [`SitenameCountAccumulator`](@ref).
-This guarantees that the actual information stored in both fields are consistent.
+This guarantees that the two maps are consistent.
 """
 struct VecInfo{N<:VarNamedTuple,V<:VarNamedTuple}
     sitename_to_rat::N
@@ -73,9 +76,19 @@ end
 function VecInfo(sca::SitenameCountAccumulator, varnames_to_rats::VarNamedTuple)
     sitenames_to_varnames = sca.entries
     # TODO: This means that sitenames_to_rats will actually be a mapping of sitenames to
-    # either RATs or SeenMultipleTimes. Do we want to get rid of the latter?
-    sitenames_to_rats = VarNames.map_values!!(sitenames_to_varnames) do v
-        v isa SeenMultipleTimes ? v : varnames_to_rats[v]
+    # either cached key-RAT pairs or SeenMultipleTimes. Do we want to get rid of the latter?
+    sitenames_to_rats = VarNames.map_pairs!!(sitenames_to_varnames) do (site, vn)
+        if vn isa SeenMultipleTimes
+            return vn
+        end
+        # Remove the submodel namespace once, rather than on every cache lookup.
+        prefix = VarNames.oinit(VarNames.varname_to_optic(site))
+        local_vn = if prefix isa VarNames.Iden
+            vn
+        else
+            VarNames.unprefix(vn, VarNames.optic_to_varname(prefix))
+        end
+        return _cache_varname_key(local_vn) => varnames_to_rats[vn]
     end
     return VecInfo(sitenames_to_rats, varnames_to_rats)
 end
@@ -95,16 +108,64 @@ struct FromVector{V<:AbstractVector,R<:VecInfo} <: AbstractLatentSource
     params::V
     vecinfo::R
 end
+
+_cache_varname_key(vn::VarName) = deepcopy(vn)
+
+function _cache_varname_key(
+    vn::VarName{
+        sym,
+        VarNames.Index{Tuple{Vector{Int}},NamedTuple{(),Tuple{}},VarNames.Iden},
+    },
+) where {sym}
+    indices = only(VarNames.getoptic(vn).ix)
+    # A valid leaf lookup selects a complete disjoint block, so one shared index
+    # identifies it. Snapshot the key because the index vector can be mutated.
+    return isempty(indices) ? deepcopy(vn) : (Val(sym), length(indices), first(indices))
+end
+
+_cache_varname_matches(a::VarName, b::VarName) = isequal(a, b)
+_cache_varname_matches(::VarName, ::Tuple{Val{sym},Int,Int}) where {sym} = false
+
+function _cache_varname_matches(
+    vn::VarName{
+        sym,
+        VarNames.Index{Tuple{Vector{Int}},NamedTuple{(),Tuple{}},VarNames.Iden},
+    },
+    key::Tuple{Val{sym},Int,Int},
+) where {sym}
+    indices = only(VarNames.getoptic(vn).ix)
+    return length(indices) == key[2] && !isempty(indices) && first(indices) == key[3]
+end
+
+function _cache_varname_matches(
+    a::VarName{sym,<:VarNames.Index{Tuple{Vector{Int}}}},
+    b::VarName{sym,<:VarNames.Index{Tuple{Vector{Int}}}},
+) where {sym}
+    ao, bo = VarNames.getoptic(a), VarNames.getoptic(b)
+    ai, bi = only(ao.ix), only(bo.ix)
+    # Integer vectors have identical == and isequal semantics, but == uses memcmp.
+    return (ai === bi || ai == bi) && isequal(ao.kw, bo.kw) && isequal(ao.child, bo.child)
+end
+
 @generated function _get_range_and_transform(
     vi::VecInfo{<:VarNamedTuple{names,types}},
-    vn::VarName,
+    vn::VarName{sym},
     ::Val{sitename},
-) where {names,types,sitename}
+) where {names,types,sym,sitename}
     idx = findfirst(==(sitename), names)
     # Need to check fieldtype because vi.sitename_to_rat might actually still contain
     # SeenMultipleTimes objects. TODO(penelopeysm) Maybe this is worth fixing?
-    return if idx !== nothing && fieldtype(types, idx) <: RangeAndTransform
-        :(vi.sitename_to_rat.data.$sitename)
+    return if idx !== nothing &&
+              fieldtype(types, idx) <:
+              Pair{<:Union{VarName,Tuple{Val{sym},Int,Int}},<:RangeAndTransform}
+        quote
+            cached = vi.sitename_to_rat.data.$sitename
+            if _cache_varname_matches(vn, cached.first)
+                cached.second
+            else
+                vi.varname_to_rat[vn]
+            end
+        end
     else
         :(vi.varname_to_rat[vn])
     end
@@ -113,9 +174,8 @@ end
 """
     get_latent(source::FromVector, ...)
 
-When evaluating a model with `FromVector`, Wren first checks the `sitename_to_rat` to see if
-the `RangeAndTransform` has been stored there. If it hasn't, then it will do the potentially
-slower `VarNamedTuple` lookup.
+When evaluating a model with `FromVector`, Wren checks `sitename_to_rat` for a matching
+key. Otherwise it uses the potentially slower `VarNamedTuple` lookup.
 
 The implicit assumption here is that if `sitename` was only encountered once during the
 construction of the `VecInfo`, then it will only be encountered once during
