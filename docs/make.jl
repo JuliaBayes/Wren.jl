@@ -41,7 +41,10 @@ makedocs(;
             "tutorials/mcmc.md",
             "tutorials/workflow.md",
         ],
-        "How-tos" => ["howtos/benchmarking.md"],
+        "How-tos" => [
+            "howtos/benchmarking.md"
+            "howtos/posteriordb.md"
+        ],
         "Explanations" => [
             "explanations/enzyme.md",
             "explanations/batch.md",

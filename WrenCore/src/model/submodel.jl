@@ -113,6 +113,9 @@ end
 function Base.getproperty(::UncollectedParams, ::Symbol)
     _issue_error("submodel parameters are not available as a top-level variable")
 end
+# in e.g. `x[1] ~ submodel`, if we don't need the params, don't needlessly set them back
+# into `x` as that can trigger type instabilities.
+set_lhs!!(obj, optic, ::UncollectedParams) = obj
 
 function evaluate_submodel(
     rhs,
