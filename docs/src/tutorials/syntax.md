@@ -292,6 +292,11 @@ x[1:N] ~ MvNormal(Zeros(N), I)
 y[1:N] ~ MvNormal(x[1:N], I)
 ```
 
+For a nonempty minibatch, `@batch size=full_size for i in indices ... end` weights each batch prior and likelihood contribution by `full_size / length(indices)`.
+This weights the original-space density, so coordinate Jacobians apply once.
+Other accumulators retain their usual behavior.
+Sample indices uniformly when estimating a full log likelihood.
+
 When `N` is large this can lead to significant speedups.
 
 **There are two important things to note about `@batch`.**

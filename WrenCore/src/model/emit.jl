@@ -61,6 +61,7 @@ function emit_model_expr(
     latent_source,
     parameter_space,
     ctx,
+    scale=nothing,
 )
     @gensym rhs val tval init_tval logjac vn child_accs child_params
     rhs_expr =
@@ -69,6 +70,8 @@ function emit_model_expr(
     template = get_top_level_symbol(stmt.lhs)
     collect_submodel_params =
         stmt.lhs_is_reused ? CollectSubmodelParams() : DiscardSubmodelParams()
+    observe, observe_args = _accumulator_call(accumulate_observe!!, scale)
+    assume, assume_args = _accumulator_call(accumulate_assume!!, scale)
     return quote
         $rhs = $rhs_expr
         $vn = $vn_expr
@@ -94,7 +97,8 @@ function emit_model_expr(
             if $(haskey)($conditioned, $vn)
                 $val = $(getindex)($conditioned, $vn)
                 $(assign_or_set!!(stmt.lhs, val, vn))
-                $accs = $(accumulate_observe!!)(
+                $accs = $(observe)(
+                    $(observe_args...),
                     $accs,
                     $val,
                     $vn,
@@ -107,7 +111,8 @@ function emit_model_expr(
                 $val, $tval, $logjac =
                     $(apply_parameter_space)($parameter_space, $init_tval, $vn, $rhs)
                 $(assign_or_set!!(stmt.lhs, val, vn))
-                $accs = $(accumulate_assume!!)(
+                $accs = $(assume)(
+                    $(assume_args...),
                     $accs,
                     $val,
                     $tval,
@@ -123,6 +128,9 @@ function emit_model_expr(
         $val
     end
 end
+
+_accumulator_call(f, scale) =
+    scale === nothing ? (f, ()) : (_scaled_accumulate!!, (f, scale))
 
 function emit_model_expr(stmt::IID, accs, conditioned, latent_source, parameter_space, ctx)
     tilde = stmt.tilde
@@ -143,6 +151,11 @@ _with_rhs(stmt::Sample, rhs) =
     Sample(stmt.name, stmt.lhs, rhs, stmt.lhs_top_level_symbol, stmt.lhs_is_reused)
 _with_rhs(stmt::Observe, rhs) = Observe(stmt.name, stmt.lhs, rhs)
 
+function _batch_scale(full_size, iters)
+    isempty(iters) && throw(ArgumentError("cannot scale an empty batch"))
+    return full_size / length(iters)
+end
+
 function emit_model_expr(
     stmt::Batch,
     accs,
@@ -152,9 +165,10 @@ function emit_model_expr(
     ctx,
 )
     # stmt.body isa block expr
-    @gensym loop_iters loop_iters_size
+    @gensym loop_iters loop_iters_size scale
     initialise_iter_expr = :($loop_iters = $(stmt.loop_iters))
     initialise_size_expr = :($loop_iters_size = $(Base.size)($loop_iters))
+    scale_expr = stmt.size === nothing ? nothing : scale
     body_exprs = [
         vectorise_batch_stmt(
             s,
@@ -166,8 +180,12 @@ function emit_model_expr(
             latent_source,
             parameter_space,
             ctx,
+            scale_expr,
         ) for s in stmt.body.args
     ]
+    if stmt.size !== nothing
+        pushfirst!(body_exprs, :($scale = $(_batch_scale)($(stmt.size), $loop_iters)))
+    end
     return Expr(:block, initialise_iter_expr, initialise_size_expr, body_exprs...)
 end
 
@@ -514,8 +532,9 @@ function replace_loop_idx_with_iters(
     end
 end
 
-vectorise_batch_stmt(lnn::LineNumberNode, idx, iters, size, ax, cond, ls, ps, ctx) = lnn
-function vectorise_batch_stmt(::IID, idx, iters, size, ax, cond, ls, ps, ctx)
+vectorise_batch_stmt(lnn::LineNumberNode, idx, iters, size, ax, cond, ls, ps, ctx, scale) =
+    lnn
+function vectorise_batch_stmt(::IID, idx, iters, size, ax, cond, ls, ps, ctx, scale)
     return error("@iid is not supported inside @batch")
 end
 
@@ -529,6 +548,7 @@ function vectorise_batch_stmt(
     latent_source,
     parameter_space,
     ctx,
+    scale,
 )
     new_lhs = replace_loop_idx_with_iters(stmt.lhs, loop_idx, loop_iters, false).new_expr
     rhs_expr =
@@ -541,6 +561,7 @@ function vectorise_batch_stmt(
         latent_source,
         parameter_space,
         ctx,
+        scale,
     )
 end
 
@@ -554,6 +575,7 @@ function vectorise_batch_stmt(
     latent_source,
     parameter_space,
     ctx,
+    scale,
 )
     new_lhs = replace_loop_idx_with_iters(stmt.lhs, loop_idx, loop_iters, false).new_expr
     rhs_expr =
@@ -566,6 +588,7 @@ function vectorise_batch_stmt(
         latent_source,
         parameter_space,
         ctx,
+        scale,
     )
 end
 
@@ -603,6 +626,7 @@ function emit_model_expr(
     latent_source,
     parameter_space,
     ctx,
+    scale=nothing,
 )
     @gensym rhs val vn
     rhs_expr =
@@ -614,12 +638,20 @@ function emit_model_expr(
     else
         stmt.lhs
     end
+    observe, observe_args = _accumulator_call(accumulate_observe!!, scale)
     return quote
         $val = $(lhs_val)
         $rhs = $rhs_expr
         $vn = $vn_expr
-        $accs =
-            $(accumulate_observe!!)($accs, $val, $vn, $rhs, $template, $(Val{stmt.name}()))
+        $accs = $(observe)(
+            $(observe_args...),
+            $accs,
+            $val,
+            $vn,
+            $rhs,
+            $template,
+            $(Val{stmt.name}()),
+        )
     end
 end
 

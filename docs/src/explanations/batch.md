@@ -7,13 +7,9 @@ This page will try to explain the reasons behind this design, and how to work ar
 
 !!! note "Minibatches"
 
-    It is also intended for the `@batch` macro to be a way to implement minibatches / subsampling in Wren.
-    This has not yet been implemented, but should not be overly difficult to add.
-
-    When this is done, it will be slightly unfortunate that the `@batch` macro will have overloaded semantics.
-    At the present moment we don't anticipate that this should be a problem.
-    However, if this proves to be a blocker for you, please do [open an issue](https://github.com/JuliaBayes/Wren.jl/issues)!
-    We can consider how to design this to separate the two use cases.
+    Use `@batch size=full_size for i in indices ... end` to weight prior and likelihood contributions by `full_size / length(indices)`.
+    Coordinate Jacobians apply once, and other accumulators retain their usual behavior.
+    Sample indices uniformly when estimating a full log likelihood.
 
 ## Why batch?
 

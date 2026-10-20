@@ -330,3 +330,39 @@ function accumulate_addloglikelihood!!(
 )
     return acclogp(acc, value)
 end
+
+@inline _scaled_accumulate!!(f, scale::Number, acc::AbstractAccumulator, args...) =
+    f(acc, args...)
+@inline function _scaled_accumulate!!(f, scale::Number, accs::AccumulatorTuple, args...)
+    return AccumulatorTuple(
+        _scaled_accumulate!!.(Ref(f), Ref(scale), Tuple(accs.nt), map(Ref, args)...),
+    )
+end
+
+# Weight original-space densities only; coordinate Jacobians and custom hooks retain
+# their usual behavior.
+function _scaled_accumulate!!(
+    ::typeof(accumulate_assume!!),
+    scale::Number,
+    acc::LogPriorAccumulator,
+    val,
+    tval,
+    vn,
+    right,
+    args...,
+)
+    lp = logdensityof(right, val)
+    return acclogp(acc, oftype(lp, scale * lp))
+end
+function _scaled_accumulate!!(
+    ::typeof(accumulate_observe!!),
+    scale::Number,
+    acc::LogLikelihoodAccumulator,
+    val,
+    vn,
+    right,
+    args...,
+)
+    lp = logdensityof(right, val)
+    return acclogp(acc, oftype(lp, scale * lp))
+end

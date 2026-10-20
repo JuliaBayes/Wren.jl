@@ -7,6 +7,7 @@ using Test
     include("dataflow.jl")
     include("syntax.jl")
     include("batch/general.jl")
+    include("batch/scaling.jl")
     include("batch/normal.jl")
     include("batch/bernoulli.jl")
     include("batch/binomial.jl")
