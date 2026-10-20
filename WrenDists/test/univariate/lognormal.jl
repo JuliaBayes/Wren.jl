@@ -65,6 +65,16 @@ test_dist(
     mu = [0.1, 0.5, 1.0]
     sigma = [0.3, 0.7, 1.2]
     x = [1.5, 2.0, 3.0]
+    @testset "strided views" begin
+        f(v) = logdensityof(
+            WrenDists.BatchedLogNormal(view(v, 1:2:5), view(v, 7:2:11)),
+            view(v, 13:2:17),
+        )
+        v = repeat(vcat(mu, sigma, x); inner=2)
+        g = ForwardDiff.gradient(f, v)
+        @test only(Enzyme.gradient(Reverse, f, v)) ≈ g
+        @test only(Enzyme.autodiff(Forward, f, Duplicated(v, ones(length(v))))) ≈ sum(g)
+    end
     @testset "reverse" begin
         @testset for Tmu in (Const, Duplicated),
             Tsigma in (Const, Duplicated),
