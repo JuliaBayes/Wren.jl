@@ -1,15 +1,19 @@
 """
     LogNormal(μ, σ)
+    LogNormal(μ)
     LogNormal()
 
 Log-normal distribution with log-scale mean `μ` (default 0.0) and log-scale standard
 deviation `σ` (default 1.0).
+
+**Customised batched implementations**: Yes
 """
 struct LogNormal{M<:Number,S<:Number} <: PositiveUnivariateDist
     μ::M
     σ::S
 end
 
+LogNormal(μ) = LogNormal(μ, one(μ))
 LogNormal() = LogNormal(0.0, 1.0)
 
 @inline zval(d::LogNormal, x::Number) = (log(x) - d.μ) / d.σ
@@ -29,3 +33,43 @@ end
 
 # Apply `μ` and `σ` after drawing noise so automatic differentiation can follow them.
 @inline Base.rand(rng::AbstractRNG, d::LogNormal) = xval(d, randn(rng, noisetype(d)))
+
+# --- Batched LogNormal ---
+
+struct BatchedLogNormal{M<:AbstractArray,S<:AbstractArray} <: BatchedUnivariate
+    μ::M
+    σ::S
+end
+Base.size(d::BatchedLogNormal) = size(d.μ)
+function Base.rand(rng::AbstractRNG, d::BatchedLogNormal)
+    return exp.(randn(rng, noisetype(d), size(d)) .* d.σ .+ d.μ)
+end
+
+function _lognormal_loop(mu, sigma, x)
+    T = float(promote_type(eltype(x), eltype(mu), eltype(sigma)))
+    s = zero(T)
+    for i in eachindex(x, mu, sigma)
+        lx = log(x[i])
+        z = (lx - mu[i]) / sigma[i]
+        s -= abs2(z) / 2 + log(sigma[i]) + lx
+    end
+    s
+end
+
+EnzymeRules.@easy_rule(
+    _lognormal_loop(mu, sigma, x),
+    @setup(z = (log.(x) .- mu) ./ sigma),
+    (z ./ sigma, (abs2.(z) .- 1) ./ sigma, -(z ./ (x .* sigma) .+ inv.(x))),
+)
+
+function DensityInterface.logdensityof(d::BatchedLogNormal, x)
+    # Benchmarks @ https://github.com/JuliaBayes/Wren.jl/issues/106
+    mu, sigma = d.μ, d.σ
+    lognorm = length(x) * convert(float(eltype(x)), log2π) / 2
+    return if within_compile()
+        sum(@. -(abs2((log(x) - mu) / sigma)) / 2 - log(sigma) - log(x)) - lognorm
+    else
+        _lognormal_loop(mu, sigma, x) - lognorm
+    end
+end
+Plaice.scalar_to_scalar_bijector(::BatchedLogNormal) = Plaice.Log(0.0, 1)

@@ -109,7 +109,7 @@ FromPrior(Xoshiro(468))
 or we can say, 'I have one stored in this `VarNamedTuple`! Please use it':
 
 ```@example models
-FromParams(trace)
+FromValues(trace)
 ```
 
 An accumulator, on the other hand, is a struct that holds information that is collected during model evaluation.
@@ -129,10 +129,14 @@ The good thing about this design is that you can choose which accumulators to in
 Now that we have the ingredients, let's put it all together:
 
 ```@example models
-using WrenCore: evaluate, OriginalSpace
+using WrenCore: evaluate, OriginalSpace, EvalContext
 
-retval, accs = evaluate(model, FromParams(trace), OriginalSpace(), accs);
+retval, accs =
+    evaluate(model, FromValues(trace), OriginalSpace(), accs, EvalContext{false}());
 ```
+
+The last argument, [`EvalContext`](@ref), controls whether model arguments are copied during evaluation.
+This is only needed when differentiating with Enzyme, so you should almost always pass `EvalContext{false}()` here.
 
 `evaluate` returns a tuple of the model's return value:
 
@@ -229,7 +233,7 @@ v = rand(vecmodel)
 or you can convert existing parameters into a vectorised form with [`vectorise_latents`](@ref):
 
 ```@example models
-ps = FromParams(rand(model))         # This is a VarNamedTuple in original model space.
+ps = FromValues(rand(model))         # This is a VarNamedTuple in original model space.
 v = vectorise_latents(ps, vecmodel)  # Convert it to vectorised (and unconstrained) form.
 ```
 
@@ -280,25 +284,3 @@ If this is not desired, you can specify a different parameter space, or a differ
         z ~ Normal()
     end
     ```
-
-## Benchmarking
-
-For the vast majority of users, the easiest way to benchmark will be to use the [`@bmodel`](@ref) macro:
-
-```@example 1
-using Wren, Distributions, LinearAlgebra
-@wren function f()
-    x ~ Normal()
-    z ~ MvNormal(zeros(3), abs(x) * I)
-end
-
-@bmodel f()
-```
-
-```@example 1
-using Enzyme
-@bmodel f() AutoEnzyme(; mode=Reverse)
-```
-
-If this isn't enough and you want to customise _exactly_ what gets benchmarked, and to test correctness, Wren also provides a function [`benchmark_and_test`](@ref) which has a staggering number of options.
-(There are also slightly simpler versions, [`benchmark_ad`](@ref), and [`test_ad`](@ref).)

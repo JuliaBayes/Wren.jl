@@ -4,6 +4,8 @@
     Normal()
 
 Normal distribution with mean `μ` (default 0.0) and standard deviation `σ` (default 1.0).
+
+**Customised batched implementations**: Yes
 """
 struct Normal{M<:Number,S<:Number} <: UnconstrainedUnivariateDist
     μ::M
@@ -40,60 +42,58 @@ function _iid_logdensityof(dist::Normal, x::AbstractArray)
     return length(x) * lognorm - z2 / 2
 end
 
-abstract type AbstractBatchedNormal <: MultivariateDist end
+# One `randn` call for the whole array is faster than drawing element by element.
+function Base.rand(rng::AbstractRNG, d::IID{<:Normal})
+    dist = _dist(d)
+    return xval.(Ref(dist), randn(rng, noisetype(dist), _dims(d)))
+end
 
-struct DiagNormal{M<:AbstractArray,S<:AbstractArray} <: AbstractBatchedNormal
+using FillArrays: AbstractFill, getindex_value
+
+struct BatchedNormal{M<:AbstractArray,S<:AbstractArray} <: BatchedUnivariate
     mu::M
     sigma::S
 end
-Base.size(d::DiagNormal) = size(d.mu)
-Base.rand(rng::Random.AbstractRNG, d::DiagNormal) =
+Base.size(d::BatchedNormal) = size(d.mu)
+Base.rand(rng::Random.AbstractRNG, d::BatchedNormal) =
     randn(rng, size(d.mu)) .* d.sigma .+ d.mu
-@inline function DensityInterface.logdensityof(d::DiagNormal, x)
-    z = (x .- d.mu) ./ d.sigma
-    return -0.5 * sum(abs2, z) - sum(log, d.sigma) - 0.5 * length(d.mu) * log2π
+
+function DensityInterface.logdensityof(d::BatchedNormal, x::AbstractArray{<:Number})
+    # Benchmarks @ https://github.com/JuliaBayes/Wren.jl/issues/99
+    mu, sigma = d.mu, d.sigma
+    # Promote so that integer data or parameters still give a float result.
+    T = float(promote_type(eltype(x), eltype(mu), eltype(sigma)))
+    lognorm = length(x) * convert(T, log2π) / 2
+    return if within_compile()
+        z = (x .- mu) ./ sigma
+        -sum(abs2, z) / 2 - sum(log, sigma) - lognorm
+    else
+        s = zero(T)
+        for i in eachindex(x)
+            z = (x[i] - mu[i]) / sigma[i]
+            s -= abs2(z) / 2 + log(sigma[i])
+        end
+        s - lognorm
+    end
 end
 
-# TODO(penelopeysm): Some preliminary benchmarks on this show that there's no meaningful
-# difference vs. DiagNormal with a FillArray for `sigma`. We should verify this more
-# scientifically, and if true, remove this type to make life simpler.
-struct IsoNormal{M<:AbstractArray,S<:Number} <: AbstractBatchedNormal
-    mu::M
-    sigma::S
-end
-Base.rand(rng::Random.AbstractRNG, d::IsoNormal) = randn(rng, size(d.mu)) .* d.sigma .+ d.mu
-Base.size(d::IsoNormal) = size(d.mu)
-function DensityInterface.logdensityof(d::IsoNormal, x)
-    inv_sigma = inv(d.sigma)
-    dist = sum(abs2, (x .- d.mu) .* inv_sigma)
-    N = length(d.mu)
-    return -0.5 * dist - N * log(d.sigma) - 0.5 * N * log2π
-end
-
-struct IIDNormal{T<:Tuple,M<:Number,S<:Number} <: AbstractBatchedNormal
-    size::T
-    mu::M
-    sigma::S
-end
-Base.rand(rng::Random.AbstractRNG, d::IIDNormal) = randn(rng, d.size) .* d.sigma .+ d.mu
-Base.size(d::IIDNormal) = d.size
-function DensityInterface.logdensityof(d::IIDNormal, x)
-    inv_sigma = inv(d.sigma)
-    # dist = sum(xi -> abs2((xi - d.mu) * inv_sigma), x)
-    # ^ This is faster, but creates lots of allocs
-    dist = sum(abs2, (x .- d.mu) .* inv_sigma)
-    N = length(x)
-    return -0.5 * dist - N * log(d.sigma) - 0.5 * N * log(2π)
+# A shared `sigma` needs one `log` and one division for the whole batch.
+function DensityInterface.logdensityof(
+    d::BatchedNormal{<:AbstractArray,<:AbstractFill},
+    x::AbstractArray{<:Number},
+)
+    mu, sigma = d.mu, getindex_value(d.sigma)
+    T = float(promote_type(eltype(x), eltype(mu), typeof(sigma)))
+    sqdist = if within_compile()
+        sum(abs2, x .- mu)
+    else
+        s = zero(T)
+        for i in eachindex(x, mu)
+            s += abs2(x[i] - mu[i])
+        end
+        s
+    end
+    return -sqdist / (2 * abs2(sigma)) - length(x) * (log(sigma) + convert(T, log2π) / 2)
 end
 
-
-Plaice.from_unconstrained_vec(d::AbstractBatchedNormal) = Plaice.Reshape(size(d))
-Plaice.to_unconstrained_vec(d::AbstractBatchedNormal) = Plaice.Vec(size(d))
-Plaice.unconstrained_vec_length(d::AbstractBatchedNormal) = prod(size(d))
-Plaice.vec_length(d::AbstractBatchedNormal) = prod(size(d))
-Plaice.is_continuous(::AbstractBatchedNormal) = true
-function _optics(d::AbstractBatchedNormal)
-    return map(c -> VarNames.Index(c.I, (;)), vec(CartesianIndices(size(d))))
-end
-Plaice.optic_vec(d::AbstractBatchedNormal) = _optics(d)
-Plaice.unconstrained_optic_vec(d::AbstractBatchedNormal) = _optics(d)
+# The Plaice interface is shared with the other batched distributions; see batched.jl.

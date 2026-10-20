@@ -167,8 +167,7 @@ Plaice.unconstrained_vec_length(d::Independent) = length(d)
 
 # Entry `i` of the vectorised sample is entry `i` of `vec(x)`, and every transform here is
 # elementwise, so the constrained and unconstrained optics coincide.
-_index_optics(d::Independent) =
-    [VarNames.Index(Tuple(I), (;)) for I in vec(CartesianIndices(size(d)))]
+_index_optics(d) = [VarNames.Index(Tuple(I), (;)) for I in vec(CartesianIndices(size(d)))]
 Plaice.optic_vec(d::Independent) = _index_optics(d)
 Plaice.unconstrained_optic_vec(d::Independent) = _index_optics(d)
 

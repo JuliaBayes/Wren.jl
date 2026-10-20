@@ -4,6 +4,9 @@
 
 Geometric distribution with success probability `p` (default 0.5), counting the number of
 failures before the first success.
+
+**Customised batched implementations**: Not yet (will fall back to a product of scalar
+distributions)
 """
 struct Geometric{P<:Number} <: DiscreteUnivariateDist
     p::P

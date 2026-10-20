@@ -2,6 +2,9 @@
     Dirichlet(α)
 
 Dirichlet distribution with concentration parameter vector `α`.
+
+**Customised batched implementations**: Not yet (will fall back to a product of scalar
+distributions)
 """
 struct Dirichlet{V<:AbstractVector{<:Number}} <: MultivariateDist
     α::V
@@ -13,11 +16,15 @@ Base.eltype(::Type{Dirichlet{V}}) where {V} = Vector{float(eltype(V))}
 
 function checkparams(d::Dirichlet)
     isempty(d.α) && return false
-    ok = true
-    for αᵢ in d.α
-        ok &= isfinite(αᵢ) & (αᵢ > zero(αᵢ))
+    return if within_compile()
+        all(αᵢ -> isfinite(αᵢ) & (αᵢ > zero(αᵢ)), d.α)
+    else
+        ok = true
+        for αᵢ in d.α
+            ok &= isfinite(αᵢ) & (αᵢ > zero(αᵢ))
+        end
+        ok
     end
-    return ok
 end
 
 function insupport(d::Dirichlet, x::AbstractVector{<:Number})
@@ -32,14 +39,19 @@ end
 
 function logmvbeta(d::Dirichlet, ::Type{T}) where {T}
     valid = checkparams(d)
-    total = zero(T)
-    logb = zero(T)
-    for αᵢ in d.α
-        a = safeshape(valid, convert(T, αᵢ))
-        total += a
-        logb += loggamma(a)
+    value = if within_compile()
+        a = ifelse.(valid, convert.(T, d.α), one(T))
+        sum(loggamma.(a)) - loggamma(sum(a))
+    else
+        total = zero(T)
+        logb = zero(T)
+        for αᵢ in d.α
+            a = safeshape(valid, convert(T, αᵢ))
+            total += a
+            logb += loggamma(a)
+        end
+        logb - loggamma(total)
     end
-    value = logb - loggamma(total)
     return select(valid, () -> value, () -> convert(T, NaN))
 end
 

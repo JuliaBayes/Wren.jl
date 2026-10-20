@@ -1,11 +1,16 @@
 """
     Poisson(λ)
+    Poisson()
 
-Poisson distribution with rate `λ`.
+Poisson distribution with rate `λ` (default 1.0).
+
+**Customised batched implementations**: Yes
 """
 struct Poisson{L<:Number} <: DiscreteUnivariateDist
     λ::L
 end
+
+Poisson() = Poisson(1.0)
 
 Base.eltype(::Type{Poisson{L}}) where {L} = float(L)
 
@@ -74,4 +79,26 @@ end
 @inline function Base.rand(rng::AbstractRNG, d::Poisson)
     T = noisetype(d)
     return _poisson_quantile(T, d, rand(rng, T))
+end
+
+# --- Batched Poisson ---
+
+struct BatchedPoisson{L<:AbstractArray} <: DiscreteBatchedUnivariate
+    λ::L
+end
+Base.size(d::BatchedPoisson) = size(d.λ)
+Base.rand(rng::AbstractRNG, d::BatchedPoisson) = rand.(Ref(rng), Poisson.(d.λ))
+function DensityInterface.logdensityof(d::BatchedPoisson, x)
+    # Benchmarks @ https://github.com/JuliaBayes/Wren.jl/issues/104
+    λ = d.λ
+    return if within_compile()
+        sum(((λi, xi) -> logdensityof(Poisson(λi), xi)).(λ, x))
+    else
+        T = float(promote_type(eltype(x), eltype(λ)))
+        s = zero(T)
+        for i in eachindex(x, λ)
+            s += logdensityof(Poisson(λ[i]), x[i])
+        end
+        s
+    end
 end

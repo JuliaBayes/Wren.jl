@@ -3,6 +3,8 @@
     Exponential()
 
 Exponential distribution with scale `θ` (default 1.0).
+
+**Customised batched implementations**: Yes
 """
 struct Exponential{R<:Number} <: PositiveUnivariateDist
     θ::R
@@ -23,3 +25,28 @@ end
     e = -log(rand(rng, noisetype(d)))
     return d.θ * e
 end
+
+# --- Batched Exponential ---
+
+struct BatchedExponential{R<:AbstractArray} <: BatchedUnivariate
+    θ::R
+end
+Base.size(d::BatchedExponential) = size(d.θ)
+function Base.rand(rng::AbstractRNG, d::BatchedExponential)
+    return -log.(rand(rng, noisetype(d), size(d))) .* d.θ
+end
+function DensityInterface.logdensityof(d::BatchedExponential, x)
+    # Benchmarks @ https://github.com/JuliaBayes/Wren.jl/issues/105
+    θ = d.θ
+    return if within_compile()
+        sum(@. -(x / θ) - log(θ))
+    else
+        T = float(promote_type(eltype(x), eltype(θ)))
+        s = zero(T)
+        for i in eachindex(x, θ)
+            s -= convert(T, x[i]) / convert(T, θ[i]) + log(convert(T, θ[i]))
+        end
+        s
+    end
+end
+Plaice.scalar_to_scalar_bijector(::BatchedExponential) = Plaice.Log(0.0, 1)

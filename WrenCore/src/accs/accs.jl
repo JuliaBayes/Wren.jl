@@ -278,6 +278,7 @@ end
     return AccumulatorTuple(map(func, at.nt))
 end
 
+# TODO(penelopeysm): Does this need to be a generated function?
 function combine_with_namespace(
     parent::AccumulatorTuple,
     child::AccumulatorTuple,

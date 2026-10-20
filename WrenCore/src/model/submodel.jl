@@ -11,38 +11,131 @@ is_submodel(::Type) = false
 is_submodel(::Type{<:Model}) = true
 
 """
+    CollectOrDiscardSubmodelParams
+
+Internal types used to denote whether the parameters of a submodel should be collected as a
+top-level variable in the parent model. For example, in
+
+```julia
+@wren function f()
+    retval = x ~ submodel
+    y ~ x[@vn(a)]
+end
+```
+
+we need `x` to contain a `VarNamedTuple` of the submodel's parameters, otherwise the next
+line will fail. However, if `x` is never used again in the model body, then we can avoid
+collecting the submodel's parameters. This makes performance better in hot paths that don't
+use `ParamsAccumulator`, such as `VecModel` (and probably also improves type stability).
+"""
+abstract type CollectOrDiscardSubmodelParams end
+struct CollectSubmodelParams <: CollectOrDiscardSubmodelParams end
+struct DiscardSubmodelParams <: CollectOrDiscardSubmodelParams end
+
+"""
     evaluate_submodel(
         rhs,
         latent_source::AbstractLatentSource,
         parameter_space::AbstractParameterSpace,
         accs::AccumulatorTuple,
-        vn::VarName
+        conditioned::VarNamedTuple,
+        vn::VarName,
+        collect_params::CollectOrDiscardSubmodelParams,
+        ctx::EvalContext,
     )
 
-Evaluate a tilde-statement of the form `vn ~ rhs`.
+Evaluate a tilde-statement of the form `vn ~ rhs`, where `rhs` is a submodel. `conditioned`
+holds the parent model's conditioned values. The values under `vn` take precedence over the
+submodel's own. The `collect_params` argument indicates whether the parent model might
+require access to the parameters of the submodel as a top-level variable. `ctx` is the
+parent model's [`EvalContext`](@ref), which should be passed on when evaluating the
+submodel.
 """
+@generated function evaluate_submodel(
+    rhs,
+    latent_source::AbstractLatentSource,
+    parameter_space::AbstractParameterSpace,
+    accs::AccumulatorTuple{<:Any,<:NamedTuple{names}},
+    conditioned::VarNamedTuple,
+    # TODO(penelopeysm): allow for no-prefix?
+    # https://github.com/JuliaBayes/Wren.jl/issues/4
+    vn::VarName,
+    ::CollectSubmodelParams,
+    ctx::EvalContext,
+) where {names}
+    parent_has_params_acc = PARAMS_ACCNAME in names
+    expr = Expr(:block)
+    push!(expr.args, :(child_source = scope(latent_source, vn)))
+    push!(expr.args, :(child_space = scope(parameter_space, vn)))
+    push!(expr.args, :(child_accs = scope(map(split, accs), vn)))
+    push!(expr.args, :(child_conditioned = merge(rhs.conditioned, scope(conditioned, vn))))
+    if !parent_has_params_acc
+        push!(expr.args, :(child_accs = setacc!!(child_accs, ParamsAccumulator())))
+    end
+    push!(
+        expr.args,
+        :(
+            (retval, child_accs) = evaluate(
+                rhs,
+                child_source,
+                child_space,
+                child_accs,
+                ctx,
+                child_conditioned,
+            )
+        ),
+    )
+    push!(expr.args, :(child_params = VarNames.parameters(child_accs)))
+    if !parent_has_params_acc
+        # If the parent wasn't collecting parameters, delete this before returning to the
+        # parent, to avoid the merge
+        #
+        # TODO(penelopeysm): maybe we don't need to delete it here, but instead change
+        # `combine_with_namespace` to just ignore unmatched accumulators?
+        push!(expr.args, :(child_accs = deleteacc!!(child_accs, Val(PARAMS_ACCNAME))))
+    end
+    push!(expr.args, :(return (retval, child_params, child_accs)))
+    return expr
+end
+
+# Sentinel value to indicate that submodel parameters were not collected as a top-level
+# variable in the model. We use this instead of `nothing` so that trying to do anything with
+# it yields a more informative error message.
+#
+# Note that this really should NOT happen because Wren should only emit
+# `DiscardSubmodelParams` if it can prove that these aren't reused.
+struct UncollectedParams end
+function Base.getindex(::UncollectedParams, ::VarName)
+    # would like to define getindex(::UncollectedParams, ::Any), but I fear method
+    # ambiguities.
+    _issue_error("submodel parameters are not available as a top-level variable")
+end
+function Base.getproperty(::UncollectedParams, ::Symbol)
+    _issue_error("submodel parameters are not available as a top-level variable")
+end
+# in e.g. `x[1] ~ submodel`, if we don't need the params, don't needlessly set them back
+# into `x` as that can trigger type instabilities.
+set_lhs!!(obj, optic, ::UncollectedParams) = obj
+
 function evaluate_submodel(
     rhs,
     latent_source::AbstractLatentSource,
     parameter_space::AbstractParameterSpace,
     accs::AccumulatorTuple,
-    # TODO(penelopeysm): allow for no-prefix
-    # https://github.com/JuliaBayes/Wren.jl/issues/4
+    conditioned::VarNamedTuple,
     vn::VarName,
+    ::DiscardSubmodelParams,
+    ctx::EvalContext,
 )
     child_source = scope(latent_source, vn)
     child_space = scope(parameter_space, vn)
     child_accs = scope(map(split, accs), vn)
-    had_params = haskey(child_accs, Val(PARAMS_ACCNAME))
-    # TODO(penelopeysm): Do not unconditionally add ParamsAccumulator here.
-    # https://github.com/JuliaBayes/Wren.jl/issues/5
-    if !had_params
-        child_accs = setacc!!(child_accs, ParamsAccumulator())
-    end
-    retval, child_accs = evaluate(rhs, child_source, child_space, child_accs)
-    child_params = VarNames.parameters(child_accs)
-    if !had_params
-        child_accs = deleteacc!!(child_accs, Val(PARAMS_ACCNAME))
-    end
-    return retval, child_params, child_accs
+    child_conditioned = merge(rhs.conditioned, scope(conditioned, vn))
+    retval, child_accs =
+        evaluate(rhs, child_source, child_space, child_accs, ctx, child_conditioned)
+    return retval, UncollectedParams(), child_accs
 end
+
+# The parent's conditioned values for the submodel at `vn`, keyed relative to `vn`.
+scope(conditioned::VarNamedTuple, vn::VarName) =
+    haskey(conditioned, vn) ? conditioned[vn] : VarNamedTuple()

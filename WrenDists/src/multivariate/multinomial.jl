@@ -2,6 +2,9 @@
     Multinomial(n, p)
 
 Multinomial distribution for `n` trials with category probability vector `p`.
+
+**Customised batched implementations**: Not yet (will fall back to a product of scalar
+distributions)
 """
 struct Multinomial{N<:Integer,V<:AbstractVector{<:Number}} <: DiscreteMultivariateDist
     n::N

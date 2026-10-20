@@ -3,6 +3,8 @@
     Bernoulli()
 
 Bernoulli distribution with success probability `p` (default 0.5).
+
+**Customised batched implementations**: Yes
 """
 struct Bernoulli{P<:Number} <: DiscreteUnivariateDist
     p::P
@@ -27,4 +29,20 @@ end
     T = eltype(d)
     u = rand(rng, noisetype(d))
     return select(u < d.p, () -> one(T), () -> zero(T))
+end
+
+# --- Batched Bernoulli ---
+
+struct BatchedBernoulli{P<:AbstractArray} <: DiscreteBatchedUnivariate
+    p::P
+end
+Base.size(d::BatchedBernoulli) = size(d.p)
+function Base.rand(rng::AbstractRNG, d::BatchedBernoulli)
+    T = float(eltype(d.p))
+    return T.(rand(rng, noisetype(d), size(d)) .< d.p)
+end
+function DensityInterface.logdensityof(d::BatchedBernoulli, x)
+    # Benchmarks @ https://github.com/JuliaBayes/Wren.jl/issues/102
+    p = d.p
+    return sum(@. x * log(p) + (one(x) - x) * log1p(-p))
 end
