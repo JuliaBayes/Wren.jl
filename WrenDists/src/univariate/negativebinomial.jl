@@ -13,7 +13,7 @@ struct NegativeBinomial{R<:Number,P<:Number} <: DiscreteUnivariateDist
     p::P
 end
 
-NegativeBinomial(r::Number) = NegativeBinomial(r, 0.5)
+NegativeBinomial(r::Number) = NegativeBinomial(r, one(r) / 2)
 NegativeBinomial() = NegativeBinomial(1.0, 0.5)
 
 @inline function insupport(::NegativeBinomial, x::Number)
