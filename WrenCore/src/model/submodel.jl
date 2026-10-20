@@ -51,38 +51,51 @@ require access to the parameters of the submodel as a top-level variable. `ctx` 
 parent model's [`EvalContext`](@ref), which should be passed on when evaluating the
 submodel.
 """
-@generated function evaluate_submodel(
+function evaluate_submodel(
+    rhs,
+    latent_source::AbstractLatentSource,
+    parameter_space::AbstractParameterSpace,
+    accs::AccumulatorTuple,
+    conditioned::VarNamedTuple,
+    # TODO(penelopeysm): allow for no-prefix?
+    # https://github.com/JuliaBayes/Wren.jl/issues/4
+    vn::VarName,
+    collect_params::CollectOrDiscardSubmodelParams,
+    ctx::EvalContext,
+)
+    scoped_args =
+        _scope_submodel(rhs, latent_source, parameter_space, accs, conditioned, vn)
+    return _evaluate_scoped_submodel(rhs, scoped_args..., collect_params, ctx)
+end
+
+function _scope_submodel(rhs, latent_source, parameter_space, accs, conditioned, vn)
+    child_source = scope(latent_source, vn)
+    child_space = scope(parameter_space, vn)
+    child_accs = scope(map(split, accs), vn)
+    child_conditioned = merge(rhs.conditioned, scope(conditioned, vn))
+    return child_source, child_space, child_accs, child_conditioned
+end
+
+@generated function _evaluate_scoped_submodel(
     rhs,
     latent_source::AbstractLatentSource,
     parameter_space::AbstractParameterSpace,
     accs::AccumulatorTuple{<:Any,<:NamedTuple{names}},
     conditioned::VarNamedTuple,
-    # TODO(penelopeysm): allow for no-prefix?
-    # https://github.com/JuliaBayes/Wren.jl/issues/4
-    vn::VarName,
     ::CollectSubmodelParams,
     ctx::EvalContext,
 ) where {names}
     parent_has_params_acc = PARAMS_ACCNAME in names
     expr = Expr(:block)
-    push!(expr.args, :(child_source = scope(latent_source, vn)))
-    push!(expr.args, :(child_space = scope(parameter_space, vn)))
-    push!(expr.args, :(child_accs = scope(map(split, accs), vn)))
-    push!(expr.args, :(child_conditioned = merge(rhs.conditioned, scope(conditioned, vn))))
+    push!(expr.args, :(child_accs = accs))
     if !parent_has_params_acc
         push!(expr.args, :(child_accs = setacc!!(child_accs, ParamsAccumulator())))
     end
     push!(
         expr.args,
         :(
-            (retval, child_accs) = evaluate(
-                rhs,
-                child_source,
-                child_space,
-                child_accs,
-                ctx,
-                child_conditioned,
-            )
+            (retval, child_accs) =
+                evaluate(rhs, latent_source, parameter_space, child_accs, ctx, conditioned)
         ),
     )
     push!(expr.args, :(child_params = VarNames.parameters(child_accs)))
@@ -117,22 +130,17 @@ end
 # into `x` as that can trigger type instabilities.
 set_lhs!!(obj, optic, ::UncollectedParams) = obj
 
-function evaluate_submodel(
+function _evaluate_scoped_submodel(
     rhs,
     latent_source::AbstractLatentSource,
     parameter_space::AbstractParameterSpace,
     accs::AccumulatorTuple,
     conditioned::VarNamedTuple,
-    vn::VarName,
     ::DiscardSubmodelParams,
     ctx::EvalContext,
 )
-    child_source = scope(latent_source, vn)
-    child_space = scope(parameter_space, vn)
-    child_accs = scope(map(split, accs), vn)
-    child_conditioned = merge(rhs.conditioned, scope(conditioned, vn))
     retval, child_accs =
-        evaluate(rhs, child_source, child_space, child_accs, ctx, child_conditioned)
+        evaluate(rhs, latent_source, parameter_space, accs, ctx, conditioned)
     return retval, UncollectedParams(), child_accs
 end
 

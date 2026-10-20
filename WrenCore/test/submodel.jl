@@ -9,6 +9,21 @@ using Test
 using Distributions
 using VarNames
 
+struct CustomSubmodel end
+WrenCore.is_submodel(::Type{CustomSubmodel}) = true
+function WrenCore.evaluate_submodel(
+    ::CustomSubmodel,
+    ::AbstractLatentSource,
+    ::AbstractParameterSpace,
+    accs::AccumulatorTuple,
+    ::VarNamedTuple,
+    ::VarName,
+    ::WrenCore.DiscardSubmodelParams,
+    ::EvalContext,
+)
+    return 42, WrenCore.UncollectedParams(), accs
+end
+
 @wren function cached_inner()
     a ~ Normal()
 end
@@ -246,6 +261,8 @@ end
         end
         @test logjoint(empty_outer_with_latent(empty_inner()), VarNamedTuple(x=43.0)) ≈
               logdensityof(Normal(42), 43.0)
+        @test logjoint(empty_outer_with_latent(CustomSubmodel()), VarNamedTuple(x=43.0)) ≈
+              logdensityof(Normal(42), 43.0)
         @test_throws ArgumentError logjoint(cached_outer(), VarNamedTuple())
     end
 
@@ -283,9 +300,7 @@ end
         end
         nested_model = outer_model(middle_model(returning_inner()))
 
-        # TODO(penelopeysm): not type stable
-        @test_broken false
-        retval, accs = evaluate(
+        retval, accs = @inferred evaluate(
             nested_model,
             FromValues(in_pars),
             OriginalSpace(),
