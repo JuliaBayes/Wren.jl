@@ -7,7 +7,7 @@ obtained.
 Wren provides several subtypes of `AbstractLatentSource`:
 
 - [`FromPrior`](@ref): samples latent variables from their prior distributions
-- [`FromParams`](@ref): provides latent variables in a `VarNamedTuple`
+- [`FromValues`](@ref): provides latent variables in a `VarNamedTuple`
 - [`FromVector`](@ref): provides a vector of flattened latent variables, together with
   information about how to convert them back into the original space
 
@@ -60,7 +60,7 @@ end
 ```
 
 When evaluating `outer`, the latent source may contain a value for the variable `a.x`. For
-example, you might have `FromParams(VarNamedTuple(a=VarNamedTuple(x=1.0)))`. However, when
+example, you might have `FromValues(VarNamedTuple(a=VarNamedTuple(x=1.0)))`. However, when
 evaluating `inner`, the submodel does not know about the prefix `a`: Wren will call `scope`
 to obtain a subsetted latent source which only contains the variable `x`.
 """

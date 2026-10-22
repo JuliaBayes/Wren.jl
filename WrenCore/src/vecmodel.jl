@@ -1,30 +1,42 @@
 using ADTypes: NoAutoDiff # DI doesn't export
+using EnzymeCore: Reverse
 
-const AUTO_RUNTIME_ACTIVITY = Ref(true)
+const AUTO_RUNTIME_ACTIVITY = Ref{Union{Nothing,Bool}}(true)
+
+const DEFAULT_AD = DI.AutoEnzyme(; mode=Reverse)
 
 """
-    WrenCore.set_auto_runtime_activity!(val::Bool)
+    WrenCore.set_auto_runtime_activity!(val::Union{Bool,Nothing})
 
 Set Wren's automatic runtime activity behaviour.
 
 When using Enzyme as the AD backend, depending on how the model is constructed, it may be
-necessary to enable runtime activity. (Wren-specific docs will follow soon, but for more
-information please see the [Enzyme
-docs](https://enzyme.mit.edu/julia/stable/faq/#faq-runtime-activity).) This can often allow
-more expressive models to be differentiated, but comes at a performance cost.
+necessary to enable runtime activity. This can often allow more expressive models to be
+differentiated, but comes at a performance cost.
 
 Wren recommends using reverse-mode Enzyme, i.e., `AutoEnzyme(; mode=Reverse)` as the AD
 backend, which does not enable runtime activity. **By default, Wren will automatically
 enable runtime activity if Enzyme requires it.**
 
-This behaviour can be disabled by calling
+If you would rather have Wren raise an error, set
 
 ```julia
-WrenCore.set_auto_runtime_activity!(false)`
+WrenCore.set_auto_runtime_activity!(false)
+```
 
-This will cause Wren to throw an error instead if runtime activity is required.
+Or if you want an info message instead of an error, set
+
+```julia
+WrenCore.set_auto_runtime_activity!(nothing)
+```
+
+To restore the default behaviour (silently enabling runtime activity), set
+
+```julia
+WrenCore.set_auto_runtime_activity!(true)
+```
 """
-function set_auto_runtime_activity!(val::Bool)
+function set_auto_runtime_activity!(val::Union{Bool,Nothing})
     AUTO_RUNTIME_ACTIVITY[] = val
     return nothing
 end
@@ -39,6 +51,8 @@ struct _VecModelLP{
     E,
     A<:NamedTuple,
     C<:VarNamedTuple,
+    CA<:Val,
+    X<:EvalContext,
     F,
     S<:AbstractParameterSpace,
     R<:VecInfo,
@@ -47,6 +61,8 @@ struct _VecModelLP{
     evaluation_fn::E
     model_args::A
     conditioned::C
+    enzyme_copy_argnames::CA
+    ctx::X
     lp_function::F
     parameter_space::S
     vecinfo::R
@@ -58,6 +74,8 @@ function (f::_VecModelLP)(params::AbstractVector)
         f.evaluation_fn,
         f.model_args,
         f.conditioned,
+        f.enzyme_copy_argnames,
+        f.ctx,
         f.lp_function,
         f.parameter_space,
         f.vecinfo,
@@ -75,13 +93,23 @@ function _vecmodel_lp(
     evaluation_fn,
     model_args::NamedTuple,
     conditioned::VarNamedTuple,
+    enzyme_copy_argnames::Val,
+    ctx::EvalContext,
     lp_function,
     parameter_space::AbstractParameterSpace,
     vecinfo::VecInfo,
     accs::AccumulatorTuple,
 )
     source = FromVector(params, vecinfo)
-    _, accs = evaluation_fn(source, parameter_space, accs, model_args, conditioned)
+    _, accs = evaluation_fn(
+        source,
+        parameter_space,
+        accs,
+        model_args,
+        conditioned,
+        enzyme_copy_argnames,
+        ctx,
+    )
     return lp_function(accs)
 end
 
@@ -91,7 +119,8 @@ end
         adtype::Union{ADTypes.AbstractADType,Nothing};
         lp_function=logjoint_transformed,
         latent_source=FromPrior(),
-        parameter_space=UnconstrainedSpace()
+        parameter_space=UnconstrainedSpace(),
+        reduce_copies=true,
     )
 
 A vectorised form of `model`, which is designed to take a single vector of parameters as
@@ -152,7 +181,7 @@ since the mapping is invariant to the order in which the latent variables are en
   vector to latent variables. This is obtained by running the model once with an
   `AbstractLatentSource`, which you can pass here. If you want to control the RNG with which
   these parameters are drawn, you can use [`FromPrior(rng)`](@ref FromPrior). If you have a
-  `VarNamedTuple` of values, wrap it in [`FromParams`](@ref).
+  `VarNamedTuple` of values, wrap it in [`FromValues`](@ref).
 
   If you have already run the model once, you can avoid reevaluation entirely by calling the
   positional constructor with a `VecInfo` and a parameter vector. This is mostly
@@ -169,6 +198,17 @@ since the mapping is invariant to the order in which the latent variables are en
 - `parameter_space::AbstractParameterSpace`: The parameter space in which the vectorised
   model is defined. The default is [`UnconstrainedSpace`](@ref), which is almost always what
   you want (again this is mostly for compatibility with gradient-based inference algorithms).
+
+- `reduce_copies::Bool`: When differentiating with Enzyme, Wren copies some of the model's
+  arguments on every evaluation (see [the docs](@ref enzyme-copyargs)). If this is `true`,
+  [`reduce_copies`](@ref) is first called on the model to find out which of these copies can
+  be skipped. This has no effect for other AD backends, which never make the copies. The
+  default is `true`.
+
+  In very pathological cases, `reduce_copies` may skip a copy that is actually needed (e.g.
+  when there is parameter-dependent control flow which (1) in turn causes a change in Enzyme's
+  behaviour, and (2) is not caught by the random testing in `reduce_copies`). This is very
+  unlikely, but if you are concerned about this, you can disable this option.
 """
 struct VecModel{
     M<:Model,
@@ -222,6 +262,10 @@ function VecModel(
         model.evaluation_fn,
         model.args,
         model.conditioned,
+        model.enzyme_copy_argnames,
+        # Safe to avoid the copy because for Enzyme (where the copy is needed) we will call
+        # `DI.prepare_gradient` with the correct EvalContext below.
+        EvalContext{false}(),
         lp_function,
         parameter_space,
         vecinfo,
@@ -243,6 +287,8 @@ function VecModel(
             DI.Constant(model.evaluation_fn),
             DI.Constant(model.args),
             DI.Constant(model.conditioned),
+            DI.Constant(model.enzyme_copy_argnames),
+            DI.Constant(_eval_context(adtype)),
             DI.Constant(lp_function),
             DI.Constant(parameter_space),
             DI.Constant(vecinfo),
@@ -271,7 +317,20 @@ function VecModel(
     latent_source::AbstractLatentSource=FromPrior(),
     lp_function=logjoint_transformed,
     parameter_space::AbstractParameterSpace=UnconstrainedSpace(),
+    reduce_copies::Bool=true,
 )
+    model = if reduce_copies
+        WrenCore.reduce_copies(
+            model,
+            adtype;
+            lp_function,
+            latent_source,
+            parameter_space,
+            verbose=false,
+        )
+    else
+        model
+    end
     vecinfo, sample = _prepare_vecmodel_info(model, latent_source, parameter_space)
     return VecModel(model, adtype, lp_function, parameter_space, vecinfo, sample)
 end
@@ -309,6 +368,19 @@ end
 _use_closure(::DI.AutoReverseDiff{compile}) where {compile} = compile
 _use_closure(::DI.AbstractADType) = false
 
+"""
+    _eval_context(adtype)
+
+The [`EvalContext`](@ref) that a `VecModel` with the given AD backend should evaluate its
+model with. Only Enzyme needs model arguments to be copied on evaluation (see [the
+docs](@ref enzyme-copyargs)); other AD backends can track gradients through writes into
+model arguments, so the copies can be skipped.
+"""
+_eval_context(::Union{DI.AbstractADType,Nothing}) = EvalContext{false}()
+_eval_context(::DI.AutoEnzyme) = EvalContext{true}()
+
+_copied_args(vm::VecModel) = _copied_args(vm.model)
+
 # overloaded in EnzymeExt as it depends on runtime activity error which isn't in Core
 _handle_enzyme(@nospecialize(vm::VecModel)) = vm
 
@@ -338,7 +410,7 @@ function _prepare_vecmodel_info(
     parameter_space::AbstractParameterSpace,
 )
     accs = AccumulatorTuple(VectorisedParamsAccumulator(), SitenameCountAccumulator())
-    _, accs = evaluate(model, source, parameter_space, accs)
+    _, accs = evaluate(model, source, parameter_space, accs, EvalContext{false}())
     vecvals = vectorised_params(accs)
     sca = getacc(accs, Val{SITENAMECOUNT_ACCNAME}())
 
@@ -395,6 +467,8 @@ function lp_and_grad(vecmodel::VecModel, params::AbstractVector)
             DI.Constant(vecmodel.model.evaluation_fn),
             DI.Constant(vecmodel.model.args),
             DI.Constant(vecmodel.model.conditioned),
+            DI.Constant(vecmodel.model.enzyme_copy_argnames),
+            DI.Constant(_eval_context(vecmodel.adtype)),
             DI.Constant(vecmodel.lp_function),
             DI.Constant(vecmodel.parameter_space),
             DI.Constant(vecmodel.vecinfo),
@@ -432,6 +506,8 @@ function lp_and_grad!(grad::AbstractVector, vecmodel::VecModel, params::Abstract
             DI.Constant(vecmodel.model.evaluation_fn),
             DI.Constant(vecmodel.model.args),
             DI.Constant(vecmodel.model.conditioned),
+            DI.Constant(vecmodel.model.enzyme_copy_argnames),
+            DI.Constant(_eval_context(vecmodel.adtype)),
             DI.Constant(vecmodel.lp_function),
             DI.Constant(vecmodel.parameter_space),
             DI.Constant(vecmodel.vecinfo),
@@ -508,6 +584,12 @@ Draw model parameters from `latent_source` and return them as a vector compatibl
 function vectorise_latents(latent_source::AbstractLatentSource, vecmodel::VecModel)
     params = similar(vecmodel.sample)
     accs = AccumulatorTuple(VecSampleAccumulator(params, vecmodel.vecinfo))
-    _, accs = evaluate(vecmodel.model, latent_source, vecmodel.parameter_space, accs)
+    _, accs = evaluate(
+        vecmodel.model,
+        latent_source,
+        vecmodel.parameter_space,
+        accs,
+        EvalContext{false}(),
+    )
     return _get_vec_sample(accs)
 end
