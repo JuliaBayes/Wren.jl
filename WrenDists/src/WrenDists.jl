@@ -35,6 +35,7 @@ include("univariate/weibull.jl")
 include("univariate/uniform.jl")
 include("univariate/laplace.jl")
 include("univariate/cauchy.jl")
+include("univariate/logistic.jl")
 include("univariate/flat.jl")
 include("univariate/gamma.jl")
 include("univariate/tdist.jl")
@@ -85,6 +86,7 @@ export Bernoulli,
     HalfNormal,
     HalfTDist,
     Laplace,
+    Logistic,
     LogNormal,
     Multinomial,
     MvNormalScale,
