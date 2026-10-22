@@ -37,6 +37,7 @@ include("univariate/laplace.jl")
 include("univariate/cauchy.jl")
 include("univariate/flat.jl")
 include("univariate/gamma.jl")
+include("univariate/inversegamma.jl")
 include("univariate/tdist.jl")
 include("univariate/beta.jl")
 include("univariate/halfnormal.jl")
@@ -84,6 +85,7 @@ export Bernoulli,
     HalfCauchy,
     HalfNormal,
     HalfTDist,
+    InverseGamma,
     Laplace,
     LogNormal,
     Multinomial,
