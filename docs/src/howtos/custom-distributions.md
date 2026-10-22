@@ -1,8 +1,8 @@
 # [Custom distributions](@id custom-distributions)
 
-Even though the Julia ecosystem[^1] already provides a rich set of distributions we can directly use with Wren, we may sometimes still have to work with distributions that we need to define ourselves.
+Even though the Julia ecosystem already provides a rich set of [distributions](@ref distributions) we can directly use with Wren, we may sometimes still have to work with distributions that we need to define ourselves.
 
-In this example, we'll demonstrate how to write a zero-inflated Poisson distribution[^2] that allows us to not only run inference but also to benefit from other important workflow features Wren provides, such as sampling from the prior.
+In this example, we'll demonstrate how to write a zero-inflated Poisson distribution[^1] that allows us to not only run inference but also to benefit from other important workflow features Wren provides, such as sampling from the prior.
 
 ## How to define a new distribution
 
@@ -61,7 +61,6 @@ nothing # hide
 ```
 
 Next up is fitting the model.
-The `y` argument declares the shape of the observation array; its values are ignored once we condition on the data (see [Arrays and structs](@ref)).
 
 ```@example custom-distributions
 @wren function poisson_zeroinflated(x, y)
@@ -101,6 +100,4 @@ pp_chain = predict(prior_model, chain)
 FlexiChains.Makie.pushforward_hist(pp_chain, @vn(y); observed=y)
 ```
 
-[^1]: See for example [MeasureBase.jl](https://github.com/JuliaMath/MeasureBase.jl). Wren also works with [Distributions.jl](https://github.com/juliastats/distributions.jl) but note that these distributions may not be GPU-compatible.
-
-[^2]: A zero-inflated Poisson distribution accounts for zero counts that would not by described by a standard Poisson by mixing a Bernoulli and Poisson component.
+[^1]: A zero-inflated Poisson distribution accounts for zero counts that would not by described by a standard Poisson by mixing a Bernoulli and Poisson component.
