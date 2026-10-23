@@ -12,15 +12,38 @@ Base.isequal(a::RangeAndTransform, b::RangeAndTransform) =
 
 All the information needed to derive a vectorised form of a model.
 
-This struct holds a `VarNamedTuple` mapping `VarName => RangeAndTransform`, together with a
-fast-path `VarNamedTuple` mapping `sitename => (key => RangeAndTransform)`. The key is
-usually a `VarName`; direct integer-vector leaves store their root, length, and first index.
+The fundamental information that we need to do this is a mapping from `VarName`s, on the
+left-hand side of tilde-statements, to `RangeAndTransform`s that describe:
 
-The fast path is only hit for sampling sites that are encountered once and only once during
-model evaluation, provided the site's current `VarName` matches its cached key. This
-allows us to elide VarNamedTuple lookups when the site still refers to the same variable.
-Usually the VNT lookup is not a problem, but VarNames like `x[1:100000]` can be very slow
-due to PartialArray and ArrayLikeBlock checks.
+- which slice of the vectorised parameters correspond to that variable, and
+- how to transform that slice into the original space of the variable.
+
+The naive way to store this information is in a direct key-value map, i.e., a
+`VarNamedTuple` mapping `(lhs VarName) => RangeAndTransform`. Then, when we encounter a `vn
+~ dist` statement during model evaluation, we can look up the `RangeAndTransform` for `vn`.
+
+However, this can become very slow for `VarName`s that contain large integer vectors, e.g.,
+`x[1:100000]`, due to `PartialArray` and `ArrayLikeBlock` checks. This motivates a fast path
+which relies on a mapping from `sitename => Pair(cache_key, RangeAndTransform)`. The idea
+behind this is that sitenames often have a one-to-one correspondence with lhs VarNames, and
+thus we can collect this mapping one time during `VecModel` construction, and then reuse it
+during the hot path of model evaluation.
+
+Sitenames that are encountered more than once during model evaluation are not stored in this
+mapping (technically, their values are stored as `SeenMultipleTimes`; this could in theory
+be removed). Lookups for those sampling sites will thus fall back to the slower
+`VarNamedTuple` lookup.
+
+The `cache_key` is an additional piece of information that allows us to handle cases where
+the sitename is constant, but the lhs VarName is not. See, e.g.
+https://github.com/JuliaBayes/Wren.jl/issues/155 for an example of this. In order to hit the
+fast path, two things must be true:
+
+- the sitename must only be encountered once during model evaluation (otherwise it will be
+  stored as `SeenMultipleTimes` and the fast path will be disabled);
+
+- the lhs VarName must be hashed into a `cache_key` that is equal to the cached key stored
+  in the mapping.
 
 ## Submodel handling
 
