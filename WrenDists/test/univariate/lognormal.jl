@@ -18,6 +18,9 @@ if RUN_REACTANT
     using Reactant
 end
 
+sample_lognormal(s, rng) = rand(rng, WrenDists.BatchedLogNormal(zero(s), s))
+sum_lognormal(s, rng=Xoshiro(8675309)) = sum(sample_lognormal(s, rng))
+
 test_dist(
     "LogNormal",
     WrenDists.LogNormal(0.5, 0.3),
@@ -40,16 +43,32 @@ test_dist(
                 logdensityof(WrenDists.BatchedLogNormal(x[1:3], x[4:6]), [1.5, 1.5, 1.5])
             ADTestCase(f, [0.1, 0.5, 1.0, 0.3, 0.7, 1.2], (), ())
         end,
+        ADTestCase(sum_lognormal, fill(0.7, 8), (), ()),
     ),
 )
 
 @testset "BatchedLogNormal sampling: $T" for T in (Float32, Float64, BigFloat)
-    mu, sigma = fill(T(0.2), 8), fill(T(0.7), 8)
-    noise = randn(Xoshiro(8675309), T, size(mu))
-    expected = exp.(noise .* sigma .+ mu)
-    draw_sum(s) = sum(rand(Xoshiro(8675309), WrenDists.BatchedLogNormal(mu, s)))
-    @test rand(Xoshiro(8675309), WrenDists.BatchedLogNormal(mu, sigma)) == expected
-    @test ReverseDiff.gradient(draw_sum, sigma) ≈ expected .* noise
+    sigma = fill(T(0.7), 8)
+    noise = randn(Xoshiro(8675309), T, size(sigma))
+    expected = exp.(noise .* sigma)
+    @test sample_lognormal(sigma, Xoshiro(8675309)) == expected
+    @test ForwardDiff.gradient(sum_lognormal, sigma) ≈ expected .* noise
+    @test ReverseDiff.gradient(sum_lognormal, sigma) ≈ expected .* noise
+end
+
+@testset "BatchedLogNormal compiled sampling" begin
+    @static if RUN_REACTANT
+        sample_and_gradient(s, rng) = (
+            sample_lognormal(s, copy(rng)),
+            first(Enzyme.gradient(Reverse, sum_lognormal, s, Const(copy(rng)))),
+        )
+        sigma = Reactant.to_rarray(fill(0.7f0, 8))
+        rng = Reactant.ReactantRNG(Reactant.to_rarray(UInt64[8675309, 0]))
+        compiled = Reactant.@compile sample_and_gradient(sigma, rng)
+        sample, gradient = compiled(sigma, rng)
+        x = Array(sample)
+        @test Array(gradient) ≈ x .* log.(x) ./ 0.7f0
+    end
 end
 
 @testset "BatchedLogNormal Enzyme rule" begin
