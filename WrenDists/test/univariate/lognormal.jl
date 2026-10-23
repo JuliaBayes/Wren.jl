@@ -7,6 +7,7 @@ using ReverseDiff
 using Mooncake
 using Enzyme
 using Plaice
+using Random: Xoshiro
 using Test
 
 const RUN_REACTANT = !Sys.iswindows()
@@ -41,6 +42,15 @@ test_dist(
         end,
     ),
 )
+
+@testset "BatchedLogNormal sampling: $T" for T in (Float32, Float64, BigFloat)
+    mu, sigma = fill(T(0.2), 8), fill(T(0.7), 8)
+    noise = randn(Xoshiro(8675309), T, size(mu))
+    expected = exp.(noise .* sigma .+ mu)
+    draw_sum(s) = sum(rand(Xoshiro(8675309), WrenDists.BatchedLogNormal(mu, s)))
+    @test rand(Xoshiro(8675309), WrenDists.BatchedLogNormal(mu, sigma)) == expected
+    @test ReverseDiff.gradient(draw_sum, sigma) ≈ expected .* noise
+end
 
 @testset "BatchedLogNormal Enzyme rule" begin
     using EnzymeTestUtils
