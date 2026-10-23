@@ -38,6 +38,12 @@ basefloat(::Type{<:Irrational}) = Float64
     return basefloat(_promoted_paramtype(D))
 end
 
+# AD wrappers forward eps to a plain float. Keep native floats, including BigFloat.
+@inline function rngtype(d::WrenDist)
+    T = noisetype(d)
+    return T <: AbstractFloat ? T : typeof(eps(T))
+end
+
 @inline function _promoted_paramtype(::Type{D}) where {D}
     return promote_type(ntuple(i -> eltype(fieldtype(D, i)), Val(fieldcount(D)))...)
 end
