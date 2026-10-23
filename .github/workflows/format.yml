@@ -1,6 +1,7 @@
 name: Format
 
 on:
+  workflow_dispatch:
   # TODO(penelopeysm): Re-enable once the repo is public.
   # push:
   #   branches:
