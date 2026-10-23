@@ -1,8 +1,11 @@
 # [Custom distributions](@id custom-distributions)
 
-Even though the Julia ecosystem already provides a rich set of [distributions](@ref distributions) we can directly use with Wren, we may sometimes still have to work with distributions that we need to define ourselves.
+Even though WrenDists already provides many commonly used distributions (read more [here](@ref distributions)), we may sometimes still find ourselves working with distributions that we need to define from scratch.
 
-In this example, we'll demonstrate how to write a zero-inflated Poisson distribution[^1] that allows us to not only run inference but also to benefit from other important workflow features Wren provides, such as sampling from the prior.
+In this example, we'll demonstrate how to write a zero-inflated Poisson distribution that allows us to not only run inference but also to benefit from other important workflow features Wren provides, such as sampling from the prior.
+
+!!! note "Zero-inflation"
+    A zero-inflated Poisson distribution accounts for zero counts that would not by described by a standard Poisson by mixing a Dirac and Poisson component.
 
 ## How to define a new distribution
 
@@ -42,37 +45,33 @@ function Base.rand(rng::AbstractRNG, d::PoissonZeroInflated)
 end
 ```
 
-If you are used to working with custom distributions in Turing.jl, you may notice that we are not implementing the `Distributions` interface – all Wren needs to know is how to calculate the logdensity and how to draw a sample.
+If you are used to working with custom distributions in Turing.jl, you may notice that we are not implementing the `Distributions` interface — all Wren needs to know is how to calculate the logdensity and how to draw a sample.
 
 ## Usage inside a model
 
 First we simulate zero-inflated counts that depend on some binary covariate (think for example the location where counts were recorded) that we can fit our model to:
 
 ```@example custom-distributions
-# Distributions per covariate group
-lambdas = [4.5, 7.0]
-pis = [0.6, 0.2]
-dists = [PoissonZeroInflated(lambda, pi) for (lambda, pi) in zip(lambdas, pis)]
-
+lambda = 4.5
+pi = 0.6
+dist = PoissonZeroInflated(lambda, pi)
 n = 1000
-x = rand([1, 2], n)
-y = rand.(dists[x])
+y = rand(dist, n)
 nothing # hide
 ```
 
 Next up is fitting the model.
 
 ```@example custom-distributions
-@wren function poisson_zeroinflated(x, y)
-    k = maximum(x)
-    @iid lambda ~ Gamma(2, 1) size=k
-    @iid pi ~ Uniform(0, 1) size=k
-    for i in eachindex(x)
-        y[i] ~ PoissonZeroInflated(lambda[x[i]], pi[x[i]])
+@wren function poisson_zeroinflated(y)
+    lambda ~ Gamma(2, 1)
+    pi ~ Uniform(0, 1)
+    for i in eachindex(y)
+        y[i] ~ PoissonZeroInflated(lambda, pi)
     end
 end
 
-prior_model = poisson_zeroinflated(x, y)
+prior_model = poisson_zeroinflated(y)
 model = prior_model | VarNamedTuple(y=y)
 chain = nuts(model, 1000, 4; progress=false)
 summarystats(chain)
@@ -82,16 +81,20 @@ We successfully sampled from our custom zero-inflated Poisson distribution and w
 
 ## Manual loglikelihoods
 
-Instead of using the recommended `~` syntax, you may also use the `@addloglikelihood` macro to increment the ... well, loglikelihood manually.
-Be aware that this sacrifices many powerful features of Wren relating to [Bayesian workflow](@ref).
+!!! danger "We do NOT recommend this"
+    We strongly discourage the use of `@addloglikelihood`. It should only be considered if the model would otherwise not work (if you run into such a case, please let us know in an issue).
 
-For example, the model using the `~` syntax supports sampling from the prior via `rand`:
+Instead of using the recommended `~` syntax, it is possible the `@addloglikelihood` macro to increment the ... well, loglikelihood manually.
+    
+Using `@addloglikelihood` means that you will not be able to use Wren's powerful features relating to [Bayesian workflow](@ref).
+
+For example, you will only be able to sample from the prior via `rand` if you use the `~` syntax:
 
 ```@example custom-distributions
 rand(prior_model)
 ```
 
-... and posterior predictions via `predict` that play nicely with the plotting functions provided by [FlexiChains.jl](https://juliabayes.org/FlexiChains.jl/stable/):
+Generating posterior predictions via `predict` and visualising them with [FlexiChains.jl](https://juliabayes.org/FlexiChains.jl/stable/) also requires the `~` syntax:
 
 ```@example custom-distributions
 using CairoMakie
@@ -99,5 +102,3 @@ using CairoMakie
 pp_chain = predict(prior_model, chain)
 FlexiChains.Makie.pushforward_hist(pp_chain, @vn(y); observed=y)
 ```
-
-[^1]: A zero-inflated Poisson distribution accounts for zero counts that would not by described by a standard Poisson by mixing a Bernoulli and Poisson component.
