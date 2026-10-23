@@ -47,6 +47,10 @@ test_dist(
             f(x) = logdensityof(WrenDists.BatchedPoisson(x), [1.0, 2.0, 8.0])
             ADTestCase(f, [1.0, 3.0, 7.0], (), ())
         end,
+        let
+            f(x) = logdensityof(WrenDists.BatchedPoisson(x), [0.0, 0.0])
+            ADTestCase(f, [0.0, 1.0], (), ())
+        end,
     ),
 )
 
@@ -59,6 +63,10 @@ test_dist(
             f(x) = logdensityof(WrenDists.BatchedPoissonLog(x), [1.0, 2.0, 8.0])
             ADTestCase(f, log.([1.0, 3.0, 7.0]), (), ())
         end,
+        let
+            f(x) = logdensityof(WrenDists.BatchedPoissonLog(x), [0.0, 0.0])
+            ADTestCase(f, [-Inf, 0.0], (), ())
+        end,
     ),
 )
 
@@ -70,5 +78,19 @@ test_dist(
         @test eltype(xs) == typeof(λ)
         @test all(x -> isinteger(x) && x >= 0, xs)
         @test isapprox(mean(xs), λ; rtol=1e-3)
+    end
+end
+    
+@testset "batched Poisson support (issue #158)" begin
+    for (scalar, batched, rates) in (
+        (WrenDists.Poisson, WrenDists.BatchedPoisson, [0.0, 1.0]),
+        (WrenDists.PoissonLog, WrenDists.BatchedPoissonLog, [-Inf, 0.0]),
+    )
+        d = batched(rates)
+        points = [[0.0, 0.0], [1.0, 0.0], [0.0, 0.5], [0.0, -2.0], [0.0, Inf]]
+        for x in points
+            @test logdensityof(d, x) == sum(logdensityof.(scalar.(rates), x))
+        end
+        RUN_REACTANT && WrenDists.test_dist_reactant(d, points)
     end
 end

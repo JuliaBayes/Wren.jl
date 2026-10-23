@@ -109,7 +109,7 @@ FromPrior(Xoshiro(468))
 or we can say, 'I have one stored in this `VarNamedTuple`! Please use it':
 
 ```@example models
-FromParams(trace)
+FromValues(trace)
 ```
 
 An accumulator, on the other hand, is a struct that holds information that is collected during model evaluation.
@@ -132,7 +132,7 @@ Now that we have the ingredients, let's put it all together:
 using WrenCore: evaluate, OriginalSpace, EvalContext
 
 retval, accs =
-    evaluate(model, FromParams(trace), OriginalSpace(), accs, EvalContext{false}());
+    evaluate(model, FromValues(trace), OriginalSpace(), accs, EvalContext{false}());
 ```
 
 The last argument, [`EvalContext`](@ref), controls whether model arguments are copied during evaluation.
@@ -233,7 +233,7 @@ v = rand(vecmodel)
 or you can convert existing parameters into a vectorised form with [`vectorise_latents`](@ref):
 
 ```@example models
-ps = FromParams(rand(model))         # This is a VarNamedTuple in original model space.
+ps = FromValues(rand(model))         # This is a VarNamedTuple in original model space.
 v = vectorise_latents(ps, vecmodel)  # Convert it to vectorised (and unconstrained) form.
 ```
 

@@ -26,9 +26,6 @@ WrenDists = "2ad4af40-d7c9-42b2-92b0-e09d37d1e75a"
 
 [sources]
 FlexiChains = {rev = "v0.7", url = "https://github.com/JuliaBayes/FlexiChains.jl"}
-Plaice = {rev = "main", url = "https://github.com/JuliaBayes/Plaice.jl"}
-WrenCore = {path = ".."}
-WrenDists = {path = "../../WrenDists"}
 
 [compat]
 ADTypes = "1"

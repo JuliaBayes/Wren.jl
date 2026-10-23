@@ -154,7 +154,7 @@ Return the log-joint probability of `model` evaluated at `params` in original sp
 function logjoint(model::Model, params::VarNamedTuple)
     _, accs = evaluate(
         model,
-        FromParams(params),
+        FromValues(params),
         OriginalSpace(),
         AccumulatorTuple(LogPriorAccumulator(), LogLikelihoodAccumulator()),
         EvalContext{false}(),

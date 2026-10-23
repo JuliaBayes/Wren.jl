@@ -131,7 +131,7 @@ function VarNames.Draw(
 end
 
 """
-    FromParams(
+    FromValues(
         draw::VarNames.Draw,
         fallback::Union{AbstractLatentSource,Nothing}=nothing,
     )
@@ -139,11 +139,11 @@ end
 Create a latent source from the parameters in `draw`. The extras are ignored, and `fallback`
 is used for any absent parameters.
 """
-function FromParams(
+function FromValues(
     draw::VarNames.Draw,
     fallback::Union{AbstractLatentSource,Nothing}=FromPrior(),
 )
-    return FromParams(parameters(draw), fallback)
+    return FromValues(parameters(draw), fallback)
 end
 
 logprior(draw::VarNames.Draw) = extras(draw).logprior

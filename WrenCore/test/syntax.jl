@@ -141,7 +141,7 @@ end
             end
         end
         params = VarNamedTuple(; x=0.5, xs=[1.0, 2.0])
-        source = FromParams(params)
+        source = FromValues(params)
         _, accs = evaluate(
             with_macros(),
             source,
@@ -166,7 +166,7 @@ end
         end
 
         params = VarNamedTuple(; y=0.5, z=2.0)
-        source = FromParams(params)
+        source = FromValues(params)
 
         _, accs = evaluate(
             nested_if(true),
@@ -240,7 +240,7 @@ end
             end
 
             x = 0.5
-            source = FromParams(VarNamedTuple(; x))
+            source = FromValues(VarNamedTuple(; x))
             _, accs = evaluate(
                 distribution_tilde_value(),
                 source,
@@ -362,7 +362,7 @@ end
                 x ~ Normal()
                 @addloglikelihood sum(collect(range(-x, x; length=1000)))
             end
-            source = FromParams(VarNamedTuple(; x=0.5))
+            source = FromValues(VarNamedTuple(; x=0.5))
             model = addloglik_elided()
 
             # Sanity check: the expression does allocate when LogLikelihood is present
@@ -478,7 +478,7 @@ end
         end
 
         values = [0.25, -0.5]
-        source = FromParams(VarNamedTuple(; xs=values))
+        source = FromValues(VarNamedTuple(; xs=values))
         retval, accs = evaluate(
             control_flow(2),
             source,

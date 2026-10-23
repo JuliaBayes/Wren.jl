@@ -9,6 +9,21 @@ using Test
 using Distributions
 using VarNames
 
+struct CustomSubmodel end
+WrenCore.is_submodel(::Type{CustomSubmodel}) = true
+function WrenCore.evaluate_submodel(
+    ::CustomSubmodel,
+    ::AbstractLatentSource,
+    ::AbstractParameterSpace,
+    accs::AccumulatorTuple,
+    ::VarNamedTuple,
+    ::VarName,
+    ::WrenCore.DiscardSubmodelParams,
+    ::EvalContext,
+)
+    return 42, WrenCore.UncollectedParams(), accs
+end
+
 @wren function cached_inner()
     a ~ Normal()
 end
@@ -43,13 +58,13 @@ end
         @test logprior(accs) ≈ logdensityof(Normal(), a)
         @test iszero(loglikelihood(accs))
 
-        # With FromParams
+        # With FromValues
         in_pars = @vnt begin
             x.a := 0.5
         end
         retval, accs = @inferred evaluate(
             returning_outer(returning_inner()),
-            FromParams(in_pars),
+            FromValues(in_pars),
             OriginalSpace(),
             WrenCore.default_accumulators(),
             EvalContext{false}(),
@@ -96,13 +111,13 @@ end
         a = out_pars[@vn(x.a)]
         @test retval == 2a
 
-        # With FromParams
+        # With FromValues
         in_pars = @vnt begin
             x.a := 0.5
         end
         retval, accs = @inferred evaluate(
             undefined_namespace_outer(returning_inner()),
-            FromParams(in_pars),
+            FromValues(in_pars),
             OriginalSpace(),
             WrenCore.default_accumulators(),
             EvalContext{false}(),
@@ -138,7 +153,7 @@ end
         a2 = out_pars[@vn(x[2, 2].a)]
         @test retval == (a1, a2)
 
-        # With FromParams
+        # With FromValues
         first_a = 0.25
         second_a = -0.5
         in_pars = @vnt begin
@@ -148,7 +163,7 @@ end
         end
         retval, accs = evaluate(
             indexed_outer(indexed_inner()),
-            FromParams(in_pars),
+            FromValues(in_pars),
             OriginalSpace(),
             WrenCore.default_accumulators(),
             EvalContext{false}(),
@@ -186,7 +201,7 @@ end
         end
         retval, accs = @inferred evaluate(
             likelihood_outer(likelihood_inner() | VarNamedTuple(; obs=obs)),
-            FromParams(in_pars),
+            FromValues(in_pars),
             OriginalSpace(),
             WrenCore.default_accumulators(),
             EvalContext{false}(),
@@ -205,7 +220,7 @@ end
         for inner in (likelihood_inner(), likelihood_inner() | VarNamedTuple(; obs=0.9))
             _, accs = @inferred evaluate(
                 likelihood_outer(inner) | parent_conditioned,
-                FromParams(in_pars),
+                FromValues(in_pars),
                 OriginalSpace(),
                 WrenCore.default_accumulators(),
                 EvalContext{false}(),
@@ -237,6 +252,18 @@ end
         @test retval == 42
         @test parameters(accs) == VarNamedTuple()
         @test iszero(logjoint(accs))
+
+        @test iszero(logjoint(empty_outer(empty_inner()), VarNamedTuple()))
+
+        @wren function empty_outer_with_latent(inner)
+            mu = child ~ inner
+            x ~ Normal(mu)
+        end
+        @test logjoint(empty_outer_with_latent(empty_inner()), VarNamedTuple(x=43.0)) ≈
+              logdensityof(Normal(42), 43.0)
+        @test logjoint(empty_outer_with_latent(CustomSubmodel()), VarNamedTuple(x=43.0)) ≈
+              logdensityof(Normal(42), 43.0)
+        @test_throws ArgumentError logjoint(cached_outer(), VarNamedTuple())
     end
 
     @testset "nested submodels" begin
@@ -266,17 +293,16 @@ end
         @test only(keys(out_pars)) == @vn(x.y.a)
         @test retval ≈ 2 * out_pars[@vn(x.y.a)] + 2
 
-        # With FromParams
+        # With FromValues
         a = 0.75
         in_pars = @vnt begin
             x.y.a := a
         end
         nested_model = outer_model(middle_model(returning_inner()))
-        # TODO: not type stable, needs #5 before we can add inferred
-        @test_broken false
-        retval, accs = evaluate(
+
+        retval, accs = @inferred evaluate(
             nested_model,
-            FromParams(in_pars),
+            FromValues(in_pars),
             OriginalSpace(),
             WrenCore.default_accumulators(),
             EvalContext{false}(),

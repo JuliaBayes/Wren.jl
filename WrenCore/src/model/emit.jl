@@ -9,11 +9,18 @@ function remove_escapes(expr::Expr)
     return Expr(expr.head, map(remove_escapes, expr.args)...)
 end
 
+
+# In submodel.jl we override this when `val` is an `UncollectedParams` sentinel, so that we
+# don't ever actually try to set it into the parent object, which can cause type instability
+# issues (and consequently Enzyme errors) if the parent object is e.g. an array with a
+# eltype that `UncollectedParams` doesn't subtype.
+set_lhs!!(obj, optic, val) = Accessors.set(obj, optic, val)
+
 assign_or_set!!(lhs::Symbol, rhs, vn) = :($lhs = $rhs)
 function assign_or_set!!(lhs::Expr, rhs, vn)
     left_top_sym = get_top_level_symbol(lhs)
     return :(
-        $left_top_sym = $(Accessors.set)(
+        $left_top_sym = $(set_lhs!!)(
             $left_top_sym,
             $(VarNames.with_mutation)($(VarNames.getoptic)($vn)),
             $rhs,
@@ -55,7 +62,7 @@ function emit_model_expr(
     parameter_space,
     ctx,
 )
-    @gensym rhs val tval init_tval logjac vn child_accs child_params
+    @gensym rhs val tval init_tval logjac vn child_accs child_params scoped_args
     rhs_expr =
         emit_model_expr(stmt.rhs, accs, conditioned, latent_source, parameter_space, ctx)
     vn_expr = remove_escapes(varname(stmt.lhs, false))
@@ -66,16 +73,34 @@ function emit_model_expr(
         $rhs = $rhs_expr
         $vn = $vn_expr
         if $(WrenCore.is_submodel)(typeof($rhs))
-            $val, $child_params, $child_accs = $(evaluate_submodel)(
-                $rhs,
-                $latent_source,
-                $parameter_space,
-                $accs,
-                $conditioned,
-                $vn,
-                $collect_submodel_params,
-                $ctx,
-            )
+            if $rhs isa $(Model)
+                # Scope before recursive evaluation can widen the site's VarName.
+                $scoped_args = $(_scope_submodel)(
+                    $rhs,
+                    $latent_source,
+                    $parameter_space,
+                    $accs,
+                    $conditioned,
+                    $vn,
+                )
+                $val, $child_params, $child_accs = $(_evaluate_scoped_submodel)(
+                    $rhs,
+                    $scoped_args...,
+                    $collect_submodel_params,
+                    $ctx,
+                )
+            else
+                $val, $child_params, $child_accs = $(evaluate_submodel)(
+                    $rhs,
+                    $latent_source,
+                    $parameter_space,
+                    $accs,
+                    $conditioned,
+                    $vn,
+                    $collect_submodel_params,
+                    $ctx,
+                )
+            end
             $(assign_or_set!!(stmt.lhs, child_params, vn))
             $accs = $(combine_with_namespace)(
                 $accs,
@@ -233,8 +258,10 @@ function _unindex(indexed::Indexed, i)
     _issue_error("cannot safely unindex type $(typeof(indexed))")
 end
 function batched(iters::I, ::Val{F}, args...; kwargs...) where {I,F}
-    # Default fallback for batching-unaware calls
-    return independent([F((_unindex(a, i) for a in args)...; kwargs...) for i in iters])
+    # Arguments are already sliced, so index their positions rather than the loop values.
+    return independent([
+        F((_unindex(a, i) for a in args)...; kwargs...) for i in LinearIndices(iters)
+    ])
 end
 
 # This returns `WrenCore.independent([$rhs for $loop_idx in $loop_iters])`.

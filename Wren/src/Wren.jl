@@ -45,7 +45,10 @@ using WrenCore:
     WithExpectedResult,
     # Initialisations for MCMC
     FromPrior,
-    FromParams
+    FromValues,
+    # PosteriorDB
+    posteriordb_model,
+    available_posteriordb_models
 
 export WrenCore,
     # DSL
@@ -77,7 +80,10 @@ export WrenCore,
     WithExpectedResult,
     # Initialisations for MCMC
     FromPrior,
-    FromParams
+    FromValues,
+    # PosteriorDB
+    posteriordb_model,
+    available_posteriordb_models
 
 using VarNames: @vn, @vnt, VarNamedTuple, VarName, Draw, parameters, extras
 export @vn, @vnt, VarNamedTuple, VarName, Draw, parameters, extras

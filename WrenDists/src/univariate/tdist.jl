@@ -25,7 +25,7 @@ struct TDist{N<:Number,M<:Number,S<:Number} <: UnconstrainedUnivariateDist
 end
 
 TDist(ν::Number, μ::Number) = TDist(ν, μ, one(μ))
-TDist(ν::Number) = TDist(ν, 0.0, 1.0)
+TDist(ν::Number) = TDist(ν, zero(ν), one(ν))
 
 @inline function _valuetype(d::TDist, x::Number)
     return float(promote_type(typeof(d.ν), typeof(d.μ), typeof(d.σ), typeof(x)))
