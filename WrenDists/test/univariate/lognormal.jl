@@ -17,6 +17,26 @@ if RUN_REACTANT
     using Reactant
 end
 
+@testset "LogNormal support" begin
+    d = WrenDists.LogNormal(0.0f0, 1.0f0)
+    batch = WrenDists.BatchedLogNormal(Float32[0], Float32[1])
+    points = [Float32[0], Float32[-1]]
+    for x in points
+        @test logdensityof(d, only(x)) == -Inf
+        @test logdensityof(batch, x) == -Inf
+    end
+    f(p, x) = logdensityof(WrenDists.BatchedLogNormal(p, p), x)
+    @test first(Enzyme.gradient(Enzyme.Reverse, f, Float32[1], Enzyme.Const(points[2]))) == [0]
+    if RUN_REACTANT
+        WrenDists.test_dist_reactant(d, Float32[0, -1])
+        WrenDists.test_dist_reactant(batch, points)
+        p, x = Reactant.to_rarray.((Float32[1], points[2]))
+        grad(p, x) = Enzyme.gradient(Enzyme.Reverse, f, p, Enzyme.Const(x))[1]
+        compiled = Reactant.@compile grad(p, x)
+        @test Array(compiled(p, x)) == [0]
+    end
+end
+
 test_dist(
     "LogNormal",
     WrenDists.LogNormal(0.5, 0.3),
