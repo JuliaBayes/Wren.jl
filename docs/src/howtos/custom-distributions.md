@@ -5,11 +5,11 @@ Even though WrenDists already provides many commonly used distributions (read mo
 In this example, we'll demonstrate how to write a zero-inflated Poisson distribution that allows us to not only run inference but also to benefit from other important workflow features Wren provides, such as sampling from the prior.
 
 !!! note "Zero-inflation"
-    A zero-inflated Poisson distribution accounts for zero counts that would not by described by a standard Poisson by mixing a Dirac and Poisson component.
+    A *zero-inflated Poisson distribution* mixes Dirac and Poisson components to account for zero counts that would not be described by a standard Poisson.
 
 ## How to define a new distribution
 
-We need to define `PoissonZeroInflated` to store the parameters and methods for `Wren.logdensityof` and `Base.rand`:
+We need to define a `PoissonZeroInflated` struct to store the parameters and methods for `Wren.logdensityof` and `Base.rand`:
 
 ```@example custom-distributions
 using Wren
@@ -24,19 +24,19 @@ struct PoissonZeroInflated{T}
     pi::T
 
     function PoissonZeroInflated(lambda::T, pi::T) where T
-        @assert lambda > 0 && 0 <= pi <= 1
+        @assert lambda > zero(T) && zero(T) <= pi <= one(T)
         return new{T}(lambda, pi)
     end
 end
 
 function Wren.logdensityof(d::PoissonZeroInflated, x::Int)
     log_1m_pi = log1p(-d.pi)
-    if x == 0
+    return if x == 0
         log_pi = log(d.pi)
         log_1m_pi_pois0 = log_1m_pi - d.lambda
-        return logaddexp(log_pi, log_1m_pi_pois0)
+        logaddexp(log_pi, log_1m_pi_pois0)
     else
-        return log_1m_pi + logdensityof(Poisson(d.lambda), x)
+        log_1m_pi + logdensityof(Poisson(d.lambda), x)
     end
 end
 
@@ -45,7 +45,7 @@ function Base.rand(rng::AbstractRNG, d::PoissonZeroInflated)
 end
 ```
 
-If you are used to working with custom distributions in Turing.jl, you may notice that we are not implementing the `Distributions` interface — all Wren needs to know is how to calculate the logdensity and how to draw a sample.
+If you are used to working with custom distributions in Turing.jl, you may notice that we are not implementing the `Distributions` interface from Distributions.jl — all Wren needs to know is how to calculate the log-density and how to draw a sample.
 
 ## Usage inside a model
 
@@ -84,9 +84,9 @@ We successfully sampled from our custom zero-inflated Poisson distribution and w
 !!! danger "We do NOT recommend this"
     We strongly discourage the use of `@addloglikelihood`. It should only be considered if the model would otherwise not work (if you run into such a case, please let us know in an issue).
 
-Instead of using the recommended `~` syntax, it is possible the `@addloglikelihood` macro to increment the ... well, loglikelihood manually.
+Instead of using the recommended `~` syntax, it is possible to use the `@addloglikelihood` macro to increment the ... well, loglikelihood manually.
     
-Using `@addloglikelihood` means that you will not be able to use Wren's powerful features relating to [Bayesian workflow](@ref).
+Using `@addloglikelihood` means that you will not be able to use Wren's features relating to [Bayesian workflow](@ref).
 
 For example, you will only be able to sample from the prior via `rand` if you use the `~` syntax:
 
