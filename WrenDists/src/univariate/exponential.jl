@@ -39,11 +39,13 @@ function DensityInterface.logdensityof(d::BatchedExponential, x)
     # Benchmarks @ https://github.com/JuliaBayes/Wren.jl/issues/105
     θ = d.θ
     return if within_compile()
-        sum(@. -(x / θ) - log(θ))
+        value = sum(@. -(x / θ) - log(θ))
+        ifelse(all(x .>= 0), value, oftype(value, -Inf))
     else
         T = float(promote_type(eltype(x), eltype(θ)))
         s = zero(T)
         for i in eachindex(x, θ)
+            x[i] >= zero(x[i]) || return convert(T, -Inf)
             s -= convert(T, x[i]) / convert(T, θ[i]) + log(convert(T, θ[i]))
         end
         s
