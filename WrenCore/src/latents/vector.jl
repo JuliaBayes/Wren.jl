@@ -111,7 +111,7 @@ function VecInfo(sca::SitenameCountAccumulator, varnames_to_rats::VarNamedTuple)
         else
             VarNames.unprefix(vn, VarNames.optic_to_varname(prefix))
         end
-        return _cache_varname_key(local_vn) => varnames_to_rats[vn]
+        return _cache_key(local_vn) => varnames_to_rats[vn]
     end
     return VecInfo(sitenames_to_rats, varnames_to_rats)
 end
@@ -132,41 +132,59 @@ struct FromVector{V<:AbstractVector,R<:VecInfo} <: AbstractLatentSource
     vecinfo::R
 end
 
-_cache_varname_key(vn::VarName) = deepcopy(vn)
+abstract type CacheKey end
 
-function _cache_varname_key(
+struct VarNameCacheKey{V<:VarName} <: CacheKey
+    vn::V
+end
+
+# A valid leaf lookup `sym[idxs]` selects a complete disjoint block, so its length and
+# first index identify it without a scan of the index vector.
+struct VectorCacheKey{sym} <: CacheKey
+    length::Int
+    first_index::Int
+end
+
+# Snapshot the key because the index vector can be mutated.
+_cache_key(vn::VarName) = VarNameCacheKey(deepcopy(vn))
+
+function _cache_key(
     vn::VarName{
         sym,
         VarNames.Index{Tuple{Vector{Int}},NamedTuple{(),Tuple{}},VarNames.Iden},
     },
 ) where {sym}
     indices = only(VarNames.getoptic(vn).ix)
-    # A valid leaf lookup selects a complete disjoint block, so one shared index
-    # identifies it. Snapshot the key because the index vector can be mutated.
-    return isempty(indices) ? deepcopy(vn) : (Val(sym), length(indices), first(indices))
+    return if isempty(indices)
+        VarNameCacheKey(deepcopy(vn))
+    else
+        VectorCacheKey{sym}(length(indices), first(indices))
+    end
 end
 
-_cache_varname_matches(a::VarName, b::VarName) = isequal(a, b)
-_cache_varname_matches(::VarName, ::Tuple{Val{sym},Int,Int}) where {sym} = false
+_cache_key_matches(vn::VarName, key::VarNameCacheKey) = isequal(vn, key.vn)
+_cache_key_matches(::VarName, ::VectorCacheKey) = false
 
-function _cache_varname_matches(
+function _cache_key_matches(
     vn::VarName{
         sym,
         VarNames.Index{Tuple{Vector{Int}},NamedTuple{(),Tuple{}},VarNames.Iden},
     },
-    key::Tuple{Val{sym},Int,Int},
+    key::VectorCacheKey{sym},
 ) where {sym}
     indices = only(VarNames.getoptic(vn).ix)
-    return length(indices) == key[2] && !isempty(indices) && first(indices) == key[3]
+    return length(indices) == key.length &&
+           !isempty(indices) &&
+           first(indices) == key.first_index
 end
 
-function _cache_varname_matches(
+function _cache_key_matches(
     a::VarName{sym,<:VarNames.Index{Tuple{Vector{Int}}}},
-    b::VarName{sym,<:VarNames.Index{Tuple{Vector{Int}}}},
+    key::VarNameCacheKey{<:VarName{sym,<:VarNames.Index{Tuple{Vector{Int}}}}},
 ) where {sym}
-    ao, bo = VarNames.getoptic(a), VarNames.getoptic(b)
+    ao, bo = VarNames.getoptic(a), VarNames.getoptic(key.vn)
     ai, bi = only(ao.ix), only(bo.ix)
-    # Integer vectors have identical == and isequal semantics, but == uses memcmp.
+    # === is an optimisation to avoid unnecessarily traversing large vectors
     return (ai === bi || ai == bi) && isequal(ao.kw, bo.kw) && isequal(ao.child, bo.child)
 end
 
@@ -179,11 +197,10 @@ end
     # Need to check fieldtype because vi.sitename_to_rat might actually still contain
     # SeenMultipleTimes objects. TODO(penelopeysm) Maybe this is worth fixing?
     return if idx !== nothing &&
-              fieldtype(types, idx) <:
-              Pair{<:Union{VarName,Tuple{Val{sym},Int,Int}},<:RangeAndTransform}
+              fieldtype(types, idx) <: Pair{<:CacheKey,<:RangeAndTransform}
         quote
             cached = vi.sitename_to_rat.data.$sitename
-            if _cache_varname_matches(vn, cached.first)
+            if _cache_key_matches(vn, cached.first)
                 cached.second
             else
                 vi.varname_to_rat[vn]
