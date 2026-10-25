@@ -44,12 +44,11 @@ function DensityInterface.logdensityof(d::BatchedExponential, x)
     else
         T = float(promote_type(eltype(x), eltype(θ)))
         s = zero(T)
-        valid = true
         for i in eachindex(x, θ)
-            valid &= x[i] >= zero(x[i])
+            x[i] >= zero(x[i]) || return convert(T, -Inf)
             s -= convert(T, x[i]) / convert(T, θ[i]) + log(convert(T, θ[i]))
         end
-        ifelse(valid, s, convert(T, -Inf))
+        s
     end
 end
 Plaice.scalar_to_scalar_bijector(::BatchedExponential) = Plaice.Log(0.0, 1)
