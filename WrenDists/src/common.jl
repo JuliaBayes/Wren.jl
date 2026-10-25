@@ -38,7 +38,8 @@ basefloat(::Type{<:Irrational}) = Float64
     return basefloat(_promoted_paramtype(D))
 end
 
-# AD wrappers forward eps to a plain float. Keep native floats, including BigFloat.
+# AD number types either have no rand/randn method, or they draw a different
+# stream from the Float64 bulk fill. Draw plain noise. eps(T) unwraps AD types.
 @inline function rngtype(d::WrenDist)
     T = noisetype(d)
     return T <: AbstractFloat ? T : typeof(eps(T))
