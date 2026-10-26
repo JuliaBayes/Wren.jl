@@ -5,7 +5,17 @@ Even though WrenDists already provides many commonly used distributions (read mo
 In this example, we'll demonstrate how to write a zero-inflated Poisson distribution that allows us to not only run inference but also to benefit from other important workflow features Wren provides, such as sampling from the prior.
 
 !!! note "Zero-inflation"
-    A zero-inflated Poisson distribution accounts for zero counts that would not by described by a standard Poisson by mixing a Dirac and Poisson component.
+To orient ourselves to the task at hand, we will first define the zero-inflated Poisson distribution. This distribution models count data with more zeros than a Poisson distribution would predict. It assumes that each observation comes from one of two processes: with probability π, the observation is always zero; otherwise, it is drawn from a Poisson distribution with mean λ. Because the Poisson process can also produce zeros, an observed zero could come from either process.
+More formally we can write this distribution as:
+#
+# ```math
+# P(Y = k) =
+# \begin{cases}
+# \pi + (1-\pi)e^{-\lambda}, & k = 0, \\
+# (1-\pi)\frac{\lambda^k e^{-\lambda}}{k!}, & k \geq 1.
+# \end{cases}
+# ```
+#
 
 ## How to define a new distribution
 
