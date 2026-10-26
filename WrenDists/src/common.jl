@@ -42,6 +42,7 @@ end
 # stream from the Float64 bulk fill, so draw plain noise. ForwardDiff and
 # ReverseDiff define eps(::Type) as eps(valtype(T)), recursively, so
 # typeof(eps(T)) is the plain float. A new AD number type needs the same method.
+# See https://github.com/JuliaBayes/Wren.jl/pull/238.
 @inline function rngtype(d::WrenDist)
     T = noisetype(d)
     return T <: AbstractFloat ? T : typeof(eps(T))
