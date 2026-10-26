@@ -1,6 +1,8 @@
 using Test
 
 @testset "WrenDists" begin
+    include("sampling.jl")
+
     # Continuous unconstrained
     include("univariate/normal.jl")
     include("univariate/laplace.jl")

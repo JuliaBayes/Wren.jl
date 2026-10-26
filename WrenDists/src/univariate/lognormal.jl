@@ -32,7 +32,7 @@ LogNormal() = LogNormal(0.0, 1.0)
 end
 
 # Apply `μ` and `σ` after drawing noise so automatic differentiation can follow them.
-@inline Base.rand(rng::AbstractRNG, d::LogNormal) = xval(d, randn(rng, noisetype(d)))
+@inline Base.rand(rng::AbstractRNG, d::LogNormal) = xval(d, randn(rng, rngtype(d)))
 
 # --- Batched LogNormal ---
 
