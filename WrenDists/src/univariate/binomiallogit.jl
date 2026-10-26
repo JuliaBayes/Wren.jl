@@ -22,9 +22,21 @@ Base.eltype(::Type{BinomialLogit{N,P}}) where {N,P} = float(P)
     return isinteger(x) & (x >= zero(x)) & (x <= d.n)
 end
 
-# `k log p + (n - k) log(1 - p) = k η - n log1pexp(η)` for `p = logistic(η)`.
-@inline function binomiallogit_logmass(n::T, k::T, η::T) where {T<:Number}
-    return logbinom(n, k) + k * η - n * log1pexp(η)
+@inline function binomiallogit_logmass(n::Number, k::Number, η::AbstractFloat)
+    positive = η >= zero(η)
+    a = ifelse(positive, -η, η)
+    c = ifelse(positive, n - k, k)
+    return logbinom(n, k) + c * ifelse(iszero(c), zero(a), a) - n * log1pexp(a)
+end
+
+# Count-only masks keep cached AD tapes valid when the logit changes sign.
+@inline function binomiallogit_logmass(n::Number, k::Number, η::Number)
+    η = float(η)
+    m = n - k
+    # Mask before softplus so endpoint counts also handle infinite logits.
+    a = ifelse(iszero(k), zero(η), -η)
+    b = ifelse(iszero(m), zero(η), η)
+    return logbinom(n, k) - k * log1pexp(a) - m * log1pexp(b)
 end
 
 @inline function DensityInterface.logdensityof(d::BinomialLogit, x::Number)
@@ -54,7 +66,7 @@ function DensityInterface.logdensityof(d::BatchedBinomialLogit, x)
         valid = @. isinteger(x) & (x >= zero(x)) & (x <= n)
         k = @. ifelse(valid, x, zero(x))
         η = @. ifelse(valid, η, zero(η))
-        logp = @. logbinom(n, k) + k * η - n * log1pexp(η)
+        logp = binomiallogit_logmass.(n, k, η)
         sum(@. ifelse(valid, logp, oftype(logp, -Inf)))
     else
         T = float(promote_type(eltype(x), eltype(n), eltype(η)))
