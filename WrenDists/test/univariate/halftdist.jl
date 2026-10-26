@@ -8,6 +8,7 @@ using Mooncake
 using Enzyme
 using Plaice
 using Test
+using Random: Xoshiro
 using WrenDists: test_halft_quantile_reactant
 
 const RUN_REACTANT = !Sys.iswindows()
@@ -30,6 +31,13 @@ for (ν, μ, σ) in ((3.0, 0.0, 2.0), (3.5, -1.5, 0.7), (40.0, 1.0, 2.0))
             end,
         ),
     )
+end
+
+@testset "HalfTDist keeps Float32" begin
+    d = WrenDists.HalfTDist(4.0f0, -1.0f0, 2.0f0)
+    @test rand(Xoshiro(468), d) isa Float32
+    @test logdensityof(d, 1.0f0) isa Float32
+    @test logdensityof(d, 1.0f0) ≈ logdensityof(WrenDists.HalfTDist(4.0, -1.0, 2.0), 1.0)
 end
 
 @testset "HalfTDist sampling" begin
