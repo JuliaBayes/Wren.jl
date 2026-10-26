@@ -1,6 +1,7 @@
 using Test
 
 @testset "WrenDists" begin
+    include("precision.jl")
     include("sampling.jl")
 
     # Continuous unconstrained
