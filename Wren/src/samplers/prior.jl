@@ -46,9 +46,10 @@ function prior(
 
     tasks = [
         Threads.@spawn begin
+            chain_model = WrenCore._copy_for_thread(model)
             chain_draws = Vector{Draw}(undef, niters)
             for i in 1:niters
-                chain_draws[i] = Draw(FromPrior(Random.TaskLocalRNG()), model)
+                chain_draws[i] = Draw(FromPrior(Random.TaskLocalRNG()), chain_model)
                 if progress && i % update_every == 0
                     put!(progress_channel, (j, i))
                 end

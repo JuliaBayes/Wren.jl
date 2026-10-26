@@ -142,6 +142,29 @@ function _with_copied_args(model::Model, copy_argnames)
 end
 
 """
+    _copy_for_thread(model::Model)
+
+Return the same model with its own copy of the arguments, so that evaluations on different
+threads cannot write into each other's arguments. Outside Enzyme, evaluation does not copy
+arguments (see `_maybe_dealias`). Models passed as arguments are copied too. This reuses the
+evaluation function, so no new code is generated.
+"""
+function _copy_for_thread(model::Model)
+    return Model(
+        model.name,
+        map(_copy_model_arg, model.args),
+        model.stmts,
+        model.mod;
+        conditioned=model.conditioned,
+        enzyme_copy_argnames=model.enzyme_copy_argnames,
+        _unsafe_reuse_evaluation_fn=model.evaluation_fn,
+    )
+end
+# The constructor copies all other arguments with `_dealias`.
+_copy_model_arg(v) = v
+_copy_model_arg(model::Model) = _copy_for_thread(model)
+
+"""
     EvalContext{Enzyme}
 
 Information about how a model is being evaluated. It is passed to the model's evaluation
