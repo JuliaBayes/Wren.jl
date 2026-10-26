@@ -51,20 +51,12 @@ end
 # Keep the cold fallback out of native reductions' hot loops.
 @noinline tdist_logkernel_tail(z, ν) = 2 * log(hypot(sqrt(ν), z)) - log(ν)
 
-# Value-dependent branches freeze in cached tapes; these ratios stay bounded.
+# Opposite maxima keep AD tie derivatives complementary in cached and compiled paths.
 @inline function tdist_logkernel(z, ν)
     s = sqrt(ν)
     a = abs(z)
-    if wrappedconditions(typeof(z)) || wrappedconditions(typeof(ν))
-        h = max(a, s)
-        # Mask before division to avoid Inf/Inf in eager compiled evaluation.
-        q = (ifelse(isfinite(z), z, zero(z)) / h) * (s / h)
-    else
-        # Average native AD tie rules; compilers may merge these swapped bounds.
-        h = max(a, s) / 2 + max(s, a) / 2
-        q = ((min(a, s) + min(s, a)) / 2) / h
-    end
-    return log1p(abs2(q)) + 2 * (log(h) - log(s))
+    lo, hi = -max(-s, -a), max(a, s)
+    return log1p(abs2(lo / hi)) + 2 * (log(hi) - log(s))
 end
 
 @inline function DensityInterface.logdensityof(d::TDist, x::Number)

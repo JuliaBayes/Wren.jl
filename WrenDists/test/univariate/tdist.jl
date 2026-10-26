@@ -20,8 +20,8 @@ if RUN_REACTANT
 end
 
 @testset "TDist typed defaults" begin
-    d = WrenDists.TDist(4.0f0)
-    explicit = WrenDists.TDist(4.0f0, 0.0f0, 1.0f0)
+    d = WrenDists.TDist(4f0)
+    explicit = WrenDists.TDist(4f0, 0f0, 1f0)
     @test logdensityof(d, 0.25f0) === logdensityof(explicit, 0.25f0)
     @test rand(Xoshiro(8675309), d) === rand(Xoshiro(8675309), explicit)
 end
@@ -29,14 +29,12 @@ end
 @testset "TDist finite tails" begin
     for T in (Float32, Float64)
         x = T(2) * sqrt(floatmax(T))
-        d = WrenDists.TDist(one(T))
         reference = logdensityof(WrenDists.Cauchy(zero(T), one(T)), x)
-        @test logdensityof(d, x) ≈ reference
+        @test logdensityof(WrenDists.TDist(one(T)), x) ≈ reference
         iid = WrenDists.IIDTDist((1,), one(T), zero(T), one(T))
         @test logdensityof(iid, [x]) ≈ reference
         for ν in (T[1], Fill(one(T), 1))
-            batch = WrenDists.BatchedTDist(ν, T[0], T[1])
-            @test logdensityof(batch, [x]) ≈ reference
+            @test logdensityof(WrenDists.BatchedTDist(ν, T[0], T[1]), [x]) ≈ reference
         end
     end
     f(x) = logdensityof(WrenDists.TDist(1.0), only(x))
@@ -57,15 +55,12 @@ end
     if RUN_REACTANT
         d = WrenDists.TDist(1.0f0)
         WrenDists.test_dist_reactant(d, Float32[2*sqrt(floatmax(Float32)), Inf])
-        g(x) = logdensityof(d, x)
-        gradient(x) = first(Enzyme.gradient(Reverse, g, x))
+        g(ν, x) = logdensityof(WrenDists.TDist(ν), x)
+        gradient(ν, x) = Enzyme.gradient(Reverse, g, ν, x)
+        ν = Reactant.to_rarray(1.0f0; track_numbers=true)
         x = Reactant.to_rarray(1.0f0; track_numbers=true)
-        compiled = Reactant.@compile gradient(x)
-        @test Float32(compiled(x)) ≈ -1.0f0
-        h(ν) = logdensityof(WrenDists.BatchedTDist(Fill(ν, 1), [0.0f0], [1.0f0]), [1.0f0])
-        nu_gradient(ν) = first(Enzyme.gradient(Reverse, h, ν))
-        compiled_nu = Reactant.@compile nu_gradient(x)
-        @test Float32(compiled_nu(x)) ≈ log(2.0f0) / 2
+        compiled = Reactant.@compile gradient(ν, x)
+        @test collect(Float32.(compiled(ν, x))) ≈ [log(2.0f0) / 2, -1.0f0]
     end
 end
 
