@@ -6,6 +6,9 @@ const MvNormalScaleFactor = Union{AbstractMatrix{<:Number},UniformScaling{<:Numb
 Multivariate normal distribution with mean vector `μ` and scale factor `L`, where `L` can be
 a lower-triangular matrix, a `Diagonal`, or a `UniformScaling`.
 
+**Customised batched implementations**: Not yet (will fall back to a product of scalar
+distributions)
+
 !!! warning
 
     This differs from Distributions.jl which uses the covariance matrix `Σ` instead of the
@@ -43,20 +46,28 @@ end
 
 function logdetfactor(d::MvNormalScale, ::Type{T}) where {T}
     R = float(T)
-    acc = zero(R)
-    for i in 1:length(d.μ)
-        acc += log(convert(R, d.L[i, i]))
+    return if within_compile()
+        sum(x -> log(convert(R, x)), diag(d.L))
+    else
+        acc = zero(R)
+        for i in 1:length(d.μ)
+            acc += log(convert(R, d.L[i, i]))
+        end
+        acc
     end
-    return acc
 end
 
 function logdetfactor(d::DiagMvNormalScale, ::Type{T}) where {T}
     R = float(T)
-    acc = zero(R)
-    for σ in d.L.diag
-        acc += log(convert(R, σ))
+    return if within_compile()
+        sum(σ -> log(convert(R, σ)), d.L.diag)
+    else
+        acc = zero(R)
+        for σ in d.L.diag
+            acc += log(convert(R, σ))
+        end
+        acc
     end
-    return acc
 end
 
 function logdetfactor(d::IsoMvNormalScale, ::Type{T}) where {T}
@@ -87,7 +98,7 @@ end
 
 # Draw plain noise `z`, then return `μ + Lz`.
 function Base.rand(rng::AbstractRNG, d::MvNormalScale)
-    return unwhiten(d, randn(rng, noisetype(d), length(d.μ)))
+    return unwhiten(d, randn(rng, rngtype(d), length(d.μ)))
 end
 
 # --- Batched MvNormalScale ---

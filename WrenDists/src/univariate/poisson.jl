@@ -1,11 +1,16 @@
 """
     Poisson(λ)
+    Poisson()
 
-Poisson distribution with rate `λ`.
+Poisson distribution with rate `λ` (default 1.0).
+
+**Customised batched implementations**: Yes
 """
 struct Poisson{L<:Number} <: DiscreteUnivariateDist
     λ::L
 end
+
+Poisson() = Poisson(1.0)
 
 Base.eltype(::Type{Poisson{L}}) where {L} = float(L)
 
@@ -61,17 +66,44 @@ function _poisson_quantile(::Type{T}, d::Poisson, q::Number) where {T<:AbstractF
     # A normal approximation with a continuity correction starts within a step or two.
     z = convert(T, -sqrt2 * erfcinvt(2 * p))
     k = clamp(floor(λ + z * sqrt(λ) - one(T) / 2), zero(T), hi)
-    while (k > zero(T)) && (_poisson_cdf(T, d, k - one(T)) >= p)
-        k -= one(T)
+    while (k > zero(T)) && (_poisson_cdf(T, d, _prevcount(k)) >= p)
+        k = _prevcount(k)
     end
     while (k < hi) && (_poisson_cdf(T, d, k) < p)
-        k += one(T)
+        k = _nextcount(k)
     end
     return k
 end
+
+# Above `maxintfloat(T)`, `k ± 1` rounds back to `k`, so step to the adjacent float instead.
+# Every float that large is an integer.
+@inline _nextcount(k::AbstractFloat) = max(k + one(k), nextfloat(k))
+@inline _prevcount(k::AbstractFloat) = min(k - one(k), prevfloat(k))
 
 # CDF inversion avoids the `exp(-λ)` underflow in product-of-uniforms sampling.
 @inline function Base.rand(rng::AbstractRNG, d::Poisson)
     T = noisetype(d)
     return _poisson_quantile(T, d, rand(rng, T))
+end
+
+# --- Batched Poisson ---
+
+struct BatchedPoisson{L<:AbstractArray} <: DiscreteBatchedUnivariate
+    λ::L
+end
+Base.size(d::BatchedPoisson) = size(d.λ)
+Base.rand(rng::AbstractRNG, d::BatchedPoisson) = rand.(Ref(rng), Poisson.(d.λ))
+function DensityInterface.logdensityof(d::BatchedPoisson, x)
+    # Benchmarks @ https://github.com/JuliaBayes/Wren.jl/issues/104
+    λ = d.λ
+    return if within_compile()
+        sum(((λi, xi) -> logdensityof(Poisson(λi), xi)).(λ, x))
+    else
+        T = float(promote_type(eltype(x), eltype(λ)))
+        s = zero(T)
+        for i in eachindex(x, λ)
+            s += logdensityof(Poisson(λ[i]), x[i])
+        end
+        s
+    end
 end

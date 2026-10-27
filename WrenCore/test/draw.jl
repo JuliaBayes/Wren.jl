@@ -40,7 +40,7 @@ end
     @test logjoint(from_prior) ≈ logprior(from_prior) + loglikelihood(from_prior)
 
     without_log_probs =
-        Draw(FromParams(parameters(from_prior)), model; include_log_probs=false)
+        Draw(FromValues(parameters(from_prior)), model; include_log_probs=false)
     @test parameters(without_log_probs) == parameters(from_prior)
     @test isempty(extras(without_log_probs))
 
@@ -49,7 +49,8 @@ end
         WrenCore.LogLikelihoodAccumulator(),
         WrenCore.ParamsAccumulator(),
     )
-    _, accs = evaluate(model, FromParams(from_prior), OriginalSpace(), accs)
+    _, accs =
+        evaluate(model, FromValues(from_prior), OriginalSpace(), accs, EvalContext{false}())
     from_accs = Draw(accs, (chain=2,))
     @test parameters(from_accs) == parameters(from_prior)
     @test extras(from_accs).chain == 2

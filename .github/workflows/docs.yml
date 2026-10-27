@@ -1,11 +1,12 @@
 name: Documentation
 
 on:
-  push:
-    branches:
-      - main
-    tags: '*'
-  pull_request:
+  # TODO(penelopeysm): Re-enable once the repo is public.
+  # push:
+  #   branches:
+  #     - main
+  #   tags: '*'
+  # pull_request:
 
 concurrency:
   # Skip intermediate builds: always.

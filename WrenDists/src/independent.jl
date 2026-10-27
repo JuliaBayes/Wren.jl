@@ -113,6 +113,7 @@ _ladj(b, x) = Plaice.logabsdet_jacobian(b, x)
 _ladj(::Plaice.TypedIdentity, x) = zero(x)
 _ladj(::Plaice.Exp, y) = y
 _ladj(b::Plaice.Log, x) = -log(b.sign * (x - b.bound))
+_ladj(b::Plaice.Truncate, y) = last(@inline Plaice.with_logabsdet_jacobian(b, y))
 _apply(b, x) = b(x)
 
 const IdentityLike = Union{Plaice.TypedIdentity,AbstractArray{Plaice.TypedIdentity}}
@@ -167,8 +168,7 @@ Plaice.unconstrained_vec_length(d::Independent) = length(d)
 
 # Entry `i` of the vectorised sample is entry `i` of `vec(x)`, and every transform here is
 # elementwise, so the constrained and unconstrained optics coincide.
-_index_optics(d::Independent) =
-    [VarNames.Index(Tuple(I), (;)) for I in vec(CartesianIndices(size(d)))]
+_index_optics(d) = [VarNames.Index(Tuple(I), (;)) for I in vec(CartesianIndices(size(d)))]
 Plaice.optic_vec(d::Independent) = _index_optics(d)
 Plaice.unconstrained_optic_vec(d::Independent) = _index_optics(d)
 

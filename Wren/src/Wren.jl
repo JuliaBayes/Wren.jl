@@ -26,6 +26,7 @@ using WrenCore:
     # Models
     Model,
     condition,
+    decondition,
     rand_with_logp,
     logjoint,
     logprior,
@@ -35,17 +36,20 @@ using WrenCore:
     lp,
     lp_and_grad,
     lp_and_grad!,
+    DEFAULT_AD,
+    reduce_copies,
     # Benchmark and test
     @bmodel,
-    benchmark_ad,
+    benchmark_model,
     test_ad,
-    benchmark_and_test,
     WithBackend,
     WithExpectedResult,
-    NoTest,
     # Initialisations for MCMC
     FromPrior,
-    FromParams
+    FromValues,
+    # PosteriorDB
+    posteriordb_model,
+    available_posteriordb_models
 
 export WrenCore,
     # DSL
@@ -57,6 +61,7 @@ export WrenCore,
     # Models
     Model,
     condition,
+    decondition,
     rand_with_logp,
     logjoint,
     logprior,
@@ -66,17 +71,20 @@ export WrenCore,
     lp,
     lp_and_grad,
     lp_and_grad!,
+    DEFAULT_AD,
+    reduce_copies,
     # Benchmark and test
     @bmodel,
-    benchmark_ad,
+    benchmark_model,
     test_ad,
-    benchmark_and_test,
     WithBackend,
     WithExpectedResult,
-    NoTest,
     # Initialisations for MCMC
     FromPrior,
-    FromParams
+    FromValues,
+    # PosteriorDB
+    posteriordb_model,
+    available_posteriordb_models
 
 using VarNames: @vn, @vnt, VarNamedTuple, VarName, Draw, parameters, extras
 export @vn, @vnt, VarNamedTuple, VarName, Draw, parameters, extras
@@ -84,8 +92,8 @@ export @vn, @vnt, VarNamedTuple, VarName, Draw, parameters, extras
 using DensityInterface: logdensityof
 export logdensityof
 
-using StatsAPI: loglikelihood
-export loglikelihood
+using StatsAPI: loglikelihood, predict
+export loglikelihood, predict
 
 using DifferentiationInterface: AutoForwardDiff, AutoReverseDiff, AutoMooncake, AutoEnzyme
 export AutoForwardDiff, AutoReverseDiff, AutoMooncake, AutoEnzyme

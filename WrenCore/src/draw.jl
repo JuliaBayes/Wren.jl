@@ -42,7 +42,7 @@ function VarNames.Draw(
     include_log_probs::Bool=true,
 )
     accs = _draw_accumulators(include_log_probs)
-    _, accs = evaluate(model, source, OriginalSpace(), accs)
+    _, accs = evaluate(model, source, OriginalSpace(), accs, EvalContext{false}())
     return _draw(accs, stats, include_log_probs)
 end
 
@@ -120,12 +120,18 @@ function VarNames.Draw(
 
     source = FromVector(params, vecmodel.vecinfo)
     accs = _draw_accumulators(include_log_probs)
-    _, accs = evaluate(vecmodel.model, source, vecmodel.parameter_space, accs)
+    _, accs = evaluate(
+        vecmodel.model,
+        source,
+        vecmodel.parameter_space,
+        accs,
+        EvalContext{false}(),
+    )
     return _draw(accs, stats, include_log_probs)
 end
 
 """
-    FromParams(
+    FromValues(
         draw::VarNames.Draw,
         fallback::Union{AbstractLatentSource,Nothing}=nothing,
     )
@@ -133,11 +139,11 @@ end
 Create a latent source from the parameters in `draw`. The extras are ignored, and `fallback`
 is used for any absent parameters.
 """
-function FromParams(
+function FromValues(
     draw::VarNames.Draw,
     fallback::Union{AbstractLatentSource,Nothing}=FromPrior(),
 )
-    return FromParams(parameters(draw), fallback)
+    return FromValues(parameters(draw), fallback)
 end
 
 logprior(draw::VarNames.Draw) = extras(draw).logprior
