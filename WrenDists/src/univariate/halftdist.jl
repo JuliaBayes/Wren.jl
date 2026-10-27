@@ -40,7 +40,8 @@ HalfTDist(ν::Number, μ::Number) = HalfTDist(ν, μ, one(μ))
 HalfTDist(ν::Number) = HalfTDist(ν, zero(ν), one(ν))
 
 # `log B(1/2, ν/2)`; the t density's normalising constant is `√ν B(1/2, ν/2)`.
-@inline tdist_logbeta(ν) = logπ / 2 + loggamma(ν / 2) - loggamma((ν + 1) / 2)
+@inline tdist_logbeta(ν) =
+    convert(float(typeof(ν)), logπ) / 2 + loggamma(ν / 2) - loggamma((ν + 1) / 2)
 
 #=
   With `x = ν / (ν + t²)` and `y = t² / (ν + t²)`, the t distribution function is
