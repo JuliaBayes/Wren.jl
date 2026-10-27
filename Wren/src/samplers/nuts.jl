@@ -4,7 +4,8 @@ using EnzymeCore: Reverse
 using FlexiChains: VNChain
 using AbstractMCMC: AbstractMCMC
 using DynamicHMC: DynamicHMC
-using MCMCProgress: MCMCProgress, Determinate, advance!, chain, closephase!, openphase!
+using MCMCProgress:
+    MCMCProgress, RunProgress, Determinate, advance!, chain_at, close_phase!, open_phase!
 
 """
     ChainReporter(run, index)
@@ -17,13 +18,12 @@ is over, so each stage's phase is closed when the next stage opens; the last is
 closed by `closephases!` once sampling returns.
 """
 mutable struct ChainReporter
-    const run::MCMCProgress.Run
+    const run::RunProgress
     const index::Int
     phase::Union{MCMCProgress.Phase,Nothing}
 end
 
-ChainReporter(run::MCMCProgress.Run, index::Integer) =
-    ChainReporter(run, Int(index), nothing)
+ChainReporter(run::RunProgress, index::Integer) = ChainReporter(run, Int(index), nothing)
 
 function DynamicHMC.make_mcmc_reporter(
     reporter::ChainReporter,
@@ -37,7 +37,7 @@ function DynamicHMC.make_mcmc_reporter(
     name = currently_warmup ? "Warmup" : "Sampling"
     closephases!(reporter)
     reporter.phase =
-        openphase!(chain(reporter.run, reporter.index), name, Determinate(total_steps))
+        open_phase!(chain_at(reporter.run, reporter.index), name, Determinate(total_steps))
     return reporter
 end
 
@@ -55,7 +55,7 @@ Close the phase `reporter` currently has open, if any. A run whose phases are
 all closed is one whose display shows no chain still working.
 """
 function closephases!(reporter::ChainReporter)
-    reporter.phase === nothing || closephase!(reporter.phase)
+    reporter.phase === nothing || close_phase!(reporter.phase)
     reporter.phase = nothing
     return nothing
 end
@@ -126,7 +126,7 @@ function nuts(
     t = time()
     label = "Sampling $(model.name)"
     draws = withprogress(progress, label, nchains) do run
-        tasks = [
+        tasks = @sync [
             Threads.@spawn _nuts_chain(vm_single, niters, run, j; dynamichmc_kwargs...) for j in 1:nchains
         ]
         reduce(hcat, fetch.(tasks))

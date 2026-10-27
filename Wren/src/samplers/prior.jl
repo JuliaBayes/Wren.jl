@@ -3,7 +3,7 @@ using FlexiChains: VNChain
 
 # only for from_samples... could we remove this as a dep in FlexiChains?
 using AbstractMCMC: AbstractMCMC
-using MCMCProgress: Determinate, advance!, chain, closephase!, openphase!
+using MCMCProgress: Determinate, advance!, chain_at, close_phase!, open_phase!
 
 """
     prior(
@@ -36,7 +36,7 @@ function prior(
     t = time()
     label = "Sampling $(model.name) from the prior"
     draws = withprogress(progress, label, nchains) do run
-        tasks = [Threads.@spawn _prior_chain(model, niters, run, j) for j in 1:nchains]
+        tasks = @sync [Threads.@spawn _prior_chain(model, niters, run, j) for j in 1:nchains]
         reduce(hcat, fetch.(tasks))
     end
 
@@ -58,13 +58,13 @@ function _prior_chain(model::WrenCore.Model, niters::Integer, run, j::Integer)
     phase = if run === nothing
         nothing
     else
-        openphase!(chain(run, j), "Sampling", Determinate(niters))
+        open_phase!(chain_at(run, j), "Sampling", Determinate(niters))
     end
     chain_draws = Vector{Draw}(undef, niters)
     for i in 1:niters
         chain_draws[i] = Draw(FromPrior(Random.TaskLocalRNG()), model)
         phase === nothing || advance!(phase, i)
     end
-    phase === nothing || closephase!(phase)
+    phase === nothing || close_phase!(phase)
     return chain_draws
 end

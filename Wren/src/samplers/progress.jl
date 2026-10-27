@@ -1,3 +1,4 @@
+using Random: Random
 using MCMCProgress: MCMCProgress, TermBackend
 # MCMCProgress renders through Term only once Term itself is loaded, which is
 # what this import is for.
@@ -21,8 +22,19 @@ report into.
 With `show_progress` false nothing is displayed and `f` is called with `nothing`
 in place of a run, which is the signal to its callees to skip reporting
 altogether.
+
+`f` must wait for every task it spawns before returning.
+
+Spawning a task changes the random streams of the caller's later spawns, and
+MCMCProgress spawns a refresh task before calling `f`. The caller's task-local
+RNG is therefore restored before `f` runs, so tasks spawned by `f` draw the
+same random numbers whether or not progress is shown.
 """
 function withprogress(f, show_progress::Bool, label::AbstractString, nchains::Integer)
     show_progress || return f(nothing)
-    return MCMCProgress.progress(f; label, nchains, backend=BACKEND)
+    caller_rng = copy(Random.TaskLocalRNG())
+    return MCMCProgress.progress(; label, nchains, backend=BACKEND) do run
+        copy!(Random.TaskLocalRNG(), caller_rng)
+        return f(run)
+    end
 end
