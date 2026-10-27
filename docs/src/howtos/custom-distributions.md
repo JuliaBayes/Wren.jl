@@ -4,18 +4,18 @@ Even though WrenDists already provides many commonly used distributions (read mo
 
 In this example, we'll demonstrate how to write a zero-inflated Poisson distribution that allows us to not only run inference but also to benefit from other important workflow features Wren provides, such as sampling from the prior.
 
-!!! note "Zero-inflation"
-To orient ourselves to the task at hand, we will first define the zero-inflated Poisson distribution. This distribution models count data with more zeros than a Poisson distribution would predict. It assumes that each observation comes from one of two processes: with probability π, the observation is always zero; otherwise, it is drawn from a Poisson distribution with mean λ. Because the Poisson process can also produce zeros, an observed zero could come from either process.
-More formally we can write this distribution as:
-#
-# ```math
-# P(Y = k) =
-# \begin{cases}
-# \pi + (1-\pi)e^{-\lambda}, & k = 0, \\
-# (1-\pi)\frac{\lambda^k e^{-\lambda}}{k!}, & k \geq 1.
-# \end{cases}
-# ```
-#
+!!! details "Details on zero-inflation"
+
+    To orient ourselves to the task at hand, we will first define the zero-inflated Poisson distribution. This distribution models count data with more zeros than a Poisson distribution would predict. It assumes that each observation comes from one of two processes: with probability π, the observation is always zero; otherwise, it is drawn from a Poisson distribution with mean λ. Because the Poisson process can also produce zeros, an observed zero could come from either process.
+    More formally we can write this distribution as:
+
+    ```math
+    P(Y = k) =
+    \begin{cases}
+    \pi + (1-\pi)e^{-\lambda}, & k = 0, \\
+    (1-\pi)\frac{\lambda^k e^{-\lambda}}{k!}, & k \geq 1.
+    \end{cases}
+    ```
 
 ## How to define a new distribution
 
@@ -26,7 +26,7 @@ using Wren
 using Wren.Dists
 using FlexiChains
 using Enzyme
-using Random: AbstractRNG
+using Random: AbstractRNG, Xoshiro
 using LogExpFunctions: logaddexp
 
 struct PoissonZeroInflated{T}
@@ -55,7 +55,7 @@ function Base.rand(rng::AbstractRNG, d::PoissonZeroInflated)
 end
 ```
 
-If you are used to working with custom distributions in Turing.jl, you may notice that we are not implementing the `Distributions` interface — all Wren needs to know is how to calculate the logdensity and how to draw a sample.
+If you are used to working with custom distributions in Turing.jl, you may notice that we are not implementing the `Distributions` interface — all Wren needs to know is how to calculate the log-density and how to draw a sample.
 
 ## Usage inside a model
 
@@ -66,7 +66,8 @@ lambda = 4.5
 pi = 0.6
 dist = PoissonZeroInflated(lambda, pi)
 n = 1000
-y = rand(dist, n)
+rng = Xoshiro(123)
+y = [rand(rng, dist) for _ in 1:n]
 nothing # hide
 ```
 
@@ -94,9 +95,9 @@ We successfully sampled from our custom zero-inflated Poisson distribution and w
 !!! danger "We do NOT recommend this"
     We strongly discourage the use of `@addloglikelihood`. It should only be considered if the model would otherwise not work (if you run into such a case, please let us know in an issue).
 
-Instead of using the recommended `~` syntax, it is possible the `@addloglikelihood` macro to increment the ... well, loglikelihood manually.
+Instead of using the recommended `~` syntax, it is possible the [`@addloglikelihood`](@ref addloglike) macro to increment the ... well, loglikelihood manually.
     
-Using `@addloglikelihood` means that you will not be able to use Wren's powerful features relating to [Bayesian workflow](@ref).
+Using `@addloglikelihood` means that you will not be able to use Wren's powerful features relating to [Bayesian workflow](@ref workflow).
 
 For example, you will only be able to sample from the prior via `rand` if you use the `~` syntax:
 

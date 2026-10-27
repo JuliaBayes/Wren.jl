@@ -1,4 +1,4 @@
-# Bayesian workflow
+# [Bayesian workflow](@id workflow)
 
 In the worked example below, we demonstrate how Wren and the JuliaBayes ecosystem enable the [Bayesian Workflow](https://avehtari.github.io/Bayesian-Workflow/).
 
