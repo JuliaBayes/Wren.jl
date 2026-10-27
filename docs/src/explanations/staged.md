@@ -98,14 +98,15 @@ However, it's still of course a limitation, and the error message isn't super he
 Above we saw two of the 'special expressions' that Wren uses in its IR, namely `Sample` and `Observe`.
 These have a very unimaginative one-to-one mapping to the special nodes in Wren:
 
-| Syntax                  | IR node          |
-|:----------------------- |:---------------- |
-| `a ~ b`                 | Sample           |
-| `@observe a ~ b`        | Observe          |
-| `@iid size=N ...`       | IID              |
-| `@batch for ...`        | Batch            |
-| `@addloglikelihood ...` | AddLogLikelihood |
-| `return ...`            | ReturnStatement  |
+| Syntax                  | IR node           |
+|:----------------------- |:----------------- |
+| `a ~ b`                 | Sample            |
+| `@observe a ~ b`        | Observe           |
+| `@iid size=N ...`       | IID               |
+| `@batch for ...`        | Batch             |
+| `@addloglikelihood ...` | AddLogLikelihood  |
+| `@gq ...`               | GeneratedQuantity |
+| `return ...`            | ReturnStatement   |
 
 As you can see, most of these are denoted by macros.
 As it turns out, none of these macros actually have a meaning outside of Wren model bodies: they don't actually expand into anything.
@@ -125,6 +126,23 @@ However, this is a bit too understated: it looks just like a normal function cal
 
 Macros are the best compromise between all of these.
 We aren't restricted to a fixed set of possibilities (as is the case with operators), but also to most Julia programmers it should be intuitive that macros have special effects!
+
+### Generated quantities
+
+A `GeneratedQuantity` node, from `@gq name = expr`, is emitted into the evaluation function as something like
+
+```julia
+if requests_gq(accs, Val(:name))
+    value = let
+        expr
+    end
+    accs = accumulate_gq!!(accs, value, @vn(name))
+end
+```
+
+[`WrenCore.requests_gq`](@ref) depends only on the type of `accs`, so the compiler replaces the condition with a constant.
+If no [`GQAccumulator`](@ref) in `accs` requests `name`, the branch is removed and `expr` is not part of the compiled function.
+The `let` keeps variables defined in `expr` out of the model body, and the value is assigned to a generated variable rather than to `name`, so `@gq` never defines `name` in the model body.
 
 ## Programmatic generation
 

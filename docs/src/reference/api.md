@@ -5,6 +5,7 @@ Modules = [Wren, WrenCore, WrenCore.Expressions]
 ```
 
 ```@docs
+WrenCore.generated_quantities(::WrenCore.Model, ::Wren.VNChain)
 predict
 logjoint
 loglikelihood

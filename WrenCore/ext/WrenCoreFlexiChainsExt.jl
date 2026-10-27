@@ -25,6 +25,9 @@ variables already present in the input `chain`, which implies that:
 
 To move a variable from the first into the second category, subset `chain` to exclude that variable (more about subsetting chains [here](https://juliabayes.org/FlexiChains.jl/stable/api#Subsetting-chains)).
 
+The returned chain also holds all generated quantities (`@gq` statements), recomputed at
+each iteration.
+
 The returned chain will also contain log-probabilities corresponding to the re-evaluation of
 the model. In particular, the log probability for the newly predicted variables are
 now considered as prior terms. However, note that the log-prior of the returned chain will
@@ -37,21 +40,73 @@ function StatsAPI.predict(rng::AbstractRNG, model::WrenCore.Model, chain::VNChai
         WrenCore.ParamsAccumulator(),
         WrenCore.LogPriorAccumulator(),
         WrenCore.LogLikelihoodAccumulator(),
+        WrenCore.GQAccumulator(),
     )
     fallback = WrenCore.FromPrior(rng)
     results = _reevaluate(model, chain, accs, fallback)
     draws = Draw.(last.(results))
-    preds = AbstractMCMC.from_samples(VNChain, draws)
-    preds = FlexiChains.renumber_iters(preds, FlexiChains.iter_indices(chain))
-    preds = FlexiChains.renumber_chains(preds, FlexiChains.chain_indices(chain))
+    preds = _chain_with_indices_of(chain, draws)
     return merge(FlexiChains.subset_extras(chain), preds)
+end
+
+function _chain_with_indices_of(chain::VNChain, draws)
+    new_chain = AbstractMCMC.from_samples(VNChain, draws)
+    new_chain = FlexiChains.renumber_iters(new_chain, FlexiChains.iter_indices(chain))
+    return FlexiChains.renumber_chains(new_chain, FlexiChains.chain_indices(chain))
 end
 
 function StatsAPI.predict(model::WrenCore.Model, chain::VNChain)
     return StatsAPI.predict(default_rng(), model, chain)
 end
 
-function _reevaluate(model::WrenCore.Model, chain::VNChain, accs, fallback=nothing)
+"""
+    generated_quantities(
+        model::WrenCore.Model,
+        chain::FlexiChains.VNChain;
+        to_collect=All(),
+    ) -> FlexiChains.VNChain
+
+Re-evaluate `model` at each iteration of `chain` and return a chain holding only the
+generated quantities (`@gq` statements), with the same iteration and chain indices as
+`chain`. Every parameter that `model` requires must be in `chain`.
+
+`to_collect` selects the generated quantities to evaluate:
+
+- `All()`: all of them;
+- `Some([:x, :y])` or `[:x, :y]`: only `x` and `y`. A submodel name such as `:a` selects
+  every generated quantity of the submodel `a ~ sub(...)`.
+
+Generated quantities that are not selected are not evaluated.
+"""
+function WrenCore.generated_quantities(
+    model::WrenCore.Model,
+    chain::VNChain;
+    to_collect=WrenCore.All(),
+)
+    gq_acc = _gq_accumulator(to_collect)
+    results = _reevaluate(model, chain, WrenCore.AccumulatorTuple(gq_acc))
+    draws = map(results) do retval_and_accs
+        gqs = WrenCore.generated_quantities(last(retval_and_accs))
+        Draw(VarNames.densify!!(gqs), NamedTuple())
+    end
+    return _chain_with_indices_of(chain, draws)
+end
+
+_gq_accumulator(::WrenCore.All) = WrenCore.GQAccumulator()
+function _gq_accumulator(to_collect::Some{<:AbstractVector{Symbol}})
+    return _gq_accumulator(something(to_collect))
+end
+_gq_accumulator(names::AbstractVector{Symbol}) = WrenCore.GQAccumulator(Tuple(names))
+function _gq_accumulator(to_collect)
+    throw(
+        ArgumentError(
+            "`to_collect` must be `All()`, `Some(names)` or `names`, where `names` is a " *
+            "vector of Symbols; got $(repr(to_collect)).",
+        ),
+    )
+end
+
+function _reevaluate(model::WrenCore.Model, chain::VNChain, accs, fallback=WrenCore.Void())
     return map(FlexiChains.parameters_at(chain)) do vnt
         WrenCore.evaluate(
             model,

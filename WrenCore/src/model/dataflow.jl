@@ -137,6 +137,10 @@ function parse_variables!(stmt::AddLogLikelihood, state::DataflowAnalysisState)
     parse_variables!(stmt.expr, state)
     return nothing
 end
+function parse_variables!(stmt::GeneratedQuantity, state::DataflowAnalysisState)
+    parse_variables!(stmt.expr, state)
+    return nothing
+end
 function parse_variables!(stmt::ReturnStatement, state::DataflowAnalysisState)
     parse_variables!(stmt.expr, state)
     return nothing
@@ -194,6 +198,8 @@ function reconstruct_statement(stmt::Sample, required_syms::Set{Symbol})
     return Accessors.@set stmt.lhs_is_reused = stmt.lhs_top_level_symbol in required_syms
 end
 reconstruct_statement(stmt::Observe, ::Set{Symbol}) = stmt
+# The expression of a GeneratedQuantity cannot contain Samples.
+reconstruct_statement(stmt::GeneratedQuantity, ::Set{Symbol}) = stmt
 # The contents of an OtherStatement are not lowered, so they can't contain Samples.
 reconstruct_statement(stmt::OtherStatement, ::Set{Symbol}) = stmt
 function reconstruct_statement(stmt::IID, required_syms::Set{Symbol})

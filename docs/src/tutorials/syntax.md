@@ -360,3 +360,102 @@ rand_with_logp(manual_likelihood())
 ```
 
 The `name` argument is optional and Wren currently does not use it, but hopefully will be wired up to pointwise logdensity calculations in the future.
+
+## [Generated quantities](@id generated-quantities)
+
+A generated quantity is a value computed from the parameters that you want to keep in the output, but that is not itself a random variable of the model.
+`@gq name = expr` records the value of `expr` under `name`, and `@gq name` is shorthand for `@gq name = name`.
+
+The linear regression below records the mean `mu` and the residual sum of squares `rss`:
+
+```@example model
+@wren function regression(x, y)
+    alpha ~ Normal()
+    beta ~ Normal()
+    sigma ~ Exponential()
+    mu = alpha .+ beta .* x
+    for i in eachindex(y)
+        @observe y[i] ~ Normal(mu[i], sigma)
+    end
+    @gq mu
+    @gq rss = sum(abs2, y .- mu)
+end
+
+reg_model = regression([0.0, 1.0, 2.0], [0.1, 0.9, 2.2])
+rand(Xoshiro(468), reg_model)
+```
+
+`rand` returns the generated quantities together with the parameters.
+`rand_with_logp` keeps them separate; read them with [`generated_quantities`](@ref):
+
+```@example model
+accs = rand_with_logp(Xoshiro(468), reg_model)
+parameters(accs), generated_quantities(accs)
+```
+
+Chains returned by [`prior`](@ref), [`nuts`](@ref) and [`predict`](@ref) store generated quantities as parameters, alongside the model's own parameters.
+To compute generated quantities for an existing chain, see [Generated quantities from a chain](@ref gq-chain).
+
+The right-hand side can be any expression, including a `begin` or `let` block:
+
+```julia
+@gq rss = begin
+    residuals = y .- mu
+    sum(abs2, residuals)
+end
+```
+
+### Rules
+
+  - `@gq` does not create a variable in the model body.
+    After `@gq rss = sum(abs2, y .- mu)`, using `rss` later in the model throws an `UndefVarError`.
+    To reuse a value, assign it first and then record it:
+
+    ```julia
+    rss = sum(abs2, y .- mu)
+    @gq rss
+    ```
+
+  - The name must be a single symbol.
+    `@gq x[1] = ...` and `@gq x.a = ...` are errors; write `@gq x1 = x[1]` instead.
+
+  - `@gq` must be a top-level statement of the model body.
+    It cannot appear inside `for`, `while`, `if`, `let` or `begin` blocks, `@batch` loops, or functions defined in the model.
+    To record the result of control flow, assign it to a variable and record that variable afterwards.
+
+  - The right-hand side must not contain `~`, `@observe`, `@iid`, `@batch`, `@addloglikelihood` or `return`.
+
+  - The right-hand side of a generated quantity runs only when that quantity is requested; generated quantities that are not requested are removed from the compiled model and cost nothing.
+    Side effects in the right-hand side, such as drawing random numbers or calling `push!`, therefore happen only when the quantity is collected.
+
+  - Values are not copied.
+    If `x` is mutable (for example an array) and the model mutates it after `@gq x`, the recorded value changes too; write `@gq x = deepcopy(x)` to record a snapshot.
+
+  - A generated quantity with the same name as a parameter overwrites that parameter in the output of `rand`, `prior`, `nuts` and `predict`.
+    Wren does not check for this.
+
+### Submodels
+
+Generated quantities of a [submodel](@ref submodels) are recorded under the submodel's name: a `@gq z = ...` statement inside `a ~ inner()` appears as `a.z`.
+When selecting generated quantities by name, `:a` selects every generated quantity of that submodel.
+
+### Selecting generated quantities
+
+Generated quantities are collected by a [`GQAccumulator`](@ref).
+`GQAccumulator()` requests all of them, and `GQAccumulator((:x, :y))` requests only `x` and `y`.
+To evaluate a model with a chosen set of accumulators, pass them to [`WrenCore.evaluate`](@ref) (see [Working with models](@ref models)):
+
+```@example model
+using WrenCore: evaluate, AccumulatorTuple, GQAccumulator, OriginalSpace, EvalContext
+
+_, accs = evaluate(
+    reg_model,
+    FromPrior(Xoshiro(468)),
+    OriginalSpace(),
+    AccumulatorTuple(GQAccumulator((:rss,))),
+    EvalContext{false}(),
+)
+generated_quantities(accs)
+```
+
+Here `mu` is not requested, so its right-hand side is not evaluated.

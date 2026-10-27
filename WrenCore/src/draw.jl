@@ -4,14 +4,21 @@ function _draw_accumulators(include_log_probs::Bool)
             LogPriorAccumulator(),
             LogLikelihoodAccumulator(),
             ParamsAccumulator(),
+            GQAccumulator(),
         )
     else
-        AccumulatorTuple(ParamsAccumulator())
+        AccumulatorTuple(ParamsAccumulator(), GQAccumulator())
     end
 end
 
+function _params_and_gqs(accs::AccumulatorTuple)
+    params = VarNames.parameters(accs)
+    hasacc(accs, Val(GQ_ACCNAME)) || return params
+    return merge(params, generated_quantities(accs))
+end
+
 function _draw(accs::AccumulatorTuple, stats::NamedTuple, include_log_probs::Bool)
-    densified_params = VarNames.densify!!(VarNames.parameters(accs))
+    densified_params = VarNames.densify!!(_params_and_gqs(accs))
     if include_log_probs
         has_prior = haskey(accs, Val(LOG_PRIOR_ACCNAME))
         has_likelihood = haskey(accs, Val(LOG_LIKELIHOOD_ACCNAME))
@@ -32,8 +39,9 @@ end
         include_log_probs::Bool=true,
     )
 
-Evaluate `model` using `source` and return its model-space parameters. By default the log
-prior, log likelihood, and log joint are added to `stats`.
+Evaluate `model` using `source` and return its model-space parameters, merged with its
+generated quantities. By default the log prior, log likelihood, and log joint are added to
+`stats`.
 """
 function VarNames.Draw(
     source::AbstractLatentSource,
@@ -54,7 +62,8 @@ end
     )
 
 Extract parameters and any available log-probability statistics from an accumulator tuple.
-The tuple must contain a [`ParamsAccumulator`](@ref).
+The tuple must contain a [`ParamsAccumulator`](@ref). If it also contains a
+[`GQAccumulator`](@ref), the generated quantities are merged into the parameters.
 """
 function VarNames.Draw(
     accs::AccumulatorTuple,

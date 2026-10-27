@@ -51,21 +51,22 @@ function Base.rand(rng::AbstractRNG, model::Model)
         model,
         FromPrior(rng),
         OriginalSpace(),
-        AccumulatorTuple(ParamsAccumulator()),
+        AccumulatorTuple(ParamsAccumulator(), GQAccumulator()),
         EvalContext{false}(),
     )
-    return VarNames.parameters(accs)
+    return merge(VarNames.parameters(accs), generated_quantities(accs))
 end
 Base.rand(model::Model) = rand(default_rng(), model)
 
 """
     rand_with_logp([rng::Random.AbstractRNG,] model::Model)::AccumulatorTuple
 
-Draw a sample from the prior distribution of `model` and return the params, log-prior,
-and log-likelihood.
+Draw a sample from the prior distribution of `model` and return the params, generated
+quantities, log-prior, and log-likelihood.
 
 To extract the contents of the `AccumulatorTuple`, you can use [`parameters`](@ref),
-[`logprior`](@ref), [`loglikelihood`](@ref), and [`logjoint`](@ref).
+[`generated_quantities`](@ref), [`logprior`](@ref), [`loglikelihood`](@ref), and
+[`logjoint`](@ref).
 """
 function rand_with_logp(rng::AbstractRNG, model::Model)
     _, accs = evaluate(
@@ -74,6 +75,7 @@ function rand_with_logp(rng::AbstractRNG, model::Model)
         OriginalSpace(),
         AccumulatorTuple(
             ParamsAccumulator(),
+            GQAccumulator(),
             LogPriorAccumulator(),
             LogLikelihoodAccumulator(),
         ),

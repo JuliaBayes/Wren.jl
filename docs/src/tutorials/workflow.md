@@ -171,3 +171,49 @@ fig
 ```
 
 As we may have expected, more penguin means more bill!
+
+## [Generated quantities from a chain](@id gq-chain)
+
+Quantities derived from the parameters can be recorded in the model with [`@gq`](@ref generated-quantities).
+For example, the difference in mean bill length between the second and first species, at equal body mass:
+
+```julia
+@wren function bill_model_gq(bill_length, species, body_mass)
+    n_species = maximum(species)
+    @iid beta1 ~ Normal(0, 1) size=n_species
+    beta2 ~ Normal(0, 1)
+    sigma ~ Exponential(1)
+    mu = beta1[species] .+ beta2 .* body_mass
+    @batch for i in eachindex(bill_length)
+        bill_length[i] ~ Normal(mu[i], sigma)
+    end
+    @gq species_diff = beta1[2] - beta1[1]
+end
+
+model_gq = bill_model_gq(
+    penguins.bill_length_mm,
+    penguins.species_idx,
+    penguins.body_mass_g,
+)
+model_gq_cond = model_gq | VarNamedTuple(bill_length=penguins.bill_length_mm)
+```
+
+Chains from `prior`, `nuts` and `predict` with this model hold `species_diff` alongside `beta1`, `beta2` and `sigma`.
+
+[`generated_quantities`](@ref) computes the generated quantities for a chain that already exists, such as `chain_post` above.
+It evaluates the model at each draw of the chain and returns a chain that holds only the generated quantities, with the same iteration and chain indices as the input:
+
+```julia
+gq_chain = generated_quantities(model_gq_cond, chain_post)
+gq_chain[@vn(species_diff)]
+```
+
+The `to_collect` keyword selects which generated quantities to compute.
+It accepts `All()` (the default), `Some([:x, :y])`, or a vector of names `[:x, :y]`, which is the same as `Some([:x, :y])`:
+
+```julia
+generated_quantities(model_gq_cond, chain_post; to_collect=All())
+generated_quantities(model_gq_cond, chain_post; to_collect=[:species_diff])
+```
+
+Generated quantities that are not selected are not evaluated.

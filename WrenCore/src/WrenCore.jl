@@ -37,6 +37,7 @@ include("accs/logp.jl")
 include("accs/vnt.jl")
 include("accs/params.jl")
 include("accs/sitename_tracker.jl")
+include("accs/gq.jl")
 include("accs/accessors.jl")
 
 # Model definition
@@ -44,6 +45,7 @@ include("model/expr.jl")
 using .Expressions:
     AbstractWrenExpr,
     AddLogLikelihood,
+    GeneratedQuantity,
     IID,
     Observe,
     OtherStatement,
@@ -96,6 +98,7 @@ export @wren,
     @iid,
     @observe,
     @batch,
+    @gq,
     AbstractLatentSource,
     AbstractTransform,
     AbstractParameterSpace,
@@ -106,6 +109,7 @@ export @wren,
     LogLikelihoodAccumulator,
     LogJacobianAccumulator,
     ParamsAccumulator,
+    GQAccumulator,
     AsUnconstrainedVec,
     AsVec,
     ADIncorrectException,
@@ -132,6 +136,8 @@ export @wren,
     iid,
     independent,
     rand_with_logp,
+    generated_quantities,
+    All,
     evaluate,
     EvalContext,
     get_latent,
