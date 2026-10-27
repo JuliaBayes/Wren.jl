@@ -226,13 +226,18 @@ function _lower_tilde(expr, mod::Module, macro_name::Symbol, name=nothing)
     return Sample(sitename, lhs, right, get_top_level_symbol(lhs), true)
 end
 
-# Extract the optional `size=...` argument and the tilde-statement of `@iid ...`.
-function _iid_args(expr::Expr)
+# Trailing options belong to the innermost macro, including a surrounding macro's name.
+function _iid_args(expr::Expr, macro_name=nothing, name=nothing)
     size_expr = nothing
     inner = nothing
     for arg in _macro_args(expr)
         if arg isa Expr && arg.head == :(=) && arg.args[1] == :size
             size_expr = arg.args[2]
+        elseif macro_name !== nothing && Meta.isexpr(arg, :(=)) && arg.args[1] == :name
+            value = arg.args[2]
+            value isa QuoteNode && value.value isa Symbol ||
+                error("$macro_name: `name` must be a single Symbol (e.g. `name=:site`)")
+            name = value.value
         elseif inner === nothing
             inner = arg
         else
@@ -241,7 +246,7 @@ function _iid_args(expr::Expr)
     end
     inner === nothing &&
         error("@iid: expected a single expression of the form `value ~ distribution`")
-    return size_expr, inner
+    return size_expr, inner, name
 end
 
 function lower_to_wren(expr::Expr, mod::Module, statement_position::Bool=false)
@@ -250,7 +255,7 @@ function lower_to_wren(expr::Expr, mod::Module, statement_position::Bool=false)
         statement_position || error("$macro_name must be used as a statement")
         name, inner = _tilde_macro_args(expr)
         if _is_macrocall(inner, Symbol("@iid"))
-            size_expr, inner = _iid_args(inner)
+            size_expr, inner, name = _iid_args(inner, macro_name, name)
             return IID(_lower_tilde(inner, mod, macro_name, name), size_expr)
         end
         return _lower_tilde(inner, mod, macro_name, name)
@@ -258,7 +263,7 @@ function lower_to_wren(expr::Expr, mod::Module, statement_position::Bool=false)
 
     if expr.head == :macrocall && expr.args[1] == Symbol("@iid")
         statement_position || error("@iid must be used as a statement")
-        size_expr, inner = _iid_args(expr)
+        size_expr, inner, _ = _iid_args(expr)
         lowered = lower_to_wren(inner, mod, true)
         lowered isa Union{Sample,Observe} ||
             error("@iid: expected an expression of the form `value ~ distribution`")

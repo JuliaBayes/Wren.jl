@@ -8,8 +8,11 @@ It mixes regular Julia code with two probabilistic primitives:
 
 Function arguments have no special meaning in Wren: they're just quantities that are passed into the model.
 
-Use `@sample name=:prior x ~ Normal()` or `@observe name=:obs y ~ Normal(x)` to assign a site name.
-Names must be literal Symbols. They identify sites for latent sources and accumulators, while parameter names still follow the left-hand side.
+You can assign a site name with `@sample x ~ Normal() name=:prior` or `@observe y ~ Normal(x) name=:obs`.
+Site names must be literal Symbols.
+This does not change parameter names, which still follow the left-hand side.
+Site names identify sites for latent sources and accumulators.
+With `@iid`, put the options after the distribution: `@sample @iid x ~ Normal() size=2 name=:prior`.
 
 ## `sample` with distributions
 

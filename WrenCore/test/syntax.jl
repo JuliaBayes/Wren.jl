@@ -33,9 +33,11 @@ WrenCore.accumulate_observe!!(acc::SiteNames, args...) = record_site(acc, last(a
             @iid size=2 @sample name=:inner_prior b ~ Normal()
             @observe name=:outer_likelihood @iid a ~ Normal()
             @iid @observe name=:inner_likelihood b ~ Normal()
+            @sample @iid c ~ Normal() size=2 name=:trailing_prior
+            @observe @iid c ~ Normal() name=:trailing_likelihood
             return x
         end
-        values = VarNamedTuple(; x=0.5, a=[0.1, 0.2], b=[0.3, 0.4])
+        values = VarNamedTuple(; x=0.5, a=[0.1, 0.2], b=[0.3, 0.4], c=[0.5, 0.6])
         _, accs = evaluate(
             named_sites(),
             FromValues(values),
@@ -51,6 +53,8 @@ WrenCore.accumulate_observe!!(acc::SiteNames, args...) = record_site(acc, last(a
             :inner_prior,
             :outer_likelihood,
             :inner_likelihood,
+            :trailing_prior,
+            :trailing_likelihood,
         )
     end
 
