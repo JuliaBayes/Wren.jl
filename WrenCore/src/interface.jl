@@ -95,9 +95,12 @@ conditioned(model::Model) = model.conditioned
 
 Condition `model` on the values in `values`, returning a new model. The original model is
 not modified.
+
+Like model arguments, `values` is copied, so a model that writes into a conditioned variable
+doesn't change the caller's data.
 """
 function condition(model::Model, values::VarNamedTuple)
-    new_conditioned = merge(conditioned(model), values)
+    new_conditioned = merge(conditioned(model), _dealias(values))
     return Model(
         model.name,
         model.args,

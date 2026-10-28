@@ -135,6 +135,11 @@ Keep every latent variable in original space.
 struct OriginalSpace <: AbstractParameterSpace end
 target_transform(::OriginalSpace, ::VarName) = AsVec()
 
+# Latent values are passed to the model without copying, so when the transform passes its
+# input through (as for `MvNormal`) the model receives a view of the caller's parameters
+# (or the caller's own object, for values supplied in original space), and may write into
+# it. Callers that need their values to stay put must copy them first (see `lp`).
+
 """
     apply_parameter_space(
         parameter_space::AbstractParameterSpace,

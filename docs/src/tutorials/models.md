@@ -250,9 +250,13 @@ LDP.logdensity_and_gradient(vecmodel, v)  # Requires an adtype.
 
     If you have a use for higher-order derivatives like Hessians, please open an issue!
 
-Wren in fact exports shorter functions for these, namely [`lp`](@ref) and [`lp_and_grad`](@ref), which are directly equivalent to the above.
+Wren in fact exports shorter functions for these, namely [`lp`](@ref) and [`lp_and_grad`](@ref).
 Additionally, Wren provides an in-place gradient [`lp_and_grad!`](@ref) function, which may be useful for squeezing every last bit of performance out.
 LogDensityProblems.jl does not provide this (but if you have a good usecase for it, please consider [adding a comment on this issue](https://github.com/tpapp/LogDensityProblems.jl/issues/115)!).
+
+The one difference between the two is that the LogDensityProblems methods copy the parameter vector before evaluating the model, while `lp` and friends do not.
+If your model writes into a latent variable (e.g. `x ~ MvNormal(...); x[1] += 1`), then `lp(vecmodel, v)` may write into `v`.
+If you need `v` to be unchanged afterwards (for example, because it is the current position of a sampler), then either pass `copy(v)` or use the LogDensityProblems interface.
 
 By default, `VecModel`s are always run in [`UnconstrainedSpace()`](@ref): that is, all parameters are transformed into a form where they can take any value in ℝ^n.
 The log-density calculation will then include the log-Jacobian term corresponding to this transformation.

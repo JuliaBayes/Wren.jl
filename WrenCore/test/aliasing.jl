@@ -55,7 +55,8 @@ using Test
         @testset "conditioned x" begin
             model = fassume(x) | VarNamedTuple(x=x)
             @test model.args.x !== x # Should be dealiased.
-            @test model.conditioned[@vn(x)] === x # Should be the same.
+            @test model.conditioned[@vn(x)] !== x # Copied on conditioning, like args.
+            @test model.conditioned[@vn(x)] == x
             rand(model) # Run the model
             # Contents should not have been modified, because conditioned values are
             # read-only.
