@@ -55,11 +55,6 @@ struct Sample{L,R} <: AbstractWrenExpr
     # TODO(penelopeysm): Add an escape hatch for users to manually declare that a variable
     # is not reused.
     lhs_is_reused::Bool
-    # Whether the model body may write into the LHS value, so it must be copied. Like
-    # `lhs_is_reused`, this is `true` until the dataflow analysis pass corrects it.
-    #
-    # TODO: Add an escape hatch for users to declare that a variable is not mutated.
-    lhs_is_mutated::Bool
 end
 
 """
@@ -351,14 +346,7 @@ function lower_to_wren(expr::Expr, mod::Module, statement_position::Bool=false)
         length(expr.args) == 3 || error("@wren: expected ~ to have 2 arguments")
         lhs, rhs = expr.args[2:3]
         lhs_top_level_symbol = get_top_level_symbol(lhs)
-        return Sample(
-            Symbol(lhs),
-            lhs,
-            lower_to_wren(rhs, mod),
-            lhs_top_level_symbol,
-            true,
-            true,
-        )
+        return Sample(Symbol(lhs), lhs, lower_to_wren(rhs, mod), lhs_top_level_symbol, true)
     end
 
     if expr.head == :return

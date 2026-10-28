@@ -17,6 +17,11 @@ if RUN_REACTANT
     using Reactant
 end
 
+for r in (2.5f0, 2.5)
+    @test logdensityof(WrenDists.NegativeBinomial(r), 3) ===
+          logdensityof(WrenDists.NegativeBinomial(r, oftype(r, 0.5)), 3)
+end
+
 test_dist(
     "NegativeBinomial",
     WrenDists.NegativeBinomial(2.5, 0.4),
