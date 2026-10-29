@@ -142,6 +142,22 @@ This is because when Wren _constructs_ a model (i.e., when calling `mutable(y_ou
 y_outside
 ```
 
+!!! warning "Don't mutate latent variables or conditioned values"
+
+    The guarantee above only applies to model arguments.
+    Wren does **not** copy the values of latent variables, nor the values you condition on (see the next section).
+    For performance, the value a model receives for a latent variable may be a view into the caller's parameter vector (for example, the vector passed to [`lp`](@ref), or a sampler's current position), and a conditioned value is the same object that you passed to `|`.
+
+    So, writing into one of these inside a model, e.g.
+
+    ```julia
+    x ~ MvNormal(zeros(2), I)
+    x[1] += 1.0
+    ```
+
+    is not supported: it can change the caller's data, make repeated evaluations return different log-densities, and break samplers.
+    If you need a modified version, make a copy first (e.g. `x2 = copy(x); x2[1] += 1.0`), or write it without mutation (e.g. `x2 = x .+ [1.0, 0.0]`).
+
 ## Conditioning
 
 Now, we would almost certainly like to progress from the starting point above where everything is a latent variable.
