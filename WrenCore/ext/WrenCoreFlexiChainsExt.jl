@@ -53,10 +53,9 @@ end
 
 function _reevaluate(model::WrenCore.Model, chain::VNChain, accs, fallback=nothing)
     return map(FlexiChains.parameters_at(chain)) do vnt
-        # Copy so that a model writing into its latents can't change the chain's values.
         WrenCore.evaluate(
             model,
-            WrenCore.FromValues(WrenCore._dealias(vnt), fallback),
+            WrenCore.FromValues(vnt, fallback),
             WrenCore.OriginalSpace(),
             map(WrenCore.reset, accs),
             WrenCore.EvalContext{false}(),

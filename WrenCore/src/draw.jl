@@ -118,8 +118,7 @@ function VarNames.Draw(
         return VarNames.Draw(raw_params, stats)
     end
 
-    # Copy so that a model writing into its latents doesn't change the caller's `params`.
-    source = FromVector(copy(params), vecmodel.vecinfo)
+    source = FromVector(params, vecmodel.vecinfo)
     accs = _draw_accumulators(include_log_probs)
     _, accs = evaluate(
         vecmodel.model,

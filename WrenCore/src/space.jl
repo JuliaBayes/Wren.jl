@@ -137,8 +137,8 @@ target_transform(::OriginalSpace, ::VarName) = AsVec()
 
 # Latent values are passed to the model without copying, so when the transform passes its
 # input through (as for `MvNormal`) the model receives a view of the caller's parameters
-# (or the caller's own object, for values supplied in original space), and may write into
-# it. Callers that need their values to stay put must copy them first (see `lp`).
+# (or the caller's own object, for values supplied in original space). Models must not
+# write into their latents; see the "Mutability" section of the syntax docs (#156).
 
 """
     apply_parameter_space(
