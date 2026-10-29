@@ -1,6 +1,8 @@
 using Test
 
 @testset "WrenDists" begin
+    include("sampling.jl")
+
     # Continuous unconstrained
     include("univariate/normal.jl")
     include("univariate/laplace.jl")
@@ -13,6 +15,7 @@ using Test
     include("univariate/exponential.jl")
     include("univariate/weibull.jl")
     include("univariate/gamma.jl")
+    include("univariate/inversegamma.jl")
     include("univariate/halfnormal.jl")
     include("univariate/halfcauchy.jl")
     include("univariate/halftdist.jl")
