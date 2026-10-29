@@ -38,6 +38,16 @@ basefloat(::Type{<:Irrational}) = Float64
     return basefloat(_promoted_paramtype(D))
 end
 
+# AD number types either have no rand/randn method, or they draw a different
+# stream from the Float64 bulk fill, so draw plain noise. ForwardDiff and
+# ReverseDiff define eps(::Type) as eps(valtype(T)), recursively, so
+# typeof(eps(T)) is the plain float. A new AD number type needs the same method.
+# See https://github.com/JuliaBayes/Wren.jl/pull/238.
+@inline function rngtype(d::WrenDist)
+    T = noisetype(d)
+    return T <: AbstractFloat ? T : typeof(eps(T))
+end
+
 @inline function _promoted_paramtype(::Type{D}) where {D}
     return promote_type(ntuple(i -> eltype(fieldtype(D, i)), Val(fieldcount(D)))...)
 end
