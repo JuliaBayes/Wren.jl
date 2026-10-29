@@ -228,6 +228,33 @@ end
             @test parameters(accs) == in_pars
             @test loglikelihood(accs) ≈ logdensityof(Normal(a), obs)
         end
+
+        # The parent can condition the child's argument, which the child then sees whole.
+        @wren function argument_inner(y)
+            m ~ Normal()
+            before = copy(y)
+            for i in eachindex(y)
+                y[i] ~ Normal(m)
+            end
+            return before
+        end
+        @wren function argument_outer(inner)
+            inner_retval = x ~ inner
+            return inner_retval
+        end
+        data = [1.0, 2.0]
+        retval, accs = @inferred evaluate(
+            argument_outer(argument_inner(zeros(2))) | (@vnt begin
+                x.y := data
+            end),
+            FromPrior(),
+            OriginalSpace(),
+            WrenCore.default_accumulators(),
+            EvalContext{false}(),
+        )
+        @test retval == data
+        m = parameters(accs)[@vn(x.m)]
+        @test loglikelihood(accs) ≈ sum(logdensityof.(Normal(m), data))
     end
 
     @testset "empty submodel" begin
