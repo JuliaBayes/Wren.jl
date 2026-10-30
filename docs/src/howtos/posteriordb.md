@@ -31,7 +31,7 @@ nuts(model, 1000, 4)
 
 ## Docstrings
 
-```@docs
+```@docs; canonical=false
 available_posteriordb_models
 posteriordb_model
 ```

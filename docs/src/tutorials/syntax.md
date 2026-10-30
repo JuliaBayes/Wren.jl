@@ -375,6 +375,9 @@ which guarantees correctness, but might not be as efficient as the vectorised fo
 
 ## [Manual log-likelihood addition](@id addloglike)
 
+!!! danger "We do NOT recommend this"
+    We strongly discourage the use of `@addloglikelihood`. It should only be considered if the model would otherwise not work (if you run into such a case, please let us know in an issue).
+
 Wren provides a macro, `@addloglikelihood [name=:name] expr`, which allows you to manually add `expr` to the model's log-likelihood.
 
 ```@example model

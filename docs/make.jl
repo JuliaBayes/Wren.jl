@@ -44,6 +44,7 @@ makedocs(;
         "How-tos" => [
             "howtos/benchmarking.md"
             "howtos/posteriordb.md"
+            "howtos/custom-distributions.md"
         ],
         "Explanations" => [
             "explanations/enzyme.md",
