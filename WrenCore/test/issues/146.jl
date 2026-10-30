@@ -11,8 +11,10 @@ using Test
     # element can stay in a register between the write and the read, which hides the race.
     @wren function writes_arg(x, y)
         n = length(y)
-        x[1:n] ~ iid(Normal(0.0, 1.0), (n,))
-        @observe y ~ WrenDists.BatchedNormal(x, fill(0.01, n))
+        @batch for i in 1:n
+            x[i] ~ Normal()
+            @observe y[i] ~ Normal(x[i], 0.01)
+        end
     end
     @wren function wraps_arg(sub)
         a ~ sub
@@ -29,6 +31,15 @@ using Test
 
         outer = wraps_arg(writes_arg(zeros(n), zeros(n)))
         @test WrenCore._copy_for_thread(outer).args.sub.args.x !== outer.args.sub.args.x
+    end
+
+    @testset "conditioned values are independent" begin
+        model = vm.model | VarNamedTuple(x=zeros(n))
+        expected = logjoint(model, VarNamedTuple())
+        copied = WrenCore._copy_for_thread(model)
+        conditioned(copied)[@vn(x)][1] = 1.0
+        @test logjoint(model, VarNamedTuple()) == expected
+        @test logjoint(copied, VarNamedTuple()) ≈ expected - 5000.5
     end
 
     @testset "concurrent evaluation matches serial" begin
@@ -49,9 +60,7 @@ using Test
                 [Draw(FromPrior(Xoshiro(100t + i)), copied) for i in 1:50]
             end for t in 1:4
         ])
-        @test all(
-            d -> logjoint(d) ≈ logjoint(model, parameters(d)), reduce(vcat, draws)
-        )
+        @test all(d -> logjoint(d) ≈ logjoint(model, parameters(d)), reduce(vcat, draws))
     end
 end
 

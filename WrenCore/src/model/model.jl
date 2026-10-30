@@ -144,10 +144,10 @@ end
 """
     _copy_for_thread(model::Model)
 
-Return the same model with its own copy of the arguments, so that evaluations on different
-threads cannot write into each other's arguments. Outside Enzyme, evaluation does not copy
-arguments (see `_maybe_dealias`). Models passed as arguments are copied too. This reuses the
-evaluation function, so no new code is generated.
+Return the same model with its own copies of the arguments and conditioned values, so that
+evaluations on different threads cannot write into each other's data. Outside Enzyme,
+evaluation does not copy arguments (see `_maybe_dealias`). Models passed as arguments are
+copied too. This reuses the evaluation function, so no new code is generated.
 """
 function _copy_for_thread(model::Model)
     return Model(
@@ -155,8 +155,9 @@ function _copy_for_thread(model::Model)
         map(_copy_model_arg, model.args),
         model.stmts,
         model.mod;
-        conditioned=model.conditioned,
+        conditioned=deepcopy(model.conditioned),
         enzyme_copy_argnames=model.enzyme_copy_argnames,
+        # Safe as the model is not changed in any way.
         _unsafe_reuse_evaluation_fn=model.evaluation_fn,
     )
 end
