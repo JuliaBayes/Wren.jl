@@ -33,7 +33,7 @@ evaluates a submodel.
     parameter_space::AbstractParameterSpace,
     accs::AccumulatorTuple,
     ctx::EvalContext,
-    conditioned::VarNamedTuple=model.conditioned,
+    conditioned::NamedTuple=model.conditioned,
 )
     return model.evaluation_fn(
         latent_source,
@@ -84,19 +84,25 @@ end
 rand_with_logp(model::Model) = rand_with_logp(default_rng(), model)
 
 """
-    conditioned(model::Model)::VarNamedTuple
+    conditioned(model::Model)::NamedTuple
 
 Return the current set of values that `model` is conditioned on.
 """
 conditioned(model::Model) = model.conditioned
 
 """
-    condition(model::Model, values::VarNamedTuple)::Model
+    condition(model::Model, values::NamedTuple)::Model
 
 Condition `model` on the values in `values`, returning a new model. The original model is
-not modified.
+not modified. Each key conditions a whole variable, including every indexed or field
+tilde-statement on that variable. Partial conditioning is not supported.
+
+For a submodel, the value under its namespace is a `NamedTuple` of the child's
+conditioned variables, for example `model | (child=(y=data,),)`.
+Values replace existing keys as in `merge(::NamedTuple, ::NamedTuple)`, including a
+nested submodel namespace. Nested values are not merged recursively.
 """
-function condition(model::Model, values::VarNamedTuple)
+function condition(model::Model, values::NamedTuple)
     new_conditioned = merge(conditioned(model), values)
     return Model(
         model.name,
@@ -110,31 +116,29 @@ function condition(model::Model, values::VarNamedTuple)
 end
 
 """
-    Base.:|(model::Model, values::VarNamedTuple)::Model
+    Base.:|(model::Model, values::NamedTuple)::Model
 
 `model | values` is an alias for [`condition(model, values)`](@ref).
 """
-Base.:|(model::Model, values::VarNamedTuple) = condition(model, values)
+Base.:|(model::Model, values::NamedTuple) = condition(model, values)
 
 """
     decondition(model::Model, vns::VarName...)::Model
 
 Remove `vns` from the set of variables that `model` is conditioned on, returning a new
-model. A variable is removed if it is subsumed by any of `vns`, so `decondition(model,
-@vn(x))` also removes `x[1]` and `x.a`. With no `vns`, every conditioned variable is
-removed.
+model. Each `VarName` must name a whole variable, for example `decondition(model, @vn(x))`.
+With no `vns`, every conditioned variable is removed.
 
 Variables observed with `@observe` are part of the model's structure rather than its
 conditioning, and are unaffected.
 """
 function decondition(model::Model, vns::VarName...)
     old = conditioned(model)
-    new_conditioned = if isempty(vns)
-        VarNamedTuple()
-    else
-        kept = [vn for (vn, _) in pairs(old) if !any(v -> VarNames.subsumes(v, vn), vns)]
-        VarNames.subset(old, kept)
-    end
+    all(vn -> VarNames.getoptic(vn) isa VarNames.Iden, vns) ||
+        throw(ArgumentError("decondition only supports whole variables"))
+    new_conditioned =
+        isempty(vns) ? NamedTuple() :
+        Base.structdiff(old, NamedTuple{map(VarNames.getsym, vns)})
     return Model(
         model.name,
         model.args,

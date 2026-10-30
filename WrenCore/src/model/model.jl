@@ -10,7 +10,7 @@ A Wren model.
 
 $(TYPEDFIELDS)
 """
-struct Model{A<:NamedTuple,C<:VarNamedTuple,F,CA<:Val}
+struct Model{A<:NamedTuple,C<:NamedTuple,F,CA<:Val}
     "Name of the function declared with @wren"
     name::Symbol
     "Positional and keyword arguments passed to the model."
@@ -39,7 +39,7 @@ struct Model{A<:NamedTuple,C<:VarNamedTuple,F,CA<:Val}
         stmts::Vector{<:Union{AbstractWrenExpr,LineNumberNode}},
         mod::Module;
         enzyme_copy_argnames::Val=Val{sort(keys(args))}(),
-        conditioned::VarNamedTuple=VarNamedTuple(),
+        conditioned::NamedTuple=NamedTuple(),
         _unsafe_reuse_evaluation_fn=nothing,
     )
         # Copy arguments upon model construction.
@@ -79,11 +79,17 @@ for why this matters.
 """
 function _dealias(v::SubArray{T}) where {T}
     v = collect(v)  # Avoid copying the entire parent array.
-    return isbitstype(T) ? v : deepcopy(v)
+    return _can_shallow_copy_elements(T) ? v : deepcopy(v)
 end
 function _dealias(v::AbstractArray{T}) where {T}
-    return isbitstype(T) ? copy(v) : deepcopy(v)
+    return _can_shallow_copy_elements(T) ? copy(v) : deepcopy(v)
 end
+# Immutable pointer-free records can include inline union fields without being bits types.
+# They contain no GC-managed references, so deepcopy is unnecessary (and Enzyme's
+# reverse deepcopy rule does not support a Const input with a duplicated result).
+_can_shallow_copy_elements(::Type{T}) where {T} =
+    isbitstype(T) ||
+    (isconcretetype(T) && !ismutabletype(T) && Base.datatype_pointerfree(T))
 _dealias(v::T) where {T} = isbitstype(T) ? v : deepcopy(v)
 # Models contain `Module`s, which can't be deepcopied. It is currently my belief that models
 # should be immutable (or at least pretend to be), and thus we should not need to deepcopy
@@ -176,16 +182,6 @@ to overload `_needs_copy`, as the generated function only has access to the meth
     name in S && _needs_copy(V) ? _dealias(v) : v
 @inline _maybe_dealias(::EvalContext{false}, ::Val, ::Val, v) = v
 
-# Whether `sym` is conditioned as a whole (not partly). Decided from the type alone.
-@generated function _whole_conditioned(
-    ::VarNamedTuple{Names,Values},
-    ::Val{sym},
-) where {Names,Values,sym}
-    i = findfirst(==(sym), Names)
-    i === nothing && return false
-    return !(fieldtype(Values, i) <: Union{VarNamedTuple,VarNames.PartialArray})
-end
-
 function make_evaluation_fn(
     argnames::Tuple{Vararg{Symbol}},
     stmts::Vector{<:Union{AbstractWrenExpr,LineNumberNode}},
@@ -199,8 +195,8 @@ function make_evaluation_fn(
         push!(
             body.args,
             :(
-                $(k) = if $(_whole_conditioned)($conditioned, Val($(QuoteNode(k))))
-                    $(getindex)($conditioned, $(VarName){$(QuoteNode(k))}())
+                $(k) = if $(haskey)($conditioned, $(QuoteNode(k)))
+                    $(getproperty)($conditioned, $(QuoteNode(k)))
                 else
                     $(WrenCore._maybe_dealias)(
                         $ctx,
@@ -306,20 +302,12 @@ function Base.show(io::IO, ::MIME"text/plain", model::Model)
         if label == "expressions"
             println(io)
             _show_wren_exprs(io, value, child_prefix * "  "; max_exprs)
-        elseif label == "arguments"
+        elseif label == "arguments" || label == "conditioned"
             if isempty(value)
                 printstyled(io, " (none)"; color=:white)
             else
                 println(io)
                 _show_namedtuple_tree(io, value, child_prefix)
-            end
-        elseif label == "conditioned" && value isa VarNamedTuple
-            if isempty(value)
-                printstyled(io, " (none)"; color=:white)
-            else
-                compact_io = IOContext(io, :compact => true, :limit => true)
-                println(io)
-                vnt_pretty_print(compact_io, value, child_prefix, 0; show_header=false)
             end
         end
         last || println(io)

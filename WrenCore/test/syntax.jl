@@ -86,7 +86,7 @@ end
         end
 
         @testset "after conditioning" begin
-            conditioned_model = x_and_y() | VarNamedTuple(y=1.0)
+            conditioned_model = x_and_y() | (; y=1.0)
             @test conditioned_model.name === :x_and_y # shouldn't be changed.
             retval, accs = evaluate(
                 conditioned_model,
@@ -109,7 +109,7 @@ end
                 y[1] ~ Normal()
                 return before
             end
-            model = read_before_tilde([0.0]) | VarNamedTuple(; y=[1.0])
+            model = read_before_tilde([0.0]) | (; y=[1.0])
             retval, accs = evaluate(
                 model,
                 FromPrior(),
@@ -119,6 +119,9 @@ end
             )
             @test retval == [1.0]
             @test loglikelihood(accs) ≈ logdensityof(Normal(), 1.0)
+            params = VarNamedTuple(y=[2.0])
+            @test logjoint(decondition(model, @vn(y)), params) ≈ logdensityof(Normal(), 2.0)
+            @test logjoint(decondition(model), params) ≈ logdensityof(Normal(), 2.0)
         end
 
         @testset "a definition in the body is a template until its tilde" begin
@@ -130,7 +133,7 @@ end
                 end
                 return (before, y)
             end
-            model = template_before_tilde() | VarNamedTuple(; y=[1.0, 2.0])
+            model = template_before_tilde() | (; y=[1.0, 2.0])
             (before, after), _ = evaluate(
                 model,
                 FromPrior(),
@@ -140,6 +143,25 @@ end
             )
             @test before == zeros(2)
             @test after == [1.0, 2.0]
+        end
+
+        @testset "whole structured observation" begin
+            @wren function observed_fields(y)
+                y.a ~ Normal()
+                y.b ~ Normal(y.a)
+                return y
+            end
+            data = (a=0.5, b=1.0)
+            retval, accs = evaluate(
+                observed_fields((a=0.0, b=0.0)) | (y=data,),
+                FromPrior(),
+                OriginalSpace(),
+                WrenCore.default_accumulators(),
+                EvalContext{false}(),
+            )
+            @test retval == data
+            @test loglikelihood(accs) ≈
+                  logdensityof(Normal(), data.a) + logdensityof(Normal(data.a), data.b)
         end
 
         @testset "whole-array conditioning" begin
@@ -152,7 +174,7 @@ end
             end
             data = [1.0, 2.0, 3.0]
             _, accs = @inferred evaluate(
-                observe_loop(3) | VarNamedTuple(; y=data),
+                observe_loop(3) | (; y=data),
                 FromPrior(),
                 OriginalSpace(),
                 WrenCore.default_accumulators(),
@@ -162,7 +184,7 @@ end
             @test loglikelihood(accs) ≈ sum(logdensityof.(Normal(x), data))
             # Indexing past the conditioned array is an error, not a new latent variable.
             @test_throws BoundsError evaluate(
-                observe_loop(4) | VarNamedTuple(; y=data),
+                observe_loop(4) | (; y=data),
                 FromPrior(),
                 OriginalSpace(),
                 WrenCore.default_accumulators(),
@@ -319,7 +341,7 @@ end
             @test logprior(accs) ≈ logdensityof(Normal(), x)
             @test loglikelihood(accs) ≈ logdensityof(Normal(), x)
 
-            conditioned_model = distribution_tilde_value() | VarNamedTuple(; x)
+            conditioned_model = distribution_tilde_value() | (; x)
             _, accs = evaluate(
                 conditioned_model,
                 FromPrior(),
@@ -399,7 +421,7 @@ end
                 y ~ Normal(x)
                 @addloglikelihood -0.5 * x^2
             end
-            model = addloglik_with_cond() | VarNamedTuple(; y=1.0)
+            model = addloglik_with_cond() | (; y=1.0)
             _, accs = evaluate(
                 model,
                 FromPrior(),

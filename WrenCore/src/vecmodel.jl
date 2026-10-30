@@ -50,7 +50,7 @@ This is equivalent to `_vecmodel_lp` but with the inactive arguments stored in t
 struct _VecModelLP{
     E,
     A<:NamedTuple,
-    C<:VarNamedTuple,
+    C<:NamedTuple,
     CA<:Val,
     X<:EvalContext,
     F,
@@ -92,7 +92,7 @@ function _vecmodel_lp(
     params::AbstractVector,
     evaluation_fn,
     model_args::NamedTuple,
-    conditioned::VarNamedTuple,
+    conditioned::NamedTuple,
     enzyme_copy_argnames::Val,
     ctx::EvalContext,
     lp_function,

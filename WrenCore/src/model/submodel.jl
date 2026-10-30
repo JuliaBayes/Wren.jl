@@ -38,7 +38,7 @@ struct DiscardSubmodelParams <: CollectOrDiscardSubmodelParams end
         latent_source::AbstractLatentSource,
         parameter_space::AbstractParameterSpace,
         accs::AccumulatorTuple,
-        conditioned::VarNamedTuple,
+        conditioned::NamedTuple,
         vn::VarName,
         collect_params::CollectOrDiscardSubmodelParams,
         ctx::EvalContext,
@@ -56,7 +56,7 @@ function evaluate_submodel(
     latent_source::AbstractLatentSource,
     parameter_space::AbstractParameterSpace,
     accs::AccumulatorTuple,
-    conditioned::VarNamedTuple,
+    conditioned::NamedTuple,
     # TODO(penelopeysm): allow for no-prefix?
     # https://github.com/JuliaBayes/Wren.jl/issues/4
     vn::VarName,
@@ -81,7 +81,7 @@ end
     latent_source::AbstractLatentSource,
     parameter_space::AbstractParameterSpace,
     accs::AccumulatorTuple{<:Any,<:NamedTuple{names}},
-    conditioned::VarNamedTuple,
+    conditioned::NamedTuple,
     ::CollectSubmodelParams,
     ctx::EvalContext,
 ) where {names}
@@ -129,13 +129,14 @@ end
 # in e.g. `x[1] ~ submodel`, if we don't need the params, don't needlessly set them back
 # into `x` as that can trigger type instabilities.
 set_lhs!!(obj, optic, ::UncollectedParams) = obj
+set_namespace_lhs!!(obj, observed, optic, ::UncollectedParams) = obj
 
 function _evaluate_scoped_submodel(
     rhs,
     latent_source::AbstractLatentSource,
     parameter_space::AbstractParameterSpace,
     accs::AccumulatorTuple,
-    conditioned::VarNamedTuple,
+    conditioned::NamedTuple,
     ::DiscardSubmodelParams,
     ctx::EvalContext,
 )
@@ -145,5 +146,9 @@ function _evaluate_scoped_submodel(
 end
 
 # The parent's conditioned values for the submodel at `vn`, keyed relative to `vn`.
-scope(conditioned::VarNamedTuple, vn::VarName) =
-    haskey(conditioned, vn) ? conditioned[vn] : VarNamedTuple()
+scope(conditioned::NamedTuple, vn::VarName) =
+    haskey(conditioned, VarNames.getsym(vn)) ? _conditioned_value(conditioned, vn) :
+    NamedTuple()
+
+_conditioned_value(values::NamedTuple, vn::VarName{sym}) where {sym} =
+    VarNames.getoptic(vn)(getproperty(values, sym))

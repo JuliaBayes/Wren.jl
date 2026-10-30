@@ -16,6 +16,34 @@ end
 # eltype that `UncollectedParams` doesn't subtype.
 set_lhs!!(obj, optic, val) = Accessors.set(obj, optic, val)
 
+set_namespace_copy(obj, optic, val) = Accessors.set(obj, optic, val)
+function set_namespace_copy(obj::Array{T}, optic::VarNames.Index, val::V) where {T,V}
+    U = Union{T,V}
+    if Base.isbitsunion(U) && all(i -> i isa Union{Integer,CartesianIndex}, optic.ix)
+        # Keep both observed records and child params inline instead of boxing into Any.
+        result = copyto!(similar(obj, U), obj)
+        Base.setindex!(result, val, optic.ix...; optic.kw...)
+        return result
+    end
+    return Accessors.set(obj, optic, val)
+end
+
+# Copy a shared namespace container at its first write, preserving observed siblings.
+# Later writes can mutate the owned container without copying it again.
+@inline function set_namespace_lhs!!(obj, observed, optic, val)
+    head, tail = VarNames.ohead(optic), VarNames.otail(optic)
+    inner = if tail isa VarNames.Iden
+        val
+    else
+        set_namespace_lhs!!(head(obj), head(observed), tail, val)
+    end
+    return if obj === observed
+        set_namespace_copy(obj, head, inner)
+    else
+        Accessors.set(obj, VarNames.with_mutation(head), inner)
+    end
+end
+
 assign_or_set!!(lhs::Symbol, rhs, vn) = :($lhs = $rhs)
 function assign_or_set!!(lhs::Expr, rhs, vn)
     left_top_sym = get_top_level_symbol(lhs)
@@ -69,6 +97,21 @@ function emit_model_expr(
     template = get_top_level_symbol(stmt.lhs)
     collect_submodel_params =
         stmt.lhs_is_reused ? CollectSubmodelParams() : DiscardSubmodelParams()
+    assign_child_params = assign_or_set!!(stmt.lhs, child_params, vn)
+    if stmt.lhs isa Expr
+        assign_child_params = quote
+            if $(haskey)($conditioned, $(QuoteNode(template)))
+                $template = $(set_namespace_lhs!!)(
+                    $template,
+                    $(getproperty)($conditioned, $(QuoteNode(template))),
+                    $(VarNames.getoptic)($vn),
+                    $child_params,
+                )
+            else
+                $assign_child_params
+            end
+        end
+    end
     return quote
         $rhs = $rhs_expr
         $vn = $vn_expr
@@ -101,7 +144,7 @@ function emit_model_expr(
                     $ctx,
                 )
             end
-            $(assign_or_set!!(stmt.lhs, child_params, vn))
+            $assign_child_params
             $accs = $(combine_with_namespace)(
                 $accs,
                 $child_accs,
@@ -109,10 +152,9 @@ function emit_model_expr(
                 $(stmt.lhs isa Symbol ? nothing : template),
             )
         else
-            # A wholly conditioned symbol is observed without a run-time check.
-            if $(_whole_conditioned)($conditioned, Val($(QuoteNode(template)))) ||
-               $(haskey)($conditioned, $vn)
-                $val = $(getindex)($conditioned, $vn)
+            # Whole-symbol membership is known from the NamedTuple's type.
+            if $(haskey)($conditioned, $(QuoteNode(template)))
+                $val = $(_conditioned_value)($conditioned, $vn)
                 # Nothing reads an observed element back unless the symbol is reused. A
                 # plain symbol is always bound, since it is the template below.
                 $(

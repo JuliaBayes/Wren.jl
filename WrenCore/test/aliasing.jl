@@ -53,9 +53,9 @@ using Test
         end
 
         @testset "conditioned x" begin
-            model = fassume(x) | VarNamedTuple(x=x)
+            model = fassume(x) | (; x=x)
             @test model.args.x !== x # Should be dealiased.
-            @test model.conditioned[@vn(x)] === x # Should be the same.
+            @test model.conditioned.x === x # Should be the same.
             rand(model) # Run the model
             # Contents should not have been modified, because conditioned values are
             # read-only.
@@ -160,7 +160,7 @@ using Test
         end
         model = cond_copies([0.0], [0.0])
         @test WrenCore._copied_args(model) == (:x,)
-        conditioned_model = model | VarNamedTuple(a=1.0)
+        conditioned_model = model | (; a=1.0)
         @test WrenCore._copied_args(conditioned_model) == (:x,)
         @test WrenCore._copied_args(decondition(conditioned_model)) == (:x,)
     end

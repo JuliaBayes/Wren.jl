@@ -155,54 +155,41 @@ Please see their respective docs for more information!
 
 ## Conditioning
 
-This is in some ways more fundamental, but we had to explain what a `VarNamedTuple` was first. :-)
-
-To condition a model on some observed data, you can use the `|` operator:
+To condition a model on observed data, pass a `NamedTuple` to the `|` operator:
 
 ```@example models
-vnt = VarNamedTuple(y=1.0)
+observed = (y=1.0,)
 
 @wren function f_orig()
     x ~ Normal()
     y ~ Normal(x + 1)
 end
 
-cond_model = f_orig() | vnt
+cond_model = f_orig() | observed
 ```
 
-or the equivalent [`condition`](@ref) function:
+The equivalent function is [`condition`](@ref):
 
 ```@example models
-cond_model = condition(f_orig(), vnt)
+cond_model = condition(f_orig(), observed)
 ```
 
-Unfortunately, the `VarNamedTuple`s that you use for conditioning will almost certainly not be the same as those drawn from a model.
-Thus, you will likely have to construct a `VarNamedTuple` yourself.
-More thorough docs on this will hopefully come at some point in time but here are some syntax examples:
+Each key names a whole variable. For example, `(y=[1.0, 2.0],)` observes every
+`y[i] ~ dist` statement. Partial conditioning of an array or field is not supported.
+A `missing` entry does not make that entry latent.
+To mix observations and latent values, use separate variables or condition whole
+variables in a submodel.
 
-```@example models
-# NamedTuple-like syntax.
-VarNamedTuple(y=1.0, z=zeros(3))
-
-# From an AbstractDict{VarName}.
-VarNamedTuple(Dict(@vn(y) => 1.0, @vn(z.a) => zeros(3)))
-
-# With a macro.
-@vnt begin
-    # Note the use of `:=` rather than `=`
-    y := 1.0
-    z.a := zeros(3)
-
-    # This says that `vect[1]` is part of a three-element vector, and that
-    # its first value is 1.0. The other values of `vect` are NOT part of
-    # the resulting `VarNamedTuple`. This allows you to condition only part
-    # of a vector. Note that the template should have the same shape as
-    # whatever `vect` in the model will be.
-    @template vect = zeros(3)
-    vect[1] := 1.0
-end
-nothing # hide
-```
+A nested `NamedTuple` under a submodel's namespace conditions variables in that
+child, for example `outer(inner()) | (child=(y=data,),)` when the parent contains
+`child ~ inner()`.
+The parent's values override the child's own conditioning.
+Conditioning replaces the entire value of each supplied key, including a nested
+submodel namespace. It does not merge nested values recursively. Supply every
+observation that you want to retain under a replaced namespace.
+To remove conditioning, use `decondition(cond_model, @vn(y))`, or
+`decondition(cond_model)` to remove all conditioning.
+Latent parameters remain `VarNamedTuple`s, as described above.
 
 ## [Vectorisation](@id vectorisation)
 
