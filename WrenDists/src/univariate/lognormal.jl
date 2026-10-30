@@ -32,9 +32,11 @@ LogNormal() = LogNormal(0.0, 1.0)
 end
 
 # Apply `μ` and `σ` after drawing noise so automatic differentiation can follow them.
-@inline Base.rand(rng::AbstractRNG, d::LogNormal) = xval(d, randn(rng, noisetype(d)))
+@inline Base.rand(rng::AbstractRNG, d::LogNormal) = xval(d, randn(rng, rngtype(d)))
 
 # --- Batched LogNormal ---
+
+using FillArrays: AbstractFill, getindex_value
 
 struct BatchedLogNormal{M<:AbstractArray,S<:AbstractArray} <: BatchedUnivariate
     μ::M
@@ -56,8 +58,24 @@ function _lognormal_loop(mu, sigma, x)
     s
 end
 
+# A shared scale needs only one logarithm for the whole batch.
+function _lognormal_loop(mu, sigma::AbstractFill, x)
+    T = float(promote_type(eltype(x), eltype(mu), eltype(sigma)))
+    s = zero(T)
+    indices = eachindex(x, mu, sigma)
+    isempty(indices) && return s
+    log_sigma = log(getindex_value(sigma))
+    for i in indices
+        lx = log(x[i])
+        z = (lx - mu[i]) / sigma[i]
+        s -= abs2(z) / 2 + log_sigma + lx
+    end
+    s
+end
+
+# The rule returns dense tangents. Differentiate the loop for Fill.
 EnzymeRules.@easy_rule(
-    _lognormal_loop(mu, sigma, x),
+    _lognormal_loop(mu::StridedArray, sigma::StridedArray, x::StridedArray),
     @setup(z = (log.(x) .- mu) ./ sigma),
     (z ./ sigma, (abs2.(z) .- 1) ./ sigma, -(z ./ (x .* sigma) .+ inv.(x))),
 )

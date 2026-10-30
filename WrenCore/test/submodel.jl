@@ -9,6 +9,21 @@ using Test
 using Distributions
 using VarNames
 
+struct CustomSubmodel end
+WrenCore.is_submodel(::Type{CustomSubmodel}) = true
+function WrenCore.evaluate_submodel(
+    ::CustomSubmodel,
+    ::AbstractLatentSource,
+    ::AbstractParameterSpace,
+    accs::AccumulatorTuple,
+    ::VarNamedTuple,
+    ::VarName,
+    ::WrenCore.DiscardSubmodelParams,
+    ::EvalContext,
+)
+    return 42, WrenCore.UncollectedParams(), accs
+end
+
 @wren function cached_inner()
     a ~ Normal()
 end
@@ -213,6 +228,33 @@ end
             @test parameters(accs) == in_pars
             @test loglikelihood(accs) ≈ logdensityof(Normal(a), obs)
         end
+
+        # The parent can condition the child's argument, which the child then sees whole.
+        @wren function argument_inner(y)
+            m ~ Normal()
+            before = copy(y)
+            for i in eachindex(y)
+                y[i] ~ Normal(m)
+            end
+            return before
+        end
+        @wren function argument_outer(inner)
+            inner_retval = x ~ inner
+            return inner_retval
+        end
+        data = [1.0, 2.0]
+        retval, accs = @inferred evaluate(
+            argument_outer(argument_inner(zeros(2))) | (@vnt begin
+                x.y := data
+            end),
+            FromPrior(),
+            OriginalSpace(),
+            WrenCore.default_accumulators(),
+            EvalContext{false}(),
+        )
+        @test retval == data
+        m = parameters(accs)[@vn(x.m)]
+        @test loglikelihood(accs) ≈ sum(logdensityof.(Normal(m), data))
     end
 
     @testset "empty submodel" begin
@@ -245,6 +287,8 @@ end
             x ~ Normal(mu)
         end
         @test logjoint(empty_outer_with_latent(empty_inner()), VarNamedTuple(x=43.0)) ≈
+              logdensityof(Normal(42), 43.0)
+        @test logjoint(empty_outer_with_latent(CustomSubmodel()), VarNamedTuple(x=43.0)) ≈
               logdensityof(Normal(42), 43.0)
         @test_throws ArgumentError logjoint(cached_outer(), VarNamedTuple())
     end
@@ -283,9 +327,7 @@ end
         end
         nested_model = outer_model(middle_model(returning_inner()))
 
-        # TODO(penelopeysm): not type stable
-        @test_broken false
-        retval, accs = evaluate(
+        retval, accs = @inferred evaluate(
             nested_model,
             FromValues(in_pars),
             OriginalSpace(),

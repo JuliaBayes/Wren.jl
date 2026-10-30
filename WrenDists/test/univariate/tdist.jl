@@ -9,6 +9,7 @@ using Enzyme
 using Plaice
 using Test
 using FillArrays
+using Random: Xoshiro
 
 const RUN_REACTANT = !Sys.iswindows()
 
@@ -16,6 +17,13 @@ if RUN_REACTANT
     using Pkg
     Pkg.add("Reactant")
     using Reactant
+end
+
+@testset "TDist typed defaults" begin
+    d = WrenDists.TDist(4f0)
+    explicit = WrenDists.TDist(4f0, 0f0, 1f0)
+    @test logdensityof(d, 0.25f0) === logdensityof(explicit, 0.25f0)
+    @test rand(Xoshiro(8675309), d) === rand(Xoshiro(8675309), explicit)
 end
 
 test_dist(

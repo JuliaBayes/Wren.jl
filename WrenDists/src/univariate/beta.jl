@@ -101,4 +101,5 @@ function DensityInterface.logdensityof(d::BatchedBeta, x)
         _beta_loop(α, β, x)
     end
 end
-Plaice.scalar_to_scalar_bijector(::BatchedBeta) = Plaice.Untruncate(0.0, 1.0)
+Plaice.scalar_to_scalar_bijector(d::BatchedBeta) =
+    Plaice.Untruncate(zero(noisetype(d)), one(noisetype(d)))
