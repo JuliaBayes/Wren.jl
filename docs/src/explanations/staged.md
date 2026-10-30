@@ -71,6 +71,10 @@ The main motivation is that the intermediate representation (IR):
   - allows Wren to do some optimisations, for example [elision of submodel parameter collection](@ref submodel-performance);
   - allows for the programmatic generation of Wren models, in that a user can construct an IR and then generate a Wren model from it, instead of having to do some macro gymnastics to create the original model definition.
 
+!!! details "Example: generated quantities"
+
+    TODO: Should we use generated quantities to illustrate staging or just leave this page as is?
+
 This of course doesn't come for free.
 Besides the substantial extra complexity of the codebase, it also means that we have to use [RuntimeGeneratedFunctions.jl](https://github.com/SciML/RuntimeGeneratedFunctions.jl) in the second step (IR to evaluation function), which brings with it some limitations.
 For example, model bodies cannot close over local variables (only global variables).
@@ -126,23 +130,6 @@ However, this is a bit too understated: it looks just like a normal function cal
 
 Macros are the best compromise between all of these.
 We aren't restricted to a fixed set of possibilities (as is the case with operators), but also to most Julia programmers it should be intuitive that macros have special effects!
-
-### Generated quantities
-
-A `GeneratedQuantity` node, from `@gq name = expr`, is emitted into the evaluation function as something like
-
-```julia
-if requests_gq(accs, Val(:name))
-    value = let
-        expr
-    end
-    accs = accumulate_gq!!(accs, value, @vn(name))
-end
-```
-
-[`WrenCore.requests_gq`](@ref) depends only on the type of `accs`, so the compiler replaces the condition with a constant.
-If no [`GQAccumulator`](@ref) in `accs` requests `name`, the branch is removed and `expr` is not part of the compiled function.
-The `let` keeps variables defined in `expr` out of the model body, and the value is assigned to a generated variable rather than to `name`, so `@gq` never defines `name` in the model body.
 
 ## Programmatic generation
 

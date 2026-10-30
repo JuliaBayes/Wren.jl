@@ -668,6 +668,16 @@ _samples(stmts) = filter(s -> s isa WrenCore.Sample, stmts)
         end
         ir, _ = run_dataflow_analysis(ir, args)
         @test only(filter(s -> s isa WrenCore.Sample, ir)).lhs_is_reused
+
+        ir, args = @wren internal_to_ir=true function r10(x, y)
+            a ~ Normal()
+            @gq mu = a .+ x
+            @observe y ~ MvNormal(mu, I)
+            @gq rss = sum(abs2, y .- mu)
+        end
+        ir, _ = run_dataflow_analysis(ir, args)
+        gqs = filter(s -> s isa WrenCore.GeneratedQuantity, ir)
+        @test [(s.name, s.name_is_reused) for s in gqs] == [(:mu, true), (:rss, false)]
     end
 
     @testset "lhs_top_level_symbol" begin

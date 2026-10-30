@@ -8,8 +8,7 @@ VarNames.parameters(accs::AccumulatorTuple) = getacc(accs, Val(PARAMS_ACCNAME)).
 """
     generated_quantities(accs::AccumulatorTuple)::VarNamedTuple
 
-Return the values recorded by `@gq` statements. `accs` must contain a
-[`GQAccumulator`](@ref).
+Return the values recorded by `@gq` statements.
 """
 function generated_quantities end
 generated_quantities(accs::AccumulatorTuple) = getacc(accs, Val(GQ_ACCNAME)).values

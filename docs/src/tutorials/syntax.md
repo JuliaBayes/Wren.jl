@@ -346,6 +346,44 @@ which guarantees correctness, but might not be as efficient as the vectorised fo
 
       - Batches will increase allocations and will almost certainly cause slowdowns on small loops.
 
+## [Generated quantities](@id generated-quantities)
+
+After sampling from a model, we often want to transform these samples into other values we're interested in.
+Following the nomenclature established by Stan, we call these "generated quantities".
+
+For example, consider logistic regression where parameters are often on the log-odds scale.
+Reporting log-odds is nasty, so we instead transform them to odds ratios:
+
+```@example model
+@wren function logistic_regression(y)
+    beta ~ Normal()
+    for i in eachindex(y)
+        y[i] ~ BernoulliLogit(beta)
+    end
+    @gq odds_ratio = exp(beta)
+end
+
+y = [0, 1, 0, 0, 0, 1]
+rand(logistic_regression(y))
+```
+
+In this contrived example, it would have been easy to calculate the odds ratio without `@gq`, but in in more complicated scenarios that involve previous calculations in the model body, using `@gq` can spare us a lot of code duplication.
+
+You can write any expression on the right-hand of `@gq`; this includes entire `begin` or `let` blocks!
+
+Keep these rules in mind when you use `@gq`:
+
+  1. The name must be a single symbol; you can't write `@gq x[1]` and `@gq x.a`.
+
+  2. `@gq` must be a top-level statement of the model body. This means that it cannot appear inside  `for`, `while`, `if`, `let` or `begin` blocks, or functions defined in the model. To record the result of control flow, you should assign the generated quantity to a variable and record it afterwards. The abbreviated form `@gq x` allows you to skip spelling out `@gq x = x`.
+
+  3. If you define a generated quantity `@gq variable` and do not reuse it later in the model body, the right-hand side is removed from the compiled model unless specifically requested with `generated_quantities(model, chain; to_collect=:variable)`.
+
+  4. Values are not copied. For example, assume our model uses the array `x` and mutates it after `@gq x`, then recorded value changes too. If you want to create a snapshot, you should write `@gq x = deepcopy(x)` instead.
+
+!!! danger "No side effects... again"
+    When the definition of a generated quantity `x` involves side effects, such as calling `push!` or drawing a random number, and `x is not reused later, the side effects in its definition will not happen!
+
 ## [Manual log-likelihood addition](@id addloglike)
 
 Wren provides a macro, `@addloglikelihood [name=:name] expr`, which allows you to manually add `expr` to the model's log-likelihood.
@@ -360,102 +398,3 @@ rand_with_logp(manual_likelihood())
 ```
 
 The `name` argument is optional and Wren currently does not use it, but hopefully will be wired up to pointwise logdensity calculations in the future.
-
-## [Generated quantities](@id generated-quantities)
-
-A generated quantity is a value computed from the parameters that you want to keep in the output, but that is not itself a random variable of the model.
-`@gq name = expr` records the value of `expr` under `name`, and `@gq name` is shorthand for `@gq name = name`.
-
-The linear regression below records the mean `mu` and the residual sum of squares `rss`:
-
-```@example model
-@wren function regression(x, y)
-    alpha ~ Normal()
-    beta ~ Normal()
-    sigma ~ Exponential()
-    mu = alpha .+ beta .* x
-    for i in eachindex(y)
-        @observe y[i] ~ Normal(mu[i], sigma)
-    end
-    @gq mu
-    @gq rss = sum(abs2, y .- mu)
-end
-
-reg_model = regression([0.0, 1.0, 2.0], [0.1, 0.9, 2.2])
-rand(Xoshiro(468), reg_model)
-```
-
-`rand` returns the generated quantities together with the parameters.
-`rand_with_logp` keeps them separate; read them with [`generated_quantities`](@ref):
-
-```@example model
-accs = rand_with_logp(Xoshiro(468), reg_model)
-parameters(accs), generated_quantities(accs)
-```
-
-Chains returned by [`prior`](@ref), [`nuts`](@ref) and [`predict`](@ref) store generated quantities as parameters, alongside the model's own parameters.
-To compute generated quantities for an existing chain, see [Generated quantities from a chain](@ref gq-chain).
-
-The right-hand side can be any expression, including a `begin` or `let` block:
-
-```julia
-@gq rss = begin
-    residuals = y .- mu
-    sum(abs2, residuals)
-end
-```
-
-### Rules
-
-  - `@gq` does not create a variable in the model body.
-    After `@gq rss = sum(abs2, y .- mu)`, using `rss` later in the model throws an `UndefVarError`.
-    To reuse a value, assign it first and then record it:
-
-    ```julia
-    rss = sum(abs2, y .- mu)
-    @gq rss
-    ```
-
-  - The name must be a single symbol.
-    `@gq x[1] = ...` and `@gq x.a = ...` are errors; write `@gq x1 = x[1]` instead.
-
-  - `@gq` must be a top-level statement of the model body.
-    It cannot appear inside `for`, `while`, `if`, `let` or `begin` blocks, `@batch` loops, or functions defined in the model.
-    To record the result of control flow, assign it to a variable and record that variable afterwards.
-
-  - The right-hand side must not contain `~`, `@observe`, `@iid`, `@batch`, `@addloglikelihood` or `return`.
-
-  - The right-hand side of a generated quantity runs only when that quantity is requested; generated quantities that are not requested are removed from the compiled model and cost nothing.
-    Side effects in the right-hand side, such as drawing random numbers or calling `push!`, therefore happen only when the quantity is collected.
-
-  - Values are not copied.
-    If `x` is mutable (for example an array) and the model mutates it after `@gq x`, the recorded value changes too; write `@gq x = deepcopy(x)` to record a snapshot.
-
-  - A generated quantity with the same name as a parameter overwrites that parameter in the output of `rand`, `prior`, `nuts` and `predict`.
-    Wren does not check for this.
-
-### Submodels
-
-Generated quantities of a [submodel](@ref submodels) are recorded under the submodel's name: a `@gq z = ...` statement inside `a ~ inner()` appears as `a.z`.
-When selecting generated quantities by name, `:a` selects every generated quantity of that submodel.
-
-### Selecting generated quantities
-
-Generated quantities are collected by a [`GQAccumulator`](@ref).
-`GQAccumulator()` requests all of them, and `GQAccumulator((:x, :y))` requests only `x` and `y`.
-To evaluate a model with a chosen set of accumulators, pass them to [`WrenCore.evaluate`](@ref) (see [Working with models](@ref models)):
-
-```@example model
-using WrenCore: evaluate, AccumulatorTuple, GQAccumulator, OriginalSpace, EvalContext
-
-_, accs = evaluate(
-    reg_model,
-    FromPrior(Xoshiro(468)),
-    OriginalSpace(),
-    AccumulatorTuple(GQAccumulator((:rss,))),
-    EvalContext{false}(),
-)
-generated_quantities(accs)
-```
-
-Here `mu` is not requested, so its right-hand side is not evaluated.

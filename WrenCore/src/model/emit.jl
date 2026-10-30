@@ -614,8 +614,9 @@ function emit_model_expr(
     end
 end
 
-# The value is assigned to a gensym rather than `stmt.name`, so that `@gq` never binds its
-# name in the model body, and the `let` keeps locals of the expression out of the model body.
+# The `let` keeps locals of the expression out of the model body. If the name is not used
+# later, the value is assigned to a gensym so that `expr` can sit inside the `requests_gq`
+# branch, which the compiler removes when the quantity is not requested.
 function emit_model_expr(
     stmt::GeneratedQuantity,
     accs,
@@ -627,6 +628,15 @@ function emit_model_expr(
     @gensym gq_value
     value_expr =
         emit_model_expr(stmt.expr, accs, conditioned, latent_source, parameter_space, ctx)
+    stmt.name_is_reused && return quote
+        $(stmt.name) = let
+            $value_expr
+        end
+        if $(requests_gq)($accs, $(Val{stmt.name}()))
+            $accs = $(accumulate_gq!!)($accs, $(stmt.name), $(VarName{stmt.name}()))
+        end
+        nothing
+    end
     return quote
         if $(requests_gq)($accs, $(Val{stmt.name}()))
             $gq_value = let

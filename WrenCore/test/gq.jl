@@ -166,12 +166,40 @@ end
         @test haskey(params, @vn(y))
     end
 
-    @testset "@gq does not bind its name" begin
-        @wren function gq_nobind()
+    @testset "@gq binds its name when it is used later" begin
+        @wren function gq_bind_return()
             @gq m = 1.0
             return m
         end
-        @test_throws UndefVarError rand(gq_nobind())
+        @test rand(gq_bind_return())[@vn(m)] == 1.0
+        retval, _ = evaluate(
+            gq_bind_return(),
+            FromPrior(),
+            OriginalSpace(),
+            AccumulatorTuple(),
+            EvalContext{false}(),
+        )
+        @test retval == 1.0
+
+        @wren function gq_bind_likelihood(x, y)
+            a ~ Normal()
+            @gq mu = a .+ x
+            @observe y ~ MvNormal(mu, I)
+            @gq bad = error("generated quantity was evaluated")
+        end
+        model = gq_bind_likelihood([0.0, 1.0], [0.5, 1.5])
+        _, accs = evaluate(
+            model,
+            FromPrior(),
+            OriginalSpace(),
+            AccumulatorTuple(ParamsAccumulator(), LogLikelihoodAccumulator()),
+            EvalContext{false}(),
+        )
+        a = parameters(accs)[@vn(a)]
+        @test loglikelihood(accs) ≈ logpdf(MvNormal(a .+ [0.0, 1.0], I), [0.5, 1.5])
+
+        mu = gq_values(model, GQAccumulator((:mu,)))[@vn(mu)]
+        @test mu ≈ mu[1] .+ [0.0, 1.0]
     end
 
     @testset "unrequested quantities are not evaluated" begin

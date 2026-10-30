@@ -16,17 +16,15 @@ using WrenCore: WrenCore
 
 Draw predictions from `model` for all iterations in `chain`.
 
-The returned `FlexiChain` by default will contain all the predicted variables, as well as the
-variables already present in the input `chain`, which implies that:
+The returned `FlexiChain` by default will contain all the predicted variables, generated
+quantities, as well as the variables already present in the input `chain`, which implies that:
 
 - variables that are in the `chain` are fixed to their respective values;
 - variables that arent in the `chain` are resampled according to the model;
 - variables that are `@observe`d are never included.
 
-To move a variable from the first into the second category, subset `chain` to exclude that variable (more about subsetting chains [here](https://juliabayes.org/FlexiChains.jl/stable/api#Subsetting-chains)).
-
-The returned chain also holds all generated quantities (`@gq` statements), recomputed at
-each iteration.
+To move a variable from the first into the second category, subset `chain` to exclude that
+variable (more about subsetting chains [here](https://juliabayes.org/FlexiChains.jl/stable/api#Subsetting-chains)).
 
 The returned chain will also contain log-probabilities corresponding to the re-evaluation of
 the model. In particular, the log probability for the newly predicted variables are
@@ -45,14 +43,10 @@ function StatsAPI.predict(rng::AbstractRNG, model::WrenCore.Model, chain::VNChai
     fallback = WrenCore.FromPrior(rng)
     results = _reevaluate(model, chain, accs, fallback)
     draws = Draw.(last.(results))
-    preds = _chain_with_indices_of(chain, draws)
-    return merge(FlexiChains.subset_extras(chain), preds)
-end
-
-function _chain_with_indices_of(chain::VNChain, draws)
-    new_chain = AbstractMCMC.from_samples(VNChain, draws)
-    new_chain = FlexiChains.renumber_iters(new_chain, FlexiChains.iter_indices(chain))
-    return FlexiChains.renumber_chains(new_chain, FlexiChains.chain_indices(chain))
+    preds_chain = AbstractMCMC.from_samples(VNChain, draws)
+    preds_chain = FlexiChains.renumber_iters(preds_chain, FlexiChains.iter_indices(chain))
+    preds_chain = FlexiChains.renumber_chains(preds_chain, FlexiChains.chain_indices(chain))
+    return merge(FlexiChains.subset_extras(chain), preds_chain)
 end
 
 function StatsAPI.predict(model::WrenCore.Model, chain::VNChain)
@@ -89,7 +83,9 @@ function WrenCore.generated_quantities(
         gqs = WrenCore.generated_quantities(last(retval_and_accs))
         Draw(VarNames.densify!!(gqs), NamedTuple())
     end
-    return _chain_with_indices_of(chain, draws)
+    gqs_chain = AbstractMCMC.from_samples(VNChain, draws)
+    gqs_chain = FlexiChains.renumber_iters(gqs_chain, FlexiChains.iter_indices(chain))
+    return FlexiChains.renumber_chains(gqs_chain, FlexiChains.chain_indices(chain))
 end
 
 _gq_accumulator(::WrenCore.All) = WrenCore.GQAccumulator()

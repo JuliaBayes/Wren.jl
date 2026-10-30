@@ -11,12 +11,8 @@ struct All end
     GQAccumulator()
     GQAccumulator(names::Tuple{Vararg{Symbol}})
 
-An accumulator that records the values of `@gq` statements in a `VarNamedTuple`. With no
-argument it requests every generated quantity; with `names` it requests only those whose
-name is in `names`. A generated quantity that is not requested is not evaluated.
-
-Generated quantities of a submodel `a ~ sub(...)` are recorded under `a` (e.g. `a.z`), and
-are all requested when `:a` is.
+Record the values of `@gq` statements in a `VarNamedTuple`. If `names` is not provided
+it returns every generated quantity, and otherwise it returns only those in `names`.
 """
 struct GQAccumulator{Names,V<:VarNamedTuple} <: AbstractAccumulator
     values::V
@@ -30,9 +26,7 @@ _gq_requested(names, sym::Symbol) = names === :all || sym in names
 """
     requests_gq(accs::AccumulatorTuple, ::Val{sym})
 
-Return `true` if `accs` holds a [`GQAccumulator`](@ref) that requests the generated quantity
-`sym`. The result depends only on the types of the arguments, so it is a compile-time
-constant.
+Return `true` if `accs` contains a [`GQAccumulator`](@ref) for `sym`.
 """
 @generated function requests_gq(::AccumulatorTuple{N,T}, ::Val{sym}) where {N,T,sym}
     GQ_ACCNAME in fieldnames(T) || return :(false)
@@ -70,8 +64,7 @@ end
 """
     accumulate_gq!!(acc::AbstractAccumulator, value, vn::VarName)
 
-Update `acc` when a `@gq` statement records `value` under `vn`. Returns the updated `acc`.
-The default implementation is a no-op; [`GQAccumulator`](@ref) stores `value`.
+Update and then return `acc` when a `@gq` statement records `value` under `vn`.
 """
 accumulate_gq!!(acc::AbstractAccumulator, value, vn::VarName) = acc
 function accumulate_gq!!(acc::GQAccumulator{Names}, value, vn::VarName) where {Names}
@@ -82,7 +75,7 @@ end
 """
     accumulate_gq!!(at::AccumulatorTuple, value, vn::VarName)
 
-Update all the accumulators of `at` by calling `accumulate_gq!!` on them.
+Update all the accumulators of `at` via `accumulate_gq!!`.
 """
 @generated function accumulate_gq!!(
     at::AccumulatorTuple{N,T},

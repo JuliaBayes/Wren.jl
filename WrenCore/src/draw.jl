@@ -39,9 +39,8 @@ end
         include_log_probs::Bool=true,
     )
 
-Evaluate `model` using `source` and return its model-space parameters, merged with its
-generated quantities. By default the log prior, log likelihood, and log joint are added to
-`stats`.
+Evaluate `model` using `source` and return its model-space parameters and generated
+quantities. By default the log prior, log likelihood, and log joint are added to `stats`.
 """
 function VarNames.Draw(
     source::AbstractLatentSource,
@@ -62,8 +61,8 @@ end
     )
 
 Extract parameters and any available log-probability statistics from an accumulator tuple.
-The tuple must contain a [`ParamsAccumulator`](@ref). If it also contains a
-[`GQAccumulator`](@ref), the generated quantities are merged into the parameters.
+The tuple must contain a [`ParamsAccumulator`](@ref). If there are generated quantities, they
+are merged into the parameters.
 """
 function VarNames.Draw(
     accs::AccumulatorTuple,

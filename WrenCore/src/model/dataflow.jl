@@ -31,7 +31,7 @@ function get_lhs_index_symbols(expr::Expr)
 end
 
 struct DataflowAnalysisState
-    # All top-level symbols on the LHS of Sample nodes
+    # All top-level symbols on the LHS of Sample nodes, and names of GeneratedQuantity nodes
     lhs_syms::Set{Symbol}
     # The subset of the above that were seen again in a later expression, which we thus need
     # the values of
@@ -44,7 +44,7 @@ struct DataflowAnalysisState
     args_to_copy::Set{Symbol}
 end
 function mark_lhs_symbol!(state::DataflowAnalysisState, sym::Symbol)
-    # Record that we've seen `sym` on the LHS of a tilde
+    # Record that we've seen `sym` on the LHS of a tilde or as a generated quantity name
     push!(state.lhs_syms, sym)
     return nothing
 end
@@ -139,6 +139,7 @@ function parse_variables!(stmt::AddLogLikelihood, state::DataflowAnalysisState)
 end
 function parse_variables!(stmt::GeneratedQuantity, state::DataflowAnalysisState)
     parse_variables!(stmt.expr, state)
+    mark_lhs_symbol!(state, stmt.name)
     return nothing
 end
 function parse_variables!(stmt::ReturnStatement, state::DataflowAnalysisState)
@@ -199,7 +200,9 @@ function reconstruct_statement(stmt::Sample, required_syms::Set{Symbol})
 end
 reconstruct_statement(stmt::Observe, ::Set{Symbol}) = stmt
 # The expression of a GeneratedQuantity cannot contain Samples.
-reconstruct_statement(stmt::GeneratedQuantity, ::Set{Symbol}) = stmt
+function reconstruct_statement(stmt::GeneratedQuantity, required_syms::Set{Symbol})
+    return Accessors.@set stmt.name_is_reused = stmt.name in required_syms
+end
 # The contents of an OtherStatement are not lowered, so they can't contain Samples.
 reconstruct_statement(stmt::OtherStatement, ::Set{Symbol}) = stmt
 function reconstruct_statement(stmt::IID, required_syms::Set{Symbol})

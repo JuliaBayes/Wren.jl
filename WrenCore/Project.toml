@@ -34,9 +34,6 @@ PosteriorDB = "1c4bc282-d2f5-44f9-b6d1-8c4424a23ad4"
 Reactant = "3c362404-f566-11ee-1572-e11a4b42c853"
 WrenDists = "2ad4af40-d7c9-42b2-92b0-e09d37d1e75a"
 
-[sources]
-FlexiChains = {rev = "v0.7", url = "https://github.com/JuliaBayes/FlexiChains.jl"}
-
 [extensions]
 WrenCoreDistributionsExt = ["Distributions"]
 WrenCoreEnzymeExt = ["Enzyme", "DifferentiationInterface"]

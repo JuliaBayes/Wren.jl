@@ -364,16 +364,22 @@ end
     @gq name = expr
     @gq name
 
-Inside a `@wren` model body, record the value of `expr` as the generated quantity `name`.
-`@gq name` is shorthand for `@gq name = name`.
+Record the value of `expr` as the generated quantity `name` in a `@wren` model.
+`@gq name` is short for `@gq name = name`. `name` must be a single symbol.
 
-`@gq` does not bind `name` in the model body. `expr` is evaluated inside a `let` block,
-and only when a [`GQAccumulator`](@ref) requests `name`; otherwise it is not run at all,
-so side effects in `expr` do not happen.
+`@gq` must be a top-level statement of the model body; we discourage using it
+inside `@submodel`.
 
-`@gq` must be a top-level statement of the model body and `name` must be a single symbol.
-If `expr` assigns to a variable defined elsewhere in the model body, that assignment
-happens only when `name` is requested.
+If `name` is used later in the model body, `expr` is also assigned to `name` and runs on
+every evaluation of the model. Otherwise `name` is not defined in the model body.
+
+!!! warning
+    If `name` is not used later in the model body and the generated quantity is not
+    requested, `expr` is not run at all.
+    Note that this means side effects in `expr` do not happen!
+
+    Relatedly, if `expr` assigns to a variable defined elsewhere in the model body,
+    that assignment happens only when `name` is requested.
 """
 macro gq(args...)
     error("@gq must be used at the top level of a @wren model body")
