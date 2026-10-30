@@ -384,19 +384,33 @@ _copied_args(vm::VecModel) = _copied_args(vm.model)
 # overloaded in EnzymeExt as it depends on runtime activity error which isn't in Core
 _handle_enzyme(@nospecialize(vm::VecModel)) = vm
 
-# Create a copy of a VecModel with a deepcopied adprep. This is necessary for multithreaded
-# sampling because AD preparation objects are not thread-safe.
+# Create a copy of a VecModel with its own model arguments and a deepcopied adprep. This is
+# necessary for multithreaded sampling because models may write into their arguments, and
+# AD preparation objects are not thread-safe.
 # https://juliadiff.org/DifferentiationInterface.jl/DifferentiationInterface/stable/faq/limitations/#Multithreading
 function _copy_for_thread(vm::VecModel)
+    model = _copy_for_thread(vm.model)
+    f = vm.lp_func
+    lp_func = _VecModelLP(
+        model.evaluation_fn,
+        model.args,
+        model.conditioned,
+        model.enzyme_copy_argnames,
+        f.ctx,
+        f.lp_function,
+        f.parameter_space,
+        f.vecinfo,
+        f.accs,
+    )
     return VecModel(
-        _dealias(vm.model),
+        model,
         vm.adtype,
         vm.lp_function,
         vm.parameter_space,
         vm.vecinfo,
         vm.accs,
         vm.dimension,
-        vm.lp_func,
+        lp_func,
         deepcopy(vm.adprep),
         copy(vm.sample),
     )
