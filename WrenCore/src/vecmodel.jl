@@ -440,6 +440,11 @@ end
     lp(vecmodel::VecModel, params::AbstractVector)
 
 Calculate the log-density of `vecmodel` at `params`.
+
+!!! warning
+    `params` is not copied, and the model may receive views into it. A model that writes
+    into a latent variable (e.g. `x ~ MvNormal(...); x[1] += 1`) is therefore not
+    supported: it may change `params` and give inconsistent results.
 """
 lp(vecmodel::VecModel, params::AbstractVector) = vecmodel.lp_func(params)
 
@@ -448,6 +453,11 @@ lp(vecmodel::VecModel, params::AbstractVector) = vecmodel.lp_func(params)
 
 Returns a tuple (log_density, grad) where `log_density` is the log-density of `vecmodel` and
 `grad` is its gradient at `params`.
+
+!!! warning
+    `params` is not copied, and the model may receive views into it. A model that writes
+    into a latent variable (e.g. `x ~ MvNormal(...); x[1] += 1`) is therefore not
+    supported: it may change `params` and give inconsistent results.
 """
 function lp_and_grad(vecmodel::VecModel, params::AbstractVector)
     prepared_params = convert(typeof(vecmodel.sample), params)
@@ -485,6 +495,11 @@ end
 
 Calculate the log-density and its gradient with respect to `params`, writing the gradient
 into `grad`. Returns a tuple (log_density, grad).
+
+!!! warning
+    `params` is not copied, and the model may receive views into it. A model that writes
+    into a latent variable (e.g. `x ~ MvNormal(...); x[1] += 1`) is therefore not
+    supported: it may change `params` and give inconsistent results.
 """
 function lp_and_grad!(grad::AbstractVector, vecmodel::VecModel, params::AbstractVector)
     prepared_params = convert(typeof(vecmodel.sample), params)

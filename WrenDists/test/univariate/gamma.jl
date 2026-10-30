@@ -24,8 +24,11 @@ end
     u = rand(Xoshiro(8675309))
     q = quantile(Distributions.Gamma(x[1]), u)
     h = 1e-4
-    dq = (quantile(Distributions.Gamma(x[1] + h), u) -
-          quantile(Distributions.Gamma(x[1] - h), u)) / (2h)
+    dq =
+        (
+            quantile(Distributions.Gamma(x[1] + h), u) -
+            quantile(Distributions.Gamma(x[1] - h), u)
+        ) / (2h)
     expected = [x[2] * dq, q]
     draw(p) = rand(Xoshiro(8675309), WrenDists.Gamma(p[1], p[2]))
     backends = Base.get_extension(WrenDists, :WrenDistsTestUtils).TESTED_ADTYPES
@@ -34,6 +37,12 @@ end
         @test value ≈ x[2] * q
         @test gradient ≈ expected rtol = 1e-6
     end
+end
+
+@testset "Gamma negative observations" begin
+    d = WrenDists.Gamma(2.0f0, 1.0f0)
+    @test logdensityof(d, -1.0f0) == -Inf
+    RUN_REACTANT && WrenDists.test_dist_reactant(d, Float32[-1])
 end
 
 test_dist(
