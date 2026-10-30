@@ -6,6 +6,7 @@ using Test
     include("expr.jl")
     include("dataflow.jl")
     include("syntax.jl")
+    include("space.jl")
     include("batch/general.jl")
     include("batch/normal.jl")
     include("batch/bernoulli.jl")
@@ -28,7 +29,7 @@ using Test
     include("issues/55.jl")
     include("issues/69.jl")
     include("issues/132.jl")
-    include("issues/156.jl")
+    include("issues/155.jl")
 end
 
 end # module WrenCoreTests

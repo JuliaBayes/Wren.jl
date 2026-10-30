@@ -142,6 +142,22 @@ This is because when Wren _constructs_ a model (i.e., when calling `mutable(y_ou
 y_outside
 ```
 
+!!! warning "Don't mutate latent variables or conditioned values"
+
+    The guarantee above only applies to model arguments.
+    Wren does **not** copy the values of latent variables, nor the values you condition on (see the next section).
+    For performance, the value a model receives for a latent variable may be a view into the caller's parameter vector (for example, the vector passed to [`lp`](@ref), or a sampler's current position), and a conditioned value is the same object that you passed to `|`.
+
+    So, writing into one of these inside a model, e.g.
+
+    ```julia
+    x ~ MvNormal(zeros(2), I)
+    x[1] += 1.0
+    ```
+
+    is not supported: it can change the caller's data, make repeated evaluations return different log-densities, and break samplers.
+    If you need a modified version, make a copy first (e.g. `x2 = copy(x); x2[1] += 1.0`), or write it without mutation (e.g. `x2 = x .+ [1.0, 0.0]`).
+
 ## Conditioning
 
 Now, we would almost certainly like to progress from the starting point above where everything is a latent variable.
@@ -157,11 +173,11 @@ logprior(accs), loglikelihood(accs), parameters(accs)
 
 Now the only latent variable is `x`, and the `y` array is observed.
 
-Note that the values in the argument passed to the model are now no longer used!
-As before, the `y` model argument only serves to declare the shape of the latent array.
-When the model is evaluated, it will use the values passed to `|` instead of the values in the argument.
+Conditioning on a model argument replaces the argument.
+Inside the model, `y` is `[1.0, 2.0, 3.0]` from the first line, and the values in `my_y` are never used.
 
-We can do the exact same with `ydef`, and in exactly the same way, the definition of `y` inside the model body will be ignored:
+We can do the same with `ydef`.
+Here `y = zeros(3)` is only a template: as when sampling, the value of each `y[i]` arrives at its tilde-statement, so `y[i]` holds `0.0` until then.
 
 ```@example model
 ydef_model_cond = ydef_model | VarNamedTuple(y=[1.0, 2.0, 3.0])
@@ -182,6 +198,17 @@ end
 yarg_model_partial_cond = yarg_model | cond
 rand(yarg_model_partial_cond)
 ```
+
+A partially conditioned argument is not replaced.
+The argument is the template, and each conditioned `y[i]` arrives at its tilde-statement, as in `ydef`.
+
+When a whole array is conditioned, every tilde-statement on it must index into it.
+For example, conditioning `y` on a 2-element array in `ydef` makes `y[3] ~ Normal(x)` throw a `BoundsError` instead of creating a new latent variable.
+
+!!! warning "Conditioned values are read-only"
+
+    Wren does not copy conditioned values, so inside the model a conditioned argument is the same array that you passed to `|`.
+    Mutating it inside the model mutates your data.
 
 ## Enforced observations
 

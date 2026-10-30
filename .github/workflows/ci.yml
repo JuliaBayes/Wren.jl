@@ -18,12 +18,20 @@ concurrency:
   cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') || github.ref == 'refs/heads/main' }}
 
 jobs:
-  test-all:
+  test:
+    name: ${{ matrix.project }} (${{ matrix.runner.os }})
     runs-on: ${{ matrix.runner.os }}
+    env:
+      # Sampling multiple chains is multithreaded
+      JULIA_NUM_THREADS: 2
     strategy:
       fail-fast: false
 
       matrix:
+        project:
+          - core
+          - wren
+          - dists
         runner:
           # Ubuntu
           - version: '1'
@@ -47,4 +55,4 @@ jobs:
 
       - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # 3.1.0
 
-      - run: ./runtests core
+      - run: ./runtests ${{ matrix.project }}
