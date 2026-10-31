@@ -120,7 +120,7 @@ end
             @test retval == [1.0]
             @test loglikelihood(accs) ≈ logdensityof(Normal(), 1.0)
             params = VarNamedTuple(y=[2.0])
-            @test logjoint(decondition(model, @vn(y)), params) ≈ logdensityof(Normal(), 2.0)
+            @test logjoint(decondition(model, :y), params) ≈ logdensityof(Normal(), 2.0)
             @test logjoint(decondition(model), params) ≈ logdensityof(Normal(), 2.0)
         end
 
@@ -162,6 +162,12 @@ end
             @test retval == data
             @test loglikelihood(accs) ≈
                   logdensityof(Normal(), data.a) + logdensityof(Normal(data.a), data.b)
+            # Removing a field must not make part of an ordinary observation latent.
+            model = observed_fields((a=0.0, b=0.0)) | (y=data,)
+            @test_throws r"has no field" logjoint(
+                decondition(model, @vn(y.a)),
+                VarNamedTuple(y=(a=2.0,)),
+            )
         end
 
         @testset "whole-array conditioning" begin
@@ -173,6 +179,7 @@ end
                 end
             end
             data = [1.0, 2.0, 3.0]
+            @test_throws ArgumentError decondition(observe_loop(3) | (; y=data), @vn(y[1]))
             _, accs = @inferred evaluate(
                 observe_loop(3) | (; y=data),
                 FromPrior(),

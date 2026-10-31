@@ -183,18 +183,6 @@ WrenCore._copied_args(model)
 
 ### Eliding copies
 
-For arrays of records with missing fields, give the records a concrete element type:
-
-```julia
-Record = @NamedTuple{a::Union{Missing,Float64}, b::Union{Missing,Float64}}
-data = Record[(a=1.0, b=missing), (a=missing, b=2.0)]
-```
-
-These immutable records contain no references to mutable objects, so Wren can copy the
-array without deep copying its elements. The untyped literal
-`[(a=1.0, b=missing), (a=missing, b=2.0)]` instead has an abstract `NamedTuple` element
-type; Enzyme currently cannot differentiate copies of that representation.
-
 Wren does perform some basic dataflow analysis to try to avoid copying things that definitely don't need to be copied, but this is very conservative since Wren only has access to the syntax tree.
 (In fact it's arguable that even this analysis is kind of pointless given the automatic optimisations described below.)
 
@@ -229,3 +217,19 @@ WrenCore._copied_args(vm)
 ```
 
 or even more simply by just copying the argument yourself inside the model, which bypasses Wren's analysis.
+
+## Troubleshooting
+
+### Records with missing fields
+
+For arrays of records with missing fields, give the records a concrete element type:
+
+```julia
+Record = @NamedTuple{a::Union{Missing,Float64}, b::Union{Missing,Float64}}
+data = Record[(a=1.0, b=missing), (a=missing, b=2.0)]
+```
+
+These immutable records contain no references to mutable objects, so Wren can copy the
+array without deep copying its elements. The untyped literal
+`[(a=1.0, b=missing), (a=missing, b=2.0)]` instead has an abstract `NamedTuple` element
+type; Enzyme currently cannot differentiate copies of that representation.

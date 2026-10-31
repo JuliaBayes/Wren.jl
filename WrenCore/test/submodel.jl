@@ -251,6 +251,25 @@ end
         @test retval == data
         m = parameters(accs)[@vn(x.m)]
         @test loglikelihood(accs) ≈ sum(logdensityof.(Normal(m), data))
+
+        partially_observed = likelihood_outer(likelihood_inner()) | (x=(a=a, obs=obs),)
+        _, accs = evaluate(
+            decondition(partially_observed, @vn(x.a)),
+            FromValues(in_pars),
+            OriginalSpace(),
+            WrenCore.default_accumulators(),
+            EvalContext{false}(),
+        )
+        @test parameters(accs) == in_pars
+        @test logprior(accs) ≈ logdensityof(Normal(), a) + logdensityof(Normal(a), b)
+        @test loglikelihood(accs) ≈ logdensityof(Normal(a), obs)
+
+        preconditioned_child = likelihood_inner() | (obs=0.9,)
+        parent_override = likelihood_outer(preconditioned_child) | (x=(obs=obs,),)
+        @test logjoint(decondition(parent_override, @vn(x.obs)), in_pars) ≈
+              logdensityof(Normal(), a) +
+              logdensityof(Normal(a), b) +
+              logdensityof(Normal(a), 0.9)
     end
 
     @testset "conditioning indexed child namespaces" begin
@@ -288,6 +307,29 @@ end
         @test logjoint(model, params) == logjoint(model, params)
         @test data == [(y=1.0,), (y=2.0,)]
 
+        selected = decondition(model, @vn(children[1].y))
+        selected_params = @vnt begin
+            children[1].a := 0.25
+            children[1].y := 0.75
+            children[2].a := -0.5
+        end
+        retval, accs = evaluate(
+            selected,
+            FromValues(selected_params),
+            OriginalSpace(),
+            WrenCore.default_accumulators(),
+            EvalContext{false}(),
+        )
+        @test retval == 2.75
+        @test logprior(accs) ≈
+              logdensityof(Normal(), 0.25) +
+              logdensityof(Normal(0.25), 0.75) +
+              logdensityof(Normal(), -0.5)
+        @test loglikelihood(accs) ≈ logdensityof(Normal(-0.5), 2.0)
+        @test data == [(y=1.0,), (y=2.0,)]
+        @test logjoint(decondition(model, @vn(children[1])), selected_params) ≈
+              logjoint(selected, selected_params)
+
         @wren function observed_siblings(x, inner)
             x.obs ~ Normal()
             result = x.child ~ inner
@@ -319,6 +361,27 @@ end
             logdensityof(Normal(0.5), 2.0)
         ) + logdensityof(Normal(6.0), 6.0)
         @test data == (obs=3.0, child=(y=2.0,), children=[(obs=3.0, child=(y=2.0,))])
+
+        unobserved_child = decondition(model, @vn(x.child))
+        params = @vnt begin
+            x.child.a := 0.5
+            x.child.y := 1.5
+            x.children[1].child.a := 0.5
+        end
+        retval, accs = evaluate(
+            unobserved_child,
+            FromValues(params),
+            OriginalSpace(),
+            WrenCore.default_accumulators(),
+            EvalContext{false}(),
+        )
+        @test retval == (3.0, 1.5, 3.0, 2.0)
+        @test logprior(accs) ≈
+              2 * logdensityof(Normal(), 0.5) + logdensityof(Normal(0.5), 1.5)
+        @test loglikelihood(accs) ≈
+              2 * logdensityof(Normal(), 3.0) +
+              logdensityof(Normal(0.5), 2.0) +
+              logdensityof(Normal(6.0), 6.0)
     end
 
     @testset "empty submodel" begin

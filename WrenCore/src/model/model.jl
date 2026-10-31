@@ -84,9 +84,9 @@ end
 function _dealias(v::AbstractArray{T}) where {T}
     return _can_shallow_copy_elements(T) ? copy(v) : deepcopy(v)
 end
-# Immutable pointer-free records can include inline union fields without being bits types.
-# They contain no GC-managed references, so deepcopy is unnecessary (and Enzyme's
-# reverse deepcopy rule does not support a Const input with a duplicated result).
+# For example, @NamedTuple{x::Union{Missing,Float64}} has an inline union field and
+# is not a bits type. It has no GC-managed references, so deepcopy is unnecessary.
+# Enzyme's reverse deepcopy rule does not support a Const input with a duplicated result.
 _can_shallow_copy_elements(::Type{T}) where {T} =
     isbitstype(T) ||
     (isconcretetype(T) && !ismutabletype(T) && Base.datatype_pointerfree(T))

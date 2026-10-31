@@ -187,8 +187,13 @@ The parent's values override the child's own conditioning.
 Conditioning replaces the entire value of each supplied key, including a nested
 submodel namespace. It does not merge nested values recursively. Supply every
 observation that you want to retain under a replaced namespace.
-To remove conditioning, use `decondition(cond_model, @vn(y))`, or
+To remove conditioning, use `decondition(cond_model, :y)`, or
 `decondition(cond_model)` to remove all conditioning.
+Qualified names select whole variables inside children, such as
+`decondition(outer_model, @vn(child.y))` or `@vn(children[1].y)` for an indexed child.
+Other child variables stay observed. This only removes conditioning stored on the
+parent, so a child's own conditioning can become visible again.
+It does not allow partial deconditioning of an ordinary array or record variable.
 Latent parameters remain `VarNamedTuple`s, as described above.
 
 ## [Vectorisation](@id vectorisation)

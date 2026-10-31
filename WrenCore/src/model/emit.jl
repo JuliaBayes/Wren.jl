@@ -17,6 +17,9 @@ end
 set_lhs!!(obj, optic, val) = Accessors.set(obj, optic, val)
 
 set_namespace_copy(obj, optic, val) = Accessors.set(obj, optic, val)
+# A deconditioned child namespace may be absent from the observed record.
+set_namespace_copy(obj::NamedTuple, ::VarNames.Property{sym}, val) where {sym} =
+    merge(obj, NamedTuple{(sym,)}((val,)))
 function set_namespace_copy(obj::Array{T}, optic::VarNames.Index, val::V) where {T,V}
     U = Union{T,V}
     if Base.isbitsunion(U) && all(i -> i isa Union{Integer,CartesianIndex}, optic.ix)
@@ -35,9 +38,14 @@ end
     inner = if tail isa VarNames.Iden
         val
     else
-        set_namespace_lhs!!(head(obj), head(observed), tail, val)
+        set_namespace_lhs!!(
+            _scope_conditioned(obj, head),
+            _scope_conditioned(observed, head),
+            tail,
+            val,
+        )
     end
-    return if obj === observed
+    return if obj isa NamedTuple || obj === observed
         set_namespace_copy(obj, head, inner)
     else
         Accessors.set(obj, VarNames.with_mutation(head), inner)

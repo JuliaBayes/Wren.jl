@@ -147,8 +147,18 @@ end
 
 # The parent's conditioned values for the submodel at `vn`, keyed relative to `vn`.
 scope(conditioned::NamedTuple, vn::VarName) =
-    haskey(conditioned, VarNames.getsym(vn)) ? _conditioned_value(conditioned, vn) :
+    haskey(conditioned, VarNames.getsym(vn)) ?
+    _scope_conditioned(
+        getproperty(conditioned, VarNames.getsym(vn)),
+        VarNames.getoptic(vn),
+    ) : NamedTuple()
+
+_scope_conditioned(values, ::VarNames.Iden) = values
+_scope_conditioned(values::NamedTuple, optic::VarNames.Property{sym}) where {sym} =
+    haskey(values, sym) ? _scope_conditioned(getproperty(values, sym), optic.child) :
     NamedTuple()
+_scope_conditioned(values, optic::Union{VarNames.Property,VarNames.Index}) =
+    _scope_conditioned(VarNames.ohead(optic)(values), VarNames.otail(optic))
 
 _conditioned_value(values::NamedTuple, vn::VarName{sym}) where {sym} =
     VarNames.getoptic(vn)(getproperty(values, sym))

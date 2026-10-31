@@ -123,22 +123,29 @@ end
 Base.:|(model::Model, values::NamedTuple) = condition(model, values)
 
 """
-    decondition(model::Model, vns::VarName...)::Model
+    decondition(model::Model, vars::Union{Symbol,VarName}...)::Model
 
-Remove `vns` from the set of variables that `model` is conditioned on, returning a new
-model. Each `VarName` must name a whole variable, for example `decondition(model, @vn(x))`.
-With no `vns`, every conditioned variable is removed.
+Remove whole variables from this model's conditioning, returning a new model.
+Use symbols for top-level names, for example `decondition(model, :y)`, and qualified
+`VarName`s for child variables, for example `decondition(model, @vn(child.y))` or
+`decondition(model, @vn(children[1].y))`. With no selectors, all conditioning is removed.
+
+Removing a parent override does not remove a child model's own conditioning.
+Components of an ordinary observed array or record cannot be made latent individually.
 
 Variables observed with `@observe` are part of the model's structure rather than its
 conditioning, and are unaffected.
 """
-function decondition(model::Model, vns::VarName...)
-    old = conditioned(model)
-    all(vn -> VarNames.getoptic(vn) isa VarNames.Iden, vns) ||
-        throw(ArgumentError("decondition only supports whole variables"))
-    new_conditioned =
-        isempty(vns) ? NamedTuple() :
-        Base.structdiff(old, NamedTuple{map(VarNames.getsym, vns)})
+function decondition(model::Model, vars::Union{Symbol,VarName}...)
+    new_conditioned = if isempty(vars)
+        NamedTuple()
+    else
+        foldl(vars; init=conditioned(model)) do values, var
+            optic =
+                var isa Symbol ? VarNames.Property{var}() : VarNames.varname_to_optic(var)
+            _decondition(values, optic)
+        end
+    end
     return Model(
         model.name,
         model.args,
@@ -149,6 +156,23 @@ function decondition(model::Model, vns::VarName...)
         _unsafe_reuse_evaluation_fn=model.evaluation_fn,
     )
 end
+
+_decondition(values::NamedTuple, ::VarNames.Iden) = NamedTuple()
+function _decondition(values::NamedTuple, optic::VarNames.Property{sym}) where {sym}
+    haskey(values, sym) || return values
+    if optic.child isa VarNames.Iden
+        return Base.structdiff(values, NamedTuple{(sym,)})
+    end
+    child = _decondition(getproperty(values, sym), optic.child)
+    # Keep empty parents: deleting a structured observation's root would make it latent.
+    return merge(values, NamedTuple{(sym,)}((child,)))
+end
+function _decondition(values, optic::Union{VarNames.Property,VarNames.Index})
+    head, tail = VarNames.ohead(optic), VarNames.otail(optic)
+    return Accessors.set(values, head, _decondition(head(values), tail))
+end
+_decondition(values, ::VarNames.Iden) =
+    throw(ArgumentError("decondition requires a whole variable or submodel namespace"))
 
 """
     logjoint(model::Model, params::VarNamedTuple)
