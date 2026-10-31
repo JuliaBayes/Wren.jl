@@ -7,6 +7,9 @@ include("samplers/prior.jl")
 include("samplers/nuts.jl")
 export prior, nuts
 
+include("optimization.jl")
+export optimize
+
 # Distributions
 module Dists
 using Reexport: @reexport
@@ -31,6 +34,7 @@ using WrenCore:
     logprior,
     # Vectorisation
     VecModel,
+    logdensity,
     vectorise_latents,
     lp,
     lp_and_grad,
@@ -66,6 +70,7 @@ export WrenCore,
     logprior,
     # Vectorisation
     VecModel,
+    logdensity,
     vectorise_latents,
     lp,
     lp_and_grad,
