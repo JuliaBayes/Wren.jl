@@ -1,7 +1,6 @@
 module WrenPathfinderExt
 
 using Wren: Wren, Model, DEFAULT_AD, FromPrior, logdensity, Draw
-using Accessors: @set
 using AbstractMCMC: AbstractMCMC
 using FlexiChains: VNChain
 using Random: AbstractRNG
@@ -45,7 +44,11 @@ function Wren.pathfinder(
         Draw(params, density)
     end
     chain = AbstractMCMC.from_samples(VNChain, reshape(draws, :, 1))
-    return @set result.draws_transformed = chain
+    names = fieldnames(typeof(result))
+    fields = NamedTuple{names}(getfield.(Ref(result), names))
+    return Pathfinder.MultiPathfinderResult(
+        values(merge(fields, (; draws_transformed=chain)))...,
+    )
 end
 
 end
