@@ -167,8 +167,3 @@ function _scope_conditioned(values::NamedTuple, optic::VarNames.Property{sym}) w
 end
 _scope_conditioned(values, optic::Union{VarNames.Property,VarNames.Index}) =
     _scope_conditioned(VarNames.ohead(optic)(values), VarNames.otail(optic))
-
-# VarNames.getvalue checks canview first, which currently rejects tuple indexing.
-# Direct optic access also supports e.g. (y=(1.0,),) conditioned at @vn(y[1]).
-_conditioned_value(values::NamedTuple, vn::VarName{sym}) where {sym} =
-    VarNames.getoptic(vn)(getproperty(values, sym))

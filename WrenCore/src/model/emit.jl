@@ -169,7 +169,7 @@ function emit_model_expr(
         else
             # Whole-symbol membership is known from the NamedTuple's type.
             if $(haskey)($conditioned, $(QuoteNode(template)))
-                $val = $(_conditioned_value)($conditioned, $vn)
+                $val = $(VarNames.getvalue)($conditioned, $vn)
                 # Nothing reads an observed element back unless the symbol is reused. A
                 # plain symbol is always bound, since it is the template below.
                 $(
