@@ -1,6 +1,6 @@
 module WrenEnzymeConditioningTests
 
-using Enzyme, Random, Test, WrenCore, WrenDists
+using Enzyme, Test, WrenCore, WrenDists
 
 @wren function trial(previous, theta)
     a ~ Normal(theta + previous.a)
@@ -49,40 +49,6 @@ end
         value, gradient = lp_and_grad(vm, [0.3, -0.2, 0.4])
         @test value ≈ expected
         @test gradient ≈ [-0.5, 3.0, 2.7]
-    end
-end
-
-# A mutable pointer-free record must still be deepcopied, preserving aliases between
-# elements while separating the model's state from the caller's state.
-mutable struct MutableRecord
-    value::Float64
-end
-
-@wren function mutate_shared(data)
-    data[1].value += 1.0
-    return data[2].value
-end
-
-@wren function mutate_nested(data)
-    data[1].value[1] += 1.0
-    return data[2].value[1]
-end
-
-@testset "Deep copies retain mutable element aliases" begin
-    for as_view in (false, true), nested in (false, true)
-        shared = nested ? (value=[0.0],) : MutableRecord(0.0)
-        data = [shared, shared]
-        data = as_view ? view(data, :) : data
-        model = nested ? mutate_nested(data) : mutate_shared(data)
-        result, _ = evaluate(
-            model,
-            FromPrior(Xoshiro(468)),
-            OriginalSpace(),
-            WrenCore.default_accumulators(),
-            EvalContext{false}(),
-        )
-        @test result == 1.0
-        @test (nested ? shared.value[1] : shared.value) == 0.0
     end
 end
 

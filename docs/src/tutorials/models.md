@@ -180,20 +180,11 @@ A `missing` entry does not make that entry latent.
 To mix observations and latent values, use separate variables or condition whole
 variables in a submodel.
 
-A nested `NamedTuple` under a submodel's namespace conditions variables in that
-child, for example `outer(inner()) | (child=(y=data,),)` when the parent contains
-`child ~ inner()`.
-The parent's values override the child's own conditioning.
-Conditioning replaces the entire value of each supplied key, including a nested
-submodel namespace. It does not merge nested values recursively. Supply every
-observation that you want to retain under a replaced namespace.
+Conditioning replaces the entire value of each supplied key.
 To remove conditioning, use `decondition(cond_model, :y)`, or
 `decondition(cond_model)` to remove all conditioning.
-Qualified names select whole variables inside children, such as
-`decondition(outer_model, @vn(child.y))` or `@vn(children[1].y)` for an indexed child.
-Other child variables stay observed. This only removes conditioning stored on the
-parent, so a child's own conditioning can become visible again.
-It does not allow partial deconditioning of an ordinary array or record variable.
+See [Conditioning submodels](@ref submodel-conditioning) for nested observations
+and deconditioning variables inside child models.
 Latent parameters remain `VarNamedTuple`s, as described above.
 
 ## [Vectorisation](@id vectorisation)

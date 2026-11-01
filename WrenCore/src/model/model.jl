@@ -289,7 +289,7 @@ function Base.show(io::IO, ::MIME"text/plain", model::Model)
     prefix = get(io, :tree_prefix, "")
     max_exprs = get(io, :max_wren_exprs, 20)
     entries = (
-        "arguments" => model.args,
+        "arguments" => Base.structdiff(model.args, model.conditioned),
         "conditioned" => model.conditioned,
         "expressions" => model.stmts,
     )

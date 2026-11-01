@@ -146,19 +146,29 @@ function _evaluate_scoped_submodel(
 end
 
 # The parent's conditioned values for the submodel at `vn`, keyed relative to `vn`.
-scope(conditioned::NamedTuple, vn::VarName) =
-    haskey(conditioned, VarNames.getsym(vn)) ?
-    _scope_conditioned(
-        getproperty(conditioned, VarNames.getsym(vn)),
-        VarNames.getoptic(vn),
-    ) : NamedTuple()
+function scope(conditioned::NamedTuple, vn::VarName)
+    if haskey(conditioned, VarNames.getsym(vn))
+        return _scope_conditioned(
+            getproperty(conditioned, VarNames.getsym(vn)),
+            VarNames.getoptic(vn),
+        )
+    else
+        return NamedTuple()
+    end
+end
 
 _scope_conditioned(values, ::VarNames.Iden) = values
-_scope_conditioned(values::NamedTuple, optic::VarNames.Property{sym}) where {sym} =
-    haskey(values, sym) ? _scope_conditioned(getproperty(values, sym), optic.child) :
-    NamedTuple()
+function _scope_conditioned(values::NamedTuple, optic::VarNames.Property{sym}) where {sym}
+    if haskey(values, sym)
+        return _scope_conditioned(getproperty(values, sym), optic.child)
+    else
+        return NamedTuple()
+    end
+end
 _scope_conditioned(values, optic::Union{VarNames.Property,VarNames.Index}) =
     _scope_conditioned(VarNames.ohead(optic)(values), VarNames.otail(optic))
 
+# VarNames.getvalue checks canview first, which currently rejects tuple indexing.
+# Direct optic access also supports e.g. (y=(1.0,),) conditioned at @vn(y[1]).
 _conditioned_value(values::NamedTuple, vn::VarName{sym}) where {sym} =
     VarNames.getoptic(vn)(getproperty(values, sym))

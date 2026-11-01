@@ -252,9 +252,12 @@ end
         m = parameters(accs)[@vn(x.m)]
         @test loglikelihood(accs) ≈ sum(logdensityof.(Normal(m), data))
 
-        partially_observed = likelihood_outer(likelihood_inner()) | (x=(a=a, obs=obs),)
+        partially_observed = decondition(
+            likelihood_outer(likelihood_inner()) | (x=(a=a, obs=obs),),
+            @vn(x.a)
+        )
         _, accs = evaluate(
-            decondition(partially_observed, @vn(x.a)),
+            partially_observed,
             FromValues(in_pars),
             OriginalSpace(),
             WrenCore.default_accumulators(),
@@ -290,6 +293,7 @@ end
         model =
             observed_children(Vector{Any}(undef, 2), observed_child()) | (children=data,)
         params = @vnt begin
+            @template children = zeros(2)
             children[1].a := 0.25
             children[2].a := -0.5
         end
@@ -309,6 +313,7 @@ end
 
         selected = decondition(model, @vn(children[1].y))
         selected_params = @vnt begin
+            @template children = zeros(2)
             children[1].a := 0.25
             children[1].y := 0.75
             children[2].a := -0.5
@@ -343,6 +348,7 @@ end
         template = (obs=0.0, child=nothing, children=[(obs=0.0, child=nothing)])
         model = observed_siblings(template, observed_child()) | (x=data,)
         params = @vnt begin
+            @template x = (; children=fill((; child=0.0), 1))
             x.child.a := 0.5
             x.children[1].child.a := 0.5
         end
@@ -364,6 +370,7 @@ end
 
         unobserved_child = decondition(model, @vn(x.child))
         params = @vnt begin
+            @template x = (; children=fill((; child=0.0), 1))
             x.child.a := 0.5
             x.child.y := 1.5
             x.children[1].child.a := 0.5

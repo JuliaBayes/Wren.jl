@@ -23,7 +23,11 @@ set_namespace_copy(obj::NamedTuple, ::VarNames.Property{sym}, val) where {sym} =
 function set_namespace_copy(obj::Array{T}, optic::VarNames.Index, val::V) where {T,V}
     U = Union{T,V}
     if Base.isbitsunion(U) && all(i -> i isa Union{Integer,CartesianIndex}, optic.ix)
-        # Keep both observed records and child params inline instead of boxing into Any.
+        # For example, replacing (y=1.0,) with VarNamedTuple(a=0.5) should use
+        # Union{typeof((y=1.0,)),typeof(VarNamedTuple(a=0.5))}, not Any. Accessors.set
+        # and BangBang.setindex!! use promote_type here, which widens these records to
+        # Any and boxes the remaining observed entries. Copy before the first write:
+        # BangBang.setindex!! alone can also mutate a shared array when its eltype fits.
         result = copyto!(similar(obj, U), obj)
         Base.setindex!(result, val, optic.ix...; optic.kw...)
         return result
@@ -107,6 +111,9 @@ function emit_model_expr(
         stmt.lhs_is_reused ? CollectSubmodelParams() : DiscardSubmodelParams()
     assign_child_params = assign_or_set!!(stmt.lhs, child_params, vn)
     if stmt.lhs isa Expr
+        # This generator only has a symbol for `conditioned`: the cached evaluation
+        # function is shared by condition/decondition and parent-supplied overrides.
+        # Julia folds this key check when specialising on the NamedTuple's type.
         assign_child_params = quote
             if $(haskey)($conditioned, $(QuoteNode(template)))
                 $template = $(set_namespace_lhs!!)(
