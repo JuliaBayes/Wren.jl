@@ -190,7 +190,7 @@ end
             x = parameters(accs)[@vn(x)]
             @test loglikelihood(accs) ≈ sum(logdensityof.(Normal(x), data))
             # Indexing past the conditioned array is an error, not a new latent variable.
-            @test_throws BoundsError evaluate(
+            @test_throws r"conditioned variable y\[4\]" evaluate(
                 observe_loop(4) | (; y=data),
                 FromPrior(),
                 OriginalSpace(),
