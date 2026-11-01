@@ -44,6 +44,7 @@ makedocs(;
         "How-tos" => [
             "howtos/benchmarking.md"
             "howtos/optimization.md"
+            "howtos/pathfinder.md"
             "howtos/posteriordb.md"
             "howtos/custom-distributions.md"
         ],

@@ -5,7 +5,8 @@ using WrenCore
 # Samplers
 include("samplers/prior.jl")
 include("samplers/nuts.jl")
-export prior, nuts
+include("samplers/pathfinder.jl")
+export prior, nuts, pathfinder
 
 include("optimization.jl")
 export optimize, MAP, MLE
