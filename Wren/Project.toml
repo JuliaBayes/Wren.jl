@@ -23,11 +23,6 @@ WrenDists = "2ad4af40-d7c9-42b2-92b0-e09d37d1e75a"
 [weakdeps]
 Optimization = "7f7a1694-90dd-40f0-9382-eb1efda571ba"
 
-[sources]
-FlexiChains = {rev = "v0.7", url = "https://github.com/JuliaBayes/FlexiChains.jl"}
-WrenCore = {path = "../WrenCore"}
-WrenDists = {path = "../WrenDists"}
-
 [extensions]
 WrenOptimizationExt = "Optimization"
 
