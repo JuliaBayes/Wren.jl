@@ -20,6 +20,12 @@ VarNames = "09a315b2-63fc-4165-8d7f-d59368e770cc"
 WrenCore = "008b59e7-bbda-4991-901b-b08f5cfc584d"
 WrenDists = "2ad4af40-d7c9-42b2-92b0-e09d37d1e75a"
 
+[weakdeps]
+Optimization = "7f7a1694-90dd-40f0-9382-eb1efda571ba"
+
+[extensions]
+WrenOptimizationExt = "Optimization"
+
 [compat]
 AbstractMCMC = "5"
 DensityInterface = "0.4"
@@ -29,6 +35,7 @@ Enzyme = "0.13"
 EnzymeCore = "0.6 - 0.8"
 FlexiChains = "0.7"
 LinearAlgebra = "1"
+Optimization = "5"
 Random = "1"
 Reexport = "1"
 StatsAPI = "1"
