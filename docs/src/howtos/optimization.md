@@ -35,6 +35,20 @@ Parameters use unconstrained coordinates internally, but the objective is the or
 density without a change-of-variables Jacobian. Solver keywords are passed to
 `Optimization.solve`; check `fit.solution.retcode` before using an estimate.
 
+## Convenience functions
+
+[`MAP`](@ref) selects `lp_function=logjoint`, as in the first example.
+[`MLE`](@ref) selects `lp_function=loglikelihood`, as in the second:
+
+```@example optimization
+map_fit = MAP(model, LBFGS())
+mle_fit = MLE(model, LBFGS())
+(map=map_fit.params, mle=mle_fit.params)
+```
+
+Both helpers fix the objective and forward all other keywords to [`optimize`](@ref),
+including initialisation and solver options. Use `optimize` for a custom objective.
+
 ## Initialisation
 
 By default, optimisation starts from a draw from the model's priors.

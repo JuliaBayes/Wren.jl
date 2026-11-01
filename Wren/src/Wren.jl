@@ -8,7 +8,7 @@ include("samplers/nuts.jl")
 export prior, nuts
 
 include("optimization.jl")
-export optimize
+export optimize, MAP, MLE
 
 # Distributions
 module Dists

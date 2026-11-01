@@ -10,14 +10,8 @@ end
 
 @testset "MAP and MLE" begin
     initial = FromValues(VarNamedTuple(rate=1.5))
-    map_fit = Wren.optimize(poisson_rate(3), LBFGS(); latent_source=initial, abstol=1e-10)
-    mle_fit = Wren.optimize(
-        poisson_rate(3),
-        LBFGS();
-        latent_source=initial,
-        lp_function=loglikelihood,
-        abstol=1e-10,
-    )
+    map_fit = MAP(poisson_rate(3), LBFGS(); latent_source=initial, abstol=1e-10)
+    mle_fit = MLE(poisson_rate(3), LBFGS(); latent_source=initial, abstol=1e-10)
     @test map_fit.params[@vn(rate)] ≈ 2.0 rtol=1e-6
     @test mle_fit.params[@vn(rate)] ≈ 3.0 rtol=1e-6
     @test Optimization.SciMLBase.successful_retcode(map_fit.solution)
