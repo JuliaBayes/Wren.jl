@@ -2,7 +2,7 @@
 
 Load Optimization.jl and a solver package to find a maximum a posteriori (MAP) estimate:
 
-```julia
+```@example optimization; continued=true
 using Wren
 using Wren.Dists: Gamma, Poisson
 using OptimizationOptimJL: LBFGS
@@ -14,17 +14,20 @@ import Enzyme, Optimization
 end
 
 model = poisson_rate(3)
-initial = FromValues(VarNamedTuple(rate=1.5))
-fit = Wren.optimize(model, LBFGS(); latent_source=initial)
-fit.params[@vn(rate)]  # approximately 2
-fit.solution          # native solver result, including convergence status
+fit = Wren.optimize(model, LBFGS())
+```
+
+The fitted parameters are returned as a `VarNamedTuple`; here the MAP estimate of `rate` is approximately 2:
+
+```@example optimization
+fit.params
 ```
 
 Use `lp_function=loglikelihood` for maximum likelihood (MLE):
 
-```julia
-fit = Wren.optimize(model, LBFGS(); latent_source=initial, lp_function=loglikelihood)
-fit.params[@vn(rate)]  # approximately 3
+```@example optimization
+fit = Wren.optimize(model, LBFGS(); lp_function=loglikelihood)
+fit.params
 ```
 
 Both methods optimise within the parameter support declared by the model's priors.
@@ -32,10 +35,23 @@ Parameters use unconstrained coordinates internally, but the objective is the or
 density without a change-of-variables Jacobian. Solver keywords are passed to
 `Optimization.solve`; check `fit.solution.retcode` before using an estimate.
 
+## Initialisation
+
+By default, optimisation starts from a draw from the model's priors.
+Use `latent_source` to provide an initial state, as for [`VecModel`](@ref):
+
+```@example optimization
+initial = FromValues(VarNamedTuple(rate=1.5))
+fit = Wren.optimize(model, LBFGS(); latent_source=initial)
+fit.params
+```
+
+## Direct log-density access
+
 For direct control, [`logdensity`](@ref) constructs the same [`VecModel`](@ref) using the
 LogDensityProblems.jl interface:
 
-```julia
+```@example optimization
 import LogDensityProblems as LDP
 
 density = logdensity(model, AutoEnzyme(; mode=Reverse); latent_source=initial)
