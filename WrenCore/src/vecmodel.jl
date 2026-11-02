@@ -480,18 +480,16 @@ lp(vecmodel::VecModel, params::AbstractVector) = vecmodel.lp_func(params)
     evaluate(vecmodel::VecModel, params::AbstractVector, accs=vecmodel.accs,
              ctx=EvalContext{false}())
 
-Evaluate the model once at `params` in `vecmodel`'s parameter space. Return the model's
-return value and the updated [`AccumulatorTuple`](@ref), without applying `lp_function`.
-The default accumulators collect [`logprior`](@ref), [`loglikelihood`](@ref), and
-[`logjac`](@ref). Supply other accumulators to select different outputs.
+Evaluate once in `vecmodel`'s parameter space, returning `(retval, accs)` without applying
+`lp_function`. The default accumulators collect [`logprior`](@ref), [`loglikelihood`](@ref),
+and [`logjac`](@ref); supply other accumulators to select different outputs.
 
-As for model evaluation, supplied accumulators are not copied or reset and may be
-updated in place. Use fresh accumulators for independent evaluations.
-`params` is not copied either; the model must not write into its latent variables.
+Accumulators are neither copied nor reset. Use fresh ones for independent evaluations.
+`params` is borrowed; the model must not write into its latent variables.
 
-This uses the prepared vector mapping, but not the AD preparation or compiled backend.
-For external Enzyme differentiation, construct the `VecModel` with `reduce_copies=false`
-and pass `EvalContext{true}()` to preserve copies needed by the selected outputs.
+This reuses the vector mapping, not the AD preparation or compiled backend. For external
+Enzyme differentiation, use `reduce_copies=false` and `EvalContext{true}()` to preserve
+copies needed by the selected outputs.
 """
 function evaluate(
     vecmodel::VecModel,
@@ -509,26 +507,20 @@ function evaluate(
 end
 
 """
-    prepare_batch(vecmodel::VecModel, params::AbstractMatrix,
-                  output_function; accs=vecmodel.accs)
-    prepare_batch(vecmodel::VecModel, params::AbstractMatrix; accs=vecmodel.accs)
+    prepare_batch(vecmodel::VecModel, params::AbstractMatrix[, output_function];
+                  accs=vecmodel.accs)
 
-Prepare a callable that evaluates all columns of a parameter matrix together. Load
-Reactant.jl before calling this function. The matrix must have `vecmodel.dimension` rows;
-subsequent calls must use the same size as `params`.
-Model distributions and output functions must support Reactant's traced numbers;
-WrenDists.jl provides compatible distributions.
+Compile a reusable callable that evaluates matrix columns together. Requires Reactant.jl
+and distributions that support its traced numbers, such as WrenDists.jl. Inputs must have
+`vecmodel.dimension` rows and the same size as `params`.
 
-By default, the result has three rows: [`logprior`](@ref), [`loglikelihood`](@ref), and
-[`logjac`](@ref). Each column corresponds to one input point. `output_function` instead
-selects a number or numeric vector from the accumulated outputs; results are concatenated
-along the column dimension, as for `mapslices(...; dims=1)`.
+Each output column corresponds to one input point. Default rows contain [`logprior`](@ref),
+[`loglikelihood`](@ref), and [`logjac`](@ref). `output_function` can select a number or numeric
+vector from the accumulators instead, with results concatenated as for `mapslices(; dims=1)`.
 
-The prepared callable owns its model arguments and copies `accs` for each point. It keeps
-results on the Reactant device. Pass Reactant arrays to reuse resident inputs, and use
-`Array` to materialise the result on the host. Preparation includes compilation and is
-intended to be reused. The scalar LogDensityProblems interface is unchanged.
-As for [`evaluate`](@ref), the model must not write into its latent variables.
+The callable owns model arguments and copies `accs` per point. Results stay on the Reactant
+device. Pass Reactant arrays to reuse resident inputs; use `Array` for host results.
+As for [`evaluate`](@ref), latent variables must not be mutated.
 """
 function prepare_batch end
 

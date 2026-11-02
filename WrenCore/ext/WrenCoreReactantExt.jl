@@ -9,21 +9,17 @@ using WrenCore.Accessors: @set
 include("reactant_bijectors.jl")
 include("reactant_evaluation.jl")
 
-struct BatchPoint{F}
-    f::F
-end
 _batch_output(value::Number) = convert(Reactant.TracedRArray, [value])
 _batch_output(value::AbstractVector) = convert(Reactant.TracedRArray, value)
-function (point::BatchPoint)(params)
-    f = point.f
-    f = @set f.accs = copy(f.accs)
-    return _batch_output(f(vec(params)))
+function _batch_points(f, params)
+    return mapslices(params; dims=1) do point
+        point_f = @set f.accs = copy(f.accs)
+        _batch_output(point_f(vec(point)))
+    end
 end
 
-_batch_points(point, params) = mapslices(point, params; dims=1)
-
 struct BatchEvaluator{F,C}
-    point::F
+    f::F
     compiled::C
     shape::Tuple{Int,Int}
 end
@@ -35,7 +31,7 @@ function (batch::BatchEvaluator)(params::AbstractMatrix)
             "prepared batch expects size $(batch.shape), received $(size(params))",
         ),
     )
-    return batch.compiled(batch.point, _batch_input(params))
+    return batch.compiled(batch.f, _batch_input(params))
 end
 
 function WrenCore.prepare_batch(
@@ -61,11 +57,10 @@ function WrenCore.prepare_batch(
         vm.vecinfo,
         Reactant.to_rarray(copy(accs)),
     )
-    point = BatchPoint(f)
     input = _batch_input(params)
     # The backend evaluator is created during preparation in the model's module.
-    compiled = Base.invokelatest(Reactant.Compiler.compile, _batch_points, (point, input))
-    return BatchEvaluator(point, compiled, size(params))
+    compiled = Base.invokelatest(Reactant.Compiler.compile, _batch_points, (f, input))
+    return BatchEvaluator(f, compiled, size(params))
 end
 
 """

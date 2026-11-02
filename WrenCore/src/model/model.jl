@@ -208,11 +208,18 @@ to overload `_needs_copy`, as the generated function only has access to the meth
 
 function evaluation_fn_expr(
     argnames::Tuple{Vararg{Symbol}},
-    stmts::Vector{<:Union{AbstractWrenExpr,LineNumberNode}},
+    stmts::Vector{<:Union{AbstractWrenExpr,LineNumberNode}};
+    fn_args=ntuple(_ -> gensym(), 7),
 )
     body = Expr(:block)
-    @gensym model_args enzyme_copy_argnames ctx
-    @gensym accs conditioned latent_source parameter_space retval
+    latent_source,
+    parameter_space,
+    accs,
+    model_args,
+    conditioned,
+    enzyme_copy_argnames,
+    ctx = fn_args
+    retval = gensym()
     for k in argnames
         # Conditioning an argument replaces it, so the model sees one value for `k`.
         push!(
@@ -236,19 +243,7 @@ function evaluation_fn_expr(
         emit_statements(stmts, accs, conditioned, latent_source, parameter_space, ctx)
     push!(body.args, :($retval = $model_body))
     push!(body.args, :(return ($retval, $accs)))
-    return :(
-        function (
-            $latent_source,
-            $parameter_space,
-            $accs,
-            $model_args,
-            $conditioned,
-            $enzyme_copy_argnames,
-            $ctx,
-        )
-            $body
-        end
-    )
+    return Expr(:function, Expr(:tuple, fn_args...), body)
 end
 
 function make_evaluation_fn(argnames, stmts, mod::Module)

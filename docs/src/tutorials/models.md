@@ -76,19 +76,14 @@ accs = rand_with_logp(model)
 which returns a new object, an [`AccumulatorTuple`](@ref).
 You can access the trace with `parameters(accs)`, and the log-density with `logjoint(accs)`.
 
-For importance sampling with the model prior as the proposal, the prior cancels from the
-target-to-proposal density ratio. The unnormalised log weight is the log-likelihood:
+For importance sampling with the prior as the proposal, the unnormalised log weight is
+the log-likelihood. The prior cancels from the target-to-proposal density ratio:
 
 ```@example models
-using Random: Xoshiro
-
-proposal = rand_with_logp(Xoshiro(468), model)
-proposal_params = parameters(proposal)
-logweight = loglikelihood(proposal)
+proposal_params, logweight = parameters(accs), loglikelihood(accs)
 ```
 
-This draws the sample and computes its log weight in one model evaluation.
-For a different proposal, include its log density in the density ratio.
+Both come from the same evaluation. Other proposals need their log density in the ratio.
 
 ## General evaluation
 
@@ -259,38 +254,20 @@ If this is not desired, you can specify a different parameter space, or a differ
 
 ### Collecting outputs in one evaluation
 
-Use [`evaluate`](@ref) with a `VecModel` to obtain the density components together at a
-parameter vector. This reuses its prepared vector mapping:
+[`evaluate`](@ref) reuses a `VecModel`'s vector mapping and returns its outputs in one pass:
 
 ```@example models
 retval, components = evaluate(noad_vecmodel, v)
 (logprior(components), loglikelihood(components), WrenCore.logjac(components))
-```
-
-`logprior` always uses original model coordinates. `logjac` is the log-absolute determinant
-for the forward transformation from original coordinates to the vector's parameter space.
-The joint density in that space is therefore:
-
-```@example models
 logprior(components) + loglikelihood(components) - WrenCore.logjac(components) ≈
 lp(noad_vecmodel, v)
 ```
 
-In `OriginalSpace()`, `logjac` is zero. These coordinate transforms do not, in general,
-turn the prior into a standard normal distribution.
-
-Select other outputs by supplying accumulators. For example, collect the parameters and
-likelihood without collecting the prior or Jacobian:
-
-```@example models
-selected = AccumulatorTuple(ParamsAccumulator(), LogLikelihoodAccumulator())
-retval, selected = evaluate(noad_vecmodel, v, selected)
-(parameters(selected), loglikelihood(selected))
-```
-
-Supplied accumulators are not copied or reset and may be updated in place. Use fresh
-accumulators for independent evaluations. As with `lp`, the parameter vector is not copied,
-so the model must not write into its latent variables.
+`logprior` uses original coordinates. `logjac` is the forward log-absolute Jacobian
+determinant, so it is subtracted above. It is zero in `OriginalSpace()`;
+unconstraining does not generally turn the prior into a standard normal distribution.
+Pass accumulators as the third argument to select other outputs. They are neither copied
+nor reset, so use fresh accumulators for independent evaluations.
 
 ### Evaluating a batch of parameter points
 
@@ -307,39 +284,25 @@ using Wren: Dists
 end
 
 batch_model = VecModel(count_model(3), nothing)
-X = reshape(log.([0.5, 1.5, 3.0]), 1, :)
+X = Reactant.to_rarray(reshape(log.([0.5, 1.5, 3.0]), 1, :))
 batch = prepare_batch(batch_model, X)
-components = Array(batch(X))
-```
+components = batch(X)       # Results stay on the Reactant device.
+Array(components)          # Materialise on the host when needed.
 
-The three result rows contain the original-space log-prior, log-likelihood, and forward
-log-Jacobian. Each column corresponds to the same input column. Select other outputs with
-a function of the accumulators:
-
-```julia
 likelihood_batch = prepare_batch(batch_model, X, loglikelihood)
 loglikelihoods = vec(Array(likelihood_batch(X)))
 ```
 
-The output function may return a number or numeric vector. Accumulators can also be
-selected with the `accs` keyword, as for single-point evaluation.
-Use the distributions in `Wren.Dists` for compatibility with Reactant's traced numbers.
+Each result column corresponds to an input point. The default rows contain log-prior,
+log-likelihood, and forward log-Jacobian. An output function can select a number or numeric
+vector; `accs` selects the accumulators. Use `Wren.Dists` for traced-number support.
 
-Reuse the prepared callable with matrices of the same size. Inputs and results can stay
-on the Reactant device:
-
-```julia
-X_device = Reactant.to_rarray(X)
-components_device = batch(X_device)
-```
-
-Preparation includes compilation. Large batches can benefit from tensor operations across
-points; small batches can be faster with ordinary Julia evaluation. The prepared callable
-owns its model arguments and isolates mutable arguments and accumulators between points.
-The model must keep its latent variables and their dimensions fixed, as for `VecModel`.
-Branch values must have compatible types, and loop lengths must be known during preparation.
-Called Julia functions and inline-created submodels follow Reactant's tracing rules.
-The scalar LogDensityProblems and gradient interfaces continue to use `VecModel`.
+Reuse the compiled callable with matrices of the same size, either ordinary or Reactant
+arrays. It owns model arguments and isolates mutable state between points and calls.
+Large batches can benefit from tensor operations; small batches can favor ordinary evaluation.
+Branches need compatible result types and loops need fixed lengths. Called functions and
+inline-created submodels follow Reactant's tracing rules. `VecModel` continues to provide
+the scalar LogDensityProblems and gradient interfaces.
 
 !!! warning
 
