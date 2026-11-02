@@ -477,6 +477,38 @@ Calculate the log-density of `vecmodel` at `params`.
 lp(vecmodel::VecModel, params::AbstractVector) = vecmodel.lp_func(params)
 
 """
+    evaluate(vecmodel::VecModel, params::AbstractVector, accs=vecmodel.accs,
+             ctx=EvalContext{false}())
+
+Evaluate the model once at `params` in `vecmodel`'s parameter space. Return the model's
+return value and the updated [`AccumulatorTuple`](@ref), without applying `lp_function`.
+The default accumulators collect [`logprior`](@ref), [`loglikelihood`](@ref), and
+[`logjac`](@ref). Supply other accumulators to select different outputs.
+
+As for model evaluation, supplied accumulators are not copied or reset and may be
+updated in place. Use fresh accumulators for independent evaluations.
+`params` is not copied either; the model must not write into its latent variables.
+
+This uses the prepared vector mapping, but not the AD preparation or compiled backend.
+For external Enzyme differentiation, construct the `VecModel` with `reduce_copies=false`
+and pass `EvalContext{true}()` to preserve copies needed by the selected outputs.
+"""
+function evaluate(
+    vecmodel::VecModel,
+    params::AbstractVector,
+    accs::AccumulatorTuple=vecmodel.accs,
+    ctx::EvalContext=EvalContext{false}(),
+)
+    return evaluate(
+        vecmodel.model,
+        FromVector(params, vecmodel.vecinfo),
+        vecmodel.parameter_space,
+        accs,
+        ctx,
+    )
+end
+
+"""
     lp_and_grad(vecmodel::VecModel, params::AbstractVector)
 
 Returns a tuple (log_density, grad) where `log_density` is the log-density of `vecmodel` and

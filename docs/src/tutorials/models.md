@@ -76,13 +76,27 @@ accs = rand_with_logp(model)
 which returns a new object, an [`AccumulatorTuple`](@ref).
 You can access the trace with `parameters(accs)`, and the log-density with `logjoint(accs)`.
 
+For importance sampling with the model prior as the proposal, the prior cancels from the
+target-to-proposal density ratio. The unnormalised log weight is the log-likelihood:
+
+```@example models
+using Random: Xoshiro
+
+proposal = rand_with_logp(Xoshiro(468), model)
+proposal_params = parameters(proposal)
+logweight = loglikelihood(proposal)
+```
+
+This draws the sample and computes its log weight in one model evaluation.
+For a different proposal, include its log density in the density ratio.
+
 ## General evaluation
 
 At this point, you are probably wondering what an `AccumulatorTuple` is.
 This is a good point to talk about the general evaluation framework that Wren uses, which is heavily lifted from DynamicPPL.
 
 The entry point for _all_ Wren model evaluation is the [`WrenCore.evaluate`](@ref) function.
-It takes exactly four arguments:
+Its first four arguments are:
 
   - a *model* (of course!);
   - a *latent source* (a specification of how to obtain the values of latent variables);
@@ -242,6 +256,41 @@ None of these functions copy the parameter vector, so the model must not write i
 By default, `VecModel`s are always run in [`UnconstrainedSpace()`](@ref): that is, all parameters are transformed into a form where they can take any value in ℝ^n.
 The log-density calculation will then include the log-Jacobian term corresponding to this transformation.
 If this is not desired, you can specify a different parameter space, or a different log-density calculation function as a keyword argument to the [`VecModel`](@ref) constructor: please see its docstring for more info.
+
+### Collecting outputs in one evaluation
+
+Use [`evaluate`](@ref) with a `VecModel` to obtain the density components together at a
+parameter vector. This reuses its prepared vector mapping:
+
+```@example models
+retval, components = evaluate(noad_vecmodel, v)
+(logprior(components), loglikelihood(components), WrenCore.logjac(components))
+```
+
+`logprior` always uses original model coordinates. `logjac` is the log-absolute determinant
+for the forward transformation from original coordinates to the vector's parameter space.
+The joint density in that space is therefore:
+
+```@example models
+logprior(components) + loglikelihood(components) - WrenCore.logjac(components) ≈
+lp(noad_vecmodel, v)
+```
+
+In `OriginalSpace()`, `logjac` is zero. These coordinate transforms do not, in general,
+turn the prior into a standard normal distribution.
+
+Select other outputs by supplying accumulators. For example, collect the parameters and
+likelihood without collecting the prior or Jacobian:
+
+```@example models
+selected = AccumulatorTuple(ParamsAccumulator(), LogLikelihoodAccumulator())
+retval, selected = evaluate(noad_vecmodel, v, selected)
+(parameters(selected), loglikelihood(selected))
+```
+
+Supplied accumulators are not copied or reset and may be updated in place. Use fresh
+accumulators for independent evaluations. As with `lp`, the parameter vector is not copied,
+so the model must not write into its latent variables.
 
 !!! warning
 
