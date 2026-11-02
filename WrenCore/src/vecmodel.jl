@@ -101,6 +101,7 @@ function _vecmodel_lp(
     accs::AccumulatorTuple,
 )
     source = FromVector(params, vecinfo)
+    accs = _with_alias_check(accs, vecinfo)
     _, accs = evaluation_fn(
         source,
         parameter_space,
@@ -110,6 +111,7 @@ function _vecmodel_lp(
         enzyme_copy_argnames,
         ctx,
     )
+    _check_aliases(accs)
     return lp_function(accs)
 end
 
@@ -121,6 +123,7 @@ end
         latent_source=FromPrior(),
         parameter_space=UnconstrainedSpace(),
         reduce_copies=true,
+        aliases=nothing,
     )
 
 A vectorised form of `model`, which is designed to take a single vector of parameters as
@@ -151,10 +154,10 @@ y = y_info.transform(params[y_info.range])
 
 where `x_info.range` might be `1:1` and `y_info.range` might be `2:2`.
 
-In order for this to work reliably, the model *must* have a fixed set of latent variables
-and fixed dimension. If these conditions are not adhered to, it is very likely that results
-obtained will be meaningless. Models with varying parameter *order* can be safely vectorised
-since the mapping is invariant to the order in which the latent variables are encountered.
+The model must have a fixed vector dimension. Latent names must remain fixed, except for
+mutually exclusive names that share a slot through `aliases` (see below). Models with
+varying parameter *order* can be safely vectorised since the mapping is invariant to the
+order in which the latent variables are encountered.
 
 ## Positional arguments
 
@@ -209,6 +212,14 @@ since the mapping is invariant to the order in which the latent variables are en
   when there is parameter-dependent control flow which (1) in turn causes a change in Enzyme's
   behaviour, and (2) is not caught by the random testing in `reduce_copies`). This is very
   unlikely, but if you are concerned about this, you can disable this option.
+
+- `aliases`: Groups of mutually exclusive plain latent names, e.g.
+  `((@vn(y), @vn(z)),)`, which share a vector slot. Exactly one member of each group must
+  occur per evaluation, with the same vector dimension and built-in transform representation.
+  Only top-level distribution latents are supported. The default `nothing` infers pairs
+  from straight-line top-level `if`/`else` branches with one differing name in each arm,
+  provided those names are not sampled elsewhere. Common names retain their slots.
+  Use an explicit tuple for other control flow, or `()` to disable inference.
 """
 struct VecModel{
     M<:Model,
@@ -318,6 +329,7 @@ function VecModel(
     lp_function=logjoint_transformed,
     parameter_space::AbstractParameterSpace=UnconstrainedSpace(),
     reduce_copies::Bool=true,
+    aliases=nothing,
 )
     model = if reduce_copies
         WrenCore.reduce_copies(
@@ -326,12 +338,13 @@ function VecModel(
             lp_function,
             latent_source,
             parameter_space,
+            aliases,
             verbose=false,
         )
     else
         model
     end
-    vecinfo, sample = _prepare_vecmodel_info(model, latent_source, parameter_space)
+    vecinfo, sample = _prepare_vecmodel_info(model, latent_source, parameter_space; aliases)
     return VecModel(model, adtype, lp_function, parameter_space, vecinfo, sample)
 end
 
@@ -435,7 +448,8 @@ end
 function _prepare_vecmodel_info(
     model::Model,
     source::AbstractLatentSource,
-    parameter_space::AbstractParameterSpace,
+    parameter_space::AbstractParameterSpace;
+    aliases=nothing,
 )
     accs = AccumulatorTuple(VectorisedParamsAccumulator(), SitenameCountAccumulator())
     _, accs = evaluate(model, source, parameter_space, accs, EvalContext{false}())
@@ -459,7 +473,11 @@ function _prepare_vecmodel_info(
         offset = last(range) + 1
         RangeAndTransform(range, get_transform(tval))
     end
-    vecinfo = VecInfo(sca, varname_to_rat)
+    # Expand the name map after building params so aliases do not add vector coordinates.
+    varname_to_rat, groups = _add_aliases(model, varname_to_rat, parameter_space, aliases)
+    # Inferred distribution aliases prove exactly-one use; explicit groups need a check.
+    # Omitting the counter also avoids Enzyme tape allocations for inferred groups.
+    vecinfo = VecInfo(sca, varname_to_rat, groups; check_aliases=aliases !== nothing)
 
     return vecinfo, params
 end
@@ -627,6 +645,7 @@ Draw model parameters from `latent_source` and return them as a vector compatibl
 function vectorise_latents(latent_source::AbstractLatentSource, vecmodel::VecModel)
     params = similar(vecmodel.sample)
     accs = AccumulatorTuple(VecSampleAccumulator(params, vecmodel.vecinfo))
+    accs = _with_alias_check(accs, vecmodel.vecinfo)
     _, accs = evaluate(
         vecmodel.model,
         latent_source,
@@ -634,5 +653,6 @@ function vectorise_latents(latent_source::AbstractLatentSource, vecmodel::VecMod
         accs,
         EvalContext{false}(),
     )
+    _check_aliases(accs)
     return _get_vec_sample(accs)
 end

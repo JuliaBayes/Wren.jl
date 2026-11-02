@@ -36,8 +36,10 @@ function WrenCore.VecModel(
     # Reactant doesn't use `WrenCore.reduce_copies`, but we still need this kwarg
     # to avoid a MethodError
     reduce_copies::Bool=true,
+    aliases=nothing,
 )
-    vecinfo, sample = WrenCore._prepare_vecmodel_info(model, latent_source, parameter_space)
+    vecinfo, sample =
+        WrenCore._prepare_vecmodel_info(model, latent_source, parameter_space; aliases)
 
     accs = WrenCore.AccumulatorTuple(
         WrenCore.LogPriorAccumulator(),

@@ -300,6 +300,7 @@ function reduce_copies(
     lp_function=logjoint_transformed,
     latent_source::AbstractLatentSource=FromPrior(),
     parameter_space::AbstractParameterSpace=UnconstrainedSpace(),
+    aliases=nothing,
     verbose::Bool=true,
 ) where {A,C,F,S}
     atol, rtol = promote(atol, rtol)
@@ -315,6 +316,7 @@ function reduce_copies(
         latent_source,
         lp_function,
         parameter_space,
+        aliases,
         # `reduce_copies` must be false here, otherwise infinite recursion!
         reduce_copies=false,
     )

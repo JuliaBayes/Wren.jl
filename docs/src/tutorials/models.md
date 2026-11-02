@@ -258,14 +258,32 @@ If this is not desired, you can specify a different parameter space, or a differ
     end
     ```
 
-    The set of variable names must also be constant across all model evaluations.
-    Thus, even though the following model has a constant number of parameters, it is still not valid for vectorisation:
+Names can differ between mutually exclusive branches while sharing a vector slot:
 
-    ```julia
+```@example models
+@wren function branch_names()
     x ~ Normal()
     if x > 0
         y ~ Normal()
     else
         z ~ Normal()
     end
-    ```
+end
+
+initial = FromValues(VarNamedTuple(; x=1.0, y=2.0))
+vm = VecModel(branch_names(), AutoEnzyme(; mode=Reverse); latent_source=initial)
+lp_and_grad(vm, [-1.0, 2.0])  # The second coordinate now supplies z.
+```
+
+Wren infers a shared slot when a straight-line top-level `if`/`else` has one differing latent name in each arm.
+Those names must not be sampled elsewhere. Names common to both arms keep their slots even when their order changes.
+For control flow that Wren cannot resolve, declare the groups explicitly:
+
+```julia
+VecModel(model, adtype; aliases=((@vn(y), @vn(z)),))
+```
+
+Each group must sample exactly one member per evaluation, with the same vector width and representation.
+Aliases support plain top-level distribution latents in `OriginalSpace()` or `UnconstrainedSpace()`.
+An explicit tuple replaces inference; `aliases=()` disables it.
+Names outside these groups must remain fixed, and the total vector dimension must remain constant.

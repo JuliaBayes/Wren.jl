@@ -77,7 +77,8 @@ function _check_vecmodel_dimension(params::AbstractVector, vecmodel::VecModel)
 end
 
 function _all_fixed_transforms(vecmodel::VecModel)
-    return all(
+    # Aliases need model evaluation to recover the active name.
+    return isempty(vecmodel.vecinfo.aliases) && all(
         rt -> rt.transform isa FixedTransform,
         values(vecmodel.vecinfo.varname_to_rat),
     )
@@ -120,6 +121,7 @@ function VarNames.Draw(
 
     source = FromVector(params, vecmodel.vecinfo)
     accs = _draw_accumulators(include_log_probs)
+    accs = _with_alias_check(accs, vecmodel.vecinfo)
     _, accs = evaluate(
         vecmodel.model,
         source,
@@ -127,6 +129,7 @@ function VarNames.Draw(
         accs,
         EvalContext{false}(),
     )
+    _check_aliases(accs)
     return _draw(accs, stats, include_log_probs)
 end
 
