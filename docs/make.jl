@@ -36,6 +36,7 @@ makedocs(;
     pages=[
         "index.md",
         "Tutorials" => [
+            "tutorials/beginner.md",
             "tutorials/syntax.md",
             "tutorials/models.md",
             "tutorials/distributions.md",

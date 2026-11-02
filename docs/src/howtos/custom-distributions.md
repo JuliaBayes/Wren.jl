@@ -6,8 +6,12 @@ In this example, we'll demonstrate how to write a zero-inflated Poisson distribu
 
 !!! details "Details on zero-inflation"
 
-    To orient ourselves to the task at hand, we will first define the zero-inflated Poisson distribution. This distribution models count data with more zeros than a Poisson distribution would predict. It assumes that each observation comes from one of two processes: with probability π, the observation is always zero; otherwise, it is drawn from a Poisson distribution with mean λ. Because the Poisson process can also produce zeros, an observed zero could come from either process.
-    More formally we can write this distribution as:
+    To orient ourselves to the task at hand, we will first define the zero-inflated Poisson distribution.
+    This distribution models count data with more zeros than a Poisson distribution would predict.
+    It assumes that each observation comes from one of two processes: with probability ``π``, the observation is always zero; otherwise, it is drawn from a Poisson distribution with mean ``λ``.
+    Because the Poisson process can also produce zeros, an observed zero could come from either process.
+
+    More formally, we can write this distribution as:
 
     ```math
     P(Y = k) =
@@ -19,13 +23,11 @@ In this example, we'll demonstrate how to write a zero-inflated Poisson distribu
 
 ## How to define a new distribution
 
-We need to define a `PoissonZeroInflated` struct to store the parameters and methods for `Wren.logdensityof` and `Base.rand`:
+We need to define a `PoissonZeroInflated` struct to store the parameters and methods for `DensityInterface.logdensityof` (which Wren reexports) and `Base.rand`:
 
 ```@example custom-distributions
 using Wren
-using Wren.Dists
-using FlexiChains
-using Enzyme
+using Wren.Dists: Poisson
 using Random: AbstractRNG, Xoshiro
 using LogExpFunctions: logaddexp
 
@@ -55,7 +57,7 @@ function Base.rand(rng::AbstractRNG, d::PoissonZeroInflated)
 end
 ```
 
-If you are used to working with custom distributions in Turing.jl, you may notice that we are not implementing the `Distributions` interface from Distributions.jl — all Wren needs to know is how to calculate the log-density and how to draw a sample.
+If you are used to working with custom distributions in Turing.jl, you may notice that we are not subtyping Distributions.jl's types or implementing its full interface — all Wren needs to know is how to calculate the log-density and how to draw a sample.
 
 ## Usage inside a model
 
@@ -74,6 +76,9 @@ nothing # hide
 Next up is fitting the model.
 
 ```@example custom-distributions
+using Wren.Dists: Gamma, Uniform
+using Enzyme
+
 @wren function poisson_zeroinflated(y)
     lambda ~ Gamma(2, 1)
     pi ~ Uniform(0, 1)
@@ -92,11 +97,12 @@ We successfully sampled from our custom zero-inflated Poisson distribution and w
 
 ## Manual loglikelihoods
 
-!!! danger "We do NOT recommend this"
+!!! danger "`@addloglikelihood` is discouraged"
 
-    We strongly discourage the use of `@addloglikelihood`. It should only be considered if the model would otherwise not work (if you run into such a case, please let us know in an issue).
+    We strongly discourage the use of `@addloglikelihood`.
+    It should only be considered if the model would otherwise not work (if you run into such a case, please do let us know in [an issue](https://github.com/JuliaBayes/Wren.jl/issues)).
 
-Instead of using the recommended `~` syntax, it is possible to use the [`@addloglikelihood`](@ref addloglike) macro to increment the ... well, loglikelihood manually.
+Instead of using the recommended `~` syntax, it is possible to use the [`@addloglikelihood`](@ref addloglike) macro to increment the loglikelihood manually.
 
 Using `@addloglikelihood` means that you will not be able to use Wren's features relating to [Bayesian workflow](@ref workflow).
 
@@ -109,6 +115,7 @@ parameters(prior_model)
 Generating posterior predictions via `predict` and visualising them with [FlexiChains.jl](https://juliabayes.org/FlexiChains.jl/stable/) also requires the `~` syntax:
 
 ```@example custom-distributions
+using FlexiChains
 using CairoMakie
 
 pp_chain = predict(prior_model, chain)
