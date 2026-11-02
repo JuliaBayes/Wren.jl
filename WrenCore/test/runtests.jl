@@ -25,6 +25,7 @@ using Test
     include("draw.jl")
     include("ad.jl")
     include("reactant.jl")
+    include("batch_evaluation.jl")
     include("predict.jl")
     include("posteriordb.jl")
     include("issues/55.jl")

@@ -509,6 +509,32 @@ function evaluate(
 end
 
 """
+    prepare_batch(vecmodel::VecModel, params::AbstractMatrix,
+                  output_function; accs=vecmodel.accs)
+    prepare_batch(vecmodel::VecModel, params::AbstractMatrix; accs=vecmodel.accs)
+
+Prepare a callable that evaluates all columns of a parameter matrix together. Load
+Reactant.jl before calling this function. The matrix must have `vecmodel.dimension` rows;
+subsequent calls must use the same size as `params`.
+Model distributions and output functions must support Reactant's traced numbers;
+WrenDists.jl provides compatible distributions.
+
+By default, the result has three rows: [`logprior`](@ref), [`loglikelihood`](@ref), and
+[`logjac`](@ref). Each column corresponds to one input point. `output_function` instead
+selects a number or numeric vector from the accumulated outputs; results are concatenated
+along the column dimension, as for `mapslices(...; dims=1)`.
+
+The prepared callable owns its model arguments and copies `accs` for each point. It keeps
+results on the Reactant device. Pass Reactant arrays to reuse resident inputs, and use
+`Array` to materialise the result on the host. Preparation includes compilation and is
+intended to be reused. The scalar LogDensityProblems interface is unchanged.
+As for [`evaluate`](@ref), the model must not write into its latent variables.
+"""
+function prepare_batch end
+
+_density_parts(accs) = vcat(promote(logprior(accs), loglikelihood(accs), logjac(accs))...)
+
+"""
     lp_and_grad(vecmodel::VecModel, params::AbstractVector)
 
 Returns a tuple (log_density, grad) where `log_density` is the log-density of `vecmodel` and

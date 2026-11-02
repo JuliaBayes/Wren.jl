@@ -292,6 +292,55 @@ Supplied accumulators are not copied or reset and may be updated in place. Use f
 accumulators for independent evaluations. As with `lp`, the parameter vector is not copied,
 so the model must not write into its latent variables.
 
+### Evaluating a batch of parameter points
+
+With Reactant.jl loaded, [`prepare_batch`](@ref) compiles evaluations across matrix columns:
+
+```julia
+using Reactant
+using WrenCore: prepare_batch
+using Wren: Dists
+
+@wren function count_model(count)
+    rate ~ Dists.Exponential()
+    @observe count ~ Dists.Poisson(rate)
+end
+
+batch_model = VecModel(count_model(3), nothing)
+X = reshape(log.([0.5, 1.5, 3.0]), 1, :)
+batch = prepare_batch(batch_model, X)
+components = Array(batch(X))
+```
+
+The three result rows contain the original-space log-prior, log-likelihood, and forward
+log-Jacobian. Each column corresponds to the same input column. Select other outputs with
+a function of the accumulators:
+
+```julia
+likelihood_batch = prepare_batch(batch_model, X, loglikelihood)
+loglikelihoods = vec(Array(likelihood_batch(X)))
+```
+
+The output function may return a number or numeric vector. Accumulators can also be
+selected with the `accs` keyword, as for single-point evaluation.
+Use the distributions in `Wren.Dists` for compatibility with Reactant's traced numbers.
+
+Reuse the prepared callable with matrices of the same size. Inputs and results can stay
+on the Reactant device:
+
+```julia
+X_device = Reactant.to_rarray(X)
+components_device = batch(X_device)
+```
+
+Preparation includes compilation. Large batches can benefit from tensor operations across
+points; small batches can be faster with ordinary Julia evaluation. The prepared callable
+owns its model arguments and isolates mutable arguments and accumulators between points.
+The model must keep its latent variables and their dimensions fixed, as for `VecModel`.
+Branch values must have compatible types, and loop lengths must be known during preparation.
+Called Julia functions and inline-created submodels follow Reactant's tracing rules.
+The scalar LogDensityProblems and gradient interfaces continue to use `VecModel`.
+
 !!! warning
 
     Vectorisation places certain restrictions on the structure of the model.

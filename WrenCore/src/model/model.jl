@@ -206,10 +206,9 @@ to overload `_needs_copy`, as the generated function only has access to the meth
     name in S && _needs_copy(V) ? _dealias(v) : v
 @inline _maybe_dealias(::EvalContext{false}, ::Val, ::Val, v) = v
 
-function make_evaluation_fn(
+function evaluation_fn_expr(
     argnames::Tuple{Vararg{Symbol}},
     stmts::Vector{<:Union{AbstractWrenExpr,LineNumberNode}},
-    mod::Module,
 )
     body = Expr(:block)
     @gensym model_args enzyme_copy_argnames ctx
@@ -237,22 +236,26 @@ function make_evaluation_fn(
         emit_statements(stmts, accs, conditioned, latent_source, parameter_space, ctx)
     push!(body.args, :($retval = $model_body))
     push!(body.args, :(return ($retval, $accs)))
+    return :(
+        function (
+            $latent_source,
+            $parameter_space,
+            $accs,
+            $model_args,
+            $conditioned,
+            $enzyme_copy_argnames,
+            $ctx,
+        )
+            $body
+        end
+    )
+end
+
+function make_evaluation_fn(argnames, stmts, mod::Module)
     return RuntimeGeneratedFunctions.RuntimeGeneratedFunction(
         mod,
         mod,
-        :(
-            function (
-                $latent_source,
-                $parameter_space,
-                $accs,
-                $model_args,
-                $conditioned,
-                $enzyme_copy_argnames,
-                $ctx,
-            )
-                $body
-            end
-        ),
+        evaluation_fn_expr(argnames, stmts),
     )
 end
 

@@ -3,7 +3,70 @@ module WrenCoreReactantExt
 using ADTypes: AutoEnzyme, AutoReactant
 using Enzyme: Enzyme
 using Reactant: Reactant
-using WrenCore: WrenCore
+using WrenCore: WrenCore, Plaice
+using WrenCore.Accessors: @set
+
+include("reactant_bijectors.jl")
+include("reactant_evaluation.jl")
+
+struct BatchPoint{F}
+    f::F
+end
+_batch_output(value::Number) = convert(Reactant.TracedRArray, [value])
+_batch_output(value::AbstractVector) = convert(Reactant.TracedRArray, value)
+function (point::BatchPoint)(params)
+    f = point.f
+    f = @set f.accs = copy(f.accs)
+    return _batch_output(f(vec(params)))
+end
+
+_batch_points(point, params) = mapslices(point, params; dims=1)
+
+struct BatchEvaluator{F,C}
+    point::F
+    compiled::C
+    shape::Tuple{Int,Int}
+end
+_batch_input(params::Reactant.ConcreteRArray) = params
+_batch_input(params::AbstractMatrix) = Reactant.to_rarray(params)
+function (batch::BatchEvaluator)(params::AbstractMatrix)
+    size(params) == batch.shape || throw(
+        DimensionMismatch(
+            "prepared batch expects size $(batch.shape), received $(size(params))",
+        ),
+    )
+    return batch.compiled(batch.point, _batch_input(params))
+end
+
+function WrenCore.prepare_batch(
+    vm::WrenCore.VecModel,
+    params::AbstractMatrix,
+    output_function=WrenCore._density_parts;
+    accs::WrenCore.AccumulatorTuple=vm.accs,
+)
+    size(params, 1) == vm.dimension || throw(
+        DimensionMismatch(
+            "VecModel expects $(vm.dimension) rows, received $(size(params, 1))",
+        ),
+    )
+    model = _reactant_model(vm.model)
+    f = WrenCore._VecModelLP(
+        _traced_evaluation_fn(model, false),
+        Reactant.to_rarray(model.args),
+        Reactant.to_rarray(model.conditioned),
+        Val(keys(model.args)),
+        WrenCore.EvalContext{true}(),
+        output_function,
+        vm.parameter_space,
+        vm.vecinfo,
+        Reactant.to_rarray(copy(accs)),
+    )
+    point = BatchPoint(f)
+    input = _batch_input(params)
+    # The backend evaluator is created during preparation in the model's module.
+    compiled = Base.invokelatest(Reactant.Compiler.compile, _batch_points, (point, input))
+    return BatchEvaluator(point, compiled, size(params))
+end
 
 """
     ReactantPrep
@@ -38,6 +101,7 @@ function WrenCore.VecModel(
     reduce_copies::Bool=true,
 )
     vecinfo, sample = WrenCore._prepare_vecmodel_info(model, latent_source, parameter_space)
+    model = _reactant_model(model)
 
     accs = WrenCore.AccumulatorTuple(
         WrenCore.LogPriorAccumulator(),
@@ -57,7 +121,7 @@ function WrenCore.VecModel(
     model_args = Reactant.to_rarray(model.args)
 
     lp_func = WrenCore._VecModelLP(
-        model.evaluation_fn,
+        _traced_evaluation_fn(model, false),
         model_args,
         model.conditioned,
         model.enzyme_copy_argnames,
@@ -72,8 +136,12 @@ function WrenCore.VecModel(
 
     reactant_sample = Reactant.to_rarray(sample)
     value_and_gradient_at = ValueAndGradientCallable(lp_func, adtype)
-    compiled_lp = Reactant.@compile lp_func(reactant_sample)
-    compiled_value_and_gradient = Reactant.@compile value_and_gradient_at(reactant_sample)
+    compiled_lp = Base.invokelatest(Reactant.Compiler.compile, lp_func, (reactant_sample,))
+    compiled_value_and_gradient = Base.invokelatest(
+        Reactant.Compiler.compile,
+        value_and_gradient_at,
+        (reactant_sample,),
+    )
     adprep = ReactantPrep(compiled_lp, compiled_value_and_gradient)
 
     return WrenCore.VecModel(
