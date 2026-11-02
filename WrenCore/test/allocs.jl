@@ -34,7 +34,7 @@ end
                 z[i] ~ Normal(x)
             end
         end
-        model = f2(ones(5)) | VarNamedTuple(z=zeros(5))
+        model = f2(ones(5)) | (; z=zeros(5))
         test_zero_allocs(model)
     end
 

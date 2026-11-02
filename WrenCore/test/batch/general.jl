@@ -60,8 +60,8 @@ fcategorical(ps) = Categorical(ps)
                     x[i] ~ Normal(a)
                 end
             end
-            model1 = conditioned1(zeros(3)) | VarNamedTuple(x=ones(3))
-            model2 = conditioned2(zeros(3)) | VarNamedTuple(x=ones(3))
+            model1 = conditioned1(zeros(3)) | (; x=ones(3))
+            model2 = conditioned2(zeros(3)) | (; x=ones(3))
             test_model_equivalence(model1, model2, adtype)
         end
 
