@@ -96,17 +96,44 @@ return_value(model::Model) = return_value(FromPrior(), model)
 """
     ModelResult
 
-A struct containing the return value, parameters, log-prior, and log-likelihood of a model
+A struct containing the parameters, return value, log-prior, and log-likelihood of a model
 evaluation.
 
 You can access these fields with [`parameters`](@ref), [`return_value`](@ref),
-[`logprior`](@ref), and [`loglikelihood`](@ref).
+[`logprior`](@ref), and [`loglikelihood`](@ref). The log-joint can be obtained with
+[`logjoint`](@ref).
 """
 struct ModelResult{R,V<:VarNamedTuple,LP,LL}
     parameters::V
     return_value::R
     logprior::LP
     loglikelihood::LL
+end
+
+function Base.show(io::IO, ::MIME"text/plain", result::ModelResult)
+    println(io, "ModelResult")
+    print(io, "├─ ")
+    printstyled(io, "parameters"; color=:cyan)
+    print(io, " => ")
+    if isempty(result.parameters)
+        print(io, "VarNamedTuple()")
+    else
+        vnt_pretty_print(io, result.parameters, "│  ", 0)
+    end
+    println(io)
+    fields = (
+        return_value=result.return_value,
+        logprior=result.logprior,
+        loglikelihood=result.loglikelihood,
+    )
+    for (i, (name, value)) in enumerate(pairs(fields))
+        print(io, i == length(fields) ? "└─ " : "├─ ")
+        printstyled(io, string(name); color=:cyan)
+        print(io, " => ")
+        show(io, value)
+        i < length(fields) && println(io)
+    end
+    return nothing
 end
 
 """
@@ -138,16 +165,39 @@ Get the log-likelihood from a [`ModelResult`](@ref).
 StatsAPI.loglikelihood(result::ModelResult) = result.loglikelihood
 
 """
+    logjoint(result::ModelResult)
+
+Get the log-joint (log-prior plus log-likelihood) from a [`ModelResult`](@ref).
+"""
+logjoint(result::ModelResult) = logprior(result) + loglikelihood(result)
+
+"""
+    VarNames.densify!!(result::ModelResult)
+
+Return a [`ModelResult`](@ref) with its parameters densified using
+[`VarNames.densify!!`](@extref). The other fields are unchanged.
+"""
+function VarNames.densify!!(result::ModelResult)
+    return ModelResult(
+        VarNames.densify!!(result.parameters),
+        result.return_value,
+        result.logprior,
+        result.loglikelihood,
+    )
+end
+
+"""
     VarNames.Draw(::ModelResult)
 
 Convert a [`ModelResult`](@ref) into a [`VarNames.Draw`](@extref). The log-prior,
-log-likelihood, and return value are stored as extras with the names `logprior`,
-`loglikelihood`, and `return_value`.
+log-likelihood, log-joint, and return value are stored as extras with the names
+`logprior`, `loglikelihood`, `logjoint`, and `return_value`.
 """
 VarNames.Draw(result::ModelResult) = VarNames.Draw(
-    result.parameters,
+    VarNames.densify!!(result.parameters),
     (logprior=result.logprior,
         loglikelihood=result.loglikelihood,
+        logjoint=logjoint(result),
         return_value=result.return_value,
     ),
 )
@@ -161,10 +211,10 @@ corresponding keys are not present, the fields are set to `nothing`.
 """
 function ModelResult(draw::VarNames.Draw)
     ModelResult(
-        draw.params,
-        get(draw.extras, :return_value, nothing),
-        get(draw.extras, :logprior, nothing),
-        get(draw.extras, :loglikelihood, nothing)
+        VarNames.parameters(draw),
+        get(VarNames.extras(draw), :return_value, nothing),
+        get(VarNames.extras(draw), :logprior, nothing),
+        get(VarNames.extras(draw), :loglikelihood, nothing)
     )
 end
 
@@ -176,7 +226,7 @@ end
 Draw a sample from `model`, using the given latent source. If one is not provided,
 draws from the prior distribution, optionally with a specified `rng`.
 
-Returns the params, log-prior, log-likelihood, and return value of the model packaged in a
+Returns the params, return value, log-prior, and log-likelihood of the model packaged in a
 [`ModelResult`](@ref).
 """
 function simulate(latents::AbstractLatentSource, model::Model)
@@ -191,7 +241,7 @@ function simulate(latents::AbstractLatentSource, model::Model)
         ),
         EvalContext{false}(),
     )
-    return ModelResult(retval, VarNames.parameters(accs), logprior(accs), loglikelihood(accs))
+    return ModelResult(VarNames.parameters(accs), retval, logprior(accs), loglikelihood(accs))
 end
 simulate(rng::AbstractRNG, model::Model) = simulate(FromPrior(rng), model)
 simulate(model::Model) = simulate(FromPrior(), model)

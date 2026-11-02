@@ -214,7 +214,7 @@ end
 In this model, even though `y` is defined in the model, the subsequent statement `y ~ Normal()` will treat `y` as a latent variable, and will sample a new value for it, which will certainly not be equal to `x + 1`:
 
 ```@example model
-rand_with_logp(y_not_obs())
+simulate(y_not_obs())
 ```
 
 To force `y` to be observed, Wren provides a macro `@observe`:
@@ -372,7 +372,7 @@ Wren provides a macro, `@addloglikelihood [name=:name] expr`, which allows you t
     @addloglikelihood name=:xsq x^2
 end
 
-rand_with_logp(manual_likelihood())
+simulate(manual_likelihood())
 ```
 
 The `name` argument is optional and Wren currently does not use it, but hopefully will be wired up to pointwise logdensity calculations in the future.
