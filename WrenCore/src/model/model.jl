@@ -10,7 +10,7 @@ A Wren model.
 
 $(TYPEDFIELDS)
 """
-struct Model{A<:NamedTuple,C<:VarNamedTuple,F,CA<:Val}
+struct Model{A<:NamedTuple,C<:NamedTuple,F,CA<:Val}
     "Name of the function declared with @wren"
     name::Symbol
     "Positional and keyword arguments passed to the model."
@@ -39,7 +39,7 @@ struct Model{A<:NamedTuple,C<:VarNamedTuple,F,CA<:Val}
         stmts::Vector{<:Union{AbstractWrenExpr,LineNumberNode}},
         mod::Module;
         enzyme_copy_argnames::Val=Val{sort(keys(args))}(),
-        conditioned::VarNamedTuple=VarNamedTuple(),
+        conditioned::NamedTuple=NamedTuple(),
         _unsafe_reuse_evaluation_fn=nothing,
     )
         # Copy arguments upon model construction.
@@ -79,11 +79,17 @@ for why this matters.
 """
 function _dealias(v::SubArray{T}) where {T}
     v = collect(v)  # Avoid copying the entire parent array.
-    return isbitstype(T) ? v : deepcopy(v)
+    return _can_shallow_copy_elements(T) ? v : deepcopy(v)
 end
 function _dealias(v::AbstractArray{T}) where {T}
-    return isbitstype(T) ? copy(v) : deepcopy(v)
+    return _can_shallow_copy_elements(T) ? copy(v) : deepcopy(v)
 end
+# For example, @NamedTuple{x::Union{Missing,Float64}} has an inline union field and
+# is not a bits type. It has no GC-managed references, so deepcopy is unnecessary.
+# Enzyme's reverse deepcopy rule does not support a Const input with a duplicated result.
+_can_shallow_copy_elements(::Type{T}) where {T} =
+    isbitstype(T) ||
+    (isconcretetype(T) && !ismutabletype(T) && Base.datatype_pointerfree(T))
 _dealias(v::T) where {T} = isbitstype(T) ? v : deepcopy(v)
 # Models contain `Module`s, which can't be deepcopied. It is currently my belief that models
 # should be immutable (or at least pretend to be), and thus we should not need to deepcopy
@@ -142,6 +148,30 @@ function _with_copied_args(model::Model, copy_argnames)
 end
 
 """
+    _copy_for_thread(model::Model)
+
+Return the same model with its own copies of the arguments and conditioned values, so that
+evaluations on different threads cannot write into each other's data. Outside Enzyme,
+evaluation does not copy arguments (see `_maybe_dealias`). Models passed as arguments are
+copied too. This reuses the evaluation function, so no new code is generated.
+"""
+function _copy_for_thread(model::Model)
+    return Model(
+        model.name,
+        map(_copy_model_arg, model.args),
+        model.stmts,
+        model.mod;
+        conditioned=deepcopy(model.conditioned),
+        enzyme_copy_argnames=model.enzyme_copy_argnames,
+        # Safe as the model is not changed in any way.
+        _unsafe_reuse_evaluation_fn=model.evaluation_fn,
+    )
+end
+# The constructor copies all other arguments with `_dealias`.
+_copy_model_arg(v) = v
+_copy_model_arg(model::Model) = _copy_for_thread(model)
+
+"""
     EvalContext{Enzyme}
 
 Information about how a model is being evaluated. It is passed to the model's evaluation
@@ -176,16 +206,6 @@ to overload `_needs_copy`, as the generated function only has access to the meth
     name in S && _needs_copy(V) ? _dealias(v) : v
 @inline _maybe_dealias(::EvalContext{false}, ::Val, ::Val, v) = v
 
-# Whether `sym` is conditioned as a whole (not partly). Decided from the type alone.
-@generated function _whole_conditioned(
-    ::VarNamedTuple{Names,Values},
-    ::Val{sym},
-) where {Names,Values,sym}
-    i = findfirst(==(sym), Names)
-    i === nothing && return false
-    return !(fieldtype(Values, i) <: Union{VarNamedTuple,VarNames.PartialArray})
-end
-
 function make_evaluation_fn(
     argnames::Tuple{Vararg{Symbol}},
     stmts::Vector{<:Union{AbstractWrenExpr,LineNumberNode}},
@@ -199,8 +219,8 @@ function make_evaluation_fn(
         push!(
             body.args,
             :(
-                $(k) = if $(_whole_conditioned)($conditioned, Val($(QuoteNode(k))))
-                    $(getindex)($conditioned, $(VarName){$(QuoteNode(k))}())
+                $(k) = if $(haskey)($conditioned, $(QuoteNode(k)))
+                    $(getproperty)($conditioned, $(QuoteNode(k)))
                 else
                     $(WrenCore._maybe_dealias)(
                         $ctx,
@@ -293,7 +313,7 @@ function Base.show(io::IO, ::MIME"text/plain", model::Model)
     prefix = get(io, :tree_prefix, "")
     max_exprs = get(io, :max_wren_exprs, 20)
     entries = (
-        "arguments" => model.args,
+        "arguments" => Base.structdiff(model.args, model.conditioned),
         "conditioned" => model.conditioned,
         "expressions" => model.stmts,
     )
@@ -306,20 +326,12 @@ function Base.show(io::IO, ::MIME"text/plain", model::Model)
         if label == "expressions"
             println(io)
             _show_wren_exprs(io, value, child_prefix * "  "; max_exprs)
-        elseif label == "arguments"
+        elseif label == "arguments" || label == "conditioned"
             if isempty(value)
                 printstyled(io, " (none)"; color=:white)
             else
                 println(io)
                 _show_namedtuple_tree(io, value, child_prefix)
-            end
-        elseif label == "conditioned" && value isa VarNamedTuple
-            if isempty(value)
-                printstyled(io, " (none)"; color=:white)
-            else
-                compact_io = IOContext(io, :compact => true, :limit => true)
-                println(io)
-                vnt_pretty_print(compact_io, value, child_prefix, 0; show_header=false)
             end
         end
         last || println(io)

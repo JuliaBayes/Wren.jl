@@ -61,9 +61,8 @@ end
     Observe
 
 Representation of `@observe lhs ~ rhs`. Note that `Sample` statements that are conditioned
-on do become observations, but do not become `Observe` nodes in the AST. This is because the
-conditioning status must be determined at runtime (consider e.g. `y[i] ~ Normal()` with a
-partial conditioning array -- thus the status depends on the runtime value of `i`).
+on do become observations, but do not become `Observe` nodes in the AST. The same model
+can be evaluated with different sets of whole variables conditioned on.
 """
 struct Observe{L,R} <: AbstractWrenExpr
     name::Symbol

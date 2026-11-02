@@ -217,3 +217,19 @@ WrenCore._copied_args(vm)
 ```
 
 or even more simply by just copying the argument yourself inside the model, which bypasses Wren's analysis.
+
+## Troubleshooting
+
+### Records with missing fields
+
+For arrays of records with missing fields, give the records a concrete element type:
+
+```julia
+Record = @NamedTuple{a::Union{Missing,Float64}, b::Union{Missing,Float64}}
+data = Record[(a=1.0, b=missing), (a=missing, b=2.0)]
+```
+
+These immutable records contain no references to mutable objects, so Wren can copy the
+array without deep copying its elements. The untyped literal
+`[(a=1.0, b=missing), (a=missing, b=2.0)]` instead has an abstract `NamedTuple` element
+type; Enzyme currently cannot differentiate copies of that representation.

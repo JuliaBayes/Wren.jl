@@ -16,6 +16,46 @@ end
 # eltype that `UncollectedParams` doesn't subtype.
 set_lhs!!(obj, optic, val) = Accessors.set(obj, optic, val)
 
+set_namespace_copy(obj, optic, val) = Accessors.set(obj, optic, val)
+# A deconditioned child namespace may be absent from the observed record.
+set_namespace_copy(obj::NamedTuple, ::VarNames.Property{sym}, val) where {sym} =
+    merge(obj, NamedTuple{(sym,)}((val,)))
+function set_namespace_copy(obj::Array{T}, optic::VarNames.Index, val::V) where {T,V}
+    U = Union{T,V}
+    if Base.isbitsunion(U) && all(i -> i isa Union{Integer,CartesianIndex}, optic.ix)
+        # For example, replacing (y=1.0,) with VarNamedTuple(a=0.5) should use
+        # Union{typeof((y=1.0,)),typeof(VarNamedTuple(a=0.5))}, not Any. Accessors.set
+        # and BangBang.setindex!! use promote_type here, which widens these records to
+        # Any and boxes the remaining observed entries. Copy before the first write:
+        # BangBang.setindex!! alone can also mutate a shared array when its eltype fits.
+        result = copyto!(similar(obj, U), obj)
+        Base.setindex!(result, val, optic.ix...; optic.kw...)
+        return result
+    end
+    return Accessors.set(obj, optic, val)
+end
+
+# Copy a shared namespace container at its first write, preserving observed siblings.
+# Later writes can mutate the owned container without copying it again.
+@inline function set_namespace_lhs!!(obj, observed, optic, val)
+    head, tail = VarNames.ohead(optic), VarNames.otail(optic)
+    inner = if tail isa VarNames.Iden
+        val
+    else
+        set_namespace_lhs!!(
+            _scope_conditioned(obj, head),
+            _scope_conditioned(observed, head),
+            tail,
+            val,
+        )
+    end
+    return if obj isa NamedTuple || obj === observed
+        set_namespace_copy(obj, head, inner)
+    else
+        Accessors.set(obj, VarNames.with_mutation(head), inner)
+    end
+end
+
 assign_or_set!!(lhs::Symbol, rhs, vn) = :($lhs = $rhs)
 function assign_or_set!!(lhs::Expr, rhs, vn)
     left_top_sym = get_top_level_symbol(lhs)
@@ -72,6 +112,24 @@ function emit_model_expr(
         stmt.lhs_is_reused ? CollectSubmodelParams() : DiscardSubmodelParams()
     observe, observe_args = _accumulator_call(accumulate_observe!!, scale)
     assume, assume_args = _accumulator_call(accumulate_assume!!, scale)
+    assign_child_params = assign_or_set!!(stmt.lhs, child_params, vn)
+    if stmt.lhs isa Expr
+        # This generator only has a symbol for `conditioned`: the cached evaluation
+        # function is shared by condition/decondition and parent-supplied overrides.
+        # Julia folds this key check when specialising on the NamedTuple's type.
+        assign_child_params = quote
+            if $(haskey)($conditioned, $(QuoteNode(template)))
+                $template = $(set_namespace_lhs!!)(
+                    $template,
+                    $(getproperty)($conditioned, $(QuoteNode(template))),
+                    $(VarNames.getoptic)($vn),
+                    $child_params,
+                )
+            else
+                $assign_child_params
+            end
+        end
+    end
     return quote
         $rhs = $rhs_expr
         $vn = $vn_expr
@@ -104,7 +162,7 @@ function emit_model_expr(
                     $ctx,
                 )
             end
-            $(assign_or_set!!(stmt.lhs, child_params, vn))
+            $assign_child_params
             $accs = $(combine_with_namespace)(
                 $accs,
                 $child_accs,
@@ -112,10 +170,9 @@ function emit_model_expr(
                 $(stmt.lhs isa Symbol ? nothing : template),
             )
         else
-            # A wholly conditioned symbol is observed without a run-time check.
-            if $(_whole_conditioned)($conditioned, Val($(QuoteNode(template)))) ||
-               $(haskey)($conditioned, $vn)
-                $val = $(getindex)($conditioned, $vn)
+            # Whole-symbol membership is known from the NamedTuple's type.
+            if $(haskey)($conditioned, $(QuoteNode(template)))
+                $val = $(VarNames.getvalue)($conditioned, $vn)
                 # Nothing reads an observed element back unless the symbol is reused. A
                 # plain symbol is always bound, since it is the template below.
                 $(
@@ -154,8 +211,8 @@ function emit_model_expr(
     end
 end
 
-_accumulator_call(f, scale) =
-    scale === nothing ? (f, ()) : (_scaled_accumulate!!, (f, scale))
+_accumulator_call(f, ::Nothing) = (f, ())
+_accumulator_call(f, scale) = (_scaled_accumulate!!, (f, scale))
 
 function emit_model_expr(stmt::IID, accs, conditioned, latent_source, parameter_space, ctx)
     tilde = stmt.tilde
@@ -193,7 +250,7 @@ function emit_model_expr(
     @gensym loop_iters loop_iters_size scale
     initialise_iter_expr = :($loop_iters = $(stmt.loop_iters))
     initialise_size_expr = :($loop_iters_size = $(Base.size)($loop_iters))
-    scale_expr = stmt.size === nothing ? nothing : scale
+    scale_expr = ifelse(stmt.size === nothing, nothing, scale)
     body_exprs = [
         vectorise_batch_stmt(
             s,

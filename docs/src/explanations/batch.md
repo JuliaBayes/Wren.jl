@@ -5,11 +5,7 @@ For many standard cases this will Just Work.
 However, there are also very many cases where it will refuse to work.
 This page will try to explain the reasons behind this design, and how to work around it (if possible).
 
-!!! note "Minibatches"
-
-    Use `@batch size=full_size for i in indices ... end` to weight prior and likelihood contributions by `full_size / length(indices)`.
-    Coordinate Jacobians apply once, and other accumulators retain their usual behavior.
-    Sample indices uniformly when estimating a full log likelihood.
+For minibatch density scaling, specify `size=full_size` as described in [the Syntax page](@ref batched).
 
 ## Why batch?
 

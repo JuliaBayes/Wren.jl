@@ -103,7 +103,7 @@ function parse_variables!(stmt::Sample, state::DataflowAnalysisState)
     # overly conservative. See https://github.com/JuliaBayes/Wren.jl/issues/139.
     #
     # Note: in the case where it's conditioned on, the symbol isn't read from because Wren
-    # will read from the `model.conditioned` VNT instead. This might change if #139 is
+    # will read from the `model.conditioned` NamedTuple instead. This might change if #139 is
     # implemented.
     mark_as_written_to!(state, Set([stmt.lhs_top_level_symbol]))
     # Record the top-level LHS symbol itself.

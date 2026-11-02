@@ -50,7 +50,7 @@ This is equivalent to `_vecmodel_lp` but with the inactive arguments stored in t
 struct _VecModelLP{
     E,
     A<:NamedTuple,
-    C<:VarNamedTuple,
+    C<:NamedTuple,
     CA<:Val,
     X<:EvalContext,
     F,
@@ -92,7 +92,7 @@ function _vecmodel_lp(
     params::AbstractVector,
     evaluation_fn,
     model_args::NamedTuple,
-    conditioned::VarNamedTuple,
+    conditioned::NamedTuple,
     enzyme_copy_argnames::Val,
     ctx::EvalContext,
     lp_function,
@@ -335,6 +335,20 @@ function VecModel(
     return VecModel(model, adtype, lp_function, parameter_space, vecinfo, sample)
 end
 
+"""
+    logdensity(model::Model, adtype=nothing; kwargs...) -> VecModel
+
+Construct a vectorised log-density object implementing the LogDensityProblems.jl interface.
+The default is the unnormalised posterior in unconstrained coordinates, including the
+change-of-variables Jacobian, as for [`VecModel`](@ref). Use `lp_function=logjoint` for
+an original-space MAP objective or `lp_function=loglikelihood` for an MLE objective.
+
+All other keywords are passed to [`VecModel`](@ref), including `latent_source` for
+initialisation. Supply an AD backend to prepare gradients. Evaluate the result with
+`LogDensityProblems.logdensity`, `LogDensityProblems.logdensity_and_gradient`, or [`lp`](@ref).
+"""
+logdensity(model::Model, adtype=nothing; kwargs...) = VecModel(model, adtype; kwargs...)
+
 function Base.show(io::IO, ::MIME"text/plain", vm::VecModel)
     printstyled(io, "VecModel ", vm.model.name; bold=true)
     println(io)
@@ -384,19 +398,33 @@ _copied_args(vm::VecModel) = _copied_args(vm.model)
 # overloaded in EnzymeExt as it depends on runtime activity error which isn't in Core
 _handle_enzyme(@nospecialize(vm::VecModel)) = vm
 
-# Create a copy of a VecModel with a deepcopied adprep. This is necessary for multithreaded
-# sampling because AD preparation objects are not thread-safe.
+# Create a copy of a VecModel with its own model arguments and a deepcopied adprep. This is
+# necessary for multithreaded sampling because models may write into their arguments, and
+# AD preparation objects are not thread-safe.
 # https://juliadiff.org/DifferentiationInterface.jl/DifferentiationInterface/stable/faq/limitations/#Multithreading
 function _copy_for_thread(vm::VecModel)
+    model = _copy_for_thread(vm.model)
+    f = vm.lp_func
+    lp_func = _VecModelLP(
+        model.evaluation_fn,
+        model.args,
+        model.conditioned,
+        model.enzyme_copy_argnames,
+        f.ctx,
+        f.lp_function,
+        f.parameter_space,
+        f.vecinfo,
+        f.accs,
+    )
     return VecModel(
-        _dealias(vm.model),
+        model,
         vm.adtype,
         vm.lp_function,
         vm.parameter_space,
         vm.vecinfo,
         vm.accs,
         vm.dimension,
-        vm.lp_func,
+        lp_func,
         deepcopy(vm.adprep),
         copy(vm.sample),
     )

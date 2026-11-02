@@ -1,4 +1,4 @@
-# Bayesian workflow
+# [Bayesian workflow](@id workflow)
 
 In the worked example below, we demonstrate how Wren and the JuliaBayes ecosystem enable the [Bayesian Workflow](https://avehtari.github.io/Bayesian-Workflow/).
 
@@ -118,7 +118,7 @@ Then we condition with `|` (see [`condition`](@ref)) and sample with [`nuts`](@r
 
 ```@example workflow
 import Enzyme
-model_cond = model | VarNamedTuple(bill_length=penguins.bill_length_mm)
+model_cond = model | (; bill_length=penguins.bill_length_mm)
 chain_post = nuts(model_cond, 1000, 4; progress=false)
 summarystats(chain_post)
 ```

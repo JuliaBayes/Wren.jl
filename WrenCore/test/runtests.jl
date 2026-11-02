@@ -21,6 +21,7 @@ using Test
     include("batch/typestability.jl")
     include("aliasing.jl")
     include("submodel.jl")
+    include("enzyme_conditioning.jl")
     include("vecmodel.jl")
     include("draw.jl")
     include("ad.jl")
@@ -30,6 +31,7 @@ using Test
     include("issues/55.jl")
     include("issues/69.jl")
     include("issues/132.jl")
+    include("issues/146.jl")
     include("issues/155.jl")
 end
 

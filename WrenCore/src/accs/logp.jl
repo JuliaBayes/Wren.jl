@@ -339,30 +339,15 @@ end
     )
 end
 
-# Weight original-space densities only; coordinate Jacobians and custom hooks retain
-# their usual behavior.
+# A NoLogProb seed keeps the increment's precision and leaves unrelated events untouched.
+# Coordinate Jacobians and custom hooks use the fallback above.
 function _scaled_accumulate!!(
-    ::typeof(accumulate_assume!!),
+    f,
     scale::Number,
-    acc::LogPriorAccumulator,
-    val,
-    tval,
-    vn,
-    right,
+    acc::Union{LogPriorAccumulator,LogLikelihoodAccumulator},
     args...,
 )
-    lp = logdensityof(right, val)
-    return acclogp(acc, oftype(lp, scale * lp))
-end
-function _scaled_accumulate!!(
-    ::typeof(accumulate_observe!!),
-    scale::Number,
-    acc::LogLikelihoodAccumulator,
-    val,
-    vn,
-    right,
-    args...,
-)
-    lp = logdensityof(right, val)
+    lp = logp(f(basetypeof(acc)(NoLogProb()), args...))
+    lp isa NoLogProb && return acc
     return acclogp(acc, oftype(lp, scale * lp))
 end

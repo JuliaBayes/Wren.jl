@@ -45,7 +45,7 @@ end
         end
         x ~ Normal(2.0, sqrt(0.5))
     end
-    model = f(zeros(2)) | VarNamedTuple(y=4.0)
+    model = f(zeros(2)) | (; y=4.0)
     chn = exact_posterior_chain(StableRNG(468), f_posterior(zeros(2)), model, 1000, 2)
 
     # Sanity check
@@ -124,7 +124,7 @@ end
             x[-2] ~ Normal(1.0, sqrt(0.5))
         end
         offset_arg() = OffsetArray(zeros(2), -2:-1)
-        cond_model = offset2(offset_arg()) | VarNamedTuple(y=2.0)
+        cond_model = offset2(offset_arg()) | (; y=2.0)
         chn = exact_posterior_chain(
             StableRNG(468),
             offset2_posterior(offset_arg()),
