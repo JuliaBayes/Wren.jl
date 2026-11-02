@@ -70,15 +70,18 @@ This seems a bit wasteful: can't we do both at once?
 Indeed, Wren gives you a function for this:
 
 ```@example models
-accs = rand_with_logp(model)
+result = simulate(model)
 ```
 
-which returns a new object, an [`AccumulatorTuple`](@ref).
-You can access the trace with `parameters(accs)`, and the log-density with `logjoint(accs)`.
+which returns a new object, a [`ModelResult`](@ref).
+You can access the trace with `parameters(result)`, and the log-density with `logjoint(result)`.
 
 ## General evaluation
 
-At this point, you are probably wondering what an `AccumulatorTuple` is.
+!!! danger
+
+    TODO(penelopeysm): This should be shifted to another page; I'll do so in a separate PR.
+
 This is a good point to talk about the general evaluation framework that Wren uses, which is heavily lifted from DynamicPPL.
 
 The entry point for _all_ Wren model evaluation is the [`WrenCore.evaluate`](@ref) function.
