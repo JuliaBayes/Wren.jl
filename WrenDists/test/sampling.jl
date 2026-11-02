@@ -8,19 +8,35 @@ import DifferentiationInterface as DI
     zs = randn(Xoshiro(8675309), T, 8)
     es = -log.(rand(Xoshiro(8675309), T, 2, 4))
     cases = (
-        ("Normal", s -> rand(Xoshiro(8675309), WrenDists.Normal(zero(only(s)), only(s))), z),
-        ("IID Normal", s -> sum(rand(
-            Xoshiro(8675309),
-            WrenDists.Independent(WrenDists.Repeated(
-                WrenDists.Normal(zero(only(s)), only(s)), (8,),
-            )),
-        )), sum(zs)),
-        ("BatchedExponential", s -> sum(rand(
-            Xoshiro(8675309), WrenDists.BatchedExponential(fill(only(s), 2, 4)),
-        )), sum(es)),
+        (
+            "Normal",
+            s -> rand(Xoshiro(8675309), WrenDists.Normal(zero(only(s)), only(s))),
+            z,
+        ),
+        (
+            "IID Normal",
+            s -> sum(
+                rand(
+                    Xoshiro(8675309),
+                    WrenDists.Independent(
+                        WrenDists.Repeated(WrenDists.Normal(zero(only(s)), only(s)), (8,)),
+                    ),
+                ),
+            ),
+            sum(zs),
+        ),
+        (
+            "BatchedExponential",
+            s -> sum(
+                rand(Xoshiro(8675309), WrenDists.BatchedExponential(fill(only(s), 2, 4))),
+            ),
+            sum(es),
+        ),
     )
     backends = Base.get_extension(WrenDists, :WrenDistsTestUtils).TESTED_ADTYPES
-    @testset "$name / $adname" for (name, f, expected) in cases, (adname, backend) in backends
+    @testset "$name / $adname" for (name, f, expected) in cases,
+        (adname, backend) in backends
+
         value, gradient = DI.value_and_gradient(f, backend, x)
         @test value ≈ f(x) rtol = 1e-5
         @test gradient ≈ [expected] rtol = 1e-5

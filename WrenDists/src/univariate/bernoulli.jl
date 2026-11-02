@@ -47,12 +47,14 @@ function DensityInterface.logdensityof(d::BatchedBernoulli, x)
     return if within_compile()
         p = convert.(float(promote_type(eltype(p), eltype(x))), p)
         # Compiled selects evaluate both branches; keep inactive logarithms finite.
-        sum(@. ifelse(
-            (x == zero(x)) | (x == one(x)),
-            log(ifelse(x == one(x), p, one(p))) +
-            log1p(-ifelse(x == zero(x), p, zero(p))),
-            oftype(p, -Inf),
-        ))
+        sum(
+            @. ifelse(
+                (x == zero(x)) | (x == one(x)),
+                log(ifelse(x == one(x), p, one(p))) +
+                log1p(-ifelse(x == zero(x), p, zero(p))),
+                oftype(p, -Inf),
+            )
+        )
     else
         sum(((p, x) -> logdensityof(Bernoulli(p), x)).(p, x))
     end

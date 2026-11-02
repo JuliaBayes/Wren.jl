@@ -31,6 +31,7 @@ using Test
     include("issues/55.jl")
     include("issues/69.jl")
     include("issues/132.jl")
+    include("issues/146.jl")
     include("issues/155.jl")
 end
 

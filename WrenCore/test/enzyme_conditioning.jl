@@ -52,4 +52,38 @@ end
     end
 end
 
+@wren function indexed_observation(y)
+    theta ~ Normal()
+    y[1] ~ Normal(theta)
+end
+
+@wren function ref_observation(y)
+    theta ~ Normal()
+    y[] ~ Normal(theta)
+end
+
+struct IndexOnly{T}
+    data::T
+end
+Base.getindex(x::IndexOnly, i::Int) = x.data[i]
+
+@testset "Enzyme with indexed observations" begin
+    models = (
+        indexed_observation((0.0,)) | (y=(1.0,),),
+        ref_observation(Ref(0.0)) | (y=Ref(1.0),),
+        indexed_observation(IndexOnly((0.0,))) | (y=IndexOnly((1.0,)),),
+    )
+    for model in models
+        vm = VecModel(
+            model,
+            AutoEnzyme(; mode=Reverse);
+            latent_source=FromValues(VarNamedTuple(theta=0.3)),
+            reduce_copies=false,
+        )
+        value, gradient = lp_and_grad(vm, [0.3])
+        @test value ≈ logdensityof(Normal(), 0.3) + logdensityof(Normal(0.3), 1.0)
+        @test gradient ≈ [0.4]
+    end
+end
+
 end

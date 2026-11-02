@@ -149,12 +149,11 @@ end
 @inline function scope(conditioned::NamedTuple, vn::VarName)
     if haskey(conditioned, VarNames.getsym(vn))
         supplied = getproperty(conditioned, VarNames.getsym(vn))
-        child = _lookup_conditioned(supplied, VarNames.getoptic(vn), vn, supplied, true)
+        context = (; vn, supplied, namespace=true)
+        child = _lookup_conditioned(supplied, VarNames.getoptic(vn), context)
         if !(child isa NamedTuple)
             _conditioned_lookup_error(
-                true,
-                vn,
-                supplied,
+                context,
                 ArgumentError("expected a NamedTuple, got $(typeof(child))"),
             )
         end
@@ -175,122 +174,81 @@ end
 _scope_conditioned(values, optic::Union{VarNames.Property,VarNames.Index}) =
     _scope_conditioned(VarNames.ohead(optic)(values), VarNames.otail(optic))
 
-# VarNames.getvalue checks canview first, which currently rejects tuple indexing.
-# Direct optic access also supports e.g. (y=(1.0,),) conditioned at @vn(y[1]).
 @inline function _conditioned_value(values::NamedTuple, vn::VarName{sym}) where {sym}
     supplied = getproperty(values, sym)
-    return _lookup_conditioned(supplied, VarNames.getoptic(vn), vn, supplied, false)
+    return _lookup_conditioned(
+        supplied,
+        VarNames.getoptic(vn),
+        (; vn, supplied, namespace=false),
+    )
 end
 
-_lookup_conditioned(value, ::VarNames.Iden, vn, supplied, namespace) = value
+_lookup_conditioned(value, ::VarNames.Iden, context) = value
 
 @inline function _lookup_conditioned(
     value::NamedTuple,
     optic::VarNames.Property{sym},
-    vn,
-    supplied,
-    namespace,
+    context,
 ) where {sym}
     if haskey(value, sym)
-        return _lookup_conditioned(
-            getproperty(value, sym),
-            optic.child,
-            vn,
-            supplied,
-            namespace,
-        )
-    elseif namespace
+        return _lookup_conditioned(getproperty(value, sym), optic.child, context)
+    elseif context.namespace
         return NamedTuple()
     end
-    return _conditioned_lookup_failure(value, optic, vn, supplied, namespace)
+    return _conditioned_lookup_failure(value, optic, context)
 end
 
-# Catching every successful lookup inhibits inlining and loop optimisation. Keep
-# native scalar indexing outside exception handling, while unusual indexers retain
-# their own getindex semantics through the fallback.
+# Keep exception handling off native success paths for loop optimisation and AD.
 @inline function _lookup_conditioned(
-    value::Array,
+    value::Union{Array,Tuple,Base.RefValue},
     optic::VarNames.Index,
-    vn,
-    supplied,
-    namespace,
+    context,
 )
-    if isempty(optic.kw) && all(i -> i isa Union{Int,CartesianIndex}, optic.ix)
-        assigned = isbitstype(eltype(value)) || isassigned(value, optic.ix...)
-        if checkbounds(Bool, value, optic.ix...) && assigned
-            return _lookup_conditioned(
-                getindex(value, optic.ix...),
-                optic.child,
-                vn,
-                supplied,
-                namespace,
-            )
+    head = VarNames.ohead(optic)
+    native =
+        isempty(optic.kw) && (
+            value isa Array && all(i -> i isa Union{Int,CartesianIndex}, optic.ix) ||
+            value isa Tuple && length(optic.ix) == 1 && only(optic.ix) isa Int ||
+            value isa Base.RefValue && isempty(optic.ix)
+        )
+    if native
+        assigned =
+            !(value isa Array) ||
+            isbitstype(eltype(value)) ||
+            isassigned(value, optic.ix...)
+        if assigned && VarNames.canview(head, value)
+            return _lookup_conditioned(head(value), optic.child, context)
         end
-        _conditioned_lookup_failure(value, optic, vn, supplied, namespace)
+        _conditioned_lookup_failure(value, optic, context)
     end
-    return _lookup_conditioned_fallback(value, optic, vn, supplied, namespace)
+    return _lookup_conditioned_fallback(value, optic, context)
 end
 
-@inline function _lookup_conditioned(
-    value::Tuple,
-    optic::VarNames.Index,
-    vn,
-    supplied,
-    namespace,
-)
-    if isempty(optic.kw) && length(optic.ix) == 1 && only(optic.ix) isa Int
-        i = only(optic.ix)
-        if 1 <= i <= length(value)
-            return _lookup_conditioned(value[i], optic.child, vn, supplied, namespace)
-        end
-        _conditioned_lookup_failure(value, optic, vn, supplied, namespace)
-    end
-    return _lookup_conditioned_fallback(value, optic, vn, supplied, namespace)
-end
-
-@inline function _lookup_conditioned(
-    value::Base.RefValue,
-    optic::VarNames.Index,
-    vn,
-    supplied,
-    namespace,
-)
-    if isempty(optic.kw) && isempty(optic.ix)
-        isassigned(value) ||
-            _conditioned_lookup_failure(value, optic, vn, supplied, namespace)
-        return _lookup_conditioned(value[], optic.child, vn, supplied, namespace)
-    end
-    return _lookup_conditioned_fallback(value, optic, vn, supplied, namespace)
-end
-
-_lookup_conditioned(value, optic, vn, supplied, namespace) =
-    _lookup_conditioned_fallback(value, optic, vn, supplied, namespace)
+_lookup_conditioned(value, optic, context) =
+    _lookup_conditioned_fallback(value, optic, context)
 
 # Preserve a non-returning bounds-failure edge for the optimiser and AD backend.
-@noinline function _conditioned_lookup_failure(value, optic, vn, supplied, namespace)
-    _lookup_conditioned_fallback(value, optic, vn, supplied, namespace)
-    _conditioned_lookup_error(
-        namespace,
-        vn,
-        supplied,
-        ArgumentError("invalid conditioned access"),
-    )
+@noinline function _conditioned_lookup_failure(value, optic, context)::Union{}
+    _lookup_conditioned_fallback(value, optic, context)
+    _conditioned_lookup_error(context, ArgumentError("invalid conditioned access"))
 end
 
-@noinline function _lookup_conditioned_fallback(value, optic, vn, supplied, namespace)
+@noinline function _lookup_conditioned_fallback(value, optic, context)
     try
-        if namespace
+        if context.namespace
             return _scope_conditioned(value, optic)
         else
-            return optic(value)
+            values = NamedTuple{(VarNames.getsym(context.vn),)}((context.supplied,))
+            return VarNames.getvalue(values, context.vn)
         end
     catch error
         error isa InterruptException && rethrow()
-        _conditioned_lookup_error(namespace, vn, supplied, error)
+        _conditioned_lookup_error(context, error)
     end
 end
 
-@noinline function _conditioned_lookup_error(namespace, vn, supplied, error)
+@noinline function _conditioned_lookup_error(context, error)
+    (; vn, supplied, namespace) = context
     kind = if namespace
         "submodel namespace"
     else
