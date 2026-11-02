@@ -81,13 +81,8 @@ This is equivalent to `return_value(simulate(model))`, but is more efficient tha
 parameters.
 """
 function return_value(latents::AbstractLatentSource, model::Model)
-    retval, _ = evaluate(
-        model,
-        latents,
-        OriginalSpace(),
-        AccumulatorTuple(),
-        EvalContext{false}(),
-    )
+    retval, _ =
+        evaluate(model, latents, OriginalSpace(), AccumulatorTuple(), EvalContext{false}())
     return retval
 end
 return_value(rng::AbstractRNG, model::Model) = return_value(FromPrior(rng), model)
@@ -195,7 +190,8 @@ log-likelihood, log-joint, and return value are stored as extras with the names
 """
 VarNames.Draw(result::ModelResult) = VarNames.Draw(
     VarNames.densify!!(result.parameters),
-    (logprior=result.logprior,
+    (
+        logprior=result.logprior,
         loglikelihood=result.loglikelihood,
         logjoint=logjoint(result),
         return_value=result.return_value,
@@ -214,7 +210,7 @@ function ModelResult(draw::VarNames.Draw)
         VarNames.parameters(draw),
         get(VarNames.extras(draw), :return_value, nothing),
         get(VarNames.extras(draw), :logprior, nothing),
-        get(VarNames.extras(draw), :loglikelihood, nothing)
+        get(VarNames.extras(draw), :loglikelihood, nothing),
     )
 end
 
@@ -241,7 +237,12 @@ function simulate(latents::AbstractLatentSource, model::Model)
         ),
         EvalContext{false}(),
     )
-    return ModelResult(VarNames.parameters(accs), retval, logprior(accs), loglikelihood(accs))
+    return ModelResult(
+        VarNames.parameters(accs),
+        retval,
+        logprior(accs),
+        loglikelihood(accs),
+    )
 end
 simulate(rng::AbstractRNG, model::Model) = simulate(FromPrior(rng), model)
 simulate(model::Model) = simulate(FromPrior(), model)
