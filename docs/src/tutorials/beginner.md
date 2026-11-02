@@ -102,6 +102,8 @@ TODO This needs #268
 ```@example beginner
 ```
 
+TODO observations with uncertainty
+
 ## Further reading
 
 For more information about probabilistic programming and Bayesian inference, you might want to check out the following resources:
