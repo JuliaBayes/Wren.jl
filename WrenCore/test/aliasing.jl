@@ -7,6 +7,7 @@ using Distributions
 using ForwardDiff, ReverseDiff, Mooncake, Enzyme
 using Chairmarks
 using Test
+using Random: Xoshiro
 
 
 @testset "aliasing.jl" begin
@@ -53,9 +54,9 @@ using Test
         end
 
         @testset "conditioned x" begin
-            model = fassume(x) | VarNamedTuple(x=x)
+            model = fassume(x) | (; x=x)
             @test model.args.x !== x # Should be dealiased.
-            @test model.conditioned[@vn(x)] === x # Should be the same.
+            @test model.conditioned.x === x # Should be the same.
             rand(model) # Run the model
             # Contents should not have been modified, because conditioned values are
             # read-only.
@@ -160,7 +161,7 @@ using Test
         end
         model = cond_copies([0.0], [0.0])
         @test WrenCore._copied_args(model) == (:x,)
-        conditioned_model = model | VarNamedTuple(a=1.0)
+        conditioned_model = model | (; a=1.0)
         @test WrenCore._copied_args(conditioned_model) == (:x,)
         @test WrenCore._copied_args(decondition(conditioned_model)) == (:x,)
     end
@@ -203,6 +204,40 @@ using Test
             z = [1, 2]
             @test int_arg(z).args.z !== z
         end
+    end
+end
+
+# Mutable records still need a deep copy, preserving aliases between elements while
+# separating the model's state from the caller's state.
+mutable struct MutableRecord
+    value::Float64
+end
+
+@wren function mutate_shared(data)
+    data[1].value += 1.0
+    return data[2].value
+end
+
+@wren function mutate_nested(data)
+    data[1].value[1] += 1.0
+    return data[2].value[1]
+end
+
+@testset "Deep copies retain mutable element aliases" begin
+    for as_view in (false, true), nested in (false, true)
+        shared = nested ? (value=[0.0],) : MutableRecord(0.0)
+        data = [shared, shared]
+        data = as_view ? view(data, :) : data
+        model = nested ? mutate_nested(data) : mutate_shared(data)
+        result, _ = evaluate(
+            model,
+            FromPrior(Xoshiro(468)),
+            OriginalSpace(),
+            WrenCore.default_accumulators(),
+            EvalContext{false}(),
+        )
+        @test result == 1.0
+        @test (nested ? shared.value[1] : shared.value) == 0.0
     end
 end
 

@@ -20,6 +20,7 @@ using Test
     include("batch/typestability.jl")
     include("aliasing.jl")
     include("submodel.jl")
+    include("enzyme_conditioning.jl")
     include("vecmodel.jl")
     include("draw.jl")
     include("ad.jl")

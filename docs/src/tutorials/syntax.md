@@ -165,7 +165,7 @@ To condition on some observed data, we can use the `|` operator on the model.
 For example, we can condition on the entire `y` array in one go:
 
 ```@example model
-yarg_model_cond = yarg_model | VarNamedTuple(y=[1.0, 2.0, 3.0])
+yarg_model_cond = yarg_model | (; y=[1.0, 2.0, 3.0])
 
 accs = rand_with_logp(Xoshiro(468), yarg_model_cond)
 logprior(accs), loglikelihood(accs), parameters(accs)
@@ -180,27 +180,14 @@ We can do the same with `ydef`.
 Here `y = zeros(3)` is only a template: as when sampling, the value of each `y[i]` arrives at its tilde-statement, so `y[i]` holds `0.0` until then.
 
 ```@example model
-ydef_model_cond = ydef_model | VarNamedTuple(y=[1.0, 2.0, 3.0])
+ydef_model_cond = ydef_model | (; y=[1.0, 2.0, 3.0])
 
 accs = rand_with_logp(Xoshiro(468), ydef_model_cond)
 logprior(accs), loglikelihood(accs), parameters(accs)
 ```
 
-One can perform partial conditioning by only specifying part of the latent array (see the [VarNames.jl](https://juliabayes.org/VarNames.jl/stable/vnt/api/#VarNames.@vnt) docs for more details on the `@vnt` macro):
-
-```@example model
-cond = @vnt begin
-    @template y = zeros(3)
-    y[1] := 1.0
-    y[3] := 3.0
-end
-
-yarg_model_partial_cond = yarg_model | cond
-rand(yarg_model_partial_cond)
-```
-
-A partially conditioned argument is not replaced.
-The argument is the template, and each conditioned `y[i]` arrives at its tilde-statement, as in `ydef`.
+Only whole variables can be conditioned. Partial array or field conditioning is not supported.
+To mix observed and latent values, use separate variables or condition whole variables in a submodel.
 
 When a whole array is conditioned, every tilde-statement on it must index into it.
 For example, conditioning `y` on a 2-element array in `ydef` makes `y[3] ~ Normal(x)` throw a `BoundsError` instead of creating a new latent variable.
@@ -308,7 +295,7 @@ This is done using the `@batch` macro:
     end
 end
 x, y = randn(1000), randn(1000)
-model = batched(x, y) | VarNamedTuple(y=y)
+model = batched(x, y) | (; y=y)
 ```
 
 Batched for-loops have the same semantics as regular for-loops.
@@ -376,6 +363,7 @@ which guarantees correctness, but might not be as efficient as the vectorised fo
 ## [Manual log-likelihood addition](@id addloglike)
 
 !!! danger "We do NOT recommend this"
+
     We strongly discourage the use of `@addloglikelihood`. It should only be considered if the model would otherwise not work (if you run into such a case, please let us know in an issue).
 
 Wren provides a macro, `@addloglikelihood [name=:name] expr`, which allows you to manually add `expr` to the model's log-likelihood.

@@ -33,7 +33,7 @@ struct PoissonZeroInflated{T}
     lambda::T
     pi::T
 
-    function PoissonZeroInflated(lambda::T, pi::T) where T
+    function PoissonZeroInflated(lambda::T, pi::T) where {T}
         @assert lambda > zero(T) && zero(T) <= pi <= one(T)
         return new{T}(lambda, pi)
     end
@@ -93,10 +93,11 @@ We successfully sampled from our custom zero-inflated Poisson distribution and w
 ## Manual loglikelihoods
 
 !!! danger "We do NOT recommend this"
+
     We strongly discourage the use of `@addloglikelihood`. It should only be considered if the model would otherwise not work (if you run into such a case, please let us know in an issue).
 
 Instead of using the recommended `~` syntax, it is possible to use the [`@addloglikelihood`](@ref addloglike) macro to increment the ... well, loglikelihood manually.
-    
+
 Using `@addloglikelihood` means that you will not be able to use Wren's features relating to [Bayesian workflow](@ref workflow).
 
 For example, you will only be able to sample from the prior via `rand` if you use the `~` syntax:

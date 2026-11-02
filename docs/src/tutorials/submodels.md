@@ -40,6 +40,73 @@ We can access the inner variable by indexing into this:
 vnt[@vn(a.x)]
 ```
 
+## [Conditioning submodels](@id submodel-conditioning)
+
+A nested `NamedTuple` under a submodel's namespace conditions whole variables in that
+child. The parent's values override the child's own conditioning:
+
+```@example submodel
+using WrenCore: conditioned, evaluate, OriginalSpace, AccumulatorTuple, EvalContext
+
+@wren function conditioning_inner()
+    x ~ Normal()
+    y ~ Normal(x)
+    return y
+end
+
+@wren function conditioning_outer(inner)
+    return child ~ inner
+end
+
+inner_model = conditioning_inner() | (y=1.0,)
+parent = conditioning_outer(inner_model) | (child=(x=0.0, y=2.0),)
+conditioned(parent)
+```
+
+The child returns `y`, so evaluating the parent shows that the parent's observation wins:
+
+```@example submodel
+first(
+    evaluate(
+        parent,
+        FromPrior(),
+        OriginalSpace(),
+        AccumulatorTuple(),
+        EvalContext{false}(),
+    ),
+)
+```
+
+Qualified names remove individual whole variables from the parent's nested conditioning.
+Here `x` stays observed, while removing the parent's `y` reveals the child's own `y=1.0`:
+
+```@example submodel
+restored = decondition(parent, @vn(child.y))
+first(
+    evaluate(
+        restored,
+        FromPrior(),
+        OriginalSpace(),
+        AccumulatorTuple(),
+        EvalContext{false}(),
+    ),
+)
+```
+
+To remove the entire parent-supplied namespace, use `decondition(parent, :child)`.
+For indexed children, selectors such as `@vn(children[1].y)` remove a whole variable
+from one child. These selectors do not make components of ordinary arrays or records latent.
+
+Conditioning replaces each supplied key, including an entire submodel namespace.
+It does not merge nested values recursively. For example, replacing `child` with a
+record containing only `y` drops the parent's previous observation of `x`:
+
+```@example submodel
+conditioned(parent | (child=(y=3.0,),))
+```
+
+Supply every observation that you want to retain under a replaced namespace.
+
 ## Unprefixed submodels
 
 Currently it is not possible to use submodels without prefixing the inner variables.
