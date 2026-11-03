@@ -80,7 +80,8 @@ Here, `Uniform(0, 15)` represents the uniform distribution between the bounds 0 
 
 Unfortunately for me, I might also sometimes oversleep!
 Let's say that the chance of me oversleeping is 10%.
-Then `s`, which is a boolean indicating whether or not I overslept, can be represented as a Bernoulli distribution:
+Then `s`, which is a number indicating whether or not I overslept, can be represented as a Bernoulli distribution.
+Specifically, 0 means I woke up on time, and 1 means I overslept:
 
 ```math
 s \sim \text{Bernoulli}(0.1)
