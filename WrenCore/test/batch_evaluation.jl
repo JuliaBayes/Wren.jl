@@ -2,6 +2,7 @@ module WrenBatchEvaluationTests
 
 using WrenCore, WrenDists, Reactant, Test
 using ADTypes: AutoReactant
+using Enzyme: Enzyme
 using Plaice
 
 vecmodel(model, values; adtype=nothing) =
@@ -90,22 +91,51 @@ end
     end
 end
 
+@wren function array_branch(y)
+    beta ~ iid(Normal(), 2)
+    if beta[1] > 0
+        @observe y ~ Normal(sum(beta))
+    else
+        @observe y ~ Normal(2beta[1] - beta[2])
+    end
+end
+
 @testset "prepared parameter batches" begin
     X = reshape(log.([0.5, 1.5, 3.0, 5.0]), 1, :)
     rates = exp.(vec(X))
     rate_values = VarNamedTuple(rate=1.5)
     normal_values = VarNamedTuple(x=1.0)
     adtype = AutoReactant(AutoEnzyme(; mode=Reverse))
+    reverse = AutoEnzyme(; mode=Reverse)
+    forward = AutoEnzyme(; mode=Enzyme.Forward)
     vm = vecmodel(rate_model(3), rate_values)
     batch = prepare_batch(vm, X)
     expected = vcat(reshape(-rates, 1, :), reshape(3vec(X) - rates .- log(6.0), 1, :), -X)
     @test Array(batch(X)) ≈ expected
+    joint = prepare_batch(vm, X, logjoint_transformed; adtype=reverse)
+    values, gradients = joint(X)
+    @test vec(Array(values)) ≈ vec(expected[1, :] + expected[2, :] - expected[3, :])
+    @test vec(Array(gradients)) ≈ 4 .- 2rates
     resident = Reactant.to_rarray(X[:, [4, 2, 1, 3]])
     @test Array(batch(resident)) ≈ expected[:, [4, 2, 1, 3]]
     @test Array(resident) == X[:, [4, 2, 1, 3]]
+    @test vec(Array(last(joint(resident)))) ≈ (4 .- 2rates)[[4, 2, 1, 3]]
     GC.gc()
     @test Array(batch(X)) ≈ expected
     @test size(prepare_batch(vm, zeros(1, 0))(zeros(1, 0))) == (3, 0)
+    for backend in (forward, reverse)
+        empty_batch = prepare_batch(vm, zeros(1, 0), loglikelihood; adtype=backend)
+        empty_values, empty_gradients = empty_batch(zeros(1, 0))
+        @test (size(empty_values), size(empty_gradients)) == ((1, 0), (1, 1, 0))
+    end
+    fixed = vecmodel(rate_model(3) | (rate=2.0,), VarNamedTuple())
+    values, gradients =
+        prepare_batch(fixed, zeros(0, 3), loglikelihood; adtype=reverse)(zeros(0, 3))
+    @test vec(Array(values)) ≈ fill(lp(fixed, Float64[]), 3)
+    @test size(gradients) == (1, 0, 3)
+    values, gradients = prepare_batch(vm, X, accs -> Float64[]; adtype=forward)(X)
+    @test size(values) == (0, 4)
+    @test size(gradients) == (0, 1, 4)
     likelihood_accs = AccumulatorTuple(LogLikelihoodAccumulator())
     likelihood = prepare_batch(vm, X, loglikelihood; accs=likelihood_accs)
     @test vec(Array(likelihood(X))) ≈ vec(expected[2, :])
@@ -121,6 +151,18 @@ end
     seed.values[1] = 99.0
     for _ in 1:2
         @test Array(counter(X)) == fill(8.0, 1, 4)
+    end
+    differentiated_counter = prepare_batch(
+        vm,
+        X,
+        accs -> accs[:counter].values;
+        accs=AccumulatorTuple(CounterAccumulator([7.0])),
+        adtype=forward,
+    )
+    for _ in 1:2
+        values, gradients = differentiated_counter(X)
+        @test Array(values) == fill(8.0, 1, 4)
+        @test Array(gradients) == zeros(1, 1, 4)
     end
 
     points = reshape([-2.0, -0.5, 0.5, 2.0], 1, :)
@@ -139,6 +181,12 @@ end
     @test vec(Array(prepare_batch(branches, points, logjoint_transformed)(points))) ≈
           expected_branch
     @test Array(prepare_batch(branches, points, logjac)(points)) == zeros(1, 4)
+    for backend in (forward, reverse)
+        constant_batch = prepare_batch(branches, points, logjac; adtype=backend)
+        values, gradients = constant_batch(points)
+        @test Array(values) == zeros(1, 4)
+        @test Array(gradients) == zeros(1, 1, 4)
+    end
     branch_ad = vecmodel(branch_model(y), normal_values; adtype)
     for i in (2, 3)
         x = points[i]
@@ -173,6 +221,16 @@ end
         reshape(-2BX[1, :] - log.(fraction) - log1p.(-fraction), 1, :),
     )
     @test Array(prepare_batch(bounded, BX)(BX)) ≈ expected_bounded
+    component_batch = prepare_batch(bounded, BX; adtype=forward)
+    values, gradients = component_batch(BX)
+    expected_gradients = zeros(3, 2, 4)
+    expected_gradients[1, 1, :] = -upper .- 1
+    expected_gradients[2, 1, :] = 3 .- rate
+    expected_gradients[2, 2, :] = (3 .- rate) .* (1 .- fraction)
+    expected_gradients[3, 1, :] .= -2
+    expected_gradients[3, 2, :] = 2fraction .- 1
+    @test Array(values) ≈ expected_bounded
+    @test Array(gradients) ≈ expected_gradients
     bounded_ad = vecmodel(bounded_model(3), bounded_values; adtype)
     _, gradient = lp_and_grad(bounded_ad, BX[:, 2])
     @test gradient ≈
@@ -196,9 +254,16 @@ end
     # Model preparation already evaluated the += once, leaving the prepared seed at 3.5.
     expected_mutation = 3log.(3.5 .+ rates) - (3.5 .+ rates) .- log(6.0)
     for model in (mutating_model([2.0], 3), mutating_model([0.0], 3) | (buffer=[2.0],))
-        isolated = prepare_batch(vecmodel(model, rate_values), X, loglikelihood)
+        mutating = vecmodel(model, rate_values)
+        isolated = prepare_batch(mutating, X, loglikelihood)
         for _ in 1:2
             @test vec(Array(isolated(X))) ≈ expected_mutation
+        end
+        differentiated = prepare_batch(mutating, X, loglikelihood; adtype=reverse)
+        for _ in 1:2
+            values, gradients = differentiated(X)
+            @test vec(Array(values)) ≈ expected_mutation
+            @test vec(Array(gradients)) ≈ rates .* (3 ./ (3.5 .+ rates) .- 1)
         end
     end
 
@@ -227,6 +292,20 @@ end
     for x in (-2.0, 0.5, 2.0)
         @test evaluate(control_ad, [x]) == evaluate(nested_if, [x])
     end
+
+    array_vm = vecmodel(array_branch(0.2), VarNamedTuple(beta=[1.0, 0.5]))
+    array_points = vcat(points, [0.3 -0.1 0.2 0.4])
+    array_batch =
+        prepare_batch(array_vm, array_points, logjoint_transformed; adtype=reverse)
+    values, gradients = array_batch(array_points)
+    @test vec(Array(values)) ≈ [lp(array_vm, x) for x in eachcol(array_points)]
+    @test dropdims(Array(gradients); dims=1) ≈ [11.0 2.7 -1.0 -4.2; -4.8 -1.0 -0.7 -2.6]
+
+    nonfinite = accs -> [-Inf, loglikelihood(accs)]
+    values, gradients = prepare_batch(vm, X, nonfinite; adtype=forward)(X)
+    @test all(Array(values)[1, :] .== -Inf)
+    @test Array(values)[2, :] ≈ expected[2, :]
+    @test Array(gradients) ≈ reshape(vcat(zeros(1, 4), (3 .- rates)'), 2, 1, 4)
 end
 
 end

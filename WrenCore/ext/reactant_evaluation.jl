@@ -1,5 +1,16 @@
 using WrenCore.Expressions: AbstractWrenExpr, WrenExpr, OtherStatement, ReturnStatement
 
+# Branch tracing needs tensor slices, not SubArrays with untraceable offset fields.
+function WrenCore.get_latent(
+    source::WrenCore.FromVector{<:Reactant.TracedRArray},
+    vn::WrenCore.VarName,
+    right,
+    sitename::Val,
+)
+    rt = WrenCore._get_range_and_transform(source.vecinfo, vn, sitename)
+    return WrenCore.TransformedValue(source.params[rt.range], rt.transform)
+end
+
 _control_transfer(x) = false
 _control_transfer(::ReturnStatement) = true
 _control_transfer(x::OtherStatement) = _control_transfer(x.expr)

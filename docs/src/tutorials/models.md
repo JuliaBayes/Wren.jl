@@ -291,11 +291,27 @@ Array(components)          # Materialise on the host when needed.
 
 likelihood_batch = prepare_batch(batch_model, X, loglikelihood)
 loglikelihoods = vec(Array(likelihood_batch(X)))
+
+component_batch = prepare_batch(batch_model, X; adtype=AutoEnzyme(; mode=Enzyme.Forward))
+components, derivatives = component_batch(X)
+
+joint_batch = prepare_batch(
+    batch_model,
+    X,
+    WrenCore.logjoint_transformed;
+    adtype=AutoEnzyme(; mode=Reverse),
+)
+joint_values, joint_gradients = joint_batch(X)
 ```
 
 Each result column corresponds to an input point. The default rows contain log-prior,
 log-likelihood, and forward log-Jacobian. An output function can select a number or numeric
 vector; `accs` selects the accumulators. Use `Wren.Dists` for traced-number support.
+
+With an `adtype`, values have size `(K, B)` and derivatives `(K, D, B)`: output component,
+parameter, and point. Derivatives use the vector's coordinates. Forward mode handles all
+components together, with one directional pass per parameter. Reverse mode handles a
+single selected output and suits models with many parameters.
 
 Reuse the compiled callable with matrices of the same size, either ordinary or Reactant
 arrays. It owns model arguments and isolates mutable state between points and calls.

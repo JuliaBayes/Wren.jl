@@ -508,7 +508,7 @@ end
 
 """
     prepare_batch(vecmodel::VecModel, params::AbstractMatrix[, output_function];
-                  accs=vecmodel.accs)
+                  accs=vecmodel.accs, adtype=nothing)
 
 Compile a reusable callable that evaluates matrix columns together. Requires Reactant.jl
 and distributions that support its traced numbers, such as WrenDists.jl. Inputs must have
@@ -517,6 +517,12 @@ and distributions that support its traced numbers, such as WrenDists.jl. Inputs 
 Each output column corresponds to one input point. Default rows contain [`logprior`](@ref),
 [`loglikelihood`](@ref), and [`logjac`](@ref). `output_function` can select a number or numeric
 vector from the accumulators instead, with results concatenated as for `mapslices(; dims=1)`.
+
+With `adtype=AutoEnzyme(...)`, return `(values, derivatives)` with sizes `(K, B)` and
+`(K, D, B)` for `K` outputs, `D` parameters, and `B` points. Derivatives use the vector's
+parameter space. Use `mode=Enzyme.Forward` for multiple outputs or `mode=Reverse` for a single
+output. Forward mode costs one directional pass per parameter; reverse mode suits scalar
+densities with many parameters. Each point has its own derivative, with no cross-point terms.
 
 The callable owns model arguments and copies `accs` per point. Results stay on the Reactant
 device. Pass Reactant arrays to reuse resident inputs; use `Array` for host results.

@@ -11,11 +11,37 @@ include("reactant_evaluation.jl")
 
 _batch_output(value::Number) = convert(Reactant.TracedRArray, [value])
 _batch_output(value::AbstractVector) = convert(Reactant.TracedRArray, value)
-function _batch_points(f, params)
-    return mapslices(params; dims=1) do point
-        point_f = @set f.accs = copy(f.accs)
-        _batch_output(point_f(vec(point)))
+function _batch_point(f, params)
+    point_f = @set f.accs = copy(f.accs)
+    return _batch_output(point_f(params))
+end
+_batch_points(f, params) = mapslices(x -> _batch_point(f, vec(x)), params; dims=1)
+
+function _batch_derivatives(adtype, f, params)
+    if size(params, 1) == 0
+        values = _batch_points(f, params)
+        return values, similar(values, size(values, 1), 0, size(params, 2))
     end
+    mode = _with_primal(adtype)
+    packed = mapslices(params; dims=1) do point
+        point_f = x -> _batch_point(f, x)
+        result = if mode isa Enzyme.ForwardMode
+            Enzyme.jacobian(mode, point_f, vec(point); chunk=Val(1))
+        else
+            Enzyme.gradient(mode, x -> Reactant.@allowscalar(only(point_f(x))), vec(point))
+        end
+        vcat(_batch_output(result.val), vec(only(result.derivs)))
+    end
+    noutputs = size(packed, 1) ÷ (size(params, 1) + 1)
+    if isempty(packed)
+        return (
+            reshape(packed, noutputs, size(params, 2)),
+            reshape(packed, noutputs, size(params)...),
+        )
+    end
+    values = packed[1:noutputs, :]
+    derivatives = reshape(packed[(noutputs+1):end, :], noutputs, size(params)...)
+    return values, derivatives
 end
 
 struct BatchEvaluator{F,C}
@@ -39,6 +65,7 @@ function WrenCore.prepare_batch(
     params::AbstractMatrix,
     output_function=WrenCore._density_parts;
     accs::WrenCore.AccumulatorTuple=vm.accs,
+    adtype::Union{Nothing,AutoEnzyme}=nothing,
 )
     size(params, 1) == vm.dimension || throw(
         DimensionMismatch(
@@ -58,8 +85,13 @@ function WrenCore.prepare_batch(
         Reactant.to_rarray(copy(accs)),
     )
     input = _batch_input(params)
+    batch_function = if adtype === nothing
+        _batch_points
+    else
+        Base.Fix1(_batch_derivatives, adtype)
+    end
     # The backend evaluator is created during preparation in the model's module.
-    compiled = Base.invokelatest(Reactant.Compiler.compile, _batch_points, (f, input))
+    compiled = Base.invokelatest(Reactant.Compiler.compile, batch_function, (f, input))
     return BatchEvaluator(f, compiled, size(params))
 end
 
