@@ -249,7 +249,7 @@ end
 ```
 
 How do we choose a value for `meet` to use?
-Well, that depends on what my manager has observed.
+Well, it's an observation—so that depends on what my manager has observed!
 Suppose on a particular day, we first meet in the office at 9:35 am.
 Flustered, I explain: 'I _swear_ I tried to leave the house at 8:45 am, but the trains were terrible today!'
 From this, we can calculate that `meet = 50`.
@@ -260,6 +260,7 @@ model = time_to_office_with_observation(50.0)
 
 Note that although `meet` is now an argument to the model constructor, it's not a parameter of the model!
 The parameters here are still only `s` and `d`; `meet` plays the role of a constant that the model depends on.
+Another way of describing it is that the model has now been _conditioned_ on the value `meet = 50`.
 
 ```mermaid
 flowchart LR
@@ -277,12 +278,18 @@ flowchart LR
     M --> L
 ```
 
-TODO(penelopeysm)
+When we call `simulate` on this model, we now can see that the `loglike` field is no longer zero.
+That's because we've picked up a log-likelihood term from the `meet` observation:
 
-  - Describe how loglike and logprior relate to the terms in Bayes theorem
-  - Explain that the logposterior is just the sum (modulo constant)
-  - We can use both together to do inference, i.e., figure out the most likely values of parameters given the observations.
-  - Demo with a simple importance sampler
+```@example beginner
+simulate(model)
+```
+
+What's important about this is that **collectively, the log-probabilities allow us to judge whether a set of parameter values are plausible or not**.
+By trying out lots of different values for the parameters `s` and `d`, and seeing how the log-probabilities vary with them, we can start to form updated beliefs about what the real values of the parameters were.
+
+TODO(penelopeysm) Code up an importance sampler to demonstrate this.
+A full explanation of IS can be deferred to a textbook, but conceptually we have the forward sampling bit which accounts for the logprior (the chance of getting a specific result is proportional to the prior), and then we just need to 'reweight' by taking into account the loglike.
 
 !!! note "Choosing priors"
 
@@ -297,9 +304,39 @@ TODO(penelopeysm)
     Just like the likelihood term where we pointed out that the choice of distribution can make a model better or worse, so can the choice of prior distributions.
     We don't have the space to discuss this in detail here, but if you're interested do check out the resources in the [Further reading](@ref beginner-further-reading) section below.
 
+## Bayes theorem
+
+Fundamentally, the components of the probability above are related to Bayes theorem:
+
+```math
+p(\mathbf{\theta} | \mathcal{D}) = \frac{p(\mathcal{D} | \mathbf{\theta}) p(\mathbf{\theta})}{p(\mathcal{D})}
+```
+
+Here, `\mathbf{\theta}` represents the parameters (`s` and `d` in our case), and `\mathcal{D}` is the set of observations (`meet` in our case).
+Taking the logarithm of both sides:
+
+```math
+\underset{\log p(\mathbf{\theta} | \mathcal{D})}_{\text{log-posterior}}
+    = \underset{\log p(\mathcal{D} | \mathbf{\theta})}_{\text{log-likelihood}}
+    + \underset{\log p(\mathbf{\theta})}_{\text{log-prior}}
+    - \underset{\log p(\mathcal{D})}_{\text{constant}}
+```
+
+It turns out that the term ``\log p(\mathbf{\theta})`` corresponds precisely to `logprior`, and ``\log p(\mathcal{D} | \mathbf{\theta})`` to `loglikelihood`, which Wren's `simulate` function gives us.
+Furthermore, `\log p(\mathcal{D})` is a constant with respect to the parameters.
+This means that even when we're trying out different parameter values, we can just ignore it: as long as we don't change `\mathcal{D}` itself, this is just a constant.
+Thus, we can sum the log-prior and log-likelihood to get the *log-posterior*, up to a normalising constant.
+
+It's very common to call the sum of these two terms the 'log-joint', since that is technically what it represents (mathematically, it's ``\log p(\mathbf{\theta}, \mathcal{D})``).
+However, as far as Bayesian inference is concerned, the two are for all intents and purposes interchangeable.
+(Indeed, it turns out that in very many algorithms, this constant will simply cancel out.)
+
 ## Expanding this model
 
-TODO(penelopeysm) - give a flavour of what 'typical' models might look like by extending the example above.
+Having seen a fairly simple example of a probabilistic model, we offer a couple of ideas for how to expand it to make it more realistic.
+In 'real-life' models you will likely see some of these elements.
+
+TODO(penelopeysm)
 
   - Hierarchical relationships
   - Multiple observations
