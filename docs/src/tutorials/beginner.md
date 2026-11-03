@@ -62,11 +62,11 @@ The output type is slightly different from above, but conceptually you can see t
 
 ## Forward simulation
 
-A probabilistic model allows us to write down a relationship between a model's _variables_ — its parameters, which we can't directly see — and the _observations_ which we do see.
+A probabilistic model allows us to write down a relationship between a model's _variables_—its parameters, which we can't directly see—and the _observations_ which we do see.
 
 The best way to understand this is to construct a simple (and sadly very realistic) example.
 To get to work each morning, I have to take [the train](https://en.wikipedia.org/wiki/London_Underground) to work.
-Although the train is usually pretty reliable, there are often delays.
+Although the train is usually pretty reliable, [there are often delays](https://tfl.gov.uk/tube-dlr-overground/status/).
 This introduces some randomness into my commute time.
 
 For example, we might say that the time I spend on the train is 30 minutes, plus some `delay` that's between 0 and 15 minutes.
@@ -150,7 +150,7 @@ The [`simulate`](@ref) function returns a bundle of not only the model's return 
 
 We can see that all the information is consistent with the model that we wrote above.
 In particular, the return value is clearly equal to `30 + d + 10s`.
-Furthermore, the probability (in this case the 'log-prior') is the sum of the individual log-densities, which we can calculate using `Wren.logdensityof`:
+Furthermore, the probability (in this case the 'log-prior'—we'll explain that later) is the sum of the individual log-densities, which we can calculate using `Wren.logdensityof`:
 
 ```@example beginner
 # Get the values of `s` and `d`. Again, don't worry too much about the
@@ -164,7 +164,10 @@ logdensityof(Bernoulli(0.1), result_s) + logdensityof(Uniform(0, 15), result_d)
 ```
 
 You certainly _could_ have done this yourself by extending the 'basic' function to store the values of `s` and `d` and include the calls to `logdensityof`.
-However, Wren does all this automatically for you, and you only need to write a single `~`.
+However, Wren does all this automatically for you, and you don't have to modify your model to do so.
+
+Essentially, in writing the model, you have given Wren something akin to a description of the model.
+Wren then uses that description to automatically generate the code which samples new values for the parameters, calculates the return value, and tracks the log-probability of those parameter values.
 
 Before we go on, it's worth noting that the return value, as well as the log-probability, are considered to be _outputs_ of the model.
 These are both functions of the parameters, which one may think of as the _inputs_ to the model.
@@ -186,7 +189,7 @@ flowchart LR
 
 !!! note "Using specific parameter values"
 
-    So far, we have always generated fresh inputs for the model each time we ran the simulation — i.e., fresh values for `s` and `d` — by drawing from their distributions.
+    So far, we have always generated fresh inputs for the model each time we ran the simulation—i.e., fresh values for `s` and `d`—by drawing from their distributions.
     (That is what `return_value` and `simulate` do if not given any other arguments.)
 
     However, it is often also very useful to be able to evaluate the model for a specific set of inputs.
@@ -197,7 +200,7 @@ flowchart LR
 
 ## Inference
 
-At this point, you might wonder why we might care about the probability of the parameters.
+You might now be wondering why we might care about the probability of the parameters.
 You might also wonder what is the 'log-likelihood' field in the `ModelResult` object above, which is currently zero.
 It turns out that both of these are very much related.
 
