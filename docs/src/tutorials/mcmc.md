@@ -1,6 +1,6 @@
 # MCMC sampling
 
-Wren currently ships with two very simple samplers.
+Wren provides prior sampling, NUTS and optional ensemble MCMC.
 
 Results are stored as `FlexiChain{VarName}`; please see the [FlexiChains documentation](https://juliabayes.org/FlexiChains.jl) for more information.
 
@@ -50,3 +50,17 @@ adtype = AutoEnzyme(; mode=Reverse)
 using Wren
 nuts(model, 1000, 4; adtype=adtype, progress=false)
 ```
+
+## Ensemble MCMC
+
+Ensemble MCMC needs no gradients. Load EnsembleMCMC, then pass the model directly:
+
+```@example mcmc
+using EnsembleMCMC
+walkers = ensemble(model, 1000, 4; warmup=500, progress=false);
+walkers[1]
+```
+
+Starting positions are drawn automatically. Each returned chain tracks one walker
+across the four independent ensembles. Use these chains separately for diagnostics;
+walkers within an ensemble are dependent. See [`ensemble`](@ref) for custom starts and moves.

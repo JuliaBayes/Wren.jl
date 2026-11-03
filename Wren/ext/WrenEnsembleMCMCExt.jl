@@ -34,13 +34,12 @@ function Wren.ensemble(
     source = isnothing(initial_params) ? FromPrior(rng) : FromValues(initial_params[1, 1])
     template =
         WrenCore.VecModel(WrenCore._copy_for_thread(model), nothing; latent_source=source)
-    count = if isnothing(nwalkers)
+    count = something(
+        nwalkers,
         isnothing(initial_params) ?
         max(4, EnsembleMCMC.minimum_walkers(move, template.dimension)) :
-        size(initial_params, 1)
-    else
-        nwalkers
-    end
+        size(initial_params, 1),
+    )
     count > 0 || throw(ArgumentError("nwalkers must be positive"))
     isnothing(initial_params) ||
         size(initial_params, 1) == count ||
@@ -58,43 +57,28 @@ function Wren.ensemble(
             end
         end
         target = x -> WrenCore.lp(vm, x)
-        values = target.(initial)
-        all(isfinite, values) || throw(
-            ArgumentError(
-                "Initial log densities must be finite; supply initial_params within the model's support",
-            ),
-        )
-        history = EnsembleMCMC.sample(
-            rng,
-            target,
-            initial,
-            niters;
-            move,
-            warmup,
-            thin,
-            logdensities=values,
-        )
+        history = EnsembleMCMC.sample(rng, target, initial, niters; move, warmup, thin)
         result = [
-            [
-                Draw(
-                    view(history.positions, :, walker, i),
-                    vm,
-                    (;
-                        log_density=history.logdensities[walker, i],
-                        accepted=history.accepted[walker, i],
-                        move_index=history.move_indices[i],
-                        walker_id=history.walker_ids[walker],
-                        sweep=warmup + i * thin,
-                    ),
-                ) for i in 1:niters
-            ] for walker in 1:count
+            Draw(
+                view(history.positions, :, walker, i),
+                vm,
+                (;
+                    log_density=history.logdensities[walker, i],
+                    accepted=history.accepted[walker, i],
+                    move_index=history.move_indices[i],
+                    walker_id=history.walker_ids[walker],
+                    sweep=warmup + i * thin,
+                ),
+            ) for i in 1:niters, walker in 1:count
         ]
         progress && println("Completed ensemble $chain/$nchains")
         result
     end
     return [
-        AbstractMCMC.from_samples(VNChain, hcat((chain[walker] for chain in draws)...)) for
-        walker in 1:count
+        AbstractMCMC.from_samples(
+            VNChain,
+            hcat((view(chain, :, walker) for chain in draws)...),
+        ) for walker in 1:count
     ]
 end
 
