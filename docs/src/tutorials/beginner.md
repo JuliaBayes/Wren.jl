@@ -208,14 +208,102 @@ It turns out that both of these are very much related.
 Broadly speaking, the log-prior is the probability density associated with the parameters themselves.
 That's why the log-densities of `s` and `d` were counted under the `logprior` field.
 
+The log-likelihood, on the other hand, is probability density associated with *outcomes* of the model.
+Often we call these 'data', or 'observations'.
+The reason for this is because in most modelling scenarios, the parameters themselves are not directly observable, but the outcomes of them are.
+Think, for example, about a medical trial: we don't know the true efficacy of a drug, but we can observe whether or not patients get better after taking it.
+
+To demonstrate this, let's flip the example above on its head.
+Instead of me trying to simulate my own commute time, let's say that my manager at work has gotten tired of me turning up late and blaming the bad train service.
+She doesn't take the train to work and thus can't directly verify whether the train was delayed; and she *certainly* can't observe whether or not I overslept.
+All of these are now hidden, or *latent*, variables.
+
+What she can record, though, is the time that we first see each other in the office.
+Now, because we might be doing different things when we get in, this time might not be _exactly_ the same time that I arrive at the office.
+
+Let's say that on average, we meet 10 minutes after I arrive, with a standard deviation of 3 minutes:
+
+```math
+meet \sim \text{Normal}(commute + 10, 3)
+```
+
+!!! note "Choose distributions wisely!"
+
+    Technically speaking, it is possible that `meet < commute`, which corresponds to a spooky situation where we meet at the office before I've actually arrived!
+    The probability of this happening is around 0.04%, which is fairly small, but not zero.
+    This could be improved by choosing a more realistic distribution.
+    We won't do so here for simplicity, but this is a convenient time to point out that a model is only as good as the assumptions that go into it.
+
+Anyway, let's add this to our model.
+Because our meeting time is an observation, we mark it with the `@observe` macro.
+We also need to specify a value for `meet`.
+The easiest way to do this is to pass it as an argument to the function:
+
+```@example beginner
+@wren function time_to_office_with_observation(meet)
+    s ~ Bernoulli(0.1)                      # Oversleeping
+    d ~ Uniform(0, 15)                      # Train delay
+    commute = 30 + d + (s * 10)             # Total commute time
+    @observe meet ~ Normal(commute + 10, 3) # Time we meet in the office
+end
+```
+
+How do we choose a value for `meet` to use?
+Well, that depends on what my manager has observed.
+Suppose on a particular day, we first meet in the office at 9:35 am.
+Flustered, I explain: 'I _swear_ I tried to leave the house at 8:45 am, but the trains were terrible today!'
+From this, we can calculate that `meet = 50`.
+
+```@example beginner
+model = time_to_office_with_observation(50.0)
+```
+
+Note that although `meet` is now an argument to the model constructor, it's not a parameter of the model!
+The parameters here are still only `s` and `d`; `meet` plays the role of a constant that the model depends on.
+
+```mermaid
+flowchart LR
+    meet[meet: fixed data] --> M
+    subgraph inputs [Inputs: parameters]
+        s
+        d
+    end
+    subgraph outputs [Outputs]
+        R[return value: nothing]
+        L[log-probability]
+    end
+    inputs --> M[time_to_office_with_observation model]
+    M --> R
+    M --> L
+```
+
 TODO(penelopeysm)
 
-  - Add an observation to the model and its distribution.
   - Describe how loglike and logprior relate to the terms in Bayes theorem
   - Explain that the logposterior is just the sum (modulo constant)
   - We can use both together to do inference, i.e., figure out the most likely values of parameters given the observations.
   - Demo with a simple importance sampler
 
-## Further reading
+!!! note "Choosing priors"
+
+    When we started setting up our model, we wrote down the distributions `Bernoulli(0.1)` and `Uniform(0, 15)` for the parameters `s` and `d` simply based on our own knowledge of the situation.
+    However, when we flipped the model around and looked at it from my manager's perspective, you might well wonder how she could have chosen those distributions without having perfect knowledge of the situation.
+
+    It turns out that this is a general problem in Bayesian inference: we need to choose sensible 'prior distributions' for the parameters.
+    We often don't know exactly what these will be, and can only make educated guesses.
+    For example, for the train delay, my manager might have looked at historical trends of train delays to get a sense of what a reasonable range might be.
+    And as for the oversleeping, it might just be a wild guess based on her knowledge of my character.
+
+    Just like the likelihood term where we pointed out that the choice of distribution can make a model better or worse, so can the choice of prior distributions.
+    We don't have the space to discuss this in detail here, but if you're interested do check out the resources in the [Further reading](@ref beginner-further-reading) section below.
+
+## Expanding this model
+
+TODO(penelopeysm) - give a flavour of what 'typical' models might look like by extending the example above.
+
+  - Hierarchical relationships
+  - Multiple observations
+
+## [Further reading](@id beginner-further-reading)
 
 For more information about probabilistic programming and Bayesian inference, you might want to check out the various resources listed on the [Learn Bayes website](https://learnbayes.se/learn/resources/).
