@@ -1,11 +1,15 @@
 module WrenEnsembleTests
 
 using Wren, Wren.Dists, EnsembleMCMC, FlexiChains, Random, Test
+using ADTypes: AutoReactant
+using Reactant: Reactant
+
+Reactant.set_default_backend(get(ENV, "WREN_TEST_BACKEND", "cpu"))
 
 @wren function poisson_rate(count, buffer)
     rate ~ Exponential()
-    buffer[1] = rate
-    @observe count ~ Poisson(buffer[1])
+    buffer .= rate
+    @observe count ~ Poisson(sum(buffer))
 end
 
 @testset "ensemble.jl" begin
@@ -36,6 +40,15 @@ end
     @test reduce(vcat, (Array(w[@vn(rate)]) for w in explicit)) ≈ rates
     single = ensemble(model, 1; initial_params=initial[:, 1], move, progress=false)
     @test reduce(vcat, (Array(w[@vn(rate)]) for w in single)) ≈ rates[:, 1:1]
+
+    adtype = AutoReactant(AutoEnzyme(; mode=Reverse))
+    compiled = ensemble(Xoshiro(19), model, 2, 2; adtype, progress=false)
+    for chain in compiled
+        values = Array(chain[@vn(rate)])
+        @test Array(chain[FlexiChains.Extra(:log_density)]) ≈
+              4 .* log.(values) .- 2 .* values .- log(6)
+    end
+    @test buffer == [-1.0]
 end
 
 end
