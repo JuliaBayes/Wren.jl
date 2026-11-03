@@ -19,6 +19,7 @@ function Wren.ensemble(
     move=EnsembleMCMC.StretchMove(),
     warmup::Integer=0,
     thin::Integer=1,
+    adtype=nothing,
     initial_params::Union{Nothing,AbstractVecOrMat{<:VarNamedTuple}}=nothing,
     progress::Bool=true,
 )
@@ -33,7 +34,7 @@ function Wren.ensemble(
     end
     source = isnothing(initial_params) ? FromPrior(rng) : FromValues(initial_params[1, 1])
     template =
-        WrenCore.VecModel(WrenCore._copy_for_thread(model), nothing; latent_source=source)
+        WrenCore.VecModel(WrenCore._copy_for_thread(model), adtype; latent_source=source)
     count = something(
         nwalkers,
         isnothing(initial_params) ?
