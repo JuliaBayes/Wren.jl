@@ -316,15 +316,15 @@ Here, `\mathbf{\theta}` represents the parameters (`s` and `d` in our case), and
 Taking the logarithm of both sides:
 
 ```math
-\underset{\log p(\mathbf{\theta} | \mathcal{D})}_{\text{log-posterior}}
-    = \underset{\log p(\mathcal{D} | \mathbf{\theta})}_{\text{log-likelihood}}
-    + \underset{\log p(\mathbf{\theta})}_{\text{log-prior}}
-    - \underset{\log p(\mathcal{D})}_{\text{constant}}
+\underbrace{\log p(\mathbf{\theta} | \mathcal{D})}_{\text{log-posterior}}
+    = \underbrace{\log p(\mathcal{D} | \mathbf{\theta})}_{\text{log-likelihood}}
+    + \underbrace{\log p(\mathbf{\theta})}_{\text{log-prior}}
+    - \underbrace{\log p(\mathcal{D})}_{\text{constant}}
 ```
 
 It turns out that the term ``\log p(\mathbf{\theta})`` corresponds precisely to `logprior`, and ``\log p(\mathcal{D} | \mathbf{\theta})`` to `loglikelihood`, which Wren's `simulate` function gives us.
-Furthermore, `\log p(\mathcal{D})` is a constant with respect to the parameters.
-This means that even when we're trying out different parameter values, we can just ignore it: as long as we don't change `\mathcal{D}` itself, this is just a constant.
+Furthermore, ``\log p(\mathcal{D})`` is a constant with respect to the parameters.
+This means that even when we're trying out different parameter values, we can just ignore it: as long as we don't change ``\mathcal{D}`` itself, this is just a constant.
 Thus, we can sum the log-prior and log-likelihood to get the *log-posterior*, up to a normalising constant.
 
 It's very common to call the sum of these two terms the 'log-joint', since that is technically what it represents (mathematically, it's ``\log p(\mathbf{\theta}, \mathcal{D})``).
