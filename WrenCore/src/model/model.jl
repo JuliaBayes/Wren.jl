@@ -367,8 +367,8 @@ end
 Record the value of `expr` as the generated quantity `name` in a `@wren` model.
 `@gq name` is short for `@gq name = name`. `name` must be a single symbol.
 
-`@gq` must be a top-level statement of the model body; we discourage using it
-inside `@submodel`.
+`@gq` must be a statement of the model body. It is not supported inside `@batch` or
+inside functions defined in the model; we discourage using it inside `@submodel`.
 
 If `name` is used later in the model body, `expr` is also assigned to `name` and runs on
 every evaluation of the model. Otherwise `name` is not defined in the model body.

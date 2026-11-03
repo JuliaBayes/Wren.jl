@@ -59,6 +59,32 @@ end
     @gq h = gq_helper(a .+ x)
 end
 
+@wren function gq_nested(flag)
+    a ~ Normal()
+    for i in 1:3
+        @gq in_for = a + i
+    end
+    if flag
+        @gq in_if = 2a
+    end
+    k = 0
+    while k < 2
+        k += 1
+        @gq in_while = k
+    end
+    let z = a^2
+        @gq in_let = z
+    end
+    begin
+        @gq in_begin = a
+    end
+    @gq reused = a + 1
+    for i in 1:2
+        reused += 1
+    end
+    @gq reused_after = reused
+end
+
 function gq_values(model, acc)
     _, accs = evaluate(
         model,
@@ -108,37 +134,29 @@ end
         end))
     end
 
-    @testset "only at the top level" begin
-        @test occursin(NOT_TOP_LEVEL, wren_error(:(function f()
-            for i in 1:2
-                @gq x = i
-            end
-        end)))
-        @test occursin(NOT_TOP_LEVEL, wren_error(:(function f()
-            if true
-                @gq x = 1.0
-            end
-        end)))
-        @test occursin(NOT_TOP_LEVEL, wren_error(:(function f()
-            while false
-                @gq x = 1.0
-            end
-        end)))
-        @test occursin(NOT_TOP_LEVEL, wren_error(:(function f()
-            let
-                @gq x = 1.0
-            end
-        end)))
-        @test occursin(NOT_TOP_LEVEL, wren_error(:(function f()
-            begin
-                @gq x = 1.0
-            end
-        end)))
-        @test occursin(NOT_TOP_LEVEL, wren_error(:(function f(N)
-            @batch for i in 1:N
-                @gq x = i
-            end
-        end)))
+    @testset "inside control flow" begin
+        model = gq_nested(true)
+        gqs = gq_values(model, GQAccumulator())
+        a = gqs[@vn(in_begin)]
+        @test gqs[@vn(in_for)] ≈ a + 3
+        @test gqs[@vn(in_if)] ≈ 2a
+        @test gqs[@vn(in_while)] == 2
+        @test gqs[@vn(in_let)] ≈ a^2
+        @test gqs[@vn(reused)] ≈ a + 1
+        @test gqs[@vn(reused_after)] ≈ a + 3
+        @test collect(keys(gq_values(model, GQAccumulator((:in_if,))))) == [@vn(in_if)]
+        @test !haskey(gq_values(gq_nested(false), GQAccumulator()), @vn(in_if))
+    end
+
+    @testset "invalid positions" begin
+        @test occursin(
+            "@gq is not supported inside @batch",
+            wren_error(:(function f(N)
+                @batch for i in 1:N
+                    @gq x = i
+                end
+            end)),
+        )
         @test occursin(NOT_TOP_LEVEL, wren_error(:(function f()
             function g()
                 @gq x = 1.0
@@ -147,9 +165,12 @@ end
         @test occursin(NOT_TOP_LEVEL, wren_error(:(function f()
             g = () -> (@gq x = 1.0)
         end)))
-        @test occursin(NOT_TOP_LEVEL, wren_error(:(function f()
-            y = (@gq x = 1.0)
-        end)))
+        @test occursin(
+            "@gq must be used as a statement",
+            wren_error(:(function f()
+                y = (@gq x = 1.0)
+            end)),
+        )
         @test_throws "@gq must be used at the top level of a @wren model body" @eval @gq x =
             1.0
     end

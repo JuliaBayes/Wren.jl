@@ -536,6 +536,9 @@ vectorise_batch_stmt(lnn::LineNumberNode, idx, iters, size, ax, cond, ls, ps, ct
 function vectorise_batch_stmt(::IID, idx, iters, size, ax, cond, ls, ps, ctx)
     return error("@iid is not supported inside @batch")
 end
+function vectorise_batch_stmt(::GeneratedQuantity, idx, iters, size, ax, cond, ls, ps, ctx)
+    return error("@gq is not supported inside @batch")
+end
 
 function vectorise_batch_stmt(
     stmt::Sample,

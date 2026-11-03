@@ -375,11 +375,9 @@ Keep these rules in mind when you use `@gq`:
 
   1. The name must be a single symbol; you can't write `@gq x[1]` and `@gq x.a`.
 
-  2. `@gq` must be a top-level statement of the model body. This means that it cannot appear inside  `for`, `while`, `if`, `let` or `begin` blocks, or functions defined in the model. To record the result of control flow, you should assign the generated quantity to a variable and record it afterwards. The abbreviated form `@gq x` allows you to skip spelling out `@gq x = x`.
+  2. If you define a generated quantity `@gq variable` and do not reuse it later in the model body, the right-hand side is removed from the compiled model unless specifically requested with `generated_quantities(model, chain; to_collect=:variable)`.
 
-  3. If you define a generated quantity `@gq variable` and do not reuse it later in the model body, the right-hand side is removed from the compiled model unless specifically requested with `generated_quantities(model, chain; to_collect=:variable)`.
-
-  4. Values are not copied. For example, assume our model uses the array `x` and mutates it after `@gq x`, then recorded value changes too. If you want to create a snapshot, you should write `@gq x = deepcopy(x)` instead.
+  3. Values are not copied. For example, assume our model uses the array `x` and mutates it after `@gq x`, then recorded value changes too. If you want to create a snapshot, you should write `@gq x = deepcopy(x)` instead.
 
 !!! danger "No side effects... again"
     When the definition of a generated quantity `x` involves side effects, such as calling `push!` or drawing a random number, and `x is not reused later, the side effects in its definition will not happen!

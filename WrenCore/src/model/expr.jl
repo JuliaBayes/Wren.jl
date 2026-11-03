@@ -294,8 +294,10 @@ _contains_probabilistic_stmt(::OtherStatement) = false
 _contains_probabilistic_stmt(expr::WrenExpr) = any(_contains_probabilistic_stmt, expr.args)
 
 function lower_to_wren(expr::Expr, mod::Module, statement_position::Bool=false)
-    _is_macrocall(expr, Symbol("@gq")) &&
-        error("@gq must be used at the top level of the model body")
+    if _is_macrocall(expr, Symbol("@gq"))
+        statement_position || error("@gq must be used as a statement")
+        return _lower_gq(expr, mod)
+    end
 
     if expr.head == :macrocall && expr.args[1] == Symbol("@observe")
         statement_position || error("@observe must be used as a statement")
