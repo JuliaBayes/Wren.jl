@@ -8,7 +8,7 @@ can help initialise MCMC. Load Pathfinder to enable its Wren model methods:
 using Wren
 using Wren.Dists: Gamma, Poisson
 using Random: Xoshiro
-import Pathfinder
+using Pathfinder
 
 @wren function poisson_rate(count)
     rate ~ Gamma(2.0, 1.0)
@@ -16,11 +16,11 @@ import Pathfinder
 end
 
 model = poisson_rate(3)
-fit = pathfinder(Xoshiro(42), model, 100)
+fit = multipathfinder(model, 100; rng=Xoshiro(42))
 ```
 
-Like [`nuts`](@ref), [`pathfinder`](@ref) accepts an optional positional RNG, a model and a
-draw count. It returns Pathfinder's native result and approximation diagnostics.
+[`Pathfinder.multipathfinder`](@ref) accepts a model, a draw count and a keyword RNG.
+It returns Pathfinder's native result and approximation diagnostics.
 `draws_transformed` is a model-space `FlexiChains.VNChain`, ready for plotting, summaries
 and prediction:
 
@@ -34,30 +34,40 @@ Both `fit.fit_distribution` and `fit.fit_distribution_transformed` remain in unc
 The density includes the change-of-variables Jacobian,
 as for NUTS, rather than the original-space MAP objective.
 
-## Multiple paths
+## Single and multiple paths
 
-By default, four Gaussian fits form the mixture used for Pareto-smoothed importance
-resampling. Set `nruns` to change the number of fits:
+[`Pathfinder.pathfinder`](@ref) fits one Gaussian approximation and returns a native
+`PathfinderResult`. Its draw count is a keyword:
 
 ```@example pathfinder
-fit = pathfinder(Xoshiro(43), model, 100; nruns=8)
+single = pathfinder(model; rng=Xoshiro(43), ndraws=100)
+single.draws_transformed
+```
+
+For `multipathfinder`, four Gaussian fits form the mixture used for Pareto-smoothed
+importance resampling by default. Set `nruns` to change the number of fits:
+
+```@example pathfinder
+fit = multipathfinder(model, 100; rng=Xoshiro(44), nruns=8)
 fit.psis_result.pareto_shape
 ```
 
 The fits are mixture components, not independent MCMC chains. All draws share one chain
 index, regardless of `nruns`. Check the ELBO estimates in `fit.pathfinder_results`
-and the Pareto shape diagnostic when assessing the approximation. These are approximate
+and the Pareto shape diagnostic when assessing the approximation. Each path also has
+model-space draws in `draws_transformed`. These are approximate
 draws, not converged MCMC samples.
 
 ## Options
 
-The method accepts `adtype`, as for [`nuts`](@ref), and forwards Pathfinder options
+Both methods accept `adtype`, as for [`nuts`](@ref), and forward Pathfinder options
 such as `init`, `init_sampler`, `history_length`, and solver tolerances. `init` and
 `init_sampler` use unconstrained coordinates and retain Pathfinder's defaults.
-When `init` is supplied, its length determines the number of fits instead of `nruns`.
+For `pathfinder`, `init` is one parameter vector. For `multipathfinder`, it is a collection
+of parameter vectors whose length determines the number of fits instead of `nruns`.
 `latent_source=FromPrior(rng)` prepares Wren's parameter mapping; it does not set the
 optimiser's starting points. `reduce_copies` has the same meaning as for [`VecModel`](@ref).
 
-The method requires `ntasks=1` and `ntasks_per_run=1`.
-Wren's model arguments and AD preparation may hold mutable state, so the method runs
+Both methods require `ntasks=1`; `multipathfinder` also requires `ntasks_per_run=1`.
+Wren's model arguments and AD preparation may hold mutable state, so both methods run
 sequentially. It copies the model arguments before preparing the density.

@@ -6,6 +6,7 @@ using Pkg: Pkg
 using Wren
 using WrenCore
 using WrenDists
+import Pathfinder
 using Documenter
 using DocumenterCodeBlocks
 using DocumenterInterLinks
@@ -29,6 +30,7 @@ makedocs(;
         Wren,
         WrenCore,
         WrenDists,
+        Base.get_extension(Wren, :WrenPathfinderExt),
         Base.get_extension(WrenCore, :WrenCoreFlexiChainsExt),
     ],
     pages=[
