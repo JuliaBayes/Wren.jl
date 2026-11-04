@@ -477,6 +477,62 @@ Calculate the log-density of `vecmodel` at `params`.
 lp(vecmodel::VecModel, params::AbstractVector) = vecmodel.lp_func(params)
 
 """
+    evaluate(vecmodel::VecModel, params::AbstractVector, accs=vecmodel.accs,
+             ctx=EvalContext{false}())
+
+Evaluate once in `vecmodel`'s parameter space, returning `(retval, accs)` without applying
+`lp_function`. The default accumulators collect [`logprior`](@ref), [`loglikelihood`](@ref),
+and [`logjac`](@ref); supply other accumulators to select different outputs.
+
+Accumulators are neither copied nor reset. Use fresh ones for independent evaluations.
+`params` is borrowed; the model must not write into its latent variables.
+
+This reuses the vector mapping, not the AD preparation or compiled backend. For external
+Enzyme differentiation, use `reduce_copies=false` and `EvalContext{true}()` to preserve
+copies needed by the selected outputs.
+"""
+function evaluate(
+    vecmodel::VecModel,
+    params::AbstractVector,
+    accs::AccumulatorTuple=vecmodel.accs,
+    ctx::EvalContext=EvalContext{false}(),
+)
+    return evaluate(
+        vecmodel.model,
+        FromVector(params, vecmodel.vecinfo),
+        vecmodel.parameter_space,
+        accs,
+        ctx,
+    )
+end
+
+"""
+    prepare_batch(vecmodel::VecModel, params::AbstractMatrix[, output_function];
+                  accs=vecmodel.accs, adtype=nothing)
+
+Compile a reusable callable that evaluates matrix columns together. Requires Reactant.jl
+and distributions that support its traced numbers, such as WrenDists.jl. Inputs must have
+`vecmodel.dimension` rows and the same size as `params`.
+
+Each output column corresponds to one input point. Default rows contain [`logprior`](@ref),
+[`loglikelihood`](@ref), and [`logjac`](@ref). `output_function` can select a number or numeric
+vector from the accumulators instead, with results concatenated as for `mapslices(; dims=1)`.
+
+With `adtype=AutoEnzyme(...)`, return `(values, derivatives)` with sizes `(K, B)` and
+`(K, D, B)` for `K` outputs, `D` parameters, and `B` points. Derivatives use the vector's
+parameter space. Use `mode=Enzyme.Forward` for multiple outputs or `mode=Reverse` for a single
+output. Forward mode costs one directional pass per parameter; reverse mode suits scalar
+densities with many parameters. Each point has its own derivative, with no cross-point terms.
+
+The callable owns model arguments and copies `accs` per point. Results stay on the Reactant
+device. Pass Reactant arrays to reuse resident inputs; use `Array` for host results.
+As for [`evaluate`](@ref), latent variables must not be mutated.
+"""
+function prepare_batch end
+
+_density_parts(accs) = vcat(promote(logprior(accs), loglikelihood(accs), logjac(accs))...)
+
+"""
     lp_and_grad(vecmodel::VecModel, params::AbstractVector)
 
 Returns a tuple (log_density, grad) where `log_density` is the log-density of `vecmodel` and

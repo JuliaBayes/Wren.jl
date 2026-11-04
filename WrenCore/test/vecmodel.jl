@@ -163,6 +163,7 @@ end
     @wren function poisson_rate(count)
         rate ~ Gamma(2.0, 1.0)
         @observe count ~ Poisson(rate)
+        return rate
     end
     model = poisson_rate(3)
     initial = FromValues(VarNamedTuple(rate=1.5))
@@ -188,6 +189,45 @@ end
     value, gradient = LDP.logdensity_and_gradient(likelihood, x)
     @test value ≈ 3log(1.5) - 1.5 - log(6.0)
     @test gradient ≈ [3 - 1.5]
+
+    @testset "prepared evaluation" begin
+        retval, accs = @inferred evaluate(posterior, x)
+        @test retval ≈ 1.5
+        @test logprior(accs) ≈ log(1.5) - 1.5
+        @test loglikelihood(accs) ≈ 3log(1.5) - 1.5 - log(6.0)
+        @test logjac(accs) ≈ -log(1.5)
+        @test logjoint_transformed(accs) ≈ LDP.logdensity(posterior, x)
+        _, repeated = evaluate(posterior, x)
+        @test repeated == accs
+        _, accumulated = evaluate(posterior, x, accs)
+        @test logjoint_transformed(accumulated) ≈ 2logjoint_transformed(accs)
+
+        selected = AccumulatorTuple(ParamsAccumulator(), LogLikelihoodAccumulator())
+        _, selected = @inferred evaluate(posterior, x, selected)
+        @test parameters(selected)[@vn(rate)] ≈ 1.5
+        @test loglikelihood(selected) ≈ loglikelihood(accs)
+        likelihood_at = x -> loglikelihood(last(evaluate(posterior, x)))
+        @test ForwardDiff.gradient(likelihood_at, x) ≈ [3 - 1.5]
+
+        original =
+            VecModel(model, nothing; latent_source=initial, parameter_space=OriginalSpace())
+        _, original_accs = evaluate(original, [1.5])
+        @test logprior(original_accs) ≈ logprior(accs)
+        @test loglikelihood(original_accs) ≈ loglikelihood(accs)
+        @test iszero(logjac(original_accs))
+
+        @wren function counted_evaluation(calls)
+            rate ~ Gamma(2.0, 1.0)
+            calls[] += 1
+            return calls[]
+        end
+        counted = VecModel(counted_evaluation(Ref(0)), nothing; latent_source=initial)
+        @test first(evaluate(counted, x)) == 2
+        @test first(evaluate(counted, x)) == 3
+        for _ in 1:2
+            @test first(evaluate(counted, x, AccumulatorTuple(), EvalContext{true}())) == 4
+        end
+    end
 end
 
 end # module WrenVecModelTests

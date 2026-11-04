@@ -10,6 +10,19 @@ using Test
 
 WrenDists.basefloat(::Type{TracedRNumber{T}}) where {T} = WrenDists.basefloat(T)
 
+function WrenDists.logdensityof(
+    d::WrenDists.IndependentArray,
+    x::AbstractArray{<:TracedRNumber},
+)
+    WrenDists._check_size(d, x)
+    # Distribution structs cannot be promoted to a traced numeric array by broadcast.
+    result = zero(promote_type(eltype(x), eltype(eltype(d.components))))
+    Reactant.@allowscalar for i in eachindex(x, d.components)
+        result += WrenDists.logdensityof(d.components[i], x[i])
+    end
+    return result
+end
+
 @inline function WrenDists.select(cond::TracedRNumber{Bool}, iftrue, iffalse)
     return ifelse(cond, iftrue(), iffalse())
 end
