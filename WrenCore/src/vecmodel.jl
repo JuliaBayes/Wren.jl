@@ -526,6 +526,8 @@ densities with many parameters. Each point has its own derivative, with no cross
 
 The callable owns model arguments and copies `accs` per point. Results stay on the Reactant
 device. Pass Reactant arrays to reuse resident inputs; use `Array` for host results.
+Inside another Reactant trace, the selected value or derivative evaluator is compiled as
+part of that trace.
 As for [`evaluate`](@ref), latent variables must not be mutated.
 """
 function prepare_batch end
