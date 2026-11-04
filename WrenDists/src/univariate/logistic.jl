@@ -31,5 +31,6 @@ end
 # Inverse CDF: the logit of a uniform draw follows Logistic(0, 1).
 @inline function Base.rand(rng::AbstractRNG, d::Logistic)
     u = rand(rng, noisetype(d))
+    u = ifelse(iszero(u), eps(noisetype(d)) / 2, u)
     return xval(d, log(u) - log1p(-u))
 end

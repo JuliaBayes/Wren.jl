@@ -8,6 +8,22 @@ using Mooncake
 using Enzyme
 using Plaice
 using Test
+using Random
+
+struct LogisticUniform{T} <: AbstractRNG
+    value::T
+end
+Random.rand(rng::LogisticUniform{T}, ::Type{T}) where {T} = rng.value
+
+@testset "Logistic uniform endpoints" begin
+    for T in (Float32, Float64), u in (zero(T), T(0.25), prevfloat(one(T)))
+        value = rand(LogisticUniform(u), WrenDists.Logistic(one(T), T(2)))
+        @test isfinite(value)
+        if !iszero(u)
+            @test value ≈ 1 + 2 * (log(u) - log1p(-u))
+        end
+    end
+end
 
 const RUN_REACTANT = !Sys.iswindows()
 
