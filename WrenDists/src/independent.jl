@@ -170,6 +170,8 @@ Plaice.unconstrained_vec_length(d::IIDMultivariate) =
 _index_optics(d) = [VarNames.Index(Tuple(I), (;)) for I in vec(CartesianIndices(size(d)))]
 Plaice.optic_vec(d::Independent) = _index_optics(d)
 Plaice.unconstrained_optic_vec(d::Independent) = _index_optics(d)
+# This IID adapter uses Plaice internals: append_index, Elementwise, and ProductVecTransform.
+# Keep these uses in sync with Plaice's product bijectors.
 function Plaice.unconstrained_optic_vec(d::IIDMultivariate)
     return vec([
         foldl(Plaice.append_index, Tuple(I); init=optic) for
@@ -192,6 +194,11 @@ Plaice.from_unconstrained_vec(d::IIDMultivariate) =
 function Plaice.to_unconstrained_vec(d::IIDMultivariate)
     bijector = Plaice.to_unconstrained_vec(_dist(d))
     bijector isa Plaice.TypedIdentity && return Plaice.Vec(size(d))
+    iszero(prod(_dims(d))) && throw(
+        ArgumentError(
+            "empty constrained multivariate iid transforms are not supported by Plaice",
+        ),
+    )
     return Plaice.ProductVecTransform(
         Plaice.Elementwise(bijector, _dims(d)),
         nothing,
