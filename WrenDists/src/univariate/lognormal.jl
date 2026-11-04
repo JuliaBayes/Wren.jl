@@ -73,7 +73,7 @@ function DensityInterface.logdensityof(d::BatchedLogNormal, x)
             lognorm
         ifelse(all(x .> 0), value, oftype(value, -Inf))
     else
-        T = promote_type(float(eltype(x)), eltype(mu), float(eltype(sigma)))
+        T = float(promote_type(eltype(x), eltype(mu), eltype(sigma)))
         # Keep unsupported data out of the kernel and its Enzyme rule.
         value = all(>(0), x) ? _lognormal_loop(mu, sigma, x) : convert(T, -Inf)
         value - lognorm
