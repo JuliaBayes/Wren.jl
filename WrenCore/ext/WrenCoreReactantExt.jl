@@ -35,7 +35,7 @@ function _batch_derivatives(adtype, f, params)
     noutputs = size(packed, 1) ÷ (size(params, 1) + 1)
     if isempty(packed)
         return (
-            Reactant.materialize_traced_array(reshape(packed, noutputs, size(params, 2))),
+            packed,
             Reactant.materialize_traced_array(reshape(packed, noutputs, size(params)...)),
         )
     end

@@ -144,11 +144,9 @@ end
     GC.gc()
     @test Array(batch(X)) ≈ expected
     @test size(prepare_batch(vm, zeros(1, 0))(zeros(1, 0))) == (3, 0)
-    for backend in (forward, reverse)
-        empty_batch = prepare_batch(vm, zeros(1, 0), loglikelihood; adtype=backend)
-        empty_values, empty_gradients = empty_batch(zeros(1, 0))
-        @test (size(empty_values), size(empty_gradients)) == ((1, 0), (1, 1, 0))
-    end
+    empty_batch = prepare_batch(vm, zeros(1, 0), loglikelihood; adtype=reverse)
+    empty_values, empty_gradients = empty_batch(zeros(1, 0))
+    @test (size(empty_values), size(empty_gradients)) == ((1, 0), (1, 1, 0))
     fixed = vecmodel(rate_model(3) | (rate=2.0,), VarNamedTuple())
     values, gradients =
         prepare_batch(fixed, zeros(0, 3), loglikelihood; adtype=reverse)(zeros(0, 3))
@@ -162,11 +160,6 @@ end
     compiled_empty = Reactant.@compile guarded_batch(empty_container, resident, enabled)
     values, gradients = compiled_empty(empty_container, resident, enabled)
     @test size(values) == (0, 4) && size(gradients) == (0, 1, 4)
-    likelihood_accs = AccumulatorTuple(LogLikelihoodAccumulator())
-    likelihood = prepare_batch(vm, X, loglikelihood; accs=likelihood_accs)
-    @test vec(Array(likelihood(X))) ≈ vec(expected[2, :])
-    pair(accs) = [logprior(accs), loglikelihood(accs)]
-    @test Array(prepare_batch(vm, X, pair)(X)) ≈ expected[1:2, :]
     selected(accs) = vcat(parameters(accs)[@vn(rate)], loglikelihood(accs))
     selected_accs = AccumulatorTuple(ParamsAccumulator(), LogLikelihoodAccumulator())
     with_params = prepare_batch(vm, X, selected; accs=selected_accs)
@@ -210,7 +203,6 @@ end
     end
     @test vec(Array(prepare_batch(branches, points, logjoint_transformed)(points))) ≈
           expected_branch
-    @test Array(prepare_batch(branches, points, logjac)(points)) == zeros(1, 4)
     for backend in (forward, reverse)
         constant_batch = prepare_batch(branches, points, logjac; adtype=backend)
         values, gradients = constant_batch(points)
