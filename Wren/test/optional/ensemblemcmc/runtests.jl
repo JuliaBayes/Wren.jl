@@ -4,6 +4,7 @@ using Wren, Wren.Dists, EnsembleMCMC, FlexiChains, Random, Test
 using ADTypes: AutoReactant
 using Reactant: Reactant
 
+get(ENV, "WREN_TEST_BACKEND", "cpu") == "gpu" && (@eval using CUDA)
 Reactant.set_default_backend(get(ENV, "WREN_TEST_BACKEND", "cpu"))
 
 @wren function poisson_rate(count, buffer)
@@ -42,6 +43,9 @@ end
     @test reduce(vcat, (Array(w[@vn(rate)]) for w in single)) ≈ rates[:, 1:1]
 
     adtype = AutoReactant(AutoEnzyme(; mode=Reverse))
+    compiled_initial =
+        ensemble(model, 1, 2; adtype, initial_params=initial, move, progress=false)
+    @test reduce(vcat, (Array(w[@vn(rate)]) for w in compiled_initial)) ≈ rates
     compiled = ensemble(Xoshiro(19), model, 2, 2; adtype, progress=false)
     for chain in compiled
         values = Array(chain[@vn(rate)])

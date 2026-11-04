@@ -14,7 +14,11 @@ ensemble columns. Walkers within an ensemble interact and are not independent ch
 For custom starts, pass complete model-space `VarNamedTuple` values as
 `initial_params[walker, ensemble]`, or a vector for one ensemble.
 
-Pass `adtype=AutoReactant(AutoEnzyme(; mode=Reverse))` to use Reactant for model
-evaluation on its selected device. Ensemble moves and stored samples stay on the CPU.
+Pass `adtype=AutoReactant(AutoEnzyme(; mode=Reverse))` with Reactant and CUDA loaded
+to run model evaluations, ensemble moves and retained history on Reactant's selected
+device. Results return to the CPU when the `VNChain`s are built.
 """
 function ensemble end
+
+function _sample_ensemble end
+function _ensemble_vm end

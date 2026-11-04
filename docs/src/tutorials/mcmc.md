@@ -65,10 +65,10 @@ Starting positions are drawn automatically. Each returned chain tracks one walke
 across the four independent ensembles. Use these chains separately for diagnostics;
 walkers within an ensemble are dependent. See [`ensemble`](@ref) for custom starts and moves.
 
-GPU model evaluation uses Reactant and compatible distributions from `Wren.Dists`:
+GPU sampling uses Reactant, CUDA and compatible distributions from `Wren.Dists`:
 
 ```julia
-using Reactant
+using Reactant, CUDA
 using ADTypes: AutoReactant
 
 @wren function rate_model(count)
@@ -85,4 +85,5 @@ walkers = ensemble(
 )
 ```
 
-Ensemble moves and stored samples stay on the CPU.
+Model evaluations, ensemble moves and retained history run on Reactant's selected
+GPU. The sampler returns the completed chains on the CPU.

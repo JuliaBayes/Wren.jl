@@ -23,9 +23,11 @@ WrenDists = "2ad4af40-d7c9-42b2-92b0-e09d37d1e75a"
 [weakdeps]
 EnsembleMCMC = "ee15a35a-54c9-4a12-9721-3f3d8c2797c8"
 Optimization = "7f7a1694-90dd-40f0-9382-eb1efda571ba"
+Reactant = "3c362404-f566-11ee-1572-e11a4b42c853"
 
 [extensions]
 WrenEnsembleMCMCExt = "EnsembleMCMC"
+WrenEnsembleMCMCReactantExt = ["EnsembleMCMC", "Reactant"]
 WrenOptimizationExt = "Optimization"
 
 [compat]
@@ -40,6 +42,7 @@ FlexiChains = "0.7"
 LinearAlgebra = "1"
 Optimization = "5"
 Random = "1"
+Reactant = "0.2.304"
 Reexport = "1"
 StatsAPI = "1"
 Term = "2"

@@ -34,7 +34,7 @@ function Wren.ensemble(
     end
     source = isnothing(initial_params) ? FromPrior(rng) : FromValues(initial_params[1, 1])
     template =
-        WrenCore.VecModel(WrenCore._copy_for_thread(model), adtype; latent_source=source)
+        Wren._ensemble_vm(WrenCore._copy_for_thread(model), adtype; latent_source=source)
     count = something(
         nwalkers,
         isnothing(initial_params) ?
@@ -57,8 +57,8 @@ function Wren.ensemble(
                 WrenCore.vectorise_latents(FromValues(initial_params[walker, chain]), vm)
             end
         end
-        target = x -> WrenCore.lp(vm, x)
-        history = EnsembleMCMC.sample(rng, target, initial, niters; move, warmup, thin)
+        history =
+            Wren._sample_ensemble(rng, vm, initial, niters, adtype; move, warmup, thin)
         result = [
             Draw(
                 view(history.positions, :, walker, i),
@@ -81,6 +81,13 @@ function Wren.ensemble(
             hcat((view(chain, :, walker) for chain in draws)...),
         ) for walker in 1:count
     ]
+end
+
+Wren._ensemble_vm(model, adtype; kwargs...) = WrenCore.VecModel(model, adtype; kwargs...)
+
+function Wren._sample_ensemble(rng, vm, initial, niters, adtype; kwargs...)
+    target = x -> WrenCore.lp(vm, x)
+    return EnsembleMCMC.sample(rng, target, initial, niters; kwargs...)
 end
 
 end

@@ -25,7 +25,7 @@ WrenCore = "008b59e7-bbda-4991-901b-b08f5cfc584d"
 WrenDists = "2ad4af40-d7c9-42b2-92b0-e09d37d1e75a"
 
 [sources]
-EnsembleMCMC = {rev = "b4eb4230a60ff27bbce055c82d6b7773f78874bf", url = "https://github.com/JuliaBayes/EnsembleMCMC.jl"}
+EnsembleMCMC = {rev = "1b91cc4f30382df8e516025ce6210b036099e1ca", url = "https://github.com/JuliaBayes/EnsembleMCMC.jl"}
 
 [compat]
 LogExpFunctions = "0.3, 1"
