@@ -22,6 +22,8 @@ Base.eltype(::Type{BinomialLogit{N,P}}) where {N,P} = float(P)
     return isinteger(x) & (x >= zero(x)) & (x <= d.n)
 end
 
+# For η ≥ 0: -n·log1pexp(-η) - (n - k)·η; for η < 0: k·η - n·log1pexp(η).
+# Taking log1pexp of -|η| avoids overflow; masking c·a avoids 0·Inf at the endpoints.
 @inline function binomiallogit_logmass(n::Number, k::Number, η::AbstractFloat)
     positive = η >= zero(η)
     a = ifelse(positive, -η, η)
@@ -29,6 +31,7 @@ end
     return logbinom(n, k) + c * ifelse(iszero(c), zero(a), a) - n * log1pexp(a)
 end
 
+# The logit terms use -k·log1pexp(-η) - (n-k)·log1pexp(η).
 # Count-only masks keep cached AD tapes valid when the logit changes sign.
 @inline function binomiallogit_logmass(n::Number, k::Number, η::Number)
     η = float(η)
