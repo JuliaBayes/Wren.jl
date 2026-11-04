@@ -71,11 +71,10 @@ function DensityInterface.logdensityof(d::BatchedCategorical, x)
     else
         T = float(eltype(P))
         s = zero(T)
-        @boundscheck checkbounds(P, :, eachindex(x))
         for i in eachindex(x)
             k = x[i]
             isinteger(k) && 1 <= k <= size(P, 1) || return convert(T, -Inf)
-            s += log(convert(T, @inbounds(P[floor(Int, k), i])))
+            s += log(convert(T, P[Int(k), i]))
         end
         s
     end

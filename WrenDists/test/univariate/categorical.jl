@@ -27,7 +27,7 @@ end
     if RUN_REACTANT
         dr = WrenDists.BatchedCategorical(Reactant.to_rarray(P))
         compiled = Reactant.@compile logdensityof(dr, Reactant.to_rarray([1.0, 2.0]))
-        for x in ([1.0, 2.0], [1.5, 2.0])
+        for x in ([1.0, 2.0], [1.5, 2.0], [3.0, 2.0])
             @test Float64(compiled(dr, Reactant.to_rarray(x))) == logdensityof(d, x)
         end
     end
