@@ -8,7 +8,6 @@ using Mooncake
 using Enzyme
 using Plaice
 using Test
-using Random: Xoshiro
 
 const RUN_REACTANT = !Sys.iswindows()
 
@@ -16,27 +15,6 @@ if RUN_REACTANT
     using Pkg
     Pkg.add("Reactant")
     using Reactant
-end
-
-@testset "Gamma sampling gradients" begin
-    # An integer shape terminates the fraction before its shape derivative settles.
-    x = [5.0, 0.7]
-    u = rand(Xoshiro(8675309))
-    q = quantile(Distributions.Gamma(x[1]), u)
-    h = 1e-4
-    dq =
-        (
-            quantile(Distributions.Gamma(x[1] + h), u) -
-            quantile(Distributions.Gamma(x[1] - h), u)
-        ) / (2h)
-    expected = [x[2] * dq, q]
-    draw(p) = rand(Xoshiro(8675309), WrenDists.Gamma(p[1], p[2]))
-    backends = Base.get_extension(WrenDists, :WrenDistsTestUtils).TESTED_ADTYPES
-    @testset "$name" for (name, backend) in backends
-        value, gradient = DI.value_and_gradient(draw, backend, x)
-        @test value ≈ x[2] * q
-        @test gradient ≈ expected rtol = 1e-6
-    end
 end
 
 @testset "Gamma negative observations" begin

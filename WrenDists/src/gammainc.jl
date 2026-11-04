@@ -101,6 +101,7 @@ function gammaq_cf(a::Number, x::Number)
         delta = d * c
         h *= delta
         settled = abs(delta - one(delta)) <= tol
+        # tol is a plain float even when F is an AD type, so this gives the base precision.
         settled & ((zeroed == 0) | (i >= zeroed + precision(tol))) && break
     end
     return muladd(a, log(x), -x) - loggamma(a) + log(h)

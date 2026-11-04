@@ -27,6 +27,27 @@ import DifferentiationInterface as DI
     end
 end
 
+@testset "Gamma sampling gradients: $T" for T in (Float32, Float64)
+    # An integer shape terminates the fraction before its shape derivative settles.
+    x = T[5.0, 0.7]
+    u = Float64(rand(Xoshiro(8675309), T))
+    q = quantile(Distributions.Gamma(5.0), u)
+    h = 1e-4
+    dq =
+        (
+            quantile(Distributions.Gamma(5.0 + h), u) -
+            quantile(Distributions.Gamma(5.0 - h), u)
+        ) / (2h)
+    expected = [x[2] * dq, q]
+    draw(p) = rand(Xoshiro(8675309), WrenDists.Gamma(p[1], p[2]))
+    backends = Base.get_extension(WrenDists, :WrenDistsTestUtils).TESTED_ADTYPES
+    @testset "$name" for (name, backend) in backends
+        value, gradient = DI.value_and_gradient(draw, backend, x)
+        @test value ≈ x[2] * q rtol = sqrt(eps(T))
+        @test gradient ≈ expected rtol = max(1e-6, sqrt(eps(T)))
+    end
+end
+
 @testset "TDist shape sampling gradient" begin
     rng = Xoshiro(8675309)
     z, u = randn(rng), rand(rng)
