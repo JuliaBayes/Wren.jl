@@ -194,15 +194,19 @@ lower_to_wren(expr, ::Module, ::Bool=false) = expr
 _is_macrocall(expr, name::Symbol) = Meta.isexpr(expr, :macrocall) && expr.args[1] == name
 _macro_args(expr::Expr) = filter(a -> !(a isa LineNumberNode), expr.args[2:end])
 
+function _name_option(macro_name, arg)
+    value = arg.args[2]
+    value isa QuoteNode && value.value isa Symbol ||
+        error("$macro_name: `name` must be a single Symbol (e.g. `name=:site`)")
+    return value.value
+end
+
 function _tilde_macro_args(expr::Expr)
     name, inner = nothing, nothing
     macro_name = expr.args[1]
     for arg in _macro_args(expr)
         if Meta.isexpr(arg, :(=)) && arg.args[1] == :name
-            value = arg.args[2]
-            value isa QuoteNode && value.value isa Symbol ||
-                error("$macro_name: `name` must be a single Symbol (e.g. `name=:site`)")
-            name = value.value
+            name = _name_option(macro_name, arg)
         elseif Meta.isexpr(arg, :(=)) && arg.args[1] == :size
             error("$macro_name: invalid `size` argument, use `@iid` as the innermost macro")
         elseif inner === nothing
@@ -234,10 +238,7 @@ function _iid_args(expr::Expr, macro_name=nothing, name=nothing)
         if arg isa Expr && arg.head == :(=) && arg.args[1] == :size
             size_expr = arg.args[2]
         elseif macro_name !== nothing && Meta.isexpr(arg, :(=)) && arg.args[1] == :name
-            value = arg.args[2]
-            value isa QuoteNode && value.value isa Symbol ||
-                error("$macro_name: `name` must be a single Symbol (e.g. `name=:site`)")
-            name = value.value
+            name = _name_option(macro_name, arg)
         elseif inner === nothing
             inner = arg
         else
@@ -280,10 +281,7 @@ function lower_to_wren(expr::Expr, mod::Module, statement_position::Bool=false)
             if arg isa Expr && arg.head == :(=) && arg.args[1] == :size
                 size_expr = arg.args[2]
             elseif arg isa Expr && arg.head == :(=) && arg.args[1] == :name
-                name_val = arg.args[2]
-                name_val isa QuoteNode && name_val.value isa Symbol ||
-                    error("@batch: `name` must be a single Symbol (e.g. `name=:obs`)")
-                name_expr = name_val.value
+                name_expr = _name_option(expr.args[1], arg)
             elseif arg isa Expr && arg.head == :for
                 for_expr = arg
             else
@@ -309,11 +307,7 @@ function lower_to_wren(expr::Expr, mod::Module, statement_position::Bool=false)
         value_expr = nothing
         for arg in addloglik_args
             if arg isa Expr && arg.head == :(=) && arg.args[1] == :name
-                name_val = arg.args[2]
-                name_val isa QuoteNode && name_val.value isa Symbol || error(
-                    "@addloglikelihood: `name` must be a single Symbol (e.g. `name=:penalty`)",
-                )
-                name_expr = name_val.value
+                name_expr = _name_option(expr.args[1], arg)
             else
                 value_expr !== nothing &&
                     error("@addloglikelihood: expected a single expression")
@@ -400,9 +394,8 @@ function _wren_expr_to_display_expr(stmt::Observe)
 end
 function _tilde_macrocall(stmt, expr)
     macro_name = stmt isa Observe ? Symbol("@observe") : Symbol("@sample")
-    args = Any[macro_name, nothing]
+    args = Any[macro_name, nothing, expr]
     stmt.name == Symbol(stmt.lhs) || push!(args, Expr(:(=), :name, QuoteNode(stmt.name)))
-    push!(args, expr)
     return Expr(:macrocall, args...)
 end
 function _wren_expr_to_display_expr(stmt::IID)

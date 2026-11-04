@@ -14,6 +14,13 @@ This does not change parameter names, which still follow the left-hand side.
 Site names identify sites for latent sources and accumulators.
 With `@iid`, put the options after the distribution: `@sample @iid x ~ Normal() size=2 name=:prior`.
 
+Site names need not be unique: distinct statements may share a name, and a site in a loop
+uses the same name on every iteration. Each occurrence contributes separately to the density,
+but custom accumulators keyed only by site name may group these contributions.
+Use distinct names when those accumulators should distinguish the statements.
+For sampling sites encountered more than once during preparation, vectorised models use
+parameter names for lookup instead of caching a single parameter under the shared site name.
+
 ## `sample` with distributions
 
 **All** `x ~ y` statements are lowered into `sample` statements.

@@ -33,7 +33,7 @@ WrenCore.accumulate_observe!!(acc::SiteNames, args...) = record_site(acc, last(a
             @iid size=2 @sample name=:inner_prior b ~ Normal()
             @observe name=:outer_likelihood @iid a ~ Normal()
             @iid @observe name=:inner_likelihood b ~ Normal()
-            @sample @iid c ~ Normal() size=2 name=:trailing_prior
+            @sample @iid c ~ Normal() size=2 name=:prior
             @observe @iid c ~ Normal() name=:trailing_likelihood
             return x
         end
@@ -53,9 +53,12 @@ WrenCore.accumulate_observe!!(acc::SiteNames, args...) = record_site(acc, last(a
             :inner_prior,
             :outer_likelihood,
             :inner_likelihood,
-            :trailing_prior,
+            :prior,
             :trailing_likelihood,
         )
+        vm = VecModel(named_sites(), nothing; latent_source=FromValues(values))
+        x = vectorise_latents(FromValues(values), vm)
+        @test lp(vm, x) ≈ logjoint(accs)
     end
 
     @testset "basic models" begin
