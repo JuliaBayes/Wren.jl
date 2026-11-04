@@ -39,6 +39,7 @@ end
 @inline zval(d::TDist, x::Number) = (x - d.μ) / d.σ
 @inline xval(d::TDist, z::Number) = muladd(d.σ, z, d.μ)
 
+# Both forms equal log(1 + z²/ν) mathematically. `TDist finite tails` covers both paths.
 @inline function tdist_logkernel(z::AbstractFloat, ν::AbstractFloat)
     if abs(z) <= sqrt(floatmax(typeof(z)))
         q = abs2(z)
@@ -51,7 +52,9 @@ end
 # Keep the cold fallback out of native reductions' hot loops.
 @noinline tdist_logkernel_tail(z, ν) = 2 * log(hypot(sqrt(ν), z)) - log(ν)
 
-# Opposite maxima keep AD tie derivatives complementary in cached and compiled paths.
+# The AD types used here follow Base.max's second-argument tie rule: at a == s,
+# lo selects a and hi selects s, giving complementary derivative contributions.
+# Keep opposite maxima: minmax can select one variable twice and double the tie derivative.
 @inline function tdist_logkernel(z, ν)
     s = sqrt(ν)
     a = abs(z)
