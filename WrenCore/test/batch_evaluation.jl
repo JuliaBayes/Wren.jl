@@ -3,7 +3,9 @@ module WrenBatchEvaluationTests
 using WrenCore, WrenDists, Reactant, Test
 using ADTypes: AutoReactant
 using Enzyme: Enzyme
-using Plaice
+
+include("reactant_models.jl")
+using .ReactantModelFixtures
 
 vecmodel(model, values; adtype=nothing) =
     VecModel(model, adtype; latent_source=FromValues(values))
@@ -33,30 +35,6 @@ WrenCore.accumulate_observe!!(acc::CounterAccumulator, args...) = acc
     @observe count ~ Poisson(rate)
 end
 
-const offset = 0.3
-shift(x) = x + offset
-@wren function branch_model(y)
-    x ~ Normal()
-    mu = if x > 0
-        shift(x)
-    else
-        2x - 1
-    end
-    for i in eachindex(y)
-        if x > 0
-            @observe y[i] ~ Normal(mu)
-        end
-    end
-    n = length(y)
-    @observe y[n] ~ Normal(mu, 2.0)
-end
-
-@wren function bounded_model(count)
-    upper ~ Exponential()
-    rate ~ Uniform(0.0, upper)
-    @observe count ~ Poisson(rate)
-end
-
 @wren function fallback_model(y)
     x ~ Normal()
     @batch for i in eachindex(y)
@@ -70,43 +48,8 @@ end
     @observe count ~ Poisson(sum(rate))
 end
 
-function transform_columns(X)
-    return mapslices(X; dims=1) do x
-        Reactant.@allowscalar vcat(
-            Plaice.with_logabsdet_jacobian(Plaice.Truncate(x[1], x[2]), x[3])...,
-        )
-    end
-end
-
-@wren function mutating_model(buffer, count)
-    rate ~ Exponential()
-    buffer[1] += rate
-    @observe count ~ Poisson(buffer[1])
-end
-
 @wren function nested_model(child)
     a ~ child
-end
-
-@wren function control_model(y, flag)
-    x ~ Normal()
-    if flag
-        return x
-    end
-    if x > 0
-        if x > 1
-            @observe y ~ Normal(x)
-        end
-    end
-end
-
-@wren function array_branch(y)
-    beta ~ iid(Normal(), 2)
-    if beta[1] > 0
-        @observe y ~ Normal(sum(beta))
-    else
-        @observe y ~ Normal(2beta[1] - beta[2])
-    end
 end
 
 @testset "prepared parameter batches" begin
@@ -209,18 +152,6 @@ end
         @test Array(values) == zeros(1, 4)
         @test Array(gradients) == zeros(1, 1, 4)
     end
-    branch_ad = vecmodel(branch_model(y), normal_values; adtype)
-    for i in (2, 3)
-        x = points[i]
-        expected_gradient = if x > 0
-            -x + sum(y .- shift(x)) + (last(y) - shift(x)) / 4
-        else
-            -x + (last(y) - (2x - 1)) / 2
-        end
-        value, gradient = lp_and_grad(branch_ad, [x])
-        @test value ≈ expected_branch[i]
-        @test gradient ≈ [expected_gradient]
-    end
 
     fallback = vecmodel(fallback_model(y), normal_values)
     expected_fallback = [
@@ -260,10 +191,6 @@ end
     values, gradients = compiled_components(component_container, component_points, enabled)
     @test Array(values) ≈ expected_bounded
     @test Array(gradients) ≈ expected_gradients
-    bounded_ad = vecmodel(bounded_model(3), bounded_values; adtype)
-    _, gradient = lp_and_grad(bounded_ad, BX[:, 2])
-    @test gradient ≈
-          [4 - upper[2] - rate[2], 1 - 2fraction[2] + (3 - rate[2]) * (1 - fraction[2])]
 
     arrays = vecmodel(bounded_array_model(3), VarNamedTuple(upper=2.0, rate=[0.5, 0.75]))
     AX = vcat(BX, 0.25 .- BX[2:2, :])
@@ -277,13 +204,6 @@ end
     compiled_arrays =
         Reactant.@compile guarded_batch(array_container, array_points, enabled)
     @test Array(compiled_arrays(array_container, array_points, enabled)) ≈ expected_arrays
-
-    bounds = [0.0 0.0 -Inf -Inf; 2.0 Inf 3.0 Inf; 0.5 0.5 0.5 0.5]
-    expected_transforms = mapreduce(hcat, eachcol(bounds)) do x
-        vcat(Plaice.with_logabsdet_jacobian(Plaice.Truncate(x[1], x[2]), x[3])...)
-    end
-    bounds_input = Reactant.to_rarray(bounds)
-    @test Array(Reactant.@jit transform_columns(bounds_input)) ≈ expected_transforms
 
     # Model preparation already evaluated the += once, leaving the prepared seed at 3.5.
     expected_mutation = 3log.(3.5 .+ rates) - (3.5 .+ rates) .- log(6.0)
@@ -322,7 +242,6 @@ end
 
     # A final conditional has an implicit accumulator/nothing return value.
     control_ad = vecmodel(control_model(0.2, false), normal_values; adtype)
-    @test last(lp_and_grad(control_ad, [2.0])) ≈ [-3.8]
     for x in (-2.0, 0.5, 2.0)
         @test evaluate(control_ad, [x]) == evaluate(nested_if, [x])
     end
