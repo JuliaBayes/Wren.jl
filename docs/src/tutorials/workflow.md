@@ -49,7 +49,7 @@ end
 
 ## Prior predictions
 
-We can now instatiate the Wren model and use it with `rand(model)` to draw from the prior (see [Working with models](@ref models)):
+We can now instantiate the Wren model and use it with `rand(model)` to draw from the prior (see [Working with models](@ref models)):
 
 ```@example workflow
 model = bill_model(penguins.bill_length_mm, penguins.species_idx, penguins.body_mass_g)
@@ -171,3 +171,83 @@ fig
 ```
 
 As we may have expected, more penguin means more bill!
+
+## Generated quantities
+
+Most of the time in applied statistical modelling, we're after a quantity that we can't express as a single parameter of our model.
+Rather, it's often some downstream quantity that we compute by combining several parameters with (often new) observations.
+These downstream quantities are typically called generated quantities.
+
+Continuing with the penguin example, let's assume that there is something special about the conditions on each island.
+These conditions make _all_ the penguins on a given island more similar to each other, because there might be better food sources near some islands than others.
+And of course, all penguin species would benefit from more fish (at least... I would think all penguins like fish?! And krill of course, ok).
+
+We can express this nestedness in Bayesian modelling with a hierarchical model.
+Since this model component is quite common and thus reusable, it's a good candidate to be written as a [submodel](@ref):
+
+```@example workflow
+@wren function hierarchical(size)
+    mu ~ Normal()
+    tau ~ Exponential(1)
+    @iid z ~ Normal() size=size
+    return mu .+ tau * z
+end
+```
+
+Assume we're mostly interested in the contrast between species 1 and 2.
+We could then consider dropping species 3 before fitting the model, but we still have reason to keep species 3 as it'll contribute to estimating `beta2` and `beta3` better.
+
+```@example workflow
+@wren function bill_model_hierarchical(bill_length, island, species, body_mass)
+    n_species = maximum(species)
+    n_islands = maximum(island)
+
+    @iid beta1 ~ Normal(0, 1) size=n_species
+    beta2 ~ Normal(0, 1)
+    beta3 = (island_effects ~ hierarchical(n_islands))
+    sigma ~ Exponential(1)
+    
+    mu = beta1[species] .+ beta2 .* body_mass .+ beta3[island]
+    @batch for i in eachindex(bill_length)
+        bill_length[i] ~ Normal(mu[i], sigma)
+    end
+
+    # TODO what would be a good contrast here?
+    @gq contrast = ...
+end
+```
+
+TODO Simon: 
+- describe the GQ more
+- describe that we now first fit the model with the data we observed
+
+```@example workflow
+transform!(penguins, :island => denserank => :island_idx)
+model = bill_model_hierarchical(
+  penguins.bill_length_mm,
+  penguins.island_idx,
+  penguins.species_idx,
+  penguins.body_mass_g,
+)
+chain = nuts(model | VarNamedTuple(bill_length=penguins.bill_length_mm), 1000, 4; progress=false)
+```
+
+TODO Simon: 
+- describe the estimate that we're after (contrast on hypothetical islands)
+
+```@example workflow
+n_new = 200
+island_new = 1:n_new
+species_new = repeat([1, 2], div(n_new, 2))
+# Not sure about this one, need to think again what we should draw here
+body_mass_g_new = rand(penguins.body_mass_g, n_new)
+```
+
+TODO Simon: 
+- describe why subsetting the chain gets us where we want to be here
+
+```@example workflow
+chain_sub = chain[filter(!=(@vn(island_effects.z)), FlexiChains.parameters(chain))]
+model_new = bill_model_hierarchical(zeros(n_new), island_new, species_new, body_mass_g_new)
+chain_new = predict(model_new, chain_sub)
+```
