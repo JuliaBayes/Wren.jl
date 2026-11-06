@@ -3,7 +3,10 @@ module WrenCoreReactantExt
 using ADTypes: AutoEnzyme, AutoReactant
 using Enzyme: Enzyme
 using Reactant: Reactant
-using WrenCore: WrenCore
+using WrenCore: WrenCore, Plaice
+
+include("reactant_bijectors.jl")
+include("reactant_evaluation.jl")
 
 """
     ReactantPrep
@@ -38,6 +41,7 @@ function WrenCore.VecModel(
     reduce_copies::Bool=true,
 )
     vecinfo, sample = WrenCore._prepare_vecmodel_info(model, latent_source, parameter_space)
+    model = _reactant_model(model)
 
     accs = WrenCore.AccumulatorTuple(
         WrenCore.LogPriorAccumulator(),
@@ -57,7 +61,7 @@ function WrenCore.VecModel(
     model_args = Reactant.to_rarray(model.args)
 
     lp_func = WrenCore._VecModelLP(
-        model.evaluation_fn,
+        _traced_evaluation_fn(model, false),
         model_args,
         model.conditioned,
         model.enzyme_copy_argnames,
@@ -72,8 +76,12 @@ function WrenCore.VecModel(
 
     reactant_sample = Reactant.to_rarray(sample)
     value_and_gradient_at = ValueAndGradientCallable(lp_func, adtype)
-    compiled_lp = Reactant.@compile lp_func(reactant_sample)
-    compiled_value_and_gradient = Reactant.@compile value_and_gradient_at(reactant_sample)
+    compiled_lp = Base.invokelatest(Reactant.Compiler.compile, lp_func, (reactant_sample,))
+    compiled_value_and_gradient = Base.invokelatest(
+        Reactant.Compiler.compile,
+        value_and_gradient_at,
+        (reactant_sample,),
+    )
     adprep = ReactantPrep(compiled_lp, compiled_value_and_gradient)
 
     return WrenCore.VecModel(
