@@ -1,4 +1,4 @@
-struct RangeAndTransform{R<:Base.UnitRange,T<:AbstractTransform}
+struct RangeAndTransform{R<:AbstractUnitRange,T<:AbstractTransform}
     range::R
     transform::T
 end

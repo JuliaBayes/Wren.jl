@@ -76,13 +76,22 @@ accs = rand_with_logp(model)
 which returns a new object, an [`AccumulatorTuple`](@ref).
 You can access the trace with `parameters(accs)`, and the log-density with `logjoint(accs)`.
 
+For importance sampling with the prior as the proposal, the unnormalised log weight is
+the log-likelihood. The prior cancels from the target-to-proposal density ratio:
+
+```@example models
+proposal_params, logweight = parameters(accs), loglikelihood(accs)
+```
+
+Both come from the same evaluation. Other proposals need their log density in the ratio.
+
 ## General evaluation
 
 At this point, you are probably wondering what an `AccumulatorTuple` is.
 This is a good point to talk about the general evaluation framework that Wren uses, which is heavily lifted from DynamicPPL.
 
 The entry point for _all_ Wren model evaluation is the [`WrenCore.evaluate`](@ref) function.
-It takes exactly four arguments:
+Its first four arguments are:
 
   - a *model* (of course!);
   - a *latent source* (a specification of how to obtain the values of latent variables);
@@ -242,6 +251,74 @@ None of these functions copy the parameter vector, so the model must not write i
 By default, `VecModel`s are always run in [`UnconstrainedSpace()`](@ref): that is, all parameters are transformed into a form where they can take any value in ℝ^n.
 The log-density calculation will then include the log-Jacobian term corresponding to this transformation.
 If this is not desired, you can specify a different parameter space, or a different log-density calculation function as a keyword argument to the [`VecModel`](@ref) constructor: please see its docstring for more info.
+
+### Collecting outputs in one evaluation
+
+[`evaluate`](@ref) reuses a `VecModel`'s vector mapping and returns its outputs in one pass:
+
+```@example models
+retval, components = evaluate(noad_vecmodel, v)
+(logprior(components), loglikelihood(components), WrenCore.logjac(components))
+logprior(components) + loglikelihood(components) - WrenCore.logjac(components) ≈
+lp(noad_vecmodel, v)
+```
+
+`logprior` uses original coordinates. `logjac` is the forward log-absolute Jacobian
+determinant, so it is subtracted above. It is zero in `OriginalSpace()`;
+unconstraining does not generally turn the prior into a standard normal distribution.
+Pass accumulators as the third argument to select other outputs. They are neither copied
+nor reset, so use fresh accumulators for independent evaluations.
+
+### Evaluating a batch of parameter points
+
+With Reactant.jl loaded, [`prepare_batch`](@ref) compiles evaluations across matrix columns:
+
+```julia
+using Reactant
+using WrenCore: prepare_batch
+using Wren: Dists
+
+@wren function count_model(count)
+    rate ~ Dists.Exponential()
+    @observe count ~ Dists.Poisson(rate)
+end
+
+batch_model = VecModel(count_model(3), nothing)
+X = Reactant.to_rarray(reshape(log.([0.5, 1.5, 3.0]), 1, :))
+batch = prepare_batch(batch_model, X)
+components = batch(X)       # Results stay on the Reactant device.
+Array(components)          # Materialise on the host when needed.
+
+likelihood_batch = prepare_batch(batch_model, X, loglikelihood)
+loglikelihoods = vec(Array(likelihood_batch(X)))
+
+component_batch = prepare_batch(batch_model, X; adtype=AutoEnzyme(; mode=Enzyme.Forward))
+components, derivatives = component_batch(X)
+
+joint_batch = prepare_batch(
+    batch_model,
+    X,
+    WrenCore.logjoint_transformed;
+    adtype=AutoEnzyme(; mode=Reverse),
+)
+joint_values, joint_gradients = joint_batch(X)
+```
+
+Each result column corresponds to an input point. The default rows contain log-prior,
+log-likelihood, and forward log-Jacobian. An output function can select a number or numeric
+vector; `accs` selects the accumulators. Use `Wren.Dists` for traced-number support.
+
+With an `adtype`, values have size `(K, B)` and derivatives `(K, D, B)`: output component,
+parameter, and point. Derivatives use the vector's coordinates. Forward mode handles all
+components together, with one directional pass per parameter. Reverse mode handles a
+single selected output and suits models with many parameters.
+
+Reuse the compiled callable with matrices of the same size, either ordinary or Reactant
+arrays. It owns model arguments and isolates mutable state between points and calls.
+Large batches can benefit from tensor operations; small batches can favor ordinary evaluation.
+Branches need compatible result types and loops need fixed lengths. Called functions and
+inline-created submodels follow Reactant's tracing rules. `VecModel` continues to provide
+the scalar LogDensityProblems and gradient interfaces.
 
 !!! warning
 

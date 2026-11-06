@@ -4,9 +4,126 @@ using ADTypes: AutoEnzyme, AutoReactant
 using Enzyme: Enzyme
 using Reactant: Reactant
 using WrenCore: WrenCore, Plaice
+using WrenCore.Accessors: @set
 
 include("reactant_bijectors.jl")
 include("reactant_evaluation.jl")
+
+_batch_output(value::Number) = convert(Reactant.TracedRArray, [value])
+_batch_output(value::AbstractVector) = convert(Reactant.TracedRArray, value)
+function _batch_point(f, params)
+    point_f = @set f.accs = copy(f.accs)
+    return _batch_output(point_f(params))
+end
+_batch_points(f, params) = mapslices(x -> _batch_point(f, vec(x)), params; dims=1)
+
+function _batch_derivatives(adtype, f, params)
+    if isempty(params)
+        values = _batch_points(f, params)
+        return values, similar(values, size(values, 1), size(params)...)
+    end
+    mode = _with_primal(adtype)
+    packed = mapslices(params; dims=1) do point
+        point_f = x -> _batch_point(f, x)
+        result = if mode isa Enzyme.ForwardMode
+            Enzyme.jacobian(mode, point_f, vec(point); chunk=Val(1))
+        else
+            Enzyme.gradient(mode, x -> Reactant.@allowscalar(only(point_f(x))), vec(point))
+        end
+        vcat(_batch_output(result.val), vec(only(result.derivs)))
+    end
+    noutputs = size(packed, 1) ÷ (size(params, 1) + 1)
+    if isempty(packed)
+        return (
+            packed,
+            Reactant.materialize_traced_array(reshape(packed, noutputs, size(params)...)),
+        )
+    end
+    values = packed[1:noutputs, :]
+    derivatives = Reactant.materialize_traced_array(
+        reshape(packed[(noutputs+1):end, :], noutputs, size(params)...),
+    )
+    return values, derivatives
+end
+
+struct BatchEvaluator{F,B,C}
+    f::F
+    batch_function::B
+    compiled::C
+    shape::Tuple{Int,Int}
+end
+
+function Reactant.traced_type_inner(
+    ::Type{BatchEvaluator{F,B,C}},
+    seen,
+    mode::Reactant.TraceMode,
+    track_numbers::Type,
+    ndevices,
+    runtime,
+) where {F,B,C}
+    traced = Reactant.traced_type_inner(F, seen, mode, track_numbers, ndevices, runtime)
+    return BatchEvaluator{traced,B,C}
+end
+
+function Reactant.make_tracer(seen, batch::BatchEvaluator, path, mode; kwargs...)
+    if mode == Reactant.TracedToTypes
+        push!(path, typeof(batch), batch.shape)
+        Reactant.make_tracer(seen, batch.f, path, mode; kwargs...)
+        return nothing
+    end
+    f = Reactant.make_tracer(seen, batch.f, (path..., :f), mode; kwargs...)
+    # The selected mode, executable, and fixed shape are preparation state.
+    return BatchEvaluator(f, batch.batch_function, batch.compiled, batch.shape)
+end
+
+_batch_input(params::Reactant.ConcreteRArray) = params
+_batch_input(params::AbstractMatrix) = Reactant.to_rarray(params)
+function (batch::BatchEvaluator)(params::AbstractMatrix)
+    size(params) == batch.shape || throw(
+        DimensionMismatch(
+            "prepared batch expects size $(batch.shape), received $(size(params))",
+        ),
+    )
+    if Reactant.within_compile()
+        return batch.batch_function(batch.f, params)
+    end
+    return batch.compiled(batch.f, _batch_input(params))
+end
+
+function WrenCore.prepare_batch(
+    vm::WrenCore.VecModel,
+    params::AbstractMatrix,
+    output_function=WrenCore._density_parts;
+    accs::WrenCore.AccumulatorTuple=vm.accs,
+    adtype::Union{Nothing,AutoEnzyme}=nothing,
+)
+    size(params, 1) == vm.dimension || throw(
+        DimensionMismatch(
+            "VecModel expects $(vm.dimension) rows, received $(size(params, 1))",
+        ),
+    )
+    model = _reactant_model(vm.model)
+    f = WrenCore._VecModelLP(
+        _traced_evaluation_fn(model, false),
+        Reactant.to_rarray(model.args),
+        Reactant.to_rarray(model.conditioned),
+        Val(keys(model.args)),
+        WrenCore.EvalContext{true}(),
+        output_function,
+        vm.parameter_space,
+        vm.vecinfo,
+        Reactant.to_rarray(copy(accs)),
+    )
+    input = _batch_input(params)
+    batch_function = if adtype === nothing
+        _batch_points
+    else
+        Base.Fix1(_batch_derivatives, adtype)
+    end
+    # The backend evaluator is created during preparation in the model's module.
+    compiled = Base.invokelatest(Reactant.Compiler.compile, batch_function, (f, input))
+    return BatchEvaluator(f, batch_function, compiled, size(params))
+end
 
 """
     ReactantPrep
