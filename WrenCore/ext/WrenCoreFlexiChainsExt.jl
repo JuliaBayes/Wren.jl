@@ -11,13 +11,15 @@ using WrenCore: WrenCore
     predict(
         [rng::Random.AbstractRNG=Random.default_rng(),]
         model::WrenCore.Model,
-        chain::FlexiChains.VNChain,
+        chain::FlexiChains.VNChain;
+        gqs::GeneratedQuantitySpec=All(),
     ) -> FlexiChains.VNChain
 
 Draw predictions from `model` for all iterations in `chain`.
 
-The returned `FlexiChain` by default will contain all the predicted variables, generated
-quantities, as well as the variables already present in the input `chain`, which implies that:
+The returned `FlexiChain` will contain all the predicted variables, the generated quantities
+selected by `gqs`, as well as the variables already present in the input `chain`, which
+implies that:
 
 - variables that are in the `chain` are fixed to their respective values;
 - variables that arent in the `chain` are resampled according to the model;
@@ -33,12 +35,17 @@ also contain the log-prior terms of the parameters already present in the input 
 Thus, if you want to obtain the log-probability of the predicted variables only, you can
 subtract the two log-prior terms.
 """
-function StatsAPI.predict(rng::AbstractRNG, model::WrenCore.Model, chain::VNChain)
+function StatsAPI.predict(
+    rng::AbstractRNG,
+    model::WrenCore.Model,
+    chain::VNChain;
+    gqs::WrenCore.GeneratedQuantitySpec=WrenCore.All(),
+)
     accs = WrenCore.AccumulatorTuple(
         WrenCore.ParamsAccumulator(),
         WrenCore.LogPriorAccumulator(),
         WrenCore.LogLikelihoodAccumulator(),
-        WrenCore.GQAccumulator(),
+        WrenCore.GeneratedQuantityAccumulator(gqs),
     )
     fallback = WrenCore.FromPrior(rng)
     results = _reevaluate(model, chain, accs, fallback)
@@ -49,35 +56,30 @@ function StatsAPI.predict(rng::AbstractRNG, model::WrenCore.Model, chain::VNChai
     return merge(FlexiChains.subset_extras(chain), preds_chain)
 end
 
-function StatsAPI.predict(model::WrenCore.Model, chain::VNChain)
-    return StatsAPI.predict(default_rng(), model, chain)
+function StatsAPI.predict(model::WrenCore.Model, chain::VNChain; kwargs...)
+    return StatsAPI.predict(default_rng(), model, chain; kwargs...)
 end
 
 """
     generated_quantities(
         model::WrenCore.Model,
-        chain::FlexiChains.VNChain;
-        to_collect=All(),
+        chain::FlexiChains.VNChain,
+        gqs::GeneratedQuantitySpec=All(),
     ) -> FlexiChains.VNChain
 
 Re-evaluate `model` at each iteration of `chain` and return a chain holding only the
-generated quantities (`@gq` statements), with the same iteration and chain indices as
-`chain`. Every parameter that `model` requires must be in `chain`.
+generated quantities (`@gq` statements) selected by `gqs`, with the same iteration and chain
+indices as `chain`. Every parameter that `model` requires must be in `chain`.
 
-`to_collect` selects the generated quantities to evaluate:
-
-- `All()`: all of them;
-- `Some([:x, :y])` or `[:x, :y]`: only `x` and `y`. A submodel name such as `:a` selects
-  every generated quantity of the submodel `a ~ sub(...)`.
-
-Generated quantities that are not selected are not evaluated.
+Generated quantities that are not selected are not evaluated, unless a selected one
+depends on them.
 """
 function WrenCore.generated_quantities(
     model::WrenCore.Model,
-    chain::VNChain;
-    to_collect=WrenCore.All(),
+    chain::VNChain,
+    gqs::WrenCore.GeneratedQuantitySpec=WrenCore.All(),
 )
-    gq_acc = _gq_accumulator(to_collect)
+    gq_acc = WrenCore.GeneratedQuantityAccumulator(gqs)
     results = _reevaluate(model, chain, WrenCore.AccumulatorTuple(gq_acc))
     draws = map(results) do retval_and_accs
         gqs = WrenCore.generated_quantities(last(retval_and_accs))
@@ -86,20 +88,6 @@ function WrenCore.generated_quantities(
     gqs_chain = AbstractMCMC.from_samples(VNChain, draws)
     gqs_chain = FlexiChains.renumber_iters(gqs_chain, FlexiChains.iter_indices(chain))
     return FlexiChains.renumber_chains(gqs_chain, FlexiChains.chain_indices(chain))
-end
-
-_gq_accumulator(::WrenCore.All) = WrenCore.GQAccumulator()
-function _gq_accumulator(to_collect::Some{<:AbstractVector{Symbol}})
-    return _gq_accumulator(something(to_collect))
-end
-_gq_accumulator(names::AbstractVector{Symbol}) = WrenCore.GQAccumulator(Tuple(names))
-function _gq_accumulator(to_collect)
-    throw(
-        ArgumentError(
-            "`to_collect` must be `All()`, `Some(names)` or `names`, where `names` is a " *
-            "vector of Symbols; got $(repr(to_collect)).",
-        ),
-    )
 end
 
 function _reevaluate(model::WrenCore.Model, chain::VNChain, accs, fallback=WrenCore.Void())

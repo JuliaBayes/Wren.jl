@@ -70,12 +70,13 @@ end
         adtype::DI.AbstractADType=DI.AutoEnzyme(; mode=Enzyme.Reverse),
         progress::Bool=true,
         reduce_copies::Bool=true,
+        gqs::GeneratedQuantitySpec=All(),
         dynamichmc_kwargs...
     ) -> FlexiChains.VNChain
 
 No U-Turn Sampler (NUTS) for a Wren model. All `dynamichmc_kwargs` are passed to
 [`DynamicHMC.mcmc_with_warmup`](@extref), allowing you to customise the warmup and sampling
-behaviour.
+behaviour. The returned chain holds the generated quantities selected by `gqs`.
 
 `reduce_copies` is passed to [`VecModel`](@ref): when sampling with Enzyme, it skips copies
 of model arguments that turn out not to be needed (see [`reduce_copies`](@ref)).
@@ -87,6 +88,7 @@ function nuts(
     adtype::DI.AbstractADType=DI.AutoEnzyme(; mode=Reverse),
     progress::Bool=true,
     reduce_copies::Bool=true,
+    gqs::GeneratedQuantitySpec=All(),
     dynamichmc_kwargs...,
 )
     return nuts(
@@ -97,6 +99,7 @@ function nuts(
         adtype,
         progress,
         reduce_copies,
+        gqs,
         dynamichmc_kwargs...,
     )
 end
@@ -108,6 +111,7 @@ function nuts(
     adtype::DI.AbstractADType=DI.AutoEnzyme(; mode=Reverse),
     progress::Bool=true,
     reduce_copies::Bool=true,
+    gqs::GeneratedQuantitySpec=All(),
     dynamichmc_kwargs...,
 )
     # AD preparation
@@ -145,7 +149,7 @@ function nuts(
                     reporter,
                     dynamichmc_kwargs...,
                 )
-                to_draws(results, vm)
+                to_draws(results, vm, gqs)
             catch e
                 if progress
                     put!(channel, ErrorUpdate(j))
@@ -222,10 +226,14 @@ function _nuts_stats(tree_stat, step_size)
         log_density=tree_stat.π,
     )
 end
-function to_draws(results::NamedTuple, vecmodel::WrenCore.VecModel)
+function to_draws(
+    results::NamedTuple,
+    vecmodel::WrenCore.VecModel,
+    gqs::GeneratedQuantitySpec,
+)
     ϵ = results.ϵ
     return [
-        Draw(col, vecmodel, _nuts_stats(ts, ϵ)) for
+        Draw(col, vecmodel, _nuts_stats(ts, ϵ); gqs) for
         (col, ts) in zip(eachcol(results.posterior_matrix), results.tree_statistics)
     ]
 end

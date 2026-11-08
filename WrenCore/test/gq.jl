@@ -20,8 +20,6 @@ end
 
 const NOT_TOP_LEVEL = "@gq must be used at the top level of the model body"
 
-@noinline gq_helper(x) = sum(x) + 1.0
-
 @wren function gq_demo(x)
     a ~ Normal()
     b ~ Normal()
@@ -52,11 +50,6 @@ end
     a ~ gq_inner()
     b ~ gq_inner()
     @gq c = 1.0
-end
-
-@wren function gq_pruned(x)
-    a ~ Normal()
-    @gq h = gq_helper(a .+ x)
 end
 
 @wren function gq_nested(flag)
@@ -136,7 +129,7 @@ end
 
     @testset "inside control flow" begin
         model = gq_nested(true)
-        gqs = gq_values(model, GQAccumulator())
+        gqs = gq_values(model, GeneratedQuantityAccumulator())
         a = gqs[@vn(in_begin)]
         @test gqs[@vn(in_for)] ≈ a + 3
         @test gqs[@vn(in_if)] ≈ 2a
@@ -144,8 +137,13 @@ end
         @test gqs[@vn(in_let)] ≈ a^2
         @test gqs[@vn(reused)] ≈ a + 1
         @test gqs[@vn(reused_after)] ≈ a + 3
-        @test collect(keys(gq_values(model, GQAccumulator((:in_if,))))) == [@vn(in_if)]
-        @test !haskey(gq_values(gq_nested(false), GQAccumulator()), @vn(in_if))
+        @test collect(
+            keys(gq_values(model, GeneratedQuantityAccumulator(Only((:in_if,))))),
+        ) == [@vn(in_if)]
+        @test !haskey(
+            gq_values(gq_nested(false), GeneratedQuantityAccumulator()),
+            @vn(in_if)
+        )
     end
 
     @testset "invalid positions" begin
@@ -219,7 +217,7 @@ end
         a = parameters(accs)[@vn(a)]
         @test loglikelihood(accs) ≈ logpdf(MvNormal(a .+ [0.0, 1.0], I), [0.5, 1.5])
 
-        mu = gq_values(model, GQAccumulator((:mu,)))[@vn(mu)]
+        mu = gq_values(model, GeneratedQuantityAccumulator(Only((:mu,))))[@vn(mu)]
         @test mu ≈ mu[1] .+ [0.0, 1.0]
     end
 
@@ -233,48 +231,52 @@ end
             EvalContext{false}(),
         )
         @test haskey(parameters(accs), @vn(a))
-        @test isempty(gq_values(model, GQAccumulator((:a,))))
+        @test isempty(gq_values(model, GeneratedQuantityAccumulator(Only((:a,)))))
         @test_throws "generated quantity was evaluated" rand(model)
     end
 
     @testset "selection" begin
         model = gq_demo([1.0, 2.0])
-        @test collect(keys(gq_values(model, GQAccumulator((:s,))))) == [@vn(s)]
-        @test Set(keys(gq_values(model, GQAccumulator((:mu, :r))))) ==
+        @test collect(keys(gq_values(model, GeneratedQuantityAccumulator(Only((:s,)))))) ==
+              [@vn(s)]
+        @test Set(keys(gq_values(model, GeneratedQuantityAccumulator(Only((:mu, :r)))))) ==
               Set([@vn(mu), @vn(r)])
-        @test isempty(gq_values(model, GQAccumulator(())))
-        @test length(keys(gq_values(model, GQAccumulator()))) == 4
+        @test isempty(gq_values(model, GeneratedQuantityAccumulator(None())))
+        @test isempty(gq_values(model, GeneratedQuantityAccumulator(Only(()))))
+        @test length(keys(gq_values(model, GeneratedQuantityAccumulator()))) == 4
 
-        accs = AccumulatorTuple(ParamsAccumulator(), GQAccumulator((:a,)))
+        accs =
+            AccumulatorTuple(ParamsAccumulator(), GeneratedQuantityAccumulator(Only((:a,))))
         @test requests_gq(accs, Val(:a))
         @test !requests_gq(accs, Val(:b))
         @test !requests_gq(AccumulatorTuple(ParamsAccumulator()), Val(:a))
-        @test requests_gq(AccumulatorTuple(GQAccumulator()), Val(:b))
+        @test requests_gq(AccumulatorTuple(GeneratedQuantityAccumulator()), Val(:b))
     end
 
     @testset "submodels" begin
         model = gq_outer()
-        all_gqs = gq_values(model, GQAccumulator())
+        all_gqs = gq_values(model, GeneratedQuantityAccumulator())
         @test haskey(all_gqs, @vn(a.z))
         @test haskey(all_gqs, @vn(b.z))
         @test haskey(all_gqs, @vn(c))
 
-        a_gqs = gq_values(model, GQAccumulator((:a,)))
+        a_gqs = gq_values(model, GeneratedQuantityAccumulator(Only((:a,))))
         @test haskey(a_gqs, @vn(a.z))
         @test !haskey(a_gqs, @vn(b))
         @test !haskey(a_gqs, @vn(c))
 
-        b_gqs = gq_values(model, GQAccumulator((:b,)))
+        b_gqs = gq_values(model, GeneratedQuantityAccumulator(Only((:b,))))
         @test !haskey(b_gqs, @vn(a))
         @test haskey(b_gqs, @vn(b.z))
 
         params = rand(model)
         @test params[@vn(a.z)] ≈ 2 * params[@vn(a.z0)]
 
-        scoped = @inferred WrenCore.scope(GQAccumulator((:a,)), @vn(a.b[1]))
-        @test scoped isa GQAccumulator{:all}
-        scoped = @inferred WrenCore.scope(GQAccumulator((:a,)), @vn(b))
-        @test scoped isa GQAccumulator{()}
+        scoped =
+            @inferred WrenCore.scope(GeneratedQuantityAccumulator(Only((:a,))), @vn(a.b[1]))
+        @test scoped isa GeneratedQuantityAccumulator{All}
+        scoped = @inferred WrenCore.scope(GeneratedQuantityAccumulator(Only((:a,))), @vn(b))
+        @test scoped isa GeneratedQuantityAccumulator{None}
     end
 
     @testset "submodel result used only in a generated quantity" begin
@@ -300,51 +302,58 @@ end
         @test haskey(parameters(draw), @vn(mu))
         @test haskey(parameters(draw), @vn(a))
 
-        # A generated quantity shares the output with the parameters; it wins a name clash.
         @wren function gq_clash()
             a ~ Normal()
             @gq a = 100.0
         end
-        @test rand(gq_clash())[@vn(a)] == 100.0
+        clash_msg = "`a` is both a generated quantity and a model parameter"
+        @test_throws clash_msg rand(gq_clash())
+        @test_throws clash_msg Draw(FromPrior(), gq_clash())
+
+        @wren function gq_clash_indexed()
+            a = zeros(2)
+            a[1] ~ Normal()
+            @gq a = 5.0
+        end
+        @test_throws clash_msg rand(gq_clash_indexed())
+        @test haskey(parameters(rand_with_logp(gq_clash())), @vn(a))
+    end
+
+    @testset "generated quantities used only by other generated quantities" begin
+        @wren function gq_chain()
+            a ~ Normal()
+            @gq b = error("b was evaluated")
+            @gq c = b
+        end
+        model = gq_chain()
+        @test isempty(gq_values(model, GeneratedQuantityAccumulator(None())))
+        @test_throws "b was evaluated" gq_values(model, GeneratedQuantityAccumulator(All()))
+        @test_throws "b was evaluated" gq_values(
+            model,
+            GeneratedQuantityAccumulator(Only((:c,))),
+        )
+        @test_throws "b was evaluated" gq_values(
+            model,
+            GeneratedQuantityAccumulator(Only((:b,))),
+        )
+
+        @wren function gq_transitive()
+            a ~ Normal()
+            @gq b = a + 1
+            @gq c = b + 1
+            @gq d = c + 1
+        end
+        model = gq_transitive()
+        d_only = gq_values(model, GeneratedQuantityAccumulator(Only((:d,))))
+        @test collect(keys(d_only)) == [@vn(d)]
+        all_gqs = gq_values(model, GeneratedQuantityAccumulator())
+        @test all_gqs[@vn(d)] ≈ all_gqs[@vn(b)] + 2
     end
 
     @testset "VecModel does not evaluate generated quantities" begin
         vecmodel = VecModel(gq_throws(), nothing)
         @test lp(vecmodel, [0.1]) ≈ logpdf(Normal(), 0.1)
         @test logjoint(gq_throws(), VarNamedTuple(; a=0.1)) ≈ logpdf(Normal(), 0.1)
-    end
-
-    @testset "compile-time pruning" begin
-        model = gq_pruned([1.0, 2.0])
-        function typed_body(accs)
-            argtypes = map(
-                typeof,
-                (
-                    model.evaluation_fn,
-                    FromPrior(),
-                    OriginalSpace(),
-                    accs,
-                    model.args,
-                    model.conditioned,
-                    model.enzyme_copy_argnames,
-                    EvalContext{false}(),
-                ),
-            )
-            return only(
-                code_typed(
-                    WrenCore.RuntimeGeneratedFunctions.generated_callfunc,
-                    Tuple{argtypes...},
-                ),
-            ).first
-        end
-        function calls_helper(code_info)
-            return any(stmt -> occursin("gq_helper", string(stmt)), code_info.code)
-        end
-
-        @test !calls_helper(typed_body(AccumulatorTuple(ParamsAccumulator())))
-        @test !calls_helper(typed_body(AccumulatorTuple(GQAccumulator((:other,)))))
-        @test calls_helper(typed_body(AccumulatorTuple(GQAccumulator())))
-        @test calls_helper(typed_body(AccumulatorTuple(GQAccumulator((:h,)))))
     end
 
     @testset "type stability" begin

@@ -1,45 +1,77 @@
 const GQ_ACCNAME = :GeneratedQuantities
 
 """
+    GeneratedQuantitySpec
+
+Selects which generated quantities (`@gq` statements) are evaluated and recorded. One of
+[`All`](@ref), [`Only`](@ref) or [`None`](@ref).
+"""
+abstract type GeneratedQuantitySpec end
+
+"""
     All()
 
-Select every generated quantity, as in `generated_quantities(model, chain; to_collect=All())`.
+Select every generated quantity.
 """
-struct All end
+struct All <: GeneratedQuantitySpec end
 
 """
-    GQAccumulator()
-    GQAccumulator(names::Tuple{Vararg{Symbol}})
+    None()
 
-Record the values of `@gq` statements in a `VarNamedTuple`. If `names` is not provided
-it returns every generated quantity, and otherwise it returns only those in `names`.
+Select no generated quantities.
 """
-struct GQAccumulator{Names,V<:VarNamedTuple} <: AbstractAccumulator
+struct None <: GeneratedQuantitySpec end
+
+"""
+    Only(names::Tuple{Vararg{Symbol}})
+
+Select the generated quantities named in `names`. The name of a submodel, such as `:a` in
+`a ~ sub(...)`, selects every generated quantity of that submodel.
+"""
+struct Only{names} <: GeneratedQuantitySpec
+    Only(names::Tuple{Vararg{Symbol}}) = new{names}()
+end
+
+_gq_requested(::All, ::Val) = true
+_gq_requested(::None, ::Val) = false
+_gq_requested(::Only{names}, ::Val{sym}) where {names,sym} = sym in names
+
+"""
+    GeneratedQuantityAccumulator(spec::GeneratedQuantitySpec=All())
+
+Record the values of the `@gq` statements selected by `spec` in a `VarNamedTuple`.
+"""
+struct GeneratedQuantityAccumulator{S<:GeneratedQuantitySpec,V<:VarNamedTuple} <:
+       AbstractAccumulator
+    spec::S
     values::V
 end
-GQAccumulator{Names}(values) where {Names} = GQAccumulator{Names,typeof(values)}(values)
-GQAccumulator() = GQAccumulator{:all}(VarNamedTuple())
-GQAccumulator(names::Tuple{Vararg{Symbol}}) = GQAccumulator{names}(VarNamedTuple())
+function GeneratedQuantityAccumulator(spec::GeneratedQuantitySpec=All())
+    return GeneratedQuantityAccumulator(spec, VarNamedTuple())
+end
 
-_gq_requested(names, sym::Symbol) = names === :all || sym in names
+function _gq_requested(acc::GeneratedQuantityAccumulator, sym::Val)
+    return _gq_requested(acc.spec, sym)
+end
 
 """
     requests_gq(accs::AccumulatorTuple, ::Val{sym})
 
-Return `true` if `accs` contains a [`GQAccumulator`](@ref) for `sym`.
+Return `true` if `accs` contains a [`GeneratedQuantityAccumulator`](@ref) that selects `sym`.
 """
-@generated function requests_gq(::AccumulatorTuple{N,T}, ::Val{sym}) where {N,T,sym}
-    GQ_ACCNAME in fieldnames(T) || return :(false)
-    names = fieldtype(T, GQ_ACCNAME).parameters[1]
-    return _gq_requested(names, sym) ? :(true) : :(false)
+function requests_gq(accs::AccumulatorTuple, sym::Val)
+    hasacc(accs, Val(GQ_ACCNAME)) || return false
+    return _gq_requested(getacc(accs, Val(GQ_ACCNAME)), sym)
 end
 
-accumulator_name(::Type{<:GQAccumulator}) = GQ_ACCNAME
+accumulator_name(::Type{<:GeneratedQuantityAccumulator}) = GQ_ACCNAME
 
-Base.copy(acc::GQAccumulator{Names}) where {Names} = GQAccumulator{Names}(copy(acc.values))
+function Base.copy(acc::GeneratedQuantityAccumulator)
+    return GeneratedQuantityAccumulator(acc.spec, copy(acc.values))
+end
 
 function accumulate_assume!!(
-    acc::GQAccumulator,
+    acc::GeneratedQuantityAccumulator,
     val,
     tval,
     vn,
@@ -51,7 +83,7 @@ function accumulate_assume!!(
     return acc
 end
 function accumulate_observe!!(
-    acc::GQAccumulator,
+    acc::GeneratedQuantityAccumulator,
     val,
     vn,
     right,
@@ -67,9 +99,9 @@ end
 Update and then return `acc` when a `@gq` statement records `value` under `vn`.
 """
 accumulate_gq!!(acc::AbstractAccumulator, value, vn::VarName) = acc
-function accumulate_gq!!(acc::GQAccumulator{Names}, value, vn::VarName) where {Names}
+function accumulate_gq!!(acc::GeneratedQuantityAccumulator, value, vn::VarName)
     new_values = VarNames.templated_setindex!!(acc.values, value, vn, VarNames.NoTemplate())
-    return GQAccumulator{Names}(new_values)
+    return GeneratedQuantityAccumulator(acc.spec, new_values)
 end
 
 """
@@ -90,29 +122,28 @@ Update all the accumulators of `at` via `accumulate_gq!!`.
     end
 end
 
-_zero(acc::GQAccumulator{Names}) where {Names} = GQAccumulator{Names}(empty(acc.values))
-reset(acc::GQAccumulator) = _zero(acc)
-split(acc::GQAccumulator) = _zero(acc)
-function combine(acc1::GQAccumulator{Names}, acc2::GQAccumulator) where {Names}
-    return GQAccumulator{Names}(merge(acc1.values, acc2.values))
+function _zero(acc::GeneratedQuantityAccumulator)
+    return GeneratedQuantityAccumulator(acc.spec, empty(acc.values))
+end
+reset(acc::GeneratedQuantityAccumulator) = _zero(acc)
+split(acc::GeneratedQuantityAccumulator) = _zero(acc)
+function combine(acc1::GeneratedQuantityAccumulator, acc2::GeneratedQuantityAccumulator)
+    return GeneratedQuantityAccumulator(acc1.spec, merge(acc1.values, acc2.values))
 end
 
-function scope(acc::GQAccumulator{Names}, ::VarName{sym}) where {Names,sym}
-    return if _gq_requested(Names, sym)
-        GQAccumulator{:all}(acc.values)
-    else
-        GQAccumulator{()}(acc.values)
-    end
+function scope(acc::GeneratedQuantityAccumulator, ::VarName{sym}) where {sym}
+    submodel_spec = _gq_requested(acc, Val{sym}()) ? All() : None()
+    return GeneratedQuantityAccumulator(submodel_spec, acc.values)
 end
 
 function combine_with_namespace(
-    parent::GQAccumulator{Names},
-    child::GQAccumulator,
+    parent::GeneratedQuantityAccumulator,
+    child::GeneratedQuantityAccumulator,
     vn::VarName,
     template,
-) where {Names}
+)
     isempty(child.values) && return parent
     nested_values =
         VarNames.templated_setindex!!(VarNamedTuple(), child.values, vn, template)
-    return GQAccumulator{Names}(merge(parent.values, nested_values))
+    return GeneratedQuantityAccumulator(parent.spec, merge(parent.values, nested_values))
 end

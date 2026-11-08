@@ -1,20 +1,20 @@
-function _draw_accumulators(include_log_probs::Bool)
+function _draw_accumulators(include_log_probs::Bool, gqs::GeneratedQuantitySpec)
     return if include_log_probs
         AccumulatorTuple(
             LogPriorAccumulator(),
             LogLikelihoodAccumulator(),
             ParamsAccumulator(),
-            GQAccumulator(),
+            GeneratedQuantityAccumulator(gqs),
         )
     else
-        AccumulatorTuple(ParamsAccumulator(), GQAccumulator())
+        AccumulatorTuple(ParamsAccumulator(), GeneratedQuantityAccumulator(gqs))
     end
 end
 
 function _params_and_gqs(accs::AccumulatorTuple)
     params = VarNames.parameters(accs)
     hasacc(accs, Val(GQ_ACCNAME)) || return params
-    return merge(params, generated_quantities(accs))
+    return merge_params_and_gqs(params, generated_quantities(accs))
 end
 
 function _draw(accs::AccumulatorTuple, stats::NamedTuple, include_log_probs::Bool)
@@ -37,18 +37,21 @@ end
         model::Model,
         stats::NamedTuple=NamedTuple();
         include_log_probs::Bool=true,
+        gqs::GeneratedQuantitySpec=All(),
     )
 
-Evaluate `model` using `source` and return its model-space parameters and generated
-quantities. By default the log prior, log likelihood, and log joint are added to `stats`.
+Evaluate `model` using `source` and return its model-space parameters and the generated
+quantities selected by `gqs`. By default the log prior, log likelihood, and log joint are
+added to `stats`.
 """
 function VarNames.Draw(
     source::AbstractLatentSource,
     model::Model,
     stats::NamedTuple=NamedTuple();
     include_log_probs::Bool=true,
+    gqs::GeneratedQuantitySpec=All(),
 )
-    accs = _draw_accumulators(include_log_probs)
+    accs = _draw_accumulators(include_log_probs, gqs)
     _, accs = evaluate(model, source, OriginalSpace(), accs, EvalContext{false}())
     return _draw(accs, stats, include_log_probs)
 end
@@ -108,26 +111,29 @@ end
         vecmodel::VecModel,
         stats::NamedTuple=NamedTuple();
         include_log_probs::Bool=true,
+        gqs::GeneratedQuantitySpec=All(),
     )
 
-Re-evaluate `vecmodel` at `params` and return model-space parameters together with optional
-log-probability statistics. If log probabilities are not requested and every transform is
-fixed, the raw parameters are recovered without evaluating the model.
+Re-evaluate `vecmodel` at `params` and return model-space parameters and the generated
+quantities selected by `gqs`, together with optional log-probability statistics. If neither
+log probabilities nor generated quantities are requested and every transform is fixed, the
+raw parameters are recovered without evaluating the model.
 """
 function VarNames.Draw(
     params::AbstractVector,
     vecmodel::VecModel,
     stats::NamedTuple=NamedTuple();
     include_log_probs::Bool=true,
+    gqs::GeneratedQuantitySpec=All(),
 )
     _check_vecmodel_dimension(params, vecmodel)
-    if !include_log_probs && _all_fixed_transforms(vecmodel)
+    if !include_log_probs && gqs isa None && _all_fixed_transforms(vecmodel)
         raw_params = _raw_params_from_fixed_transforms(params, vecmodel.vecinfo)
         return VarNames.Draw(raw_params, stats)
     end
 
     source = FromVector(params, vecmodel.vecinfo)
-    accs = _draw_accumulators(include_log_probs)
+    accs = _draw_accumulators(include_log_probs, gqs)
     _, accs = evaluate(
         vecmodel.model,
         source,

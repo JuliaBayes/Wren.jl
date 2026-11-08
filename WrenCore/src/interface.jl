@@ -51,10 +51,10 @@ function Base.rand(rng::AbstractRNG, model::Model)
         model,
         FromPrior(rng),
         OriginalSpace(),
-        AccumulatorTuple(ParamsAccumulator(), GQAccumulator()),
+        AccumulatorTuple(ParamsAccumulator(), GeneratedQuantityAccumulator()),
         EvalContext{false}(),
     )
-    return merge(VarNames.parameters(accs), generated_quantities(accs))
+    return merge_params_and_gqs(VarNames.parameters(accs), generated_quantities(accs))
 end
 Base.rand(model::Model) = rand(default_rng(), model)
 
@@ -75,7 +75,7 @@ function rand_with_logp(rng::AbstractRNG, model::Model)
         OriginalSpace(),
         AccumulatorTuple(
             ParamsAccumulator(),
-            GQAccumulator(),
+            GeneratedQuantityAccumulator(),
             LogPriorAccumulator(),
             LogLikelihoodAccumulator(),
         ),

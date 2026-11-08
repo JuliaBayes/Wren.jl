@@ -375,12 +375,14 @@ Keep these rules in mind when you use `@gq`:
 
   1. The name must be a single symbol; you can't write `@gq x[1]` and `@gq x.a`.
 
-  2. If you define a generated quantity `@gq variable` and do not reuse it later in the model body, the right-hand side is removed from the compiled model unless specifically requested with `generated_quantities(model, chain; to_collect=:variable)`.
+  2. If you define a generated quantity `@gq variable`, do not reuse it later in the model body, _and_ do not request collecting it (see [`Only`](@ref) or [`None`](@ref)), the right-hand side is removed from the compiled model. If the skipped GQ is computationally expensive, this can speed up model evaluations. By default, all generated quantities are collected.
 
-  3. Values are not copied. For example, assume our model uses the array `x` and mutates it after `@gq x`, then recorded value changes too. If you want to create a snapshot, you should write `@gq x = deepcopy(x)` instead.
+  3. A generated quantity must not have the same name as a model parameter; collecting both throws an error.
 
-!!! danger "No side effects... again"
-    When the definition of a generated quantity `x` involves side effects, such as calling `push!` or drawing a random number, and `x is not reused later, the side effects in its definition will not happen!
+  4. Values are not copied. For example, assume our model uses the array `x` and mutates it after `@gq x`, then recorded value changes too. If you want to create a snapshot, you should write `@gq x = deepcopy(x)` instead.
+
+!!! note "No side effects... again"
+    When the definition of a generated quantity `x` involves side effects, such as calling `push!` or drawing a random number, and `x` is not reused later, the side effects in its definition will not happen!
 
 ## [Manual log-likelihood addition](@id addloglike)
 

@@ -13,6 +13,25 @@ Return the values recorded by `@gq` statements.
 function generated_quantities end
 generated_quantities(accs::AccumulatorTuple) = getacc(accs, Val(GQ_ACCNAME)).values
 
+"""
+    merge_params_and_gqs(params::VarNamedTuple, gqs::VarNamedTuple)::VarNamedTuple
+
+Merges `params` and `gqs` and errors if a `gq` has the same name as `param`.
+"""
+function merge_params_and_gqs(params::VarNamedTuple, gqs::VarNamedTuple)
+    for gq_vn in keys(gqs), param_vn in keys(params)
+        if VarNames.subsumes(gq_vn, param_vn)
+            throw(
+                ArgumentError(
+                    "`$gq_vn` is both a generated quantity and a model parameter. " *
+                    "Rename one of them.",
+                ),
+            )
+        end
+    end
+    return merge(params, gqs)
+end
+
 """Return the vectorised parameter values."""
 vectorised_params(accs::AccumulatorTuple) =
     getacc(accs, Val(VECTORISED_PARAMS_ACCNAME)).values

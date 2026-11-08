@@ -617,9 +617,10 @@ function emit_model_expr(
     end
 end
 
-# The `let` keeps locals of the expression out of the model body. If the name is not used
-# later, the value is assigned to a gensym so that `expr` can sit inside the `requests_gq`
-# branch, which the compiler removes when the quantity is not requested.
+# The `let` keeps locals of the expression out of the model body. If the name is not reused,
+# `expr` sits inside a `requests_gq` branch, which the compiler removes when neither the
+# quantity nor any of its dependent generated quantities is requested. Without dependents,
+# the value is assigned to a gensym so that it cannot shadow a variable of the same name.
 function emit_model_expr(
     stmt::GeneratedQuantity,
     accs,
@@ -631,23 +632,33 @@ function emit_model_expr(
     @gensym gq_value
     value_expr =
         emit_model_expr(stmt.expr, accs, conditioned, latent_source, parameter_space, ctx)
-    stmt.name_is_reused && return quote
-        $(stmt.name) = let
-            $value_expr
-        end
-        if $(requests_gq)($accs, $(Val{stmt.name}()))
-            $accs = $(accumulate_gq!!)($accs, $(stmt.name), $(VarName{stmt.name}()))
-        end
-        nothing
-    end
-    return quote
-        if $(requests_gq)($accs, $(Val{stmt.name}()))
-            $gq_value = let
+    is_requested = :($(requests_gq)($accs, $(Val{stmt.name}())))
+    return if stmt.name_is_reused
+        quote
+            $(stmt.name) = let
                 $value_expr
             end
-            $accs = $(accumulate_gq!!)($accs, $gq_value, $(VarName{stmt.name}()))
+            if $is_requested
+                $accs = $(accumulate_gq!!)($accs, $(stmt.name), $(VarName{stmt.name}()))
+            end
+            nothing
         end
-        nothing
+    else
+        value_name = isempty(stmt.dependent_gqs) ? gq_value : stmt.name
+        is_needed = foldl(stmt.dependent_gqs; init=is_requested) do condition, dependent
+            :($condition || $(requests_gq)($accs, $(Val{dependent}())))
+        end
+        quote
+            if $is_needed
+                $value_name = let
+                    $value_expr
+                end
+                if $is_requested
+                    $accs = $(accumulate_gq!!)($accs, $value_name, $(VarName{stmt.name}()))
+                end
+            end
+            nothing
+        end
     end
 end
 

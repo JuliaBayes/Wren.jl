@@ -12,17 +12,20 @@ using Term.Progress: ProgressBar, addjob!, update!, start!, stop!, render
         niters::Integer,
         nchains::Integer=1;
         progress::Bool=true,
+        gqs::GeneratedQuantitySpec=All(),
     ) -> FlexiChains.VNChain
 
-Sample from the prior distribution of a Wren model.
+Sample from the prior distribution of a Wren model. The returned chain holds the generated
+quantities selected by `gqs`.
 """
 function prior(
     model::WrenCore.Model,
     niters::Integer,
     nchains::Integer=1;
     progress::Bool=true,
+    gqs::GeneratedQuantitySpec=All(),
 )
-    return prior(Random.default_rng(), model, niters, nchains; progress)
+    return prior(Random.default_rng(), model, niters, nchains; progress, gqs)
 end
 function prior(
     rng::Random.AbstractRNG,
@@ -30,6 +33,7 @@ function prior(
     niters::Integer,
     nchains::Integer=1;
     progress::Bool=true,
+    gqs::GeneratedQuantitySpec=All(),
 )
     if progress
         t = time()
@@ -48,7 +52,7 @@ function prior(
         Threads.@spawn begin
             chain_draws = Vector{Draw}(undef, niters)
             for i in 1:niters
-                chain_draws[i] = Draw(FromPrior(Random.TaskLocalRNG()), model)
+                chain_draws[i] = Draw(FromPrior(Random.TaskLocalRNG()), model; gqs)
                 if progress && i % update_every == 0
                     put!(progress_channel, (j, i))
                 end

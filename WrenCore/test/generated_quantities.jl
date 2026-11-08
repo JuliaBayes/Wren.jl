@@ -51,21 +51,20 @@ parameter_keys(chain) = Set(FlexiChains.parameters(chain))
     chn = prior_chain(StableRNG(468), gq_model_without_gqs(), 10, 2)
 
     gqs_all = generated_quantities(model, chn)
-    gqs_some = generated_quantities(model, chn; to_collect=Some([:x2, :a]))
-    gqs_vec = generated_quantities(model, chn; to_collect=[:x2])
+    gqs_only = generated_quantities(model, chn, Only((:x2, :a)))
 
     @testset "keys" begin
         @test parameter_keys(gqs_all) == Set([@vn(x2), @vn(xp1), @vn(a.z)])
-        @test parameter_keys(gqs_some) == Set([@vn(x2), @vn(a.z)])
-        @test parameter_keys(gqs_vec) == Set([@vn(x2)])
-        @test generated_quantities(model, chn; to_collect=All()) isa VNChain
+        @test parameter_keys(gqs_only) == Set([@vn(x2), @vn(a.z)])
+        @test parameter_keys(generated_quantities(model, chn, All())) ==
+              parameter_keys(gqs_all)
+        @test isempty(parameter_keys(generated_quantities(model, chn, None())))
     end
 
     @testset "forms agree on shared keys" begin
-        for vn in parameter_keys(gqs_some)
-            @test gqs_some[vn] == gqs_all[vn]
+        for vn in parameter_keys(gqs_only)
+            @test gqs_only[vn] == gqs_all[vn]
         end
-        @test gqs_vec[@vn(x2)] == gqs_all[@vn(x2)]
     end
 
     @testset "values match chain parameters" begin
@@ -82,13 +81,6 @@ parameter_keys(chain) = Set(FlexiChains.parameters(chain))
         @test FlexiChains.nchains(gqs) == 2
     end
 
-    @testset "invalid to_collect" begin
-        msg = "`to_collect` must be `All()`, `Some(names)` or `names`"
-        @test_throws msg generated_quantities(model, chn; to_collect=:x2)
-        @test_throws msg generated_quantities(model, chn; to_collect=["x2"])
-        @test_throws ArgumentError generated_quantities(model, chn; to_collect=:x2)
-    end
-
     @testset "missing parameter errors" begin
         chn_without_a = prior_chain(StableRNG(468), gq_model_without_submodel(), 10, 2)
         @test_throws "No latent value provided for variable z0" generated_quantities(
@@ -101,6 +93,11 @@ parameter_keys(chain) = Set(FlexiChains.parameters(chain))
         pdns = predict(StableRNG(468), model, chn)
         @test issubset(Set([@vn(x2), @vn(xp1), @vn(a.z)]), parameter_keys(pdns))
         @test pdns[@vn(x2)] == chn[@vn(x)] .^ 2
+
+        pdns_only = predict(StableRNG(468), model, chn; gqs=Only((:x2,)))
+        @test @vn(x2) in parameter_keys(pdns_only)
+        @test !(@vn(xp1) in parameter_keys(pdns_only))
+        @test !(@vn(a.z) in parameter_keys(pdns_only))
     end
 end
 

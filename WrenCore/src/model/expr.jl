@@ -127,15 +127,17 @@ end
 Represents `@gq name = expr`, or `@gq name` (short for `@gq name = name`).
 `name` must be a single Symbol.
 
-`name_is_reused` is set by dataflow analysis. If `true`, `name` appears in a later
-statement, so `expr` is evaluated on every model evaluation and bound to `name` in the
-model body. If `false`, `expr` is evaluated only when the quantity is requested and `name`
-is not bound.
+`name_is_reused` and `dependent_gqs` are set by dataflow analysis. If `name_is_reused` is
+`true`, `name` appears in a later statement other than a generated quantity that is itself
+not reused, so `expr` is evaluated on every model evaluation and bound to `name` in the
+model body. Otherwise `expr` is evaluated only when the quantity or one of the generated
+quantities in `dependent_gqs` is requested.
 """
 struct GeneratedQuantity{E} <: AbstractWrenExpr
     name::Symbol
     expr::E
     name_is_reused::Bool
+    dependent_gqs::Vector{Symbol}
 end
 
 """
@@ -280,7 +282,7 @@ function _lower_gq(expr::Expr, mod::Module)
         "@gq: the expression for `$name` must not contain probabilistic statements " *
         "(`~`, `@observe`, `@iid`, `@batch`, `@addloglikelihood`) or `return`",
     )
-    return GeneratedQuantity(name, lowered, false)
+    return GeneratedQuantity(name, lowered, false, Symbol[])
 end
 
 function _contains_gq(x)
