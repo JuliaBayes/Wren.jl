@@ -358,7 +358,7 @@ Reporting log-odds is nasty, so we instead transform them to odds ratios:
 @wren function logistic_regression(y)
     beta ~ Normal()
     for i in eachindex(y)
-        y[i] ~ BernoulliLogit(beta)
+        @observe y[i] ~ BernoulliLogit(beta)
     end
     @gq odds_ratio = exp(beta)
 end
