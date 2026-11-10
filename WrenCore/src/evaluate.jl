@@ -1,12 +1,3 @@
-function default_accumulators(::Type{FloatT}=LogProbType) where {FloatT}
-    return AccumulatorTuple(
-        LogPriorAccumulator{FloatT}(),
-        LogJacobianAccumulator{FloatT}(),
-        LogLikelihoodAccumulator{FloatT}(),
-        ParamsAccumulator(),
-    )
-end
-
 """
     evaluate(model, latent_source, parameter_space, accs, ctx[, conditioned])
 

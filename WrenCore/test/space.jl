@@ -27,7 +27,13 @@ using Distributions
             space in (UnconstrainedSpace(), OriginalSpace())
 
             source = FromValues(VarNamedTuple(; x=tval))
-            _, accs = evaluate(model, source, space, WrenCore.default_accumulators(), ctx)
+            accs = AccumulatorTuple(
+                LogPriorAccumulator(),
+                LogJacobianAccumulator(),
+                LogLikelihoodAccumulator(),
+                ParamsAccumulator(),
+            )
+            _, accs = evaluate(model, source, space, accs, ctx)
             @test parameters(accs)[@vn(x)] ≈ x
             @test logprior(accs) ≈ -x
             if space isa UnconstrainedSpace

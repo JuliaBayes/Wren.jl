@@ -339,20 +339,22 @@ end
             model = addloglik_elided()
 
             # Sanity check: the expression does allocate when LogLikelihood is present
+            accs_with_ll = AccumulatorTuple(
+                LogPriorAccumulator(),
+                LogLikelihoodAccumulator(),
+                ParamsAccumulator(),
+            )
             result_with = @b evaluate(
                 $model,
                 $source,
                 OriginalSpace(),
-                $(WrenCore.default_accumulators()),
+                $accs_with_ll,
                 EvalContext{false}(),
             )
             @test !iszero(result_with.allocs)
 
             # But is elided when LogLikelihood is absent
-            accs_no_ll = WrenCore.deleteacc!!(
-                WrenCore.default_accumulators(),
-                Val(WrenCore.LOG_LIKELIHOOD_ACCNAME),
-            )
+            accs_no_ll = AccumulatorTuple(LogPriorAccumulator(), ParamsAccumulator())
             result_without = @b evaluate(
                 $model,
                 $source,
