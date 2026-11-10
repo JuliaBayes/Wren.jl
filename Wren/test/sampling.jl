@@ -62,8 +62,9 @@ end
         model = normal_model()
         niters, nchains = 100, 2
         @testset "$name" for (name, sampler) in (
-            "nuts" => (rng, m) ->
-                nuts(rng, m, niters, nchains; adtype=AutoForwardDiff(), progress=false),
+            "nuts" =>
+                (rng, m) ->
+                    nuts(rng, m, niters, nchains; adtype=AutoForwardDiff(), progress=false),
             "prior" => (rng, m) -> prior(rng, m, niters, nchains; progress=false),
         )
             chn1 = sampler(Xoshiro(468), model)

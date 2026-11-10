@@ -20,8 +20,8 @@ if RUN_REACTANT
 end
 
 @testset "TDist typed defaults" begin
-    d = WrenDists.TDist(4f0)
-    explicit = WrenDists.TDist(4f0, 0f0, 1f0)
+    d = WrenDists.TDist(4.0f0)
+    explicit = WrenDists.TDist(4.0f0, 0.0f0, 1.0f0)
     @test logdensityof(d, 0.25f0) === logdensityof(explicit, 0.25f0)
     @test rand(Xoshiro(8675309), d) === rand(Xoshiro(8675309), explicit)
 end
