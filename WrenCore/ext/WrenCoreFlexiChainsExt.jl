@@ -8,6 +8,73 @@ using VarNames: VarNames, Draw, parameters
 using WrenCore: WrenCore
 
 """
+    WrenCore.to_flexichain(
+        results::AbstractMatrix{<:ModelResult},
+        stats::AbstractMatrix{<:NamedTuple}=fill((;), size(results));
+        iter_indices::AbstractVector{Int}=1:size(results, 1),
+        chain_indices::AbstractVector{Int}=1:size(results, 2),
+        sampling_time::AbstractVector{<:Union{Real,Missing}}=fill(missing, size(results, 2)),
+        last_sampler_state::AbstractVector=fill(missing, size(results, 2)),
+    ) -> FlexiChains.VNChain
+
+Convert a matrix of `WrenCore.ModelResult`s, and optionally a matrix of `NamedTuple`
+statistics, into a `FlexiChains.VNChain`.
+
+The other keyword arguments are passed directly to the `FlexiChains.VNChain` constructor.
+"""
+function WrenCore.to_flexichain(
+    results::AbstractMatrix{<:ModelResult},
+    stats::AbstractMatrix{<:NamedTuple}=fill((;), size(results));
+    iter_indices::AbstractVector{Int}=1:size(results, 1),
+    chain_indices::AbstractVector{Int}=1:size(results, 2),
+    sampling_time::AbstractVector{<:Union{Real,Missing}}=fill(missing, size(results, 2)),
+    last_sampler_state::AbstractVector=fill(missing, size(results, 2)),
+)
+    niters, nchains = size(results)
+    if !(
+        size(stats) == (niters, nchains) &&
+        length(iter_indices) == niters &&
+        length(chain_indices) == nchains &&
+        length(sampling_time) == nchains &&
+        length(last_sampler_state) == nchains
+    )
+        throw(ArgumentError("input sizes do not match"))
+    end
+
+    dicts = Matrix{OrderedDict{ParameterOrExtra{<:VarName},Any}}(undef, niters, nchains)
+    structures = Matrix{VarNamedTuple}(undef, niters, nchains)
+    for (i, (result, stat)) in enumerate(zip(results, stats))
+        # Parameters
+        params = VarNames.densify!!(parameters(result))
+
+        d = OrderedDict{ParameterOrExtra{<:VarName},Any}(
+            Parameter(vn) => val for (vn, val) in pairs(params)
+        )
+        # Stats
+        for (stat_vn, stat_val) in pairs(stat)
+            d[Extra(stat_vn)] = stat_val
+        end
+        # Return value and logps
+        d[Extra(:return_value)] = WrenCore.return_value(result)
+        d[Extra(:logprior)] = WrenCore.logprior(result)
+        d[Extra(:loglikelihood)] = WrenCore.loglikelihood(result)
+        d[Extra(:logjoint)] = WrenCore.logjoint(result)
+        dicts[i] = d
+        structures[i] = VarNames.skeleton(d)
+    end
+    return FlexiChain{VarName}(
+        niters,
+        nchains,
+        dicts;
+        structures=structures,
+        iter_indices=iter_indices,
+        chain_indices=chain_indices,
+        sampling_time=sampling_time,
+        last_sampler_state=last_sampler_state,
+    )
+end
+
+"""
     predict(
         [rng::Random.AbstractRNG=Random.default_rng(),]
         model::WrenCore.Model,
@@ -16,37 +83,36 @@ using WrenCore: WrenCore
 
 Draw predictions from `model` for all iterations in `chain`.
 
-The returned `FlexiChain` by default will contain all the predicted variables, as well as the
-variables already present in the input `chain`, which implies that:
+The returned `FlexiChain` by default will contain all the predicted variables, as well as
+the variables already present in the input `chain`, which implies that:
 
 - variables that are in the `chain` are fixed to their respective values;
 - variables that arent in the `chain` are resampled according to the model;
 - variables that are `@observe`d are never included.
 
-To move a variable from the first into the second category, subset `chain` to exclude that variable (more about subsetting chains [here](https://juliabayes.org/FlexiChains.jl/stable/api#Subsetting-chains)).
+To move a variable from the first into the second category, subset `chain` to exclude that
+variable (more about subsetting chains
+[here](https://juliabayes.org/FlexiChains.jl/stable/api#Subsetting-chains)).
 
 The returned chain will also contain log-probabilities corresponding to the re-evaluation of
-the model. In particular, the log probability for the newly predicted variables are
-now considered as prior terms. However, note that the log-prior of the returned chain will
-also contain the log-prior terms of the parameters already present in the input `chain`.
-Thus, if you want to obtain the log-probability of the predicted variables only, you can
-subtract the two log-prior terms.
+the model. In particular, the log probability for the newly predicted variables are now
+considered as prior terms. However, note that the log-prior of the returned chain will also
+contain the log-prior terms of the parameters already present in the input `chain`. Thus, if
+you want to obtain the log-probability of the predicted variables only, you can subtract the
+two log-prior terms.
 """
 function StatsAPI.predict(rng::AbstractRNG, model::WrenCore.Model, chain::VNChain)
-    accs = WrenCore.AccumulatorTuple(
-        WrenCore.ParamsAccumulator(),
-        WrenCore.LogPriorAccumulator(),
-        WrenCore.LogLikelihoodAccumulator(),
-    )
     fallback = WrenCore.FromPrior(rng)
-    results = _reevaluate(model, chain, accs, fallback)
-    draws = map(results) do (_, accs)
+    results = map(FlexiChains.parameters_at(chain)) do vnt
+        WrenCore.simulate(model, WrenCore.FromValues(vnt, fallback))
+    end
+    draws = map(results) do result
         Draw(
-            VarNames.densify!!(parameters(accs)),
+            VarNames.densify!!(parameters(result)),
             (
-                logprior=WrenCore.logprior(accs),
-                loglikelihood=StatsAPI.loglikelihood(accs),
-                logjoint=WrenCore.logjoint(accs),
+                logprior=WrenCore.logprior(result),
+                loglikelihood=StatsAPI.loglikelihood(result),
+                logjoint=WrenCore.logjoint(result),
             ),
         )
     end
@@ -60,23 +126,6 @@ function StatsAPI.predict(model::WrenCore.Model, chain::VNChain)
     return StatsAPI.predict(default_rng(), model, chain)
 end
 
-function _reevaluate(model::WrenCore.Model, chain::VNChain, accs, fallback=nothing)
-    return map(FlexiChains.parameters_at(chain)) do vnt
-        WrenCore.evaluate(
-            model,
-            WrenCore.FromValues(vnt, fallback),
-            WrenCore.OriginalSpace(),
-            map(WrenCore.reset, accs),
-            WrenCore.EvalContext{false}(),
-        )
-    end
-end
-
-function _pointwise_logp(get_logp, model::WrenCore.Model, chain::VNChain, accs)
-    results = _reevaluate(model, chain, accs)
-    return map(retval_and_accs -> get_logp(last(retval_and_accs)), results)
-end
-
 """
     logprior(model::WrenCore.Model, chain::FlexiChains.VNChain) -> DimMatrix
 
@@ -86,8 +135,7 @@ Unlike [`predict`](@ref StatsAPI.predict), this errors on a variable that `model
 and `chain` does not hold, rather than sampling it.
 """
 function WrenCore.logprior(model::WrenCore.Model, chain::VNChain)
-    accs = WrenCore.AccumulatorTuple(WrenCore.LogPriorAccumulator())
-    return _pointwise_logp(WrenCore.logprior, model, chain, accs)
+    return map(vnt -> WrenCore.logprior(model, vnt), FlexiChains.parameters_at(chain))
 end
 
 """
@@ -99,22 +147,32 @@ Unlike [`predict`](@ref StatsAPI.predict), this errors on a variable that `model
 and `chain` does not hold, rather than sampling it.
 """
 function StatsAPI.loglikelihood(model::WrenCore.Model, chain::VNChain)
-    accs = WrenCore.AccumulatorTuple(WrenCore.LogLikelihoodAccumulator())
-    return _pointwise_logp(StatsAPI.loglikelihood, model, chain, accs)
+    return map(vnt -> StatsAPI.loglikelihood(model, vnt), FlexiChains.parameters_at(chain))
 end
 
 """
     logjoint(model::WrenCore.Model, chain::FlexiChains.VNChain) -> DimMatrix
 
-Returns a `DimMatrix` of the log-joint probabilities, re-evaluated using the parameters at
-each iteration of the chain.
+Return the log-joint (log-prior plus log-likelihood) of `model` at each iteration of
+`chain`.
+
+Unlike [`predict`](@ref StatsAPI.predict), this errors on a variable that `model` requires
+and `chain` does not hold, rather than sampling it.
 """
 function WrenCore.logjoint(model::WrenCore.Model, chain::VNChain)
-    accs = WrenCore.AccumulatorTuple(
-        WrenCore.LogPriorAccumulator(),
-        WrenCore.LogLikelihoodAccumulator(),
-    )
-    return _pointwise_logp(WrenCore.logjoint, model, chain, accs)
+    return map(vnt -> WrenCore.logjoint(model, vnt), FlexiChains.parameters_at(chain))
+end
+
+"""
+    return_value(model::WrenCore.Model, chain::FlexiChains.VNChain) -> DimMatrix
+
+Return the return value of `model` at each iteration of `chain`.
+
+Unlike [`predict`](@ref StatsAPI.predict), this errors on a variable that `model` requires
+and `chain` does not hold, rather than sampling it.
+"""
+function WrenCore.return_value(model::WrenCore.Model, chain::VNChain)
+    return map(vnt -> WrenCore.return_value(model, vnt), FlexiChains.parameters_at(chain))
 end
 
 end # module WrenCoreFlexiChainsExt
