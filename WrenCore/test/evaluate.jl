@@ -1,10 +1,14 @@
-module WrenInterfaceTests
+module WrenEvaluateTests
 
-@info "testing interface.jl"
+@info "testing evaluate.jl"
 
+using DifferentiationInterface: AutoForwardDiff
 using Distributions
+using ForwardDiff
+using LinearAlgebra
 using Random
 using Test
+using Plaice
 using WrenCore
 
 @wren function interface_model(y)
@@ -47,22 +51,6 @@ end
         @test return_value(model) isa Float64
     end
 
-    @testset "Draw round trip" begin
-        result = simulate(Xoshiro(468), model)
-        draw = Draw(result)
-        @test parameters(draw) == parameters(result)
-        @test logprior(draw) == logprior(result)
-        @test loglikelihood(draw) == loglikelihood(result)
-        @test logjoint(draw) == logjoint(result)
-        @test extras(draw).return_value == return_value(result)
-
-        result2 = WrenCore.ModelResult(draw)
-        @test parameters(result2) == parameters(result)
-        @test return_value(result2) == return_value(result)
-        @test logprior(result2) == logprior(result)
-        @test loglikelihood(result2) == loglikelihood(result)
-    end
-
     @testset "densify!!" begin
         result = simulate(Xoshiro(468), densify_model(zeros(2)))
         xs = [parameters(result)[@vn(x[1])], parameters(result)[@vn(x[2])]]
@@ -78,4 +66,49 @@ end
     end
 end
 
+@wren function stats_model(observation)
+    x ~ Beta(2, 3)
+    y ~ MvNormal(zeros(2), I)
+    @observe observation ~ Normal(x + y[1])
 end
+
+struct TestFixedSpace{T<:VarNamedTuple} <: AbstractParameterSpace
+    transforms::T
+end
+WrenCore.target_transform(space::TestFixedSpace, vn::VarName) = space.transforms[vn]
+
+@wren function prickly_model(should_error)
+    should_error[] && error("model was evaluated")
+    x ~ Normal()
+end
+
+@testset "parameters(params, vecmodel)" begin
+    model = stats_model(0.7)
+
+    vecmodel = VecModel(model, AutoForwardDiff(); latent_source=FromPrior(Xoshiro(602)))
+    expected = rand(Xoshiro(603), model)
+    vector_params = vectorise_latents(FromValues(expected), vecmodel)
+    pars = parameters(vector_params, vecmodel)
+    @test pars[@vn(x)] ≈ expected[@vn(x)]
+    @test pars[@vn(y)] ≈ expected[@vn(y)]
+
+    @test_throws ArgumentError parameters(vector_params[1:(end-1)], vecmodel)
+    @test_throws ArgumentError parameters(vcat(vector_params, 0.0), vecmodel)
+
+    should_error = Ref(false)
+    fixed_transforms = @vnt begin
+        x := FixedTransform(Plaice.from_vec(Normal()))
+    end
+    fixed_space = TestFixedSpace(fixed_transforms)
+    fixed_vecmodel = VecModel(
+        prickly_model(should_error),
+        nothing;
+        latent_source=FromPrior(Xoshiro(604)),
+        parameter_space=fixed_space,
+    )
+    fixed_params = copy(fixed_vecmodel.sample)
+    fixed_vecmodel.model.args.should_error[] = true
+    @test parameters(fixed_params, fixed_vecmodel)[@vn(x)] ≈ only(fixed_params)
+end
+
+end # module WrenEvaluateTests

@@ -68,8 +68,8 @@ include("accs/vec_sample.jl")
 include("vecmodel.jl")
 
 # User-facing interface
-include("interface.jl")
-include("draw.jl")
+include("evaluate.jl")
+include("condition.jl")
 include("test_ad.jl")
 include("test_utils.jl")
 
@@ -157,8 +157,8 @@ export @wren,
     available_posteriordb_models
 
 # Reexports
-using VarNames: @vn, @vnt, VarNamedTuple, VarName, Draw, parameters, extras
-export @vn, @vnt, VarNamedTuple, VarName, Draw, parameters, extras
+using VarNames: @vn, @vnt, VarNamedTuple, VarName, parameters
+export @vn, @vnt, VarNamedTuple, VarName, parameters
 
 using DensityInterface: logdensityof
 export logdensityof

@@ -4,6 +4,7 @@ using Distributions
 import ForwardDiff
 import Enzyme
 using Test
+using VarNames: VarNames
 using WrenCore
 
 @testset "indexed sampling sites" begin
@@ -51,7 +52,7 @@ using WrenCore
             value, _ = lp_and_grad!(grad_buffer, vm, p)
             @test value ≈ expected_lp
             @test grad_buffer ≈ expected_grad
-            draw = parameters(Draw(p, vm))
+            draw = VarNames.densify!!(parameters(p, vm))
             child = label == "indexed submodel" ? draw[@vn(a[1])] : draw
             @test child == VarNamedTuple(; switch, x=[1.0, 2.0])
             @test vectorise_latents(FromValues(named), vm) == p
@@ -98,7 +99,7 @@ using WrenCore
             @test value ≈ expected
             @test grad ≈ gradient
             named = VarNamedTuple(; a=[VarNamedTuple(; x)])
-            @test parameters(Draw(p, vm))[@vn(a[1])] == named[@vn(a[1])]
+            @test VarNames.densify!!(parameters(p, vm))[@vn(a[1])] == named[@vn(a[1])]
             @test vectorise_latents(FromValues(named), vm) == p
         end
     end

@@ -10,6 +10,7 @@ using OffsetArrays: OffsetArray
 using Random
 using StableRNGs
 using Test
+using VarNames: VarNames
 using WrenCore
 
 """
@@ -20,7 +21,16 @@ chain holds the same log-probabilities an MCMC sampler would record.
 function exact_posterior_chain(rng, posterior_model, cond_model, niters, nchains)
     draws = map(Iterators.product(1:niters, 1:nchains)) do _
         posterior_params = rand(rng, posterior_model)
-        Draw(FromValues(posterior_params), cond_model, (acceptance_rate=1.0,))
+        result = simulate(FromValues(posterior_params), cond_model)
+        VarNames.Draw(
+            VarNames.densify!!(parameters(result)),
+            (
+                acceptance_rate=1.0,
+                logprior=logprior(result),
+                loglikelihood=loglikelihood(result),
+                logjoint=logjoint(result),
+            ),
+        )
     end
     return AbstractMCMC.from_samples(VNChain, draws)
 end

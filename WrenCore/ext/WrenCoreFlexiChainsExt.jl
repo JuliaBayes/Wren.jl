@@ -4,7 +4,7 @@ using AbstractMCMC: AbstractMCMC
 using FlexiChains: FlexiChains, VNChain
 using Random: AbstractRNG, default_rng
 using StatsAPI: StatsAPI
-using VarNames: VarNames, Draw, extras, parameters
+using VarNames: VarNames, Draw, parameters
 using WrenCore: WrenCore
 
 """
@@ -40,7 +40,16 @@ function StatsAPI.predict(rng::AbstractRNG, model::WrenCore.Model, chain::VNChai
     )
     fallback = WrenCore.FromPrior(rng)
     results = _reevaluate(model, chain, accs, fallback)
-    draws = Draw.(last.(results))
+    draws = map(results) do (_, accs)
+        Draw(
+            VarNames.densify!!(parameters(accs)),
+            (
+                logprior=WrenCore.logprior(accs),
+                loglikelihood=StatsAPI.loglikelihood(accs),
+                logjoint=WrenCore.logjoint(accs),
+            ),
+        )
+    end
     preds = AbstractMCMC.from_samples(VNChain, draws)
     preds = FlexiChains.renumber_iters(preds, FlexiChains.iter_indices(chain))
     preds = FlexiChains.renumber_chains(preds, FlexiChains.chain_indices(chain))
