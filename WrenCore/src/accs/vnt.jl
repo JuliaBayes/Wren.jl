@@ -90,7 +90,7 @@ accumulate_observe!!(
     vn,
     right,
     template,
-    @nospecialize(sitename::Val)
+    @nospecialize(sitename::Val),
 ) = acc
 
 _zero(acc::VNTAccumulator) = update_values(acc, empty(acc.values))

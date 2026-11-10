@@ -254,7 +254,7 @@ end
 
         partially_observed = decondition(
             likelihood_outer(likelihood_inner()) | (x=(a=a, obs=obs),),
-            @vn(x.a)
+            @vn(x.a),
         )
         _, accs = evaluate(
             partially_observed,

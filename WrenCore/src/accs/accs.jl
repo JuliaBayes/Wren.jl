@@ -92,7 +92,7 @@ See also: [`accumulate_observe!!`](@ref), [`accumulate_assume!!`](@ref)
 accumulate_addloglikelihood!!(
     acc::AbstractAccumulator,
     value,
-    @nospecialize(sitename::Val)
+    @nospecialize(sitename::Val),
 ) = acc
 
 """
