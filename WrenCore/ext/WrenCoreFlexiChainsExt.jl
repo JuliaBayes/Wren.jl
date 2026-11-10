@@ -1,10 +1,10 @@
 module WrenCoreFlexiChainsExt
 
 using AbstractMCMC: AbstractMCMC
-using FlexiChains: FlexiChains, VNChain
+using FlexiChains: FlexiChains, VNChain, FlexiChain, Parameter, Extra, ParameterOrExtra
 using Random: AbstractRNG, default_rng
 using StatsAPI: StatsAPI
-using VarNames: VarNames, Draw, parameters
+using VarNames: VarNames, Draw, VarName, VarNamedTuple, parameters
 using WrenCore: WrenCore
 
 """
@@ -23,7 +23,7 @@ statistics, into a `FlexiChains.VNChain`.
 The other keyword arguments are passed directly to the `FlexiChains.VNChain` constructor.
 """
 function WrenCore.to_flexichain(
-    results::AbstractMatrix{<:ModelResult},
+    results::AbstractMatrix{<:WrenCore.ModelResult},
     stats::AbstractMatrix{<:NamedTuple}=fill((;), size(results));
     iter_indices::AbstractVector{Int}=1:size(results, 1),
     chain_indices::AbstractVector{Int}=1:size(results, 2),
@@ -31,23 +31,23 @@ function WrenCore.to_flexichain(
     last_sampler_state::AbstractVector=fill(missing, size(results, 2)),
 )
     niters, nchains = size(results)
-    if !(
-        size(stats) == (niters, nchains) &&
-        length(iter_indices) == niters &&
-        length(chain_indices) == nchains &&
-        length(sampling_time) == nchains &&
-        length(last_sampler_state) == nchains
-    )
-        throw(ArgumentError("input sizes do not match"))
+    # The `FlexiChain` constructor checks the sizes of the other arguments.
+    if size(stats) != size(results)
+        msg = "expected `stats` to have size $(size(results)), but got $(size(stats))."
+        throw(DimensionMismatch(msg))
     end
 
-    dicts = Matrix{OrderedDict{ParameterOrExtra{<:VarName},Any}}(undef, niters, nchains)
+    dicts = Matrix{FlexiChains.OrderedDict{ParameterOrExtra{<:VarName},Any}}(
+        undef,
+        niters,
+        nchains,
+    )
     structures = Matrix{VarNamedTuple}(undef, niters, nchains)
     for (i, (result, stat)) in enumerate(zip(results, stats))
         # Parameters
         params = VarNames.densify!!(parameters(result))
 
-        d = OrderedDict{ParameterOrExtra{<:VarName},Any}(
+        d = FlexiChains.OrderedDict{ParameterOrExtra{<:VarName},Any}(
             Parameter(vn) => val for (vn, val) in pairs(params)
         )
         # Stats
@@ -60,7 +60,7 @@ function WrenCore.to_flexichain(
         d[Extra(:loglikelihood)] = WrenCore.loglikelihood(result)
         d[Extra(:logjoint)] = WrenCore.logjoint(result)
         dicts[i] = d
-        structures[i] = VarNames.skeleton(d)
+        structures[i] = VarNames.skeleton(params)
     end
     return FlexiChain{VarName}(
         niters,
