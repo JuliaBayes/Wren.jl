@@ -16,7 +16,7 @@ using WrenDists: WrenDists
         @test isfinite(logjoint(model, parameters(model, StableRNG(468))))
 
         vm = VecModel(model, DI.AutoForwardDiff())
-        v = rand(StableRNG(468), vm)
+        v = vector_parameters(vm, StableRNG(468))
         @test length(v) == vm.dimension
         logp, grad = lp_and_grad(vm, v)
         @test isfinite(logp)

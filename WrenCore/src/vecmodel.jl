@@ -609,21 +609,14 @@ function LogDensityProblems.logdensity_and_gradient(
 end
 
 """
-    Base.rand([rng::AbstractRNG,] vecmodel::VecModel) -> AbstractVector
-
-Draw a parameter vector compatible with `vecmodel`.
-"""
-function Base.rand(rng::AbstractRNG, vecmodel::VecModel)
-    return vector_parameters(vecmodel, rng)
-end
-Base.rand(vecmodel::VecModel) = rand(default_rng(), vecmodel)
-
-"""
+    vector_parameters(vecmodel::VecModel)::AbstractVector
     vector_parameters(vecmodel::VecModel, latents)::AbstractVector
 
 Obtain the model's parameters from `latents` and return them as a vector compatible with
-`vecmodel`. The vector is in the parameter space of `vecmodel` (usually unconstrained), not
-in original space; `parameters(vecmodel, v)` converts it back.
+`vecmodel`. If no latent values are provided, they are drawn from the prior distribution.
+
+The vector is in the parameter space of `vecmodel` (usually unconstrained), not in original
+space; `parameters(vecmodel, v)` converts it back.
 
 `latents` is converted to a latent source with [`to_latent_source`](@ref), so it can also
 be an `AbstractRNG` (to draw from the prior) or a `VarNamedTuple` of values.
@@ -643,3 +636,4 @@ end
 function vector_parameters(vecmodel::VecModel, latents)
     return vector_parameters(vecmodel, to_latent_source(latents))
 end
+vector_parameters(vecmodel::VecModel) = vector_parameters(vecmodel, FromPrior())

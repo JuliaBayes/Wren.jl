@@ -77,7 +77,7 @@ end
                 @info nameof(typeof(d)), name
 
                 vm = VecModel(f(d), adtype)
-                x = rand(vm)
+                x = vector_parameters(vm)
                 N = length(x)
                 @test N == Plaice.unconstrained_vec_length(d)
 
@@ -119,7 +119,7 @@ end
 
         for noad in (nothing, DI.ADTypes.NoAutoDiff())
             vm = VecModel(model, noad)
-            yvec = rand(vm)
+            yvec = vector_parameters(vm)
             # Should still be able to calculate logp
             @test LDP.capabilities(typeof(vm)) == LDP.LogDensityOrder{0}()
             @test LDP.dimension(vm) == vm.dimension
@@ -132,7 +132,7 @@ end
         end
     end
 
-    @testset "vector_parameters and rand" begin
+    @testset "vector_parameters" begin
         @wren function fexp()
             x ~ Exponential()
         end
@@ -140,15 +140,15 @@ end
 
         vm = VecModel(model, nothing)
 
-        x = @inferred rand(vm)
+        x = @inferred vector_parameters(vm)
         @test x isa AbstractVector{<:Real}
         @test length(x) == 1
 
         # check reproducibility
-        @test rand(Xoshiro(468), vm) == rand(Xoshiro(468), vm)
+        @test vector_parameters(vm, Xoshiro(468)) == vector_parameters(vm, Xoshiro(468))
 
         # check that there are some negative values, i.e., it's unconstrained space
-        xs = vcat([rand(StableRNG(i), vm) for i in 1:100]...)
+        xs = vcat([vector_parameters(vm, StableRNG(i)) for i in 1:100]...)
         @test any(xs .< 0)
 
         for X in [0.1, 1.0, 10.0]

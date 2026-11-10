@@ -101,7 +101,7 @@ using Random: Xoshiro
             vm = VecModel(model, adtype)
 
             x_orig = vm.model.args.x[1]
-            params = rand(vm)
+            params = vector_parameters(vm)
             @test vm.model.args.x[1] > x_orig
 
             x_orig = vm.model.args.x[1]
@@ -139,7 +139,7 @@ using Random: Xoshiro
         # Test that without `reduce_copies`, the copy is performed.
         vm = VecModel(model, WrenCore.DEFAULT_AD; reduce_copies=false)
         @test WrenCore._copied_args(vm.model) == (:y,)
-        params = rand(vm)
+        params = vector_parameters(vm)
         bm = @b lp_and_grad($vm, $params)
         @test bm.bytes >= sizeof(Y)
 
@@ -178,7 +178,7 @@ using Random: Xoshiro
         # Gradients are only right under Enzyme if the copies are actually made.
         vm_enzyme = VecModel(model, AutoEnzyme(; mode=Reverse); reduce_copies=false)
         vm_fd = VecModel(model, AutoForwardDiff())
-        params = rand(vm_enzyme)
+        params = vector_parameters(vm_enzyme)
         @test lp_and_grad(vm_enzyme, params)[2] ≈ lp_and_grad(vm_fd, params)[2]
     end
 

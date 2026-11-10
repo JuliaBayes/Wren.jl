@@ -388,7 +388,7 @@ end
             end
             vmodel = VecModel(outerv(innerv()), AutoEnzyme(; mode=Reverse))
 
-            r = rand(vmodel)
+            r = vector_parameters(vmodel)
             @test r isa AbstractVector{<:Real}
             @test length(r) == 1
             @test lp(vmodel, r) isa Real
@@ -413,7 +413,7 @@ end
             # no unique sitenames
             @test haskey(vmodel.vecinfo.sitename_to_rat, @vn(a))
 
-            r = rand(vmodel)
+            r = vector_parameters(vmodel)
             @test r isa AbstractVector{<:Real}
             @test length(r) == N
             @test lp(vmodel, r) isa Real
@@ -437,7 +437,7 @@ end
 
             @test all(i -> haskey(vmodel.vecinfo.sitename_to_rat, @vn(a[i])), 1:5)
 
-            r = rand(vmodel)
+            r = vector_parameters(vmodel)
             @test r isa AbstractVector{<:Real}
             @test length(r) == 5
             @test lp(vmodel, r) isa Real

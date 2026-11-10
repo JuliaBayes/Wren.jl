@@ -117,8 +117,9 @@ end
         for f in (simulate, parameters, return_value)
             @test_throws ArgumentError f(vecmodel, Float64[])
         end
-        @test length(rand(vecmodel)) == 1
-        @test rand(Xoshiro(468), vecmodel) == rand(Xoshiro(468), vecmodel)
+        @test length(vector_parameters(vecmodel)) == 1
+        @test vector_parameters(vecmodel, Xoshiro(468)) ==
+              vector_parameters(vecmodel, Xoshiro(468))
     end
 end
 

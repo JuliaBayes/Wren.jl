@@ -318,7 +318,7 @@ function reduce_copies(
         # `reduce_copies` must be false here, otherwise infinite recursion!
         reduce_copies=false,
     )
-    points = [rand(rng, ref_vecmodel) for _ in 1:n_points]
+    points = [vector_parameters(ref_vecmodel, rng) for _ in 1:n_points]
     expected = [lp_and_collected_grad(ref_vecmodel, p) for p in points]
 
     # Arguments in the copy set are only really copied if `_needs_copy` says so, so

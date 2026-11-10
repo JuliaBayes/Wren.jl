@@ -210,10 +210,10 @@ noad_vecmodel = VecModel(model, nothing)
 This is mostly useful when you want to handoff a Wren model to a different library which expects a vector interface.
 In particular, `VecModel`s obey the [LogDensityProblems.jl interface](https://github.com/tpapp/LogDensityProblems.jl), and thus can be used with a wide range of other Julia packages that expect this.
 
-You can draw a vectorised sample from a `VecModel` with the `rand` function:
+You can draw a vectorised sample from a `VecModel` with [`vector_parameters`](@ref):
 
 ```@example models
-v = rand(vecmodel)
+v = vector_parameters(vecmodel)
 ```
 
 or you can convert existing parameters into a vectorised form with [`vector_parameters`](@ref):

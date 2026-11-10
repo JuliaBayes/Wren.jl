@@ -45,7 +45,7 @@ For more information about model syntax, see `docs/src/syntax.md`.
 
 ```
 vecmodel = VecModel(model, AutoEnzyme(; mode=Reverse)) # or any other adtype
-v = rand(vecmodel) # draws a vector
+v = vector_parameters(vecmodel) # draws a vector
 ```
 
   - `lp(vecmodel, v)` computes the log density.
