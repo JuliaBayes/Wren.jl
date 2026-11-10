@@ -103,7 +103,7 @@ You can access these fields with [`parameters`](@ref), [`return_value`](@ref),
 [`logprior`](@ref), and [`loglikelihood`](@ref). The log-joint can be obtained with
 [`logjoint`](@ref).
 """
-struct ModelResult{R,V<:VarNamedTuple,LP,LL}
+struct ModelResult{V<:VarNamedTuple,R,LP,LL}
     parameters::V
     return_value::R
     logprior::LP
@@ -170,6 +170,9 @@ StatsAPI.loglikelihood(result::ModelResult) = result.loglikelihood
 Get the log-joint (log-prior plus log-likelihood) from a [`ModelResult`](@ref).
 """
 logjoint(result::ModelResult) = logprior(result) + loglikelihood(result)
+logjoint(::ModelResult{<:VarNamedTuple,<:Any,Nothing,<:Any}) = nothing
+logjoint(::ModelResult{<:VarNamedTuple,<:Any,<:Any,Nothing}) = nothing
+logjoint(::ModelResult{<:VarNamedTuple,<:Any,Nothing,Nothing}) = nothing
 
 """
     VarNames.densify!!(result::ModelResult)
