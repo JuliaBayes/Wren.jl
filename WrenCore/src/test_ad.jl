@@ -454,7 +454,7 @@ function benchmark_model(
     seconds::Real=1,
     verbose::Bool=(!isinteractive()),
 )
-    vnt_params = parameters(latent_source, model)
+    vnt_params = parameters(model, latent_source)
     vecmodel = VecModel(
         model,
         adtype;
@@ -466,7 +466,7 @@ function benchmark_model(
 
     # Model level
     rng = Xoshiro(468) # avoid mutating global RNG
-    parameters_bench = _min_bench(() -> parameters(rng, model), seconds)
+    parameters_bench = _min_bench(() -> parameters(model, rng), seconds)
     logjoint_bench = _min_bench(() -> logjoint(model, vnt_params), seconds)
 
     # VecModel level

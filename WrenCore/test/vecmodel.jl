@@ -132,7 +132,7 @@ end
         end
     end
 
-    @testset "vectorise_latents and rand" begin
+    @testset "vector_parameters and rand" begin
         @wren function fexp()
             x ~ Exponential()
         end
@@ -153,7 +153,7 @@ end
 
         for X in [0.1, 1.0, 10.0]
             prms = FromValues(VarNamedTuple(x=X))
-            x = @inferred vectorise_latents(prms, vm)
+            x = @inferred vector_parameters(vm, prms)
             @test x ≈ [log(X)]
         end
     end

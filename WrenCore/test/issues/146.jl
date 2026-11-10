@@ -57,7 +57,7 @@ using Test
         draws = fetch.([
             Threads.@spawn begin
                 copied = WrenCore._copy_for_thread(model)
-                [simulate(FromPrior(Xoshiro(100t + i)), copied) for i in 1:50]
+                [simulate(copied, FromPrior(Xoshiro(100t + i))) for i in 1:50]
             end for t in 1:4
         ])
         @test all(d -> logjoint(d) ≈ logjoint(model, parameters(d)), reduce(vcat, draws))

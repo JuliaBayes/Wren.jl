@@ -22,6 +22,23 @@ Custom subtypes of this can be created to customise model execution. To be a val
 abstract type AbstractLatentSource end
 
 """
+    to_latent_source(x)::AbstractLatentSource
+
+Convert `x` into an [`AbstractLatentSource`](@ref). Functions that take a latent source,
+such as [`simulate`](@ref), call this on their argument, so they also accept:
+
+- an `AbstractRNG`, which becomes [`FromPrior(rng)`](@ref FromPrior), i.e. latent
+  variables are drawn from the prior using `rng`;
+- a `VarNamedTuple`, which becomes [`FromValues(values)`](@ref FromValues). There is no
+  fallback, so it must contain every latent variable of the model.
+
+An `AbstractLatentSource` is returned unchanged.
+"""
+to_latent_source(source::AbstractLatentSource) = source
+to_latent_source(rng::AbstractRNG) = FromPrior(rng)
+to_latent_source(values::VarNamedTuple) = FromValues(values)
+
+"""
     get_latent(
         source::AbstractLatentSource,
         vn::VarName,

@@ -229,7 +229,7 @@ end
         data = [shared, shared]
         data = as_view ? view(data, :) : data
         model = nested ? mutate_nested(data) : mutate_shared(data)
-        result = return_value(FromPrior(Xoshiro(468)), model)
+        result = return_value(model, FromPrior(Xoshiro(468)))
         @test result == 1.0
         @test (nested ? shared.value[1] : shared.value) == 0.0
     end

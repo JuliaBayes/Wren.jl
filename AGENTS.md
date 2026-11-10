@@ -36,7 +36,7 @@ end
 model = f(1.0)
 ```
 
-  - `rand(model)` draws a sample from the model.
+  - `parameters(model)` draws a sample from the model.
   - `simulate(model)` draws a sample plus the components of log density.
 
 For more information about model syntax, see `docs/src/syntax.md`.

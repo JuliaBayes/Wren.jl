@@ -439,7 +439,7 @@ function _prepare_vecmodel_info(
 )
     accs = AccumulatorTuple(VectorisedParamsAccumulator(), SitenameCountAccumulator())
     _, accs = evaluate(model, source, parameter_space, accs, EvalContext{false}())
-    vecvals = vectorised_params(accs)
+    vecvals = _vectorised_values(accs)
     sca = getacc(accs, Val{SITENAMECOUNT_ACCNAME}())
 
     # TODO(penelopeysm): This might be slower than necessary due to boxing of the
@@ -614,17 +614,21 @@ end
 Draw a parameter vector compatible with `vecmodel`.
 """
 function Base.rand(rng::AbstractRNG, vecmodel::VecModel)
-    return vectorise_latents(FromPrior(rng), vecmodel)
+    return vector_parameters(vecmodel, rng)
 end
 Base.rand(vecmodel::VecModel) = rand(default_rng(), vecmodel)
 
 """
-    WrenCore.vectorise_latents(latent_source::AbstractLatentSource, vecmodel::VecModel)
+    vector_parameters(vecmodel::VecModel, latents)::AbstractVector
 
-Draw model parameters from `latent_source` and return them as a vector compatible with
-`vecmodel`.
+Obtain the model's parameters from `latents` and return them as a vector compatible with
+`vecmodel`. The vector is in the parameter space of `vecmodel` (usually unconstrained), not
+in original space; `parameters(vecmodel, v)` converts it back.
+
+`latents` is converted to a latent source with [`to_latent_source`](@ref), so it can also
+be an `AbstractRNG` (to draw from the prior) or a `VarNamedTuple` of values.
 """
-function vectorise_latents(latent_source::AbstractLatentSource, vecmodel::VecModel)
+function vector_parameters(vecmodel::VecModel, latent_source::AbstractLatentSource)
     params = similar(vecmodel.sample)
     accs = AccumulatorTuple(VecSampleAccumulator(params, vecmodel.vecinfo))
     _, accs = evaluate(
@@ -634,5 +638,8 @@ function vectorise_latents(latent_source::AbstractLatentSource, vecmodel::VecMod
         accs,
         EvalContext{false}(),
     )
-    return _get_vec_sample(accs)
+    return vector_parameters(accs)
+end
+function vector_parameters(vecmodel::VecModel, latents)
+    return vector_parameters(vecmodel, to_latent_source(latents))
 end

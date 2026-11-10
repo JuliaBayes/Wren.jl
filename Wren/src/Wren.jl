@@ -37,7 +37,7 @@ using WrenCore:
     # Vectorisation
     VecModel,
     logdensity,
-    vectorise_latents,
+    vector_parameters,
     lp,
     lp_and_grad,
     lp_and_grad!,
@@ -75,7 +75,7 @@ export WrenCore,
     # Vectorisation
     VecModel,
     logdensity,
-    vectorise_latents,
+    vector_parameters,
     lp,
     lp_and_grad,
     lp_and_grad!,

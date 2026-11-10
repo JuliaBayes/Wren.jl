@@ -52,22 +52,19 @@ using Distributions
 
         partial = VarNamedTuple(; a=VarNamedTuple(; x=0.5))
         source = FromValues(partial, FromPrior())
-        result = simulate(source, model)
+        result = simulate(model, source)
         pars = parameters(result)
         @test pars[@vn(a.x)] == 0.5
         @test logprior(result) ≈ logpdf(Normal(), 0.5) + logpdf(Normal(), pars[@vn(a.y)])
 
         # No params at all under `a`: the submodel is evaluated with the fallback only.
         source = FromValues(VarNamedTuple(; b=1.0), FromPrior())
-        result = simulate(source, model)
+        result = simulate(model, source)
         @test haskey(parameters(result), @vn(a.x))
         @test haskey(parameters(result), @vn(a.y))
 
-        @test_throws "No latent value provided for variable y" simulate(
-            FromValues(partial),
-            model,
-        )
-        @test_throws ArgumentError simulate(FromValues(VarNamedTuple(; a=0.5)), model)
+        @test_throws "No latent value provided for variable y" simulate(model, partial)
+        @test_throws ArgumentError simulate(model, VarNamedTuple(; a=0.5))
     end
 end
 

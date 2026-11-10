@@ -22,7 +22,7 @@ end
             end
             model = simple_normal()
             @test model.name === :simple_normal
-            result = simulate(FromPrior(), model)
+            result = simulate(model, FromPrior())
             pars = parameters(result)
             @test return_value(result) === nothing
             @test pars isa VarNamedTuple
@@ -38,7 +38,7 @@ end
             end
             d = [100.0]
             model = sample_with_arg(d)
-            result = simulate(FromPrior(), model)
+            result = simulate(model, FromPrior())
             @test return_value(result) === nothing
             @test parameters(result) isa VarNamedTuple
             @test logprior(result) ≈ logdensityof(Normal(d[1]), parameters(result)[@vn(x)])
@@ -56,7 +56,7 @@ end
         @testset "before conditioning" begin
             model = x_and_y()
             @test model.name === :x_and_y
-            result = simulate(FromPrior(), model)
+            result = simulate(model, FromPrior())
             pars = parameters(result)
             @test return_value(result) === nothing
             @test pars isa VarNamedTuple
@@ -70,7 +70,7 @@ end
         @testset "after conditioning" begin
             conditioned_model = x_and_y() | (; y=1.0)
             @test conditioned_model.name === :x_and_y # shouldn't be changed.
-            result = simulate(FromPrior(), conditioned_model)
+            result = simulate(conditioned_model, FromPrior())
             pars = parameters(result)
             @test return_value(result) === nothing
             @test pars isa VarNamedTuple
@@ -86,7 +86,7 @@ end
                 return before
             end
             model = read_before_tilde([0.0]) | (; y=[1.0])
-            result = simulate(FromPrior(), model)
+            result = simulate(model, FromPrior())
             @test return_value(result) == [1.0]
             @test loglikelihood(result) ≈ logdensityof(Normal(), 1.0)
             params = VarNamedTuple(y=[2.0])
@@ -104,7 +104,7 @@ end
                 return (before, y)
             end
             model = template_before_tilde() | (; y=[1.0, 2.0])
-            (before, after) = return_value(FromPrior(), model)
+            (before, after) = return_value(model, FromPrior())
             @test before == zeros(2)
             @test after == [1.0, 2.0]
         end
@@ -116,7 +116,7 @@ end
                 return y
             end
             data = (a=0.5, b=1.0)
-            result = simulate(FromPrior(), observed_fields((a=0.0, b=0.0)) | (y=data,))
+            result = simulate(observed_fields((a=0.0, b=0.0)) | (y=data,), FromPrior())
             @test return_value(result) == data
             @test loglikelihood(result) ≈
                   logdensityof(Normal(), data.a) + logdensityof(Normal(data.a), data.b)
@@ -138,11 +138,11 @@ end
             end
             data = [1.0, 2.0, 3.0]
             @test_throws ArgumentError decondition(observe_loop(3) | (; y=data), @vn(y[1]))
-            result = @inferred simulate(FromPrior(), observe_loop(3) | (; y=data))
+            result = @inferred simulate(observe_loop(3) | (; y=data), FromPrior())
             x = parameters(result)[@vn(x)]
             @test loglikelihood(result) ≈ sum(logdensityof.(Normal(x), data))
             # Indexing past the conditioned array is an error, not a new latent variable.
-            @test_throws ErrorException simulate(FromPrior(), observe_loop(4) | (; y=data))
+            @test_throws ErrorException simulate(observe_loop(4) | (; y=data), FromPrior())
         end
     end
 
@@ -155,7 +155,7 @@ end
         end
         model = observe_macro()
         @test model.name === :observe_macro
-        result = simulate(FromPrior(), model)
+        result = simulate(model, FromPrior())
         pars = parameters(result)
         @test return_value(result) === nothing
         @test pars isa VarNamedTuple
@@ -177,8 +177,7 @@ end
             end
         end
         params = VarNamedTuple(; x=0.5, xs=[1.0, 2.0])
-        source = FromValues(params)
-        result = simulate(source, with_macros())
+        result = simulate(with_macros(), params)
         @test logprior(result) ≈ sum(logdensityof.(Ref(Normal()), [0.5, 1.0, 2.0]))
         @test loglikelihood(result) ≈ logdensityof(Normal(), 0.25)
     end
@@ -196,13 +195,12 @@ end
         end
 
         params = VarNamedTuple(; y=0.5, z=2.0)
-        source = FromValues(params)
 
-        result = simulate(source, nested_if(true))
+        result = simulate(nested_if(true), params)
         @test logprior(result) ≈ logdensityof(Normal(), 0.5)
         @test loglikelihood(result) ≈ logdensityof(Normal(), 0.5)
 
-        result = simulate(source, nested_if(false))
+        result = simulate(nested_if(false), params)
         @test logprior(result) ≈ logdensityof(Normal(), 2.0)
         @test loglikelihood(result) ≈ logdensityof(Normal(), 2.0)
     end
@@ -215,7 +213,7 @@ end
             x = Foo(0.5)
             x.a ~ Normal()
         end
-        result = simulate(FromPrior(), immutable_struct())
+        result = simulate(immutable_struct(), FromPrior())
         pars = parameters(result)
         @test only(keys(pars)) == @vn(x.a)
         @test logprior(result) ≈ logdensityof(Normal(), pars[@vn(x.a)])
@@ -252,14 +250,13 @@ end
             end
 
             x = 0.5
-            source = FromValues(VarNamedTuple(; x))
-            result = simulate(source, distribution_tilde_value())
+            result = simulate(distribution_tilde_value(), VarNamedTuple(; x))
             @test parameters(result) == VarNamedTuple(; x)
             @test logprior(result) ≈ logdensityof(Normal(), x)
             @test loglikelihood(result) ≈ logdensityof(Normal(), x)
 
             conditioned_model = distribution_tilde_value() | (; x)
-            result = simulate(FromPrior(), conditioned_model)
+            result = simulate(conditioned_model, FromPrior())
             @test parameters(result) == VarNamedTuple()
             @test iszero(logprior(result))
             @test loglikelihood(result) ≈ 2 * logdensityof(Normal(), x)
@@ -274,7 +271,7 @@ end
                 @addloglikelihood -0.5 * x^2
             end
             model = addloglik_anon()
-            result = simulate(FromPrior(), model)
+            result = simulate(model, FromPrior())
             pars = parameters(result)
             x_val = pars[@vn(x)]
             @test logprior(result) ≈ logdensityof(Normal(), x_val)
@@ -287,7 +284,7 @@ end
                 @addloglikelihood name=:penalty -x^2
             end
             model = addloglik_named()
-            result = simulate(FromPrior(), model)
+            result = simulate(model, FromPrior())
             pars = parameters(result)
             x_val = pars[@vn(x)]
             @test logprior(result) ≈ logdensityof(Normal(), x_val)
@@ -301,7 +298,7 @@ end
                 @addloglikelihood -0.5 * x
             end
             model = addloglik_multiple()
-            result = simulate(FromPrior(), model)
+            result = simulate(model, FromPrior())
             pars = parameters(result)
             x_val = pars[@vn(x)]
             @test logprior(result) ≈ logdensityof(Normal(), x_val)
@@ -315,7 +312,7 @@ end
                 @addloglikelihood -0.5 * x^2
             end
             model = addloglik_with_cond() | (; y=1.0)
-            result = simulate(FromPrior(), model)
+            result = simulate(model, FromPrior())
             pars = parameters(result)
             x_val = pars[@vn(x)]
             @test logprior(result) ≈ logdensityof(Normal(), x_val)
@@ -373,7 +370,7 @@ end
                 return x ~ Normal()
             end
             model = explicit_return_sample()
-            result = simulate(FromPrior(), model)
+            result = simulate(model, FromPrior())
             @test return_value(result) == parameters(result)[@vn(x)]
         end
 
@@ -382,7 +379,7 @@ end
                 return
                 error("unreachable")
             end
-            retval = return_value(FromPrior(), bare_return())
+            retval = return_value(bare_return(), FromPrior())
             @test retval === nothing
         end
 
@@ -391,7 +388,7 @@ end
                 x ~ Normal()
             end
             model = fallthrough_sample()
-            result = simulate(FromPrior(), model)
+            result = simulate(model, FromPrior())
             @test return_value(result) == parameters(result)[@vn(x)]
 
             @wren function fallthrough_value()
@@ -399,7 +396,7 @@ end
                 2
             end
             model = fallthrough_value()
-            retval = return_value(FromPrior(), model)
+            retval = return_value(model, FromPrior())
             @test retval == 2
         end
     end
@@ -430,8 +427,7 @@ end
         end
 
         values = [0.25, -0.5]
-        source = FromValues(VarNamedTuple(; xs=values))
-        result = simulate(source, control_flow(2))
+        result = simulate(control_flow(2), VarNamedTuple(; xs=values))
         expected_logp = sum(logdensityof(Normal(), value) for value in values)
 
         @test return_value(result) == (:even, :finished)
@@ -440,7 +436,7 @@ end
         @test logprior(result) ≈ expected_logp
         @test loglikelihood(result) ≈ expected_logp
 
-        result = simulate(FromPrior(), control_flow(0))
+        result = simulate(control_flow(0), FromPrior())
         @test return_value(result) == :empty
         @test parameters(result) == VarNamedTuple()
     end
@@ -474,7 +470,7 @@ end
         for (model, expected) in
             ((f(1.0), (a=1.0, b=2.0, c=3.0)), (f(1.0, 4.0; c=5.0), (a=1.0, b=4.0, c=5.0)))
             @test model.args == expected
-            retval = return_value(FromPrior(), model)
+            retval = return_value(model, FromPrior())
             @test retval == values(expected)
         end
     end

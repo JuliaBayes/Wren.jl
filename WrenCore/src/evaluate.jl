@@ -91,16 +91,18 @@ end
 
 """
     simulate(model::Model)
-    simulate(rng::Random.AbstractRNG, model::Model)
-    simulate(latents::AbstractLatentSource, model::Model)
+    simulate(model::Model, latents)
 
 Draw a sample from `model`, using the given latent source. If one is not provided,
-draws from the prior distribution, optionally with a specified `rng`.
+draws from the prior distribution.
+
+`latents` is converted to a latent source with [`to_latent_source`](@ref), so it can also
+be an `AbstractRNG` (to draw from the prior) or a `VarNamedTuple` of values.
 
 Returns the params, return value, log-prior, and log-likelihood of the model packaged in a
 [`ModelResult`](@ref).
 """
-function simulate(latents::AbstractLatentSource, model::Model)
+function simulate(model::Model, latents::AbstractLatentSource)
     retval, accs = evaluate(
         model,
         latents,
@@ -119,8 +121,8 @@ function simulate(latents::AbstractLatentSource, model::Model)
         loglikelihood(accs),
     )
 end
-simulate(rng::AbstractRNG, model::Model) = simulate(FromPrior(rng), model)
-simulate(model::Model) = simulate(FromPrior(), model)
+simulate(model::Model, latents) = simulate(model, to_latent_source(latents))
+simulate(model::Model) = simulate(model, FromPrior())
 
 ############################################################################################
 # parameters
@@ -135,17 +137,18 @@ VarNames.parameters(result::ModelResult) = result.parameters
 
 """
     parameters(model::Model)::VarNamedTuple
-    parameters(rng::Random.AbstractRNG, model::Model)::VarNamedTuple
-    parameters(latents::AbstractLatentSource, model::Model)::VarNamedTuple
+    parameters(model::Model, latents)::VarNamedTuple
 
 Obtain the model's parameters in original space, calculated with a given set of latent
-values. If no latent values are provided, they are drawn from the prior distribution,
-optionally with a specified `rng`.
+values. If no latent values are provided, they are drawn from the prior distribution.
+
+`latents` is converted to a latent source with [`to_latent_source`](@ref), so it can also
+be an `AbstractRNG` (to draw from the prior) or a `VarNamedTuple` of values.
 
 This is equivalent to `parameters(simulate(model))`, but is more efficient than
 [`simulate`](@ref) because it does not compute the log-density terms.
 """
-function VarNames.parameters(latents::AbstractLatentSource, model::Model)
+function VarNames.parameters(model::Model, latents::AbstractLatentSource)
     _, accs = evaluate(
         model,
         latents,
@@ -155,10 +158,10 @@ function VarNames.parameters(latents::AbstractLatentSource, model::Model)
     )
     return VarNames.parameters(accs)
 end
-function VarNames.parameters(rng::AbstractRNG, model::Model)
-    return VarNames.parameters(FromPrior(rng), model)
+function VarNames.parameters(model::Model, latents)
+    return VarNames.parameters(model, to_latent_source(latents))
 end
-VarNames.parameters(model::Model) = VarNames.parameters(FromPrior(), model)
+VarNames.parameters(model::Model) = VarNames.parameters(model, FromPrior())
 
 function _check_vecmodel_dimension(params::AbstractVector, vecmodel::VecModel)
     actual = length(params)
@@ -191,12 +194,12 @@ function _raw_params_from_fixed_transforms(params::AbstractVector, vecinfo::VecI
 end
 
 """
-    VarNames.parameters(params::AbstractVector, vecmodel::VecModel)::VarNamedTuple
+    VarNames.parameters(vecmodel::VecModel, params::AbstractVector)::VarNamedTuple
 
 Return the model-space parameters of `vecmodel` at `params`. If every transform is fixed,
 the raw parameters are recovered without evaluating the model.
 """
-function VarNames.parameters(params::AbstractVector, vecmodel::VecModel)
+function VarNames.parameters(vecmodel::VecModel, params::AbstractVector)
     _check_vecmodel_dimension(params, vecmodel)
     if _all_fixed_transforms(vecmodel)
         return _raw_params_from_fixed_transforms(params, vecmodel.vecinfo)
@@ -227,24 +230,25 @@ return_value(result::ModelResult) = result.return_value
 
 """
     return_value(model::Model)
-    return_value(rng::Random.AbstractRNG, model::Model)
-    return_value(latents::AbstractLatentSource, model::Model)
+    return_value(model::Model, latents)
 
 Obtain the model's return value calculated with a given set of latent values. If no latent
-values are provided, they are drawn from the prior distribution, optionally with a specified
-`rng`.
+values are provided, they are drawn from the prior distribution.
+
+`latents` is converted to a latent source with [`to_latent_source`](@ref), so it can also
+be an `AbstractRNG` (to draw from the prior) or a `VarNamedTuple` of values.
 
 This is equivalent to `return_value(simulate(model))`, but is more efficient than
 [`simulate`](@ref) because it does not compute the log-density terms or store the
 parameters.
 """
-function return_value(latents::AbstractLatentSource, model::Model)
+function return_value(model::Model, latents::AbstractLatentSource)
     retval, _ =
         evaluate(model, latents, OriginalSpace(), AccumulatorTuple(), EvalContext{false}())
     return retval
 end
-return_value(rng::AbstractRNG, model::Model) = return_value(FromPrior(rng), model)
-return_value(model::Model) = return_value(FromPrior(), model)
+return_value(model::Model, latents) = return_value(model, to_latent_source(latents))
+return_value(model::Model) = return_value(model, FromPrior())
 
 ############################################################################################
 # logprior
@@ -257,6 +261,27 @@ Get the log-prior from a [`ModelResult`](@ref).
 """
 logprior(result::ModelResult) = result.logprior
 
+"""
+    logprior(model::Model, latents)
+
+Return the log-prior probability of `model` evaluated at the given latent values, in
+original space.
+
+`latents` is converted to a latent source with [`to_latent_source`](@ref), so it can also
+be an `AbstractRNG` (to draw from the prior) or a `VarNamedTuple` of values.
+"""
+function logprior(model::Model, latents::AbstractLatentSource)
+    _, accs = evaluate(
+        model,
+        latents,
+        OriginalSpace(),
+        AccumulatorTuple(LogPriorAccumulator()),
+        EvalContext{false}(),
+    )
+    return logprior(accs)
+end
+logprior(model::Model, latents) = logprior(model, to_latent_source(latents))
+
 ############################################################################################
 # loglikelihood
 ############################################################################################
@@ -267,6 +292,28 @@ logprior(result::ModelResult) = result.logprior
 Get the log-likelihood from a [`ModelResult`](@ref).
 """
 StatsAPI.loglikelihood(result::ModelResult) = result.loglikelihood
+
+"""
+    loglikelihood(model::Model, latents)
+
+Return the log-likelihood of `model` evaluated at the given latent values.
+
+`latents` is converted to a latent source with [`to_latent_source`](@ref), so it can also
+be an `AbstractRNG` (to draw from the prior) or a `VarNamedTuple` of values.
+"""
+function StatsAPI.loglikelihood(model::Model, latents::AbstractLatentSource)
+    _, accs = evaluate(
+        model,
+        latents,
+        OriginalSpace(),
+        AccumulatorTuple(LogLikelihoodAccumulator()),
+        EvalContext{false}(),
+    )
+    return loglikelihood(accs)
+end
+function StatsAPI.loglikelihood(model::Model, latents)
+    return StatsAPI.loglikelihood(model, to_latent_source(latents))
+end
 
 ############################################################################################
 # logjoint
@@ -283,17 +330,22 @@ logjoint(::ModelResult{<:VarNamedTuple,<:Any,<:Any,Nothing}) = nothing
 logjoint(::ModelResult{<:VarNamedTuple,<:Any,Nothing,Nothing}) = nothing
 
 """
-    logjoint(model::Model, params::VarNamedTuple)
+    logjoint(model::Model, latents)
 
-Return the log-joint probability of `model` evaluated at `params` in original space.
+Return the log-joint probability of `model` evaluated at the given latent values, in
+original space.
+
+`latents` is converted to a latent source with [`to_latent_source`](@ref), so it can also
+be an `AbstractRNG` (to draw from the prior) or a `VarNamedTuple` of values.
 """
-function logjoint(model::Model, params::VarNamedTuple)
+function logjoint(model::Model, latents::AbstractLatentSource)
     _, accs = evaluate(
         model,
-        FromValues(params),
+        latents,
         OriginalSpace(),
         AccumulatorTuple(LogPriorAccumulator(), LogLikelihoodAccumulator()),
         EvalContext{false}(),
     )
     return logjoint(accs)
 end
+logjoint(model::Model, latents) = logjoint(model, to_latent_source(latents))

@@ -17,12 +17,12 @@ using WrenCore
     return x + 1
 end
 
-@testset "simulate / return_value / rand" begin
+@testset "simulate / return_value / parameters" begin
     model = interface_model(1.0)
 
     @testset "simulate" begin
         for result in
-            (simulate(model), simulate(Xoshiro(468), model), simulate(FromPrior(), model))
+            (simulate(model), simulate(model, Xoshiro(468)), simulate(model, FromPrior()))
             x = parameters(result)[@vn(x)]
             @test return_value(result) == x + 1
             @test logprior(result) ≈ logpdf(Normal(), x)
@@ -32,17 +32,83 @@ end
     end
 
     @testset "simulate with given values" begin
-        result = simulate(FromValues(VarNamedTuple(x=0.5)), model)
+        result = simulate(model, VarNamedTuple(x=0.5))
         @test parameters(result)[@vn(x)] == 0.5
         @test return_value(result) == 1.5
     end
 
     @testset "consistency with same rng" begin
-        result = simulate(Xoshiro(468), model)
-        @test parameters(Xoshiro(468), model) == parameters(result)
-        @test return_value(Xoshiro(468), model) == return_value(result)
-        @test return_value(FromValues(VarNamedTuple(x=0.5)), model) == 1.5
+        result = simulate(model, Xoshiro(468))
+        @test parameters(model, Xoshiro(468)) == parameters(result)
+        @test return_value(model, Xoshiro(468)) == return_value(result)
+        @test return_value(model, VarNamedTuple(x=0.5)) == 1.5
         @test return_value(model) isa Float64
+    end
+end
+
+@testset "interface" begin
+    model = interface_model(1.0)
+    x = 0.5
+    vnt = VarNamedTuple(; x)
+    expected_lp = logpdf(Normal(), x)
+    expected_ll = logpdf(Normal(x), 1.0)
+
+    @testset "with given values: $(typeof(values).name.name)" for values in (
+        vnt,
+        FromValues(vnt),
+        # The fallback is never used because `vnt` has every latent variable.
+        FromValues(vnt, FromPrior()),
+    )
+        result = simulate(model, values)
+        @test result isa ModelResult
+        @test parameters(result) == vnt
+        @test return_value(result) == x + 1
+        @test logprior(result) ≈ expected_lp
+        @test loglikelihood(result) ≈ expected_ll
+        @test logjoint(result) ≈ expected_lp + expected_ll
+
+        @test parameters(model, values) == vnt
+        @test return_value(model, values) == x + 1
+        @test logprior(model, values) ≈ expected_lp
+        @test loglikelihood(model, values) ≈ expected_ll
+        @test logjoint(model, values) ≈ expected_lp + expected_ll
+    end
+
+    @testset "with an rng" begin
+        # Passing an rng is the same as passing `FromPrior(rng)`.
+        expected = simulate(model, FromPrior(Xoshiro(468)))
+        result = simulate(model, Xoshiro(468))
+        @test parameters(result) == parameters(expected)
+        @test return_value(result) == return_value(expected)
+        @test logprior(result) == logprior(expected)
+        @test loglikelihood(result) == loglikelihood(expected)
+        @test parameters(model, Xoshiro(468)) == parameters(expected)
+        @test return_value(model, Xoshiro(468)) == return_value(expected)
+    end
+
+    @testset "with no latent values" begin
+        result = simulate(model)
+        drawn_x = parameters(result)[@vn(x)]
+        @test return_value(result) == drawn_x + 1
+        @test logjoint(result) ≈ logpdf(Normal(), drawn_x) + logpdf(Normal(drawn_x), 1.0)
+        @test only(keys(parameters(model))) == @vn(x)
+        @test return_value(model) isa Float64
+    end
+
+    fns = (simulate, parameters, return_value, logprior, loglikelihood, logjoint)
+    @testset "missing values are an error: $f" for f in fns
+        @test_throws "No latent value provided for variable x" f(model, VarNamedTuple())
+    end
+
+    @testset "VecModel" begin
+        vecmodel = VecModel(model, AutoForwardDiff())
+        # `x ~ Normal()` is already unconstrained, so the vector is just `[x]`.
+        v = vector_parameters(vecmodel, vnt)
+        @test v == [x]
+        @test parameters(vecmodel, v) == vnt
+        @test lp(vecmodel, v) ≈ expected_lp + expected_ll
+        @test length(rand(vecmodel)) == 1
+        @test rand(Xoshiro(468), vecmodel) == rand(Xoshiro(468), vecmodel)
     end
 end
 
@@ -62,18 +128,18 @@ WrenCore.target_transform(space::TestFixedSpace, vn::VarName) = space.transforms
     x ~ Normal()
 end
 
-@testset "parameters(params, vecmodel)" begin
+@testset "parameters(vecmodel, params)" begin
     model = stats_model(0.7)
 
     vecmodel = VecModel(model, AutoForwardDiff(); latent_source=FromPrior(Xoshiro(602)))
-    expected = parameters(Xoshiro(603), model)
-    vector_params = vectorise_latents(FromValues(expected), vecmodel)
-    pars = parameters(vector_params, vecmodel)
+    expected = parameters(model, Xoshiro(603))
+    vector_params = vector_parameters(vecmodel, expected)
+    pars = parameters(vecmodel, vector_params)
     @test pars[@vn(x)] ≈ expected[@vn(x)]
     @test pars[@vn(y)] ≈ expected[@vn(y)]
 
-    @test_throws ArgumentError parameters(vector_params[1:(end-1)], vecmodel)
-    @test_throws ArgumentError parameters(vcat(vector_params, 0.0), vecmodel)
+    @test_throws ArgumentError parameters(vecmodel, vector_params[1:(end-1)])
+    @test_throws ArgumentError parameters(vecmodel, vcat(vector_params, 0.0))
 
     should_error = Ref(false)
     fixed_transforms = @vnt begin
@@ -88,7 +154,7 @@ end
     )
     fixed_params = copy(fixed_vecmodel.sample)
     fixed_vecmodel.model.args.should_error[] = true
-    @test parameters(fixed_params, fixed_vecmodel)[@vn(x)] ≈ only(fixed_params)
+    @test parameters(fixed_vecmodel, fixed_params)[@vn(x)] ≈ only(fixed_params)
 end
 
 end # module WrenEvaluateTests

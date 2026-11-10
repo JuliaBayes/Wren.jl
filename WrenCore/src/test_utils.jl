@@ -32,7 +32,7 @@ function test_model_equivalence(
     vm1 = VecModel(model1, adtype)
     vm2 = VecModel(model2, adtype)
     @test vm1.dimension == vm2.dimension
-    vparams = vectorise_latents(FromValues(params), vm1)
+    vparams = vector_parameters(vm1, params)
     if adtype === nothing
         lp1 = lp(vm1, vparams)
         lp2 = lp(vm2, vparams)

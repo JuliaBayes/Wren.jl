@@ -44,7 +44,7 @@ end
         end
 
         # With FromPrior
-        result = @inferred simulate(FromPrior(), returning_outer(returning_inner()))
+        result = @inferred simulate(returning_outer(returning_inner()), FromPrior())
         out_pars = parameters(result)
         a = out_pars[@vn(x.a)]
         @test return_value(result) == (VarNamedTuple(; a=a), 2a + 1)
@@ -56,7 +56,7 @@ end
         in_pars = @vnt begin
             x.a := 0.5
         end
-        result = @inferred simulate(FromValues(in_pars), returning_outer(returning_inner()))
+        result = @inferred simulate(returning_outer(returning_inner()), in_pars)
         out_pars = parameters(result)
         @test return_value(result) ==
               (VarNamedTuple(; a=in_pars[@vn(x.a)]), 2 * in_pars[@vn(x.a)] + 1)
@@ -89,7 +89,7 @@ end
 
         # With FromPrior
         result =
-            @inferred simulate(FromPrior(), undefined_namespace_outer(returning_inner()))
+            @inferred simulate(undefined_namespace_outer(returning_inner()), FromPrior())
         out_pars = parameters(result)
         @test only(keys(out_pars)) == @vn(x.a)
         a = out_pars[@vn(x.a)]
@@ -99,10 +99,7 @@ end
         in_pars = @vnt begin
             x.a := 0.5
         end
-        result = @inferred simulate(
-            FromValues(in_pars),
-            undefined_namespace_outer(returning_inner()),
-        )
+        result = @inferred simulate(undefined_namespace_outer(returning_inner()), in_pars)
         out_pars = parameters(result)
         @test only(keys(out_pars)) == @vn(x.a)
         @test return_value(result) == 2 * in_pars[@vn(x.a)]
@@ -121,7 +118,7 @@ end
         end
 
         # With FromPrior
-        result = simulate(FromPrior(), indexed_outer(indexed_inner()))
+        result = simulate(indexed_outer(indexed_inner()), FromPrior())
         out_pars = parameters(result)
         @test size(out_pars.data.x) == (2, 2) # tests that templated_setindex worked
         a1 = out_pars[@vn(x[1, 1].a)]
@@ -136,7 +133,7 @@ end
             x[1].a := first_a
             x[2, 2].a := second_a
         end
-        result = simulate(FromValues(in_pars), indexed_outer(indexed_inner()))
+        result = simulate(indexed_outer(indexed_inner()), in_pars)
         out_pars = parameters(result)
 
         @test return_value(result) == (first_a, second_a)
@@ -168,10 +165,8 @@ end
             x.a := a
             b := b
         end
-        result = @inferred simulate(
-            FromValues(in_pars),
-            likelihood_outer(likelihood_inner() | (; obs=obs)),
-        )
+        result =
+            @inferred simulate(likelihood_outer(likelihood_inner() | (; obs=obs)), in_pars)
 
         @test return_value(result) == b
         @test parameters(result) == in_pars
@@ -182,10 +177,8 @@ end
         # The parent's conditioned value reaches the child and overrides the child's own.
         parent_conditioned = (x=(obs=obs,),)
         for inner in (likelihood_inner(), likelihood_inner() | (; obs=0.9))
-            result = @inferred simulate(
-                FromValues(in_pars),
-                likelihood_outer(inner) | parent_conditioned,
-            )
+            result =
+                @inferred simulate(likelihood_outer(inner) | parent_conditioned, in_pars)
             @test parameters(result) == in_pars
             @test loglikelihood(result) ≈ logdensityof(Normal(a), obs)
         end
@@ -205,8 +198,8 @@ end
         end
         data = [1.0, 2.0]
         result = @inferred simulate(
-            FromPrior(),
             argument_outer(argument_inner(zeros(2))) | (x=(y=data,),),
+            FromPrior(),
         )
         @test return_value(result) == data
         m = parameters(result)[@vn(x.m)]
@@ -216,7 +209,7 @@ end
             likelihood_outer(likelihood_inner()) | (x=(a=a, obs=obs),),
             @vn(x.a),
         )
-        result = simulate(FromValues(in_pars), partially_observed)
+        result = simulate(partially_observed, in_pars)
         @test parameters(result) == in_pars
         @test logprior(result) ≈ logdensityof(Normal(), a) + logdensityof(Normal(a), b)
         @test loglikelihood(result) ≈ logdensityof(Normal(a), obs)
@@ -251,7 +244,7 @@ end
             children[1].a := 0.25
             children[2].a := -0.5
         end
-        result = simulate(FromValues(params), model)
+        result = simulate(model, params)
         @test return_value(result) == 3.0
         @test parameters(result) == params
         @test loglikelihood(result) ≈
@@ -266,7 +259,7 @@ end
             children[1].y := 0.75
             children[2].a := -0.5
         end
-        result = simulate(FromValues(selected_params), selected)
+        result = simulate(selected, selected_params)
         @test return_value(result) == 2.75
         @test logprior(result) ≈
               logdensityof(Normal(), 0.25) +
@@ -294,7 +287,7 @@ end
             x.child.a := 0.5
             x.children[1].child.a := 0.5
         end
-        result = simulate(FromValues(params), model)
+        result = simulate(model, params)
         @test return_value(result) == (3.0, 2.0, 3.0, 2.0)
         @test logjoint(result) ≈
               2 * (
@@ -311,7 +304,7 @@ end
             x.child.y := 1.5
             x.children[1].child.a := 0.5
         end
-        result = simulate(FromValues(params), unobserved_child)
+        result = simulate(unobserved_child, params)
         @test return_value(result) == (3.0, 1.5, 3.0, 2.0)
         @test logprior(result) ≈
               2 * logdensityof(Normal(), 0.5) + logdensityof(Normal(0.5), 1.5)
@@ -333,7 +326,7 @@ end
             # also return 42 from this model
         end
 
-        result = @inferred simulate(FromPrior(), empty_outer(empty_inner()))
+        result = @inferred simulate(empty_outer(empty_inner()), FromPrior())
         @test return_value(result) == 42
         @test parameters(result) == VarNamedTuple()
         @test iszero(logjoint(result))
@@ -367,7 +360,7 @@ end
         nested_model = outer_model(middle_model(returning_inner()))
 
         # With FromPrior
-        result = @inferred simulate(FromPrior(), nested_model)
+        result = @inferred simulate(nested_model, FromPrior())
         out_pars = parameters(result)
         @test only(keys(out_pars)) == @vn(x.y.a)
         @test return_value(result) ≈ 2 * out_pars[@vn(x.y.a)] + 2
@@ -379,7 +372,7 @@ end
         end
         nested_model = outer_model(middle_model(returning_inner()))
 
-        result = @inferred simulate(FromValues(in_pars), nested_model)
+        result = @inferred simulate(nested_model, in_pars)
         @test return_value(result) ≈ 2a + 2
         @test parameters(result) == in_pars
         @test logprior(result) ≈ logdensityof(Normal(), a)

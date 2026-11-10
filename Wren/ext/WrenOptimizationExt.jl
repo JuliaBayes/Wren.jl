@@ -29,7 +29,7 @@ function Wren.optimize(
     )
     problem = Optimization.OptimizationProblem(objective, copy(density.sample))
     solution = Optimization.solve(problem, solver; kwargs...)
-    params = densify!!(parameters(solution.u, density))
+    params = densify!!(parameters(density, solution.u))
     return (; params, solution)
 end
 

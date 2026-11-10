@@ -52,10 +52,10 @@ using WrenCore
             value, _ = lp_and_grad!(grad_buffer, vm, p)
             @test value ≈ expected_lp
             @test grad_buffer ≈ expected_grad
-            draw = VarNames.densify!!(parameters(p, vm))
+            draw = VarNames.densify!!(parameters(vm, p))
             child = label == "indexed submodel" ? draw[@vn(a[1])] : draw
             @test child == VarNamedTuple(; switch, x=[1.0, 2.0])
-            @test vectorise_latents(FromValues(named), vm) == p
+            @test vector_parameters(vm, named) == p
         end
     end
 
@@ -72,7 +72,7 @@ using WrenCore
             indexed_parent(indexed_blocks(wrap_indices([1, 2, 3]), wrap_indices([4, 5, 6])))
         initial = VarNamedTuple(; a=[VarNamedTuple(; x=collect(1.0:6.0))])
         vm = VecModel(model, AutoForwardDiff(); latent_source=FromValues(initial))
-        p = vectorise_latents(FromValues(initial), vm)
+        p = vector_parameters(vm, initial)
         for (a, b) in (
             ([1, 2, 3], [4, 5, 6]),
             ([1, 3, 2], [4, 6, 5]),
@@ -99,8 +99,8 @@ using WrenCore
             @test value ≈ expected
             @test grad ≈ gradient
             named = VarNamedTuple(; a=[VarNamedTuple(; x)])
-            @test VarNames.densify!!(parameters(p, vm))[@vn(a[1])] == named[@vn(a[1])]
-            @test vectorise_latents(FromValues(named), vm) == p
+            @test VarNames.densify!!(parameters(vm, p))[@vn(a[1])] == named[@vn(a[1])]
+            @test vector_parameters(vm, named) == p
         end
     end
 end
