@@ -44,36 +44,25 @@ end
         end
 
         # With FromPrior
-        retval, accs = @inferred evaluate(
-            returning_outer(returning_inner()),
-            FromPrior(),
-            OriginalSpace(),
-            WrenCore.default_accumulators(),
-            EvalContext{false}(),
-        )
-        out_pars = parameters(accs)
+        result = @inferred simulate(returning_outer(returning_inner()), FromPrior())
+        out_pars = parameters(result)
         a = out_pars[@vn(x.a)]
-        @test retval == (VarNamedTuple(; a=a), 2a + 1)
+        @test return_value(result) == (VarNamedTuple(; a=a), 2a + 1)
         @test only(keys(out_pars)) == @vn(x.a)
-        @test logprior(accs) ≈ logdensityof(Normal(), a)
-        @test iszero(loglikelihood(accs))
+        @test logprior(result) ≈ logdensityof(Normal(), a)
+        @test iszero(loglikelihood(result))
 
         # With FromValues
         in_pars = @vnt begin
             x.a := 0.5
         end
-        retval, accs = @inferred evaluate(
-            returning_outer(returning_inner()),
-            FromValues(in_pars),
-            OriginalSpace(),
-            WrenCore.default_accumulators(),
-            EvalContext{false}(),
-        )
-        out_pars = parameters(accs)
-        @test retval == (VarNamedTuple(; a=in_pars[@vn(x.a)]), 2 * in_pars[@vn(x.a)] + 1)
+        result = @inferred simulate(returning_outer(returning_inner()), in_pars)
+        out_pars = parameters(result)
+        @test return_value(result) ==
+              (VarNamedTuple(; a=in_pars[@vn(x.a)]), 2 * in_pars[@vn(x.a)] + 1)
         @test only(keys(out_pars)) == @vn(x.a)
-        @test logprior(accs) ≈ logdensityof(Normal(), in_pars[@vn(x.a)])
-        @test iszero(loglikelihood(accs))
+        @test logprior(result) ≈ logdensityof(Normal(), in_pars[@vn(x.a)])
+        @test iszero(loglikelihood(result))
     end
 
     @testset "reuse evaluation function" begin
@@ -83,7 +72,7 @@ end
         @test typeof(inner1) === typeof(inner2)
 
         outer = cached_outer()
-        rand(outer)
+        parameters(outer)
         @test typeof(cached_inner()) === typeof(inner1)
     end
 
@@ -99,32 +88,21 @@ end
         end
 
         # With FromPrior
-        retval, accs = @inferred evaluate(
-            undefined_namespace_outer(returning_inner()),
-            FromPrior(),
-            OriginalSpace(),
-            WrenCore.default_accumulators(),
-            EvalContext{false}(),
-        )
-        out_pars = parameters(accs)
+        result =
+            @inferred simulate(undefined_namespace_outer(returning_inner()), FromPrior())
+        out_pars = parameters(result)
         @test only(keys(out_pars)) == @vn(x.a)
         a = out_pars[@vn(x.a)]
-        @test retval == 2a
+        @test return_value(result) == 2a
 
         # With FromValues
         in_pars = @vnt begin
             x.a := 0.5
         end
-        retval, accs = @inferred evaluate(
-            undefined_namespace_outer(returning_inner()),
-            FromValues(in_pars),
-            OriginalSpace(),
-            WrenCore.default_accumulators(),
-            EvalContext{false}(),
-        )
-        out_pars = parameters(accs)
+        result = @inferred simulate(undefined_namespace_outer(returning_inner()), in_pars)
+        out_pars = parameters(result)
         @test only(keys(out_pars)) == @vn(x.a)
-        @test retval == 2 * in_pars[@vn(x.a)]
+        @test return_value(result) == 2 * in_pars[@vn(x.a)]
     end
 
     @testset "indexed namespace uses the outer template" begin
@@ -140,18 +118,12 @@ end
         end
 
         # With FromPrior
-        retval, accs = evaluate(
-            indexed_outer(indexed_inner()),
-            FromPrior(),
-            OriginalSpace(),
-            WrenCore.default_accumulators(),
-            EvalContext{false}(),
-        )
-        out_pars = parameters(accs)
+        result = simulate(indexed_outer(indexed_inner()), FromPrior())
+        out_pars = parameters(result)
         @test size(out_pars.data.x) == (2, 2) # tests that templated_setindex worked
         a1 = out_pars[@vn(x[1, 1].a)]
         a2 = out_pars[@vn(x[2, 2].a)]
-        @test retval == (a1, a2)
+        @test return_value(result) == (a1, a2)
 
         # With FromValues
         first_a = 0.25
@@ -161,20 +133,14 @@ end
             x[1].a := first_a
             x[2, 2].a := second_a
         end
-        retval, accs = evaluate(
-            indexed_outer(indexed_inner()),
-            FromValues(in_pars),
-            OriginalSpace(),
-            WrenCore.default_accumulators(),
-            EvalContext{false}(),
-        )
-        out_pars = parameters(accs)
+        result = simulate(indexed_outer(indexed_inner()), in_pars)
+        out_pars = parameters(result)
 
-        @test retval == (first_a, second_a)
+        @test return_value(result) == (first_a, second_a)
         @test Set(keys(out_pars)) == Set([@vn(x[1, 1].a), @vn(x[2, 2].a)])
         @test out_pars[@vn(x[1].a)] == first_a
         @test out_pars[@vn(x[2, 2].a)] == second_a
-        @test logprior(accs) ≈
+        @test logprior(result) ≈
               logdensityof(Normal(), first_a) + logdensityof(Normal(), second_a)
     end
 
@@ -199,32 +165,22 @@ end
             x.a := a
             b := b
         end
-        retval, accs = @inferred evaluate(
-            likelihood_outer(likelihood_inner() | (; obs=obs)),
-            FromValues(in_pars),
-            OriginalSpace(),
-            WrenCore.default_accumulators(),
-            EvalContext{false}(),
-        )
+        result =
+            @inferred simulate(likelihood_outer(likelihood_inner() | (; obs=obs)), in_pars)
 
-        @test retval == b
-        @test parameters(accs) == in_pars
-        @test logprior(accs) ≈ logdensityof(Normal(), a) + logdensityof(Normal(a), b)
-        @test loglikelihood(accs) ≈ logdensityof(Normal(a), obs)
+        @test return_value(result) == b
+        @test parameters(result) == in_pars
+        @test logprior(result) ≈ logdensityof(Normal(), a) + logdensityof(Normal(a), b)
+        @test loglikelihood(result) ≈ logdensityof(Normal(a), obs)
 
         # https://github.com/JuliaBayes/Wren.jl/issues/162
         # The parent's conditioned value reaches the child and overrides the child's own.
         parent_conditioned = (x=(obs=obs,),)
         for inner in (likelihood_inner(), likelihood_inner() | (; obs=0.9))
-            _, accs = @inferred evaluate(
-                likelihood_outer(inner) | parent_conditioned,
-                FromValues(in_pars),
-                OriginalSpace(),
-                WrenCore.default_accumulators(),
-                EvalContext{false}(),
-            )
-            @test parameters(accs) == in_pars
-            @test loglikelihood(accs) ≈ logdensityof(Normal(a), obs)
+            result =
+                @inferred simulate(likelihood_outer(inner) | parent_conditioned, in_pars)
+            @test parameters(result) == in_pars
+            @test loglikelihood(result) ≈ logdensityof(Normal(a), obs)
         end
 
         # The parent can condition the child's argument, which the child then sees whole.
@@ -241,31 +197,22 @@ end
             return inner_retval
         end
         data = [1.0, 2.0]
-        retval, accs = @inferred evaluate(
+        result = @inferred simulate(
             argument_outer(argument_inner(zeros(2))) | (x=(y=data,),),
             FromPrior(),
-            OriginalSpace(),
-            WrenCore.default_accumulators(),
-            EvalContext{false}(),
         )
-        @test retval == data
-        m = parameters(accs)[@vn(x.m)]
-        @test loglikelihood(accs) ≈ sum(logdensityof.(Normal(m), data))
+        @test return_value(result) == data
+        m = parameters(result)[@vn(x.m)]
+        @test loglikelihood(result) ≈ sum(logdensityof.(Normal(m), data))
 
         partially_observed = decondition(
             likelihood_outer(likelihood_inner()) | (x=(a=a, obs=obs),),
             @vn(x.a),
         )
-        _, accs = evaluate(
-            partially_observed,
-            FromValues(in_pars),
-            OriginalSpace(),
-            WrenCore.default_accumulators(),
-            EvalContext{false}(),
-        )
-        @test parameters(accs) == in_pars
-        @test logprior(accs) ≈ logdensityof(Normal(), a) + logdensityof(Normal(a), b)
-        @test loglikelihood(accs) ≈ logdensityof(Normal(a), obs)
+        result = simulate(partially_observed, in_pars)
+        @test parameters(result) == in_pars
+        @test logprior(result) ≈ logdensityof(Normal(), a) + logdensityof(Normal(a), b)
+        @test loglikelihood(result) ≈ logdensityof(Normal(a), obs)
 
         preconditioned_child = likelihood_inner() | (obs=0.9,)
         parent_override = likelihood_outer(preconditioned_child) | (x=(obs=obs,),)
@@ -297,16 +244,10 @@ end
             children[1].a := 0.25
             children[2].a := -0.5
         end
-        retval, accs = evaluate(
-            model,
-            FromValues(params),
-            OriginalSpace(),
-            WrenCore.default_accumulators(),
-            EvalContext{false}(),
-        )
-        @test retval == 3.0
-        @test parameters(accs) == params
-        @test loglikelihood(accs) ≈
+        result = simulate(model, params)
+        @test return_value(result) == 3.0
+        @test parameters(result) == params
+        @test loglikelihood(result) ≈
               logdensityof(Normal(0.25), 1.0) + logdensityof(Normal(-0.5), 2.0)
         @test logjoint(model, params) == logjoint(model, params)
         @test data == [(y=1.0,), (y=2.0,)]
@@ -318,19 +259,13 @@ end
             children[1].y := 0.75
             children[2].a := -0.5
         end
-        retval, accs = evaluate(
-            selected,
-            FromValues(selected_params),
-            OriginalSpace(),
-            WrenCore.default_accumulators(),
-            EvalContext{false}(),
-        )
-        @test retval == 2.75
-        @test logprior(accs) ≈
+        result = simulate(selected, selected_params)
+        @test return_value(result) == 2.75
+        @test logprior(result) ≈
               logdensityof(Normal(), 0.25) +
               logdensityof(Normal(0.25), 0.75) +
               logdensityof(Normal(), -0.5)
-        @test loglikelihood(accs) ≈ logdensityof(Normal(-0.5), 2.0)
+        @test loglikelihood(result) ≈ logdensityof(Normal(-0.5), 2.0)
         @test data == [(y=1.0,), (y=2.0,)]
         @test logjoint(decondition(model, @vn(children[1])), selected_params) ≈
               logjoint(selected, selected_params)
@@ -352,15 +287,9 @@ end
             x.child.a := 0.5
             x.children[1].child.a := 0.5
         end
-        retval, accs = evaluate(
-            model,
-            FromValues(params),
-            OriginalSpace(),
-            WrenCore.default_accumulators(),
-            EvalContext{false}(),
-        )
-        @test retval == (3.0, 2.0, 3.0, 2.0)
-        @test logjoint(accs) ≈
+        result = simulate(model, params)
+        @test return_value(result) == (3.0, 2.0, 3.0, 2.0)
+        @test logjoint(result) ≈
               2 * (
             logdensityof(Normal(), 0.5) +
             logdensityof(Normal(), 3.0) +
@@ -375,17 +304,11 @@ end
             x.child.y := 1.5
             x.children[1].child.a := 0.5
         end
-        retval, accs = evaluate(
-            unobserved_child,
-            FromValues(params),
-            OriginalSpace(),
-            WrenCore.default_accumulators(),
-            EvalContext{false}(),
-        )
-        @test retval == (3.0, 1.5, 3.0, 2.0)
-        @test logprior(accs) ≈
+        result = simulate(unobserved_child, params)
+        @test return_value(result) == (3.0, 1.5, 3.0, 2.0)
+        @test logprior(result) ≈
               2 * logdensityof(Normal(), 0.5) + logdensityof(Normal(0.5), 1.5)
-        @test loglikelihood(accs) ≈
+        @test loglikelihood(result) ≈
               2 * logdensityof(Normal(), 3.0) +
               logdensityof(Normal(0.5), 2.0) +
               logdensityof(Normal(6.0), 6.0)
@@ -403,16 +326,10 @@ end
             # also return 42 from this model
         end
 
-        retval, accs = @inferred evaluate(
-            empty_outer(empty_inner()),
-            FromPrior(),
-            OriginalSpace(),
-            WrenCore.default_accumulators(),
-            EvalContext{false}(),
-        )
-        @test retval == 42
-        @test parameters(accs) == VarNamedTuple()
-        @test iszero(logjoint(accs))
+        result = @inferred simulate(empty_outer(empty_inner()), FromPrior())
+        @test return_value(result) == 42
+        @test parameters(result) == VarNamedTuple()
+        @test iszero(logjoint(result))
 
         @test iszero(logjoint(empty_outer(empty_inner()), VarNamedTuple()))
 
@@ -443,16 +360,10 @@ end
         nested_model = outer_model(middle_model(returning_inner()))
 
         # With FromPrior
-        retval, accs = @inferred evaluate(
-            nested_model,
-            FromPrior(),
-            OriginalSpace(),
-            WrenCore.default_accumulators(),
-            EvalContext{false}(),
-        )
-        out_pars = parameters(accs)
+        result = @inferred simulate(nested_model, FromPrior())
+        out_pars = parameters(result)
         @test only(keys(out_pars)) == @vn(x.y.a)
-        @test retval ≈ 2 * out_pars[@vn(x.y.a)] + 2
+        @test return_value(result) ≈ 2 * out_pars[@vn(x.y.a)] + 2
 
         # With FromValues
         a = 0.75
@@ -461,16 +372,10 @@ end
         end
         nested_model = outer_model(middle_model(returning_inner()))
 
-        retval, accs = @inferred evaluate(
-            nested_model,
-            FromValues(in_pars),
-            OriginalSpace(),
-            WrenCore.default_accumulators(),
-            EvalContext{false}(),
-        )
-        @test retval ≈ 2a + 2
-        @test parameters(accs) == in_pars
-        @test logprior(accs) ≈ logdensityof(Normal(), a)
+        result = @inferred simulate(nested_model, in_pars)
+        @test return_value(result) ≈ 2a + 2
+        @test parameters(result) == in_pars
+        @test logprior(result) ≈ logdensityof(Normal(), a)
     end
 
     @testset "vectorisation" begin
@@ -483,7 +388,7 @@ end
             end
             vmodel = VecModel(outerv(innerv()), AutoEnzyme(; mode=Reverse))
 
-            r = rand(vmodel)
+            r = vector_parameters(vmodel)
             @test r isa AbstractVector{<:Real}
             @test length(r) == 1
             @test lp(vmodel, r) isa Real
@@ -508,7 +413,7 @@ end
             # no unique sitenames
             @test haskey(vmodel.vecinfo.sitename_to_rat, @vn(a))
 
-            r = rand(vmodel)
+            r = vector_parameters(vmodel)
             @test r isa AbstractVector{<:Real}
             @test length(r) == N
             @test lp(vmodel, r) isa Real
@@ -532,7 +437,7 @@ end
 
             @test all(i -> haskey(vmodel.vecinfo.sitename_to_rat, @vn(a[i])), 1:5)
 
-            r = rand(vmodel)
+            r = vector_parameters(vmodel)
             @test r isa AbstractVector{<:Real}
             @test length(r) == 5
             @test lp(vmodel, r) isa Real

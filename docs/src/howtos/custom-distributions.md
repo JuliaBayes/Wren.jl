@@ -83,7 +83,7 @@ Next up is fitting the model.
 end
 
 prior_model = poisson_zeroinflated(y)
-model = prior_model | VarNamedTuple(y=y)
+model = prior_model | (; y=y)
 chain = nuts(model, 1000, 4; progress=false)
 summarystats(chain)
 ```
@@ -100,10 +100,10 @@ Instead of using the recommended `~` syntax, it is possible to use the [`@addlog
 
 Using `@addloglikelihood` means that you will not be able to use Wren's features relating to [Bayesian workflow](@ref workflow).
 
-For example, you will only be able to sample from the prior via `rand` if you use the `~` syntax:
+For example, you will only be able to sample from the prior via `parameters` if you use the `~` syntax:
 
 ```@example custom-distributions
-rand(prior_model)
+parameters(prior_model)
 ```
 
 Generating posterior predictions via `predict` and visualising them with [FlexiChains.jl](https://juliabayes.org/FlexiChains.jl/stable/) also requires the `~` syntax:

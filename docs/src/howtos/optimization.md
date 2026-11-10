@@ -69,7 +69,7 @@ LogDensityProblems.jl interface:
 import LogDensityProblems as LDP
 
 density = logdensity(model, AutoEnzyme(; mode=Reverse); latent_source=initial)
-x = vectorise_latents(initial, density)
+x = vector_parameters(density, initial)
 LDP.logdensity(density, x)
 LDP.logdensity_and_gradient(density, x)
 ```

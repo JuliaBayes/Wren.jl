@@ -17,7 +17,7 @@ using WrenDists
         @wren function independent_4d()
             x ~ WrenCore.independent(fill(WrenDists.Normal(1.0, 2.0), 2, 3, 4, 5))
         end
-        @test size(rand(iid_4d())[@vn(x)]) == (2, 3, 4, 5)
+        @test size(parameters(iid_4d())[@vn(x)]) == (2, 3, 4, 5)
         test_model_equivalence(iid_4d(), independent_4d())
     end
 

@@ -37,7 +37,7 @@ using WrenCore:
     # Vectorisation
     VecModel,
     logdensity,
-    vectorise_latents,
+    vector_parameters,
     lp,
     lp_and_grad,
     lp_and_grad!,
@@ -75,7 +75,7 @@ export WrenCore,
     # Vectorisation
     VecModel,
     logdensity,
-    vectorise_latents,
+    vector_parameters,
     lp,
     lp_and_grad,
     lp_and_grad!,
@@ -94,8 +94,8 @@ export WrenCore,
     posteriordb_model,
     available_posteriordb_models
 
-using VarNames: @vn, @vnt, VarNamedTuple, VarName, Draw, parameters, extras
-export @vn, @vnt, VarNamedTuple, VarName, Draw, parameters, extras
+using VarNames: @vn, @vnt, VarNamedTuple, VarName, parameters
+export @vn, @vnt, VarNamedTuple, VarName, parameters
 
 using DensityInterface: logdensityof
 export logdensityof

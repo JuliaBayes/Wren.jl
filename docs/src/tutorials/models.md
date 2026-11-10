@@ -25,7 +25,7 @@ However, it is designed to be much more general and performant than a simple `Di
 
 ## Drawing samples
 
-Calling `rand(model)` gives you a _trace_, i.e., a collection of variable names and values.
+Calling `parameters(model)` gives you a _trace_, i.e., a collection of variable names and values.
 Given the above discussion you should not be surprised to learn that the trace is a `VarNamedTuple`!
 
 ```@example models
@@ -39,7 +39,7 @@ using Wren, Distributions, LinearAlgebra
 end
 model = f(1.0)
 
-trace = rand(model)
+trace = parameters(model)
 ```
 
 To access the values inside the trace, you can index into the `VarNamedTuple` with a `VarName`.
@@ -210,17 +210,17 @@ noad_vecmodel = VecModel(model, nothing)
 This is mostly useful when you want to handoff a Wren model to a different library which expects a vector interface.
 In particular, `VecModel`s obey the [LogDensityProblems.jl interface](https://github.com/tpapp/LogDensityProblems.jl), and thus can be used with a wide range of other Julia packages that expect this.
 
-You can draw a vectorised sample from a `VecModel` with the `rand` function:
+You can draw a vectorised sample from a `VecModel` with [`vector_parameters`](@ref):
 
 ```@example models
-v = rand(vecmodel)
+v = vector_parameters(vecmodel)
 ```
 
-or you can convert existing parameters into a vectorised form with [`vectorise_latents`](@ref):
+or you can convert existing parameters into a vectorised form with [`vector_parameters`](@ref):
 
 ```@example models
-ps = FromValues(rand(model))         # This is a VarNamedTuple in original model space.
-v = vectorise_latents(ps, vecmodel)  # Convert it to vectorised (and unconstrained) form.
+ps = parameters(model)               # This is a VarNamedTuple in original model space.
+v = vector_parameters(vecmodel, ps)  # Convert it to vectorised (and unconstrained) form.
 ```
 
 Then you can calculate the log-density of these vectorised parameters, and their gradient:

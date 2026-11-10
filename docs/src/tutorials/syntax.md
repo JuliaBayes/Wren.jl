@@ -65,7 +65,7 @@ end
 my_y = zeros(3)
 yarg_model = yarg(my_y)
 
-rand(Xoshiro(468), yarg_model)
+parameters(yarg_model, Xoshiro(468))
 ```
 
 And this is permitted because `y` is defined in the model body:
@@ -80,7 +80,7 @@ And this is permitted because `y` is defined in the model body:
 end
 ydef_model = ydef()
 
-rand(Xoshiro(468), ydef_model)
+parameters(ydef_model, Xoshiro(468))
 ```
 
 It should be noted that the two models above are actually semantically equivalent: in both models, all `y[i]` are latent variables, regardless of whether `y` is an argument or defined in the model body.
@@ -128,7 +128,7 @@ model.args.y
 Evaluating the model will now mutate `y`:
 
 ```@example model
-rand(model);
+parameters(model);
 model.args.y
 ```
 
@@ -166,7 +166,7 @@ For example, we can condition on the entire `y` array in one go:
 ```@example model
 yarg_model_cond = yarg_model | (; y=[1.0, 2.0, 3.0])
 
-res = simulate(Xoshiro(468), yarg_model_cond)
+res = simulate(yarg_model_cond, Xoshiro(468))
 logprior(res), loglikelihood(res), parameters(res)
 ```
 
@@ -181,7 +181,7 @@ Here `y = zeros(3)` is only a template: as when sampling, the value of each `y[i
 ```@example model
 ydef_model_cond = ydef_model | (; y=[1.0, 2.0, 3.0])
 
-res = simulate(Xoshiro(468), ydef_model_cond)
+res = simulate(ydef_model_cond, Xoshiro(468))
 logprior(res), loglikelihood(res), parameters(res)
 ```
 
@@ -245,7 +245,7 @@ You can in principle use this to enforce that model arguments are observed:
     end
 end
 
-rand(yarg_obs([1.0, 2.0, 3.0]))
+parameters(yarg_obs([1.0, 2.0, 3.0]))
 ```
 
 However, note that once a statement has been marked with `@observe`, you cannot 'uncondition' it without modifying the model's stored AST itself.
