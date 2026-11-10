@@ -1,25 +1,19 @@
-function _draw_accumulators(include_log_probs::Bool)
-    return if include_log_probs
-        AccumulatorTuple(
-            LogPriorAccumulator(),
-            LogLikelihoodAccumulator(),
-            ParamsAccumulator(),
-        )
-    else
-        AccumulatorTuple(ParamsAccumulator())
-    end
+function _draw_accumulators()
+    return AccumulatorTuple(
+        LogPriorAccumulator(),
+        LogLikelihoodAccumulator(),
+        ParamsAccumulator(),
+    )
 end
 
-function _draw(accs::AccumulatorTuple, stats::NamedTuple, include_log_probs::Bool)
+function _draw(accs::AccumulatorTuple, stats::NamedTuple)
     densified_params = VarNames.densify!!(VarNames.parameters(accs))
-    if include_log_probs
-        has_prior = haskey(accs, Val(LOG_PRIOR_ACCNAME))
-        has_likelihood = haskey(accs, Val(LOG_LIKELIHOOD_ACCNAME))
-        has_prior && (stats = merge(stats, (logprior=logprior(accs),)))
-        has_likelihood && (stats = merge(stats, (loglikelihood=loglikelihood(accs),)))
-        if has_prior && has_likelihood
-            stats = merge(stats, (logjoint=logjoint(accs),))
-        end
+    has_prior = haskey(accs, Val(LOG_PRIOR_ACCNAME))
+    has_likelihood = haskey(accs, Val(LOG_LIKELIHOOD_ACCNAME))
+    has_prior && (stats = merge(stats, (logprior=logprior(accs),)))
+    has_likelihood && (stats = merge(stats, (loglikelihood=loglikelihood(accs),)))
+    if has_prior && has_likelihood
+        stats = merge(stats, (logjoint=logjoint(accs),))
     end
     return VarNames.Draw(densified_params, stats)
 end
@@ -28,40 +22,33 @@ end
     VarNames.Draw(
         source::AbstractLatentSource,
         model::Model,
-        stats::NamedTuple=NamedTuple();
-        include_log_probs::Bool=true,
+        stats::NamedTuple=NamedTuple(),
     )
 
-Evaluate `model` using `source` and return its model-space parameters. By default the log
-prior, log likelihood, and log joint are added to `stats`.
+Evaluate `model` using `source` and return its model-space parameters. The log prior, log
+likelihood, and log joint are added to `stats`.
 """
 function VarNames.Draw(
     source::AbstractLatentSource,
     model::Model,
-    stats::NamedTuple=NamedTuple();
-    include_log_probs::Bool=true,
+    stats::NamedTuple=NamedTuple(),
 )
-    accs = _draw_accumulators(include_log_probs)
+    accs = _draw_accumulators()
     _, accs = evaluate(model, source, OriginalSpace(), accs, EvalContext{false}())
-    return _draw(accs, stats, include_log_probs)
+    return _draw(accs, stats)
 end
 
 """
     VarNames.Draw(
         accs::AccumulatorTuple,
-        stats::NamedTuple=NamedTuple();
-        include_log_probs::Bool=true,
+        stats::NamedTuple=NamedTuple(),
     )
 
 Extract parameters and any available log-probability statistics from an accumulator tuple.
 The tuple must contain a [`ParamsAccumulator`](@ref).
 """
-function VarNames.Draw(
-    accs::AccumulatorTuple,
-    stats::NamedTuple=NamedTuple();
-    include_log_probs::Bool=true,
-)
-    return _draw(accs, stats, include_log_probs)
+function VarNames.Draw(accs::AccumulatorTuple, stats::NamedTuple=NamedTuple())
+    return _draw(accs, stats)
 end
 
 function _check_vecmodel_dimension(params::AbstractVector, vecmodel::VecModel)
@@ -91,35 +78,27 @@ function _raw_params_from_fixed_transforms(params::AbstractVector, vecinfo::VecI
         raw_value = rt.transform.transform(params[rt.range])
         raw_params = VarNames.templated_setindex!!(raw_params, raw_value, vn, template)
     end
-    return VarNames.densify!!(raw_params)
+    return raw_params
 end
 
 """
     VarNames.Draw(
         params::AbstractVector,
         vecmodel::VecModel,
-        stats::NamedTuple=NamedTuple();
-        include_log_probs::Bool=true,
+        stats::NamedTuple=NamedTuple(),
     )
 
-Re-evaluate `vecmodel` at `params` and return model-space parameters together with optional
-log-probability statistics. If log probabilities are not requested and every transform is
-fixed, the raw parameters are recovered without evaluating the model.
+Re-evaluate `vecmodel` at `params` and return model-space parameters together with
+log-probability statistics.
 """
 function VarNames.Draw(
     params::AbstractVector,
     vecmodel::VecModel,
-    stats::NamedTuple=NamedTuple();
-    include_log_probs::Bool=true,
+    stats::NamedTuple=NamedTuple(),
 )
     _check_vecmodel_dimension(params, vecmodel)
-    if !include_log_probs && _all_fixed_transforms(vecmodel)
-        raw_params = _raw_params_from_fixed_transforms(params, vecmodel.vecinfo)
-        return VarNames.Draw(raw_params, stats)
-    end
-
     source = FromVector(params, vecmodel.vecinfo)
-    accs = _draw_accumulators(include_log_probs)
+    accs = _draw_accumulators()
     _, accs = evaluate(
         vecmodel.model,
         source,
@@ -127,7 +106,31 @@ function VarNames.Draw(
         accs,
         EvalContext{false}(),
     )
-    return _draw(accs, stats, include_log_probs)
+    return _draw(accs, stats)
+end
+
+"""
+    VarNames.parameters(params::AbstractVector, vecmodel::VecModel)::VarNamedTuple
+
+Return the model-space parameters of `vecmodel` at `params`. If every transform is fixed,
+the raw parameters are recovered without evaluating the model.
+"""
+function VarNames.parameters(params::AbstractVector, vecmodel::VecModel)
+    _check_vecmodel_dimension(params, vecmodel)
+    if _all_fixed_transforms(vecmodel)
+        return _raw_params_from_fixed_transforms(params, vecmodel.vecinfo)
+    end
+
+    source = FromVector(params, vecmodel.vecinfo)
+    accs = AccumulatorTuple(ParamsAccumulator())
+    _, accs = evaluate(
+        vecmodel.model,
+        source,
+        vecmodel.parameter_space,
+        accs,
+        EvalContext{false}(),
+    )
+    return VarNames.parameters(accs)
 end
 
 """

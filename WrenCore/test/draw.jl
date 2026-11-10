@@ -39,11 +39,6 @@ end
     @test loglikelihood(from_prior) ≈ logpdf(Normal(pars[@vn(x)] + pars[@vn(y)][1]), 0.7)
     @test logjoint(from_prior) ≈ logprior(from_prior) + loglikelihood(from_prior)
 
-    without_log_probs =
-        Draw(FromValues(parameters(from_prior)), model; include_log_probs=false)
-    @test parameters(without_log_probs) == parameters(from_prior)
-    @test isempty(extras(without_log_probs))
-
     accs = WrenCore.AccumulatorTuple(
         WrenCore.LogPriorAccumulator(),
         WrenCore.LogLikelihoodAccumulator(),
@@ -60,11 +55,12 @@ end
     vector_params = rand(Xoshiro(603), vecmodel)
     from_vecmodel = Draw(vector_params, vecmodel)
     @test logjoint(from_vecmodel) ≈ logprior(from_vecmodel) + loglikelihood(from_vecmodel)
-    @test parameters(Draw(vector_params, vecmodel; include_log_probs=false)) ==
-          parameters(from_vecmodel)
+    @test parameters(vector_params, vecmodel) == parameters(from_vecmodel)
 
     @test_throws ArgumentError Draw(vector_params[1:(end-1)], vecmodel)
     @test_throws ArgumentError Draw(vcat(vector_params, 0.0), vecmodel)
+    @test_throws ArgumentError parameters(vector_params[1:(end-1)], vecmodel)
+    @test_throws ArgumentError parameters(vcat(vector_params, 0.0), vecmodel)
 
     should_error = Ref(false)
     fixed_transforms = @vnt begin
@@ -79,8 +75,7 @@ end
     )
     fixed_params = copy(fixed_vecmodel.sample)
     fixed_vecmodel.model.args.should_error[] = true
-    fixed_draw = Draw(fixed_params, fixed_vecmodel; include_log_probs=false)
-    @test parameters(fixed_draw)[@vn(x)] ≈ only(fixed_params)
+    @test parameters(fixed_params, fixed_vecmodel)[@vn(x)] ≈ only(fixed_params)
     @test_throws ErrorException Draw(fixed_params, fixed_vecmodel)
 end
 

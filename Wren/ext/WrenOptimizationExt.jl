@@ -9,10 +9,10 @@ using Wren:
     logjoint,
     lp,
     lp_and_grad!,
-    Draw,
     parameters
 import DifferentiationInterface as DI
 import Optimization
+using VarNames: densify!!
 
 function Wren.optimize(
     model::Model,
@@ -37,7 +37,7 @@ function Wren.optimize(
     )
     problem = Optimization.OptimizationProblem(objective, copy(density.sample))
     solution = Optimization.solve(problem, solver; kwargs...)
-    params = parameters(Draw(solution.u, density; include_log_probs=false))
+    params = densify!!(parameters(solution.u, density))
     return (; params, solution)
 end
 
