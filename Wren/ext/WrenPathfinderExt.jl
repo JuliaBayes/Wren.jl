@@ -2,7 +2,7 @@ module WrenPathfinderExt
 
 using Wren: Wren, Model, DEFAULT_AD, FromPrior, logdensity, Draw
 using AbstractMCMC: AbstractMCMC
-using Accessors: @set
+using Accessors: @set, setproperties
 using FlexiChains: VNChain
 using Random: Random, AbstractRNG
 import Pathfinder
@@ -50,9 +50,6 @@ function Pathfinder.multipathfinder(
     kwargs...,
 )
     ntasks_per_run == 1 || throw(ArgumentError("Wren models require ntasks_per_run=1."))
-    if init !== nothing
-        nruns = length(init)
-    end
     return _pathfinder(
         Pathfinder.multipathfinder,
         model,
@@ -102,7 +99,7 @@ function _transform_result(result::Pathfinder.MultiPathfinderResult, density)
         _transform_result(path, density)
     end
     chain = _pathfinder_draws(result.draws, density)
-    return @set (@set result.draws_transformed = chain).pathfinder_results = paths
+    return setproperties(result, (; draws_transformed=chain, pathfinder_results=paths))
 end
 
 end

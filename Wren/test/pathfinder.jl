@@ -21,7 +21,7 @@ end
     @test mean(path.fit_distribution)[1] ≈ posterior_mean atol=1e-5
     @test var(path.fit_distribution)[1] ≈ posterior_var atol=1e-5
     @test first(path.optim_trace.points) == [-1.0]
-    @test size(path.draws, 2) == 32
+    @test size(fit.draws, 2) == 32
     @test vec(Array(fit.draws_transformed[@vn(rate)])) ≈ exp.(vec(fit.draws))
     @test vec(Array(path.draws_transformed[@vn(rate)])) ≈ exp.(vec(path.draws))
     repeated = multipathfinder(model, 32; rng=StableRNG(42), init=[[-1.0]])
