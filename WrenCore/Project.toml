@@ -24,7 +24,6 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 VarNames = "09a315b2-63fc-4165-8d7f-d59368e770cc"
 
 [weakdeps]
-AbstractMCMC = "80f14c24-f653-4e6a-9b94-39d6b0f70001"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
 FlexiChains = "4a37a8b9-6e57-4b92-8664-298d46e639f7"
@@ -38,7 +37,7 @@ WrenDists = "2ad4af40-d7c9-42b2-92b0-e09d37d1e75a"
 [extensions]
 WrenCoreDistributionsExt = ["Distributions"]
 WrenCoreEnzymeExt = ["Enzyme", "DifferentiationInterface"]
-WrenCoreFlexiChainsExt = ["AbstractMCMC", "FlexiChains", "OrderedCollections"]
+WrenCoreFlexiChainsExt = ["FlexiChains", "OrderedCollections"]
 WrenCoreMooncakeExt = ["Mooncake"]
 WrenCorePosteriorDBExt = ["LogExpFunctions", "PosteriorDB", "WrenDists"]
 WrenCoreReactantExt = ["ADTypes", "Enzyme", "Reactant"]
@@ -46,7 +45,6 @@ WrenCoreWrenDistsExt = ["WrenDists"]
 
 [compat]
 ADTypes = "1"
-AbstractMCMC = "5"
 Accessors = "0.1"
 Chairmarks = "1"
 DensityInterface = "0.4"

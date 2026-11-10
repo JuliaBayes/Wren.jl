@@ -4,7 +4,6 @@ version = "0.1.0"
 authors = ["Penelope Yong <penelopeysm@gmail.com>"]
 
 [deps]
-AbstractMCMC = "80f14c24-f653-4e6a-9b94-39d6b0f70001"
 DensityInterface = "b429d917-457f-4dbc-8f4c-0cc954292b1d"
 DifferentiationInterface = "a0c0ee7d-e4b9-4e03-894e-1c5f64a51d63"
 DynamicHMC = "bbc10e6e-7c05-544b-b16e-64fede858acb"
@@ -27,7 +26,6 @@ Optimization = "7f7a1694-90dd-40f0-9382-eb1efda571ba"
 WrenOptimizationExt = "Optimization"
 
 [compat]
-AbstractMCMC = "5"
 DensityInterface = "0.4"
 DifferentiationInterface = "0.7"
 DynamicHMC = "3"

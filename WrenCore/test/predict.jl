@@ -2,7 +2,6 @@ module WrenCorePredictTests
 
 @info "testing predict.jl"
 
-using AbstractMCMC: AbstractMCMC
 using Distributions
 using FlexiChains: FlexiChains, Extra, Parameter, VNChain
 using LinearAlgebra
@@ -19,20 +18,12 @@ from the posterior of `cond_model`; each draw is re-evaluated in `cond_model` so
 chain holds the same log-probabilities an MCMC sampler would record.
 """
 function exact_posterior_chain(rng, posterior_model, cond_model, niters, nchains)
-    draws = map(Iterators.product(1:niters, 1:nchains)) do _
+    results = map(Iterators.product(1:niters, 1:nchains)) do _
         posterior_params = parameters(posterior_model, rng)
-        result = simulate(cond_model, posterior_params)
-        VarNames.Draw(
-            VarNames.densify!!(parameters(result)),
-            (
-                acceptance_rate=1.0,
-                logprior=logprior(result),
-                loglikelihood=loglikelihood(result),
-                logjoint=logjoint(result),
-            ),
-        )
+        simulate(cond_model, posterior_params)
     end
-    return AbstractMCMC.from_samples(VNChain, draws)
+    stats = fill((acceptance_rate=1.0,), niters, nchains)
+    return WrenCore.to_flexichain(results, stats)
 end
 
 @testset "predict" begin

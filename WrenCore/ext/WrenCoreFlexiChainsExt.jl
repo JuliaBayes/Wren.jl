@@ -1,10 +1,10 @@
 module WrenCoreFlexiChainsExt
 
-using AbstractMCMC: AbstractMCMC
 using FlexiChains: FlexiChains, VNChain, FlexiChain, Parameter, Extra, ParameterOrExtra
+using OrderedCollections: OrderedDict
 using Random: AbstractRNG, default_rng
 using StatsAPI: StatsAPI
-using VarNames: VarNames, Draw, VarName, VarNamedTuple, parameters
+using VarNames: VarNames, VarName, VarNamedTuple, parameters
 using WrenCore: WrenCore
 
 """
@@ -37,17 +37,13 @@ function WrenCore.to_flexichain(
         throw(DimensionMismatch(msg))
     end
 
-    dicts = Matrix{FlexiChains.OrderedDict{ParameterOrExtra{<:VarName},Any}}(
-        undef,
-        niters,
-        nchains,
-    )
+    dicts = Matrix{OrderedDict{ParameterOrExtra{<:VarName},Any}}(undef, niters, nchains)
     structures = Matrix{VarNamedTuple}(undef, niters, nchains)
     for (i, (result, stat)) in enumerate(zip(results, stats))
         # Parameters
         params = VarNames.densify!!(parameters(result))
 
-        d = FlexiChains.OrderedDict{ParameterOrExtra{<:VarName},Any}(
+        d = OrderedDict{ParameterOrExtra{<:VarName},Any}(
             Parameter(vn) => val for (vn, val) in pairs(params)
         )
         # Stats
@@ -106,19 +102,11 @@ function StatsAPI.predict(rng::AbstractRNG, model::WrenCore.Model, chain::VNChai
     results = map(FlexiChains.parameters_at(chain)) do vnt
         WrenCore.simulate(model, WrenCore.FromValues(vnt, fallback))
     end
-    draws = map(results) do result
-        Draw(
-            VarNames.densify!!(parameters(result)),
-            (
-                logprior=WrenCore.logprior(result),
-                loglikelihood=StatsAPI.loglikelihood(result),
-                logjoint=WrenCore.logjoint(result),
-            ),
-        )
-    end
-    preds = AbstractMCMC.from_samples(VNChain, draws)
-    preds = FlexiChains.renumber_iters(preds, FlexiChains.iter_indices(chain))
-    preds = FlexiChains.renumber_chains(preds, FlexiChains.chain_indices(chain))
+    preds = WrenCore.to_flexichain(
+        results;
+        iter_indices=FlexiChains.iter_indices(chain),
+        chain_indices=FlexiChains.chain_indices(chain),
+    )
     return merge(FlexiChains.subset_extras(chain), preds)
 end
 
