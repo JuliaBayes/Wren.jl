@@ -127,7 +127,12 @@ function simulate(latents::AbstractLatentSource, model::Model)
         ),
         EvalContext{false}(),
     )
-    return ModelResult(VarNames.parameters(accs), retval, logprior(accs), loglikelihood(accs))
+    return ModelResult(
+        VarNames.parameters(accs),
+        retval,
+        logprior(accs),
+        loglikelihood(accs),
+    )
 end
 simulate(rng::AbstractRNG, model::Model) = simulate(FromPrior(rng), model)
 simulate(model::Model) = simulate(FromPrior(), model)
@@ -243,13 +248,8 @@ This is equivalent to `return_value(simulate(model))`, but is more efficient tha
 parameters.
 """
 function return_value(latents::AbstractLatentSource, model::Model)
-    retval, _ = evaluate(
-        model,
-        latents,
-        OriginalSpace(),
-        AccumulatorTuple(),
-        EvalContext{false}(),
-    )
+    retval, _ =
+        evaluate(model, latents, OriginalSpace(), AccumulatorTuple(), EvalContext{false}())
     return retval
 end
 return_value(rng::AbstractRNG, model::Model) = return_value(FromPrior(rng), model)

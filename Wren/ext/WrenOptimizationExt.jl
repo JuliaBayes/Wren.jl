@@ -1,15 +1,7 @@
 module WrenOptimizationExt
 
 using Wren:
-    Wren,
-    Model,
-    DEFAULT_AD,
-    FromPrior,
-    logdensity,
-    logjoint,
-    lp,
-    lp_and_grad!,
-    parameters
+    Wren, Model, DEFAULT_AD, FromPrior, logdensity, logjoint, lp, lp_and_grad!, parameters
 import DifferentiationInterface as DI
 import Optimization
 using VarNames: densify!!
