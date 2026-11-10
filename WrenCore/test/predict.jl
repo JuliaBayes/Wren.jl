@@ -20,7 +20,7 @@ chain holds the same log-probabilities an MCMC sampler would record.
 """
 function exact_posterior_chain(rng, posterior_model, cond_model, niters, nchains)
     draws = map(Iterators.product(1:niters, 1:nchains)) do _
-        posterior_params = rand(rng, posterior_model)
+        posterior_params = parameters(rng, posterior_model)
         result = simulate(FromValues(posterior_params), cond_model)
         VarNames.Draw(
             VarNames.densify!!(parameters(result)),

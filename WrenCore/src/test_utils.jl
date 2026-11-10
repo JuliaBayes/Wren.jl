@@ -21,7 +21,7 @@ function test_model_equivalence(
     adtype::Union{AbstractADType,Nothing}=nothing,
 )
     # Shouldn't matter which model we use to generate params, since they are equivalent
-    params = rand(model1)
+    params = parameters(model1)
 
     lpr1, llk1 = get_lp_components(model1, params)
     lpr2, llk2 = get_lp_components(model2, params)

@@ -11,7 +11,7 @@ using Test
 using Chairmarks
 
 function test_zero_allocs(model)
-    @test iszero((@b rand($model)).allocs)
+    @test iszero((@b parameters($model)).allocs)
     v = VecModel(model, nothing)
     x = rand(v)
     @test iszero((@b lp($v, $x)).allocs)

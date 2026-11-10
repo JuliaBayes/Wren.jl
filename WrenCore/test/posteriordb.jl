@@ -13,7 +13,7 @@ using WrenDists: WrenDists
 @testset "posteriordb.jl" begin
     @testset "$name" for name in available_posteriordb_models()
         model = posteriordb_model(name)
-        @test isfinite(logjoint(model, rand(StableRNG(468), model)))
+        @test isfinite(logjoint(model, parameters(StableRNG(468), model)))
 
         vm = VecModel(model, DI.AutoForwardDiff())
         v = rand(StableRNG(468), vm)

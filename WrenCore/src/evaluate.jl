@@ -90,21 +90,6 @@ function Base.show(io::IO, ::MIME"text/plain", result::ModelResult)
 end
 
 """
-    VarNames.densify!!(result::ModelResult)
-
-Return a [`ModelResult`](@ref) with its parameters densified using
-[`VarNames.densify!!`](@extref). The other fields are unchanged.
-"""
-function VarNames.densify!!(result::ModelResult)
-    return ModelResult(
-        VarNames.densify!!(result.parameters),
-        result.return_value,
-        result.logprior,
-        result.loglikelihood,
-    )
-end
-
-"""
     simulate(model::Model)
     simulate(rng::Random.AbstractRNG, model::Model)
     simulate(latents::AbstractLatentSource, model::Model)
@@ -137,27 +122,6 @@ end
 simulate(rng::AbstractRNG, model::Model) = simulate(FromPrior(rng), model)
 simulate(model::Model) = simulate(FromPrior(), model)
 
-"""
-    Base.rand([rng::Random.AbstractRNG,] model::Model)::VarNamedTuple
-
-Draw a sample from the prior distribution of `model`, returning the parameters in
-original space.
-
-This is equivalent to `parameters(simulate(model))`, but is more efficient than
-[`simulate`](@ref) because it does not compute the log-density terms.
-"""
-function Base.rand(rng::AbstractRNG, model::Model)
-    _, accs = evaluate(
-        model,
-        FromPrior(rng),
-        OriginalSpace(),
-        AccumulatorTuple(ParamsAccumulator()),
-        EvalContext{false}(),
-    )
-    return VarNames.parameters(accs)
-end
-Base.rand(model::Model) = rand(default_rng(), model)
-
 ############################################################################################
 # parameters
 ############################################################################################
@@ -168,6 +132,33 @@ Base.rand(model::Model) = rand(default_rng(), model)
 Get the parameters from a [`ModelResult`](@ref).
 """
 VarNames.parameters(result::ModelResult) = result.parameters
+
+"""
+    parameters(model::Model)::VarNamedTuple
+    parameters(rng::Random.AbstractRNG, model::Model)::VarNamedTuple
+    parameters(latents::AbstractLatentSource, model::Model)::VarNamedTuple
+
+Obtain the model's parameters in original space, calculated with a given set of latent
+values. If no latent values are provided, they are drawn from the prior distribution,
+optionally with a specified `rng`.
+
+This is equivalent to `parameters(simulate(model))`, but is more efficient than
+[`simulate`](@ref) because it does not compute the log-density terms.
+"""
+function VarNames.parameters(latents::AbstractLatentSource, model::Model)
+    _, accs = evaluate(
+        model,
+        latents,
+        OriginalSpace(),
+        AccumulatorTuple(ParamsAccumulator()),
+        EvalContext{false}(),
+    )
+    return VarNames.parameters(accs)
+end
+function VarNames.parameters(rng::AbstractRNG, model::Model)
+    return VarNames.parameters(FromPrior(rng), model)
+end
+VarNames.parameters(model::Model) = VarNames.parameters(FromPrior(), model)
 
 function _check_vecmodel_dimension(params::AbstractVector, vecmodel::VecModel)
     actual = length(params)

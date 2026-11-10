@@ -17,12 +17,6 @@ using WrenCore
     return x + 1
 end
 
-@wren function densify_model(x)
-    for i in eachindex(x)
-        x[i] ~ Normal()
-    end
-end
-
 @testset "simulate / return_value / rand" begin
     model = interface_model(1.0)
 
@@ -45,24 +39,10 @@ end
 
     @testset "consistency with same rng" begin
         result = simulate(Xoshiro(468), model)
-        @test rand(Xoshiro(468), model) == parameters(result)
+        @test parameters(Xoshiro(468), model) == parameters(result)
         @test return_value(Xoshiro(468), model) == return_value(result)
         @test return_value(FromValues(VarNamedTuple(x=0.5)), model) == 1.5
         @test return_value(model) isa Float64
-    end
-
-    @testset "densify!!" begin
-        result = simulate(Xoshiro(468), densify_model(zeros(2)))
-        xs = [parameters(result)[@vn(x[1])], parameters(result)[@vn(x[2])]]
-        # Before densifying, `x` is stored as a PartialArray, so it does not compare equal
-        # to a VarNamedTuple holding a plain Vector.
-        @test parameters(result) != VarNamedTuple(; x=xs)
-        dense = WrenCore.VarNames.densify!!(result)
-        @test haskey(parameters(dense), @vn(x))
-        @test parameters(dense) == VarNamedTuple(; x=xs)
-        @test return_value(dense) == return_value(result)
-        @test logprior(dense) == logprior(result)
-        @test loglikelihood(dense) == loglikelihood(result)
     end
 end
 
@@ -86,7 +66,7 @@ end
     model = stats_model(0.7)
 
     vecmodel = VecModel(model, AutoForwardDiff(); latent_source=FromPrior(Xoshiro(602)))
-    expected = rand(Xoshiro(603), model)
+    expected = parameters(Xoshiro(603), model)
     vector_params = vectorise_latents(FromValues(expected), vecmodel)
     pars = parameters(vector_params, vecmodel)
     @test pars[@vn(x)] ≈ expected[@vn(x)]
