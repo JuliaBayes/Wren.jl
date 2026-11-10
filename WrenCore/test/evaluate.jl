@@ -106,7 +106,17 @@ end
         v = vector_parameters(vecmodel, vnt)
         @test v == [x]
         @test parameters(vecmodel, v) == vnt
+        @test return_value(vecmodel, v) == x + 1
+        result = simulate(vecmodel, v)
+        @test result isa ModelResult
+        @test parameters(result) == vnt
+        @test return_value(result) == x + 1
+        @test logprior(result) ≈ expected_lp
+        @test loglikelihood(result) ≈ expected_ll
         @test lp(vecmodel, v) ≈ expected_lp + expected_ll
+        for f in (simulate, parameters, return_value)
+            @test_throws ArgumentError f(vecmodel, Float64[])
+        end
         @test length(rand(vecmodel)) == 1
         @test rand(Xoshiro(468), vecmodel) == rand(Xoshiro(468), vecmodel)
     end
@@ -137,6 +147,12 @@ end
     pars = parameters(vecmodel, vector_params)
     @test pars[@vn(x)] ≈ expected[@vn(x)]
     @test pars[@vn(y)] ≈ expected[@vn(y)]
+    # `x ~ Beta(2, 3)` is constrained, so this checks that `simulate` returns values and
+    # log-densities in original space.
+    result = simulate(vecmodel, vector_params)
+    @test parameters(result) == pars
+    @test logprior(result) ≈ logprior(model, expected)
+    @test loglikelihood(result) ≈ loglikelihood(model, expected)
 
     @test_throws ArgumentError parameters(vecmodel, vector_params[1:(end-1)])
     @test_throws ArgumentError parameters(vecmodel, vcat(vector_params, 0.0))

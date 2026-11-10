@@ -124,6 +124,33 @@ end
 simulate(model::Model, latents) = simulate(model, to_latent_source(latents))
 simulate(model::Model) = simulate(model, FromPrior())
 
+"""
+    simulate(vecmodel::VecModel, params::AbstractVector)::ModelResult
+
+Evaluate the model of `vecmodel` at the parameter vector `params`, which is in the parameter
+space of `vecmodel`. The log-prior and log-likelihood in the result are in original space.
+"""
+function simulate(vecmodel::VecModel, params::AbstractVector)
+    _check_vecmodel_dimension(params, vecmodel)
+    retval, accs = evaluate(
+        vecmodel.model,
+        FromVector(params, vecmodel.vecinfo),
+        vecmodel.parameter_space,
+        AccumulatorTuple(
+            ParamsAccumulator(),
+            LogPriorAccumulator(),
+            LogLikelihoodAccumulator(),
+        ),
+        EvalContext{false}(),
+    )
+    return ModelResult(
+        VarNames.parameters(accs),
+        retval,
+        logprior(accs),
+        loglikelihood(accs),
+    )
+end
+
 ############################################################################################
 # parameters
 ############################################################################################
@@ -249,6 +276,24 @@ function return_value(model::Model, latents::AbstractLatentSource)
 end
 return_value(model::Model, latents) = return_value(model, to_latent_source(latents))
 return_value(model::Model) = return_value(model, FromPrior())
+
+"""
+    return_value(vecmodel::VecModel, params::AbstractVector)
+
+Obtain the return value of the model of `vecmodel` at the parameter vector `params`, which
+is in the parameter space of `vecmodel`.
+"""
+function return_value(vecmodel::VecModel, params::AbstractVector)
+    _check_vecmodel_dimension(params, vecmodel)
+    retval, _ = evaluate(
+        vecmodel.model,
+        FromVector(params, vecmodel.vecinfo),
+        vecmodel.parameter_space,
+        AccumulatorTuple(),
+        EvalContext{false}(),
+    )
+    return retval
+end
 
 ############################################################################################
 # logprior
