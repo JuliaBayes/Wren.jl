@@ -78,7 +78,6 @@ function prior(
         t = time()
         print("Constructing chain... ")
     end
-    # `stack` (unlike `reduce(hcat, ...)`) still gives a matrix when there is one chain.
     chn = WrenCore.to_flexichain(stack(fetch.(tasks)))
     if progress
         println("took $(round(time() - t, digits=2)) seconds")

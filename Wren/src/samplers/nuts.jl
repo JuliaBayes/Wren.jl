@@ -203,7 +203,6 @@ function nuts(
         print("Constructing chain... ")
     end
     outputs = fetch.(tasks)
-    # `stack` (unlike `reduce(hcat, ...)`) still gives a matrix when there is one chain.
     model_results = stack(first.(outputs))
     stats = stack(last.(outputs))
     chn = WrenCore.to_flexichain(model_results, stats)
