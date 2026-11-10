@@ -144,7 +144,7 @@ function nuts(
                     reporter,
                     dynamichmc_kwargs...,
                 )
-                _results_and_stats(results, vm)
+                _nuts_results_and_stats(results, vm)
             catch e
                 if progress
                     put!(channel, ErrorUpdate(j))
@@ -224,7 +224,7 @@ function _nuts_stats(tree_stat, step_size)
         log_density=tree_stat.π,
     )
 end
-function _results_and_stats(results::NamedTuple, vecmodel::WrenCore.VecModel)
+function _nuts_results_and_stats(results::NamedTuple, vecmodel::WrenCore.VecModel)
     ϵ = results.ϵ
     model_results =
         [WrenCore.simulate(vecmodel, col) for col in eachcol(results.posterior_matrix)]
