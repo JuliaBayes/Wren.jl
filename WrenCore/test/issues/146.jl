@@ -34,10 +34,10 @@ using Test
     end
 
     @testset "conditioned values are independent" begin
-        model = vm.model | VarNamedTuple(x=zeros(n))
+        model = vm.model | (; x=zeros(n))
         expected = logjoint(model, VarNamedTuple())
         copied = WrenCore._copy_for_thread(model)
-        conditioned(copied)[@vn(x)][1] = 1.0
+        conditioned(copied).x[1] = 1.0
         @test logjoint(model, VarNamedTuple()) == expected
         @test logjoint(copied, VarNamedTuple()) ≈ expected - 5000.5
     end

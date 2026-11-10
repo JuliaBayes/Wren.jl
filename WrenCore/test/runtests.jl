@@ -6,6 +6,7 @@ using Test
     include("expr.jl")
     include("dataflow.jl")
     include("syntax.jl")
+    include("interface.jl")
     include("space.jl")
     include("batch/general.jl")
     include("batch/normal.jl")

@@ -26,16 +26,15 @@ model = f()
 
 This model has a single latent variable, `x`, drawn from `Normal()`.
 
-Wren uses a concept of *accumulators* to represent outputs from a model.
-We'll use a few of Wren's functions to extract information from these; we won't explain them here, but please do see [Models](@ref models) for more usage details.
+Wren uses a `ModelResult` type to represent all the information that can be obtained by evaluating a model.
+We'll use a few of Wren's functions to extract information from these.
 
 ```@example model
-accs = rand_with_logp(model)
-logprior(accs), loglikelihood(accs), parameters(accs)
+result = simulate(model)
+logprior(result), loglikelihood(result), parameters(result)
 ```
 
-Here we can see that a value was sampled for `x`, and that the log-prior (and not
-log-likelihood) was updated.
+Here we can see that a value was sampled for `x`, and that the log-prior (and not log-likelihood) was updated.
 
 ## Arrays and structs
 
@@ -167,8 +166,8 @@ For example, we can condition on the entire `y` array in one go:
 ```@example model
 yarg_model_cond = yarg_model | (; y=[1.0, 2.0, 3.0])
 
-accs = rand_with_logp(Xoshiro(468), yarg_model_cond)
-logprior(accs), loglikelihood(accs), parameters(accs)
+res = simulate(Xoshiro(468), yarg_model_cond)
+logprior(res), loglikelihood(res), parameters(res)
 ```
 
 Now the only latent variable is `x`, and the `y` array is observed.
@@ -182,8 +181,8 @@ Here `y = zeros(3)` is only a template: as when sampling, the value of each `y[i
 ```@example model
 ydef_model_cond = ydef_model | (; y=[1.0, 2.0, 3.0])
 
-accs = rand_with_logp(Xoshiro(468), ydef_model_cond)
-logprior(accs), loglikelihood(accs), parameters(accs)
+res = simulate(Xoshiro(468), ydef_model_cond)
+logprior(res), loglikelihood(res), parameters(res)
 ```
 
 Only whole variables can be conditioned. Partial array or field conditioning is not supported.
@@ -215,7 +214,7 @@ end
 In this model, even though `y` is defined in the model, the subsequent statement `y ~ Normal()` will treat `y` as a latent variable, and will sample a new value for it, which will certainly not be equal to `x + 1`:
 
 ```@example model
-rand_with_logp(y_not_obs())
+simulate(y_not_obs())
 ```
 
 To force `y` to be observed, Wren provides a macro `@observe`:
@@ -227,13 +226,13 @@ To force `y` to be observed, Wren provides a macro `@observe`:
     @observe y ~ Normal()
 end
 
-accs = rand_with_logp(y_obs())
+res = simulate(y_obs())
 ```
 
 We can check that these values are consistent:
 
 ```@example model
-loglikelihood(accs) ≈ logdensityof(Normal(), parameters(accs)[@vn(x)] + 1)
+loglikelihood(res) ≈ logdensityof(Normal(), parameters(res)[@vn(x)] + 1)
 ```
 
 You can in principle use this to enforce that model arguments are observed:
@@ -262,8 +261,8 @@ Array-valued data are often modelled as independent draws from a single distribu
 end
 
 y = [1.0, 2.0, 3.0]
-accs = rand_with_logp(iid_obs(y))
-loglikelihood(accs) ≈ sum(logdensityof.(Normal(parameters(accs)[@vn(mu)]), y))
+res = simulate(iid_obs(y))
+loglikelihood(res) ≈ sum(logdensityof.(Normal(parameters(res)[@vn(mu)]), y))
 ```
 
 When specifying priors for independent groups `@iid mu ~ dist`, there is typically no way for `@iid` to derive `size(mu)` because `mu` is not yet defined. You can instead specify `size` via an argument:
@@ -374,7 +373,7 @@ Wren provides a macro, `@addloglikelihood [name=:name] expr`, which allows you t
     @addloglikelihood name=:xsq x^2
 end
 
-rand_with_logp(manual_likelihood())
+simulate(manual_likelihood())
 ```
 
 The `name` argument is optional and Wren currently does not use it, but hopefully will be wired up to pointwise logdensity calculations in the future.
