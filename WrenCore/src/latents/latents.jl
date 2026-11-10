@@ -37,6 +37,8 @@ An `AbstractLatentSource` is returned unchanged.
 to_latent_source(source::AbstractLatentSource) = source
 to_latent_source(rng::AbstractRNG) = FromPrior(rng)
 to_latent_source(values::VarNamedTuple) = FromValues(values)
+to_latent_source(@nospecialize(x)) =
+    throw(ArgumentError("Cannot convert $(typeof(x)) into a latent source."))
 
 """
     get_latent(
