@@ -26,7 +26,7 @@ J = 8
 end
 model = eight_schools(y, sigma, J)
 
-rand(model)
+parameters(model)
 # VarNamedTuple
 # ├─ mu => -4.868066951440143
 # ├─ tau => 1.77728015115861

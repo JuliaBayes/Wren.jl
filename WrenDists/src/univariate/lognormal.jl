@@ -76,7 +76,7 @@ end
 # The rule returns dense tangents. Differentiate the loop for Fill.
 EnzymeRules.@easy_rule(
     _lognormal_loop(mu::StridedArray, sigma::StridedArray, x::StridedArray),
-    @setup(z = (log.(x) .- mu) ./ sigma),
+    @setup(z=(log.(x) .- mu) ./ sigma),
     (z ./ sigma, (abs2.(z) .- 1) ./ sigma, -(z ./ (x .* sigma) .+ inv.(x))),
 )
 
