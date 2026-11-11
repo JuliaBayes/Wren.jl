@@ -39,15 +39,17 @@ end
     @test length(counted.pathfinder_results) == 1
     @test size(only(counted.pathfinder_results).draws, 2) == 12
 
-    # With no `init`, starting points are drawn from the prior.
+    # With no `init`, starting points are drawn uniformly from [-2, 2] in unconstrained space.
     default_single = pathfinder(model; rng=StableRNG(1), ndraws=8)
     @test mean(default_single.fit_distribution)[1] ≈ posterior_mean atol=1e-5
+    @test all(abs.(first(default_single.optim_trace.points)) .<= 2)
 
     @testset "rejected keywords" begin
         @test_throws ArgumentError pathfinder(model; init=[-1.0])
         @test_throws ArgumentError multipathfinder(model, 8; init=[[-1.0]])
         @test_throws ArgumentError multipathfinder(model, 8; init=[-1.0])
-        @test_throws ArgumentError pathfinder(model; init_scale=1)
+        @test_throws ArgumentError pathfinder(model; init_scale=0)
+        @test_throws ArgumentError pathfinder(model; init_scale=1, init_sampler=FromPrior())
         @test_throws ArgumentError pathfinder(model; latent_source=FromPrior())
     end
 
@@ -81,6 +83,37 @@ end
             init_sampler=good,
         )
         @test [p.num_tries for p in mres.pathfinder_results] == [2, 1]
+    end
+
+    @testset "init_scale sets the starting point when init is not given" begin
+        scale = 0.25
+        res = pathfinder(model; rng=StableRNG(1), init_scale=scale, ndraws=8)
+        @test all(abs.(first(res.optim_trace.points)) .<= scale)
+        mres = multipathfinder(model, 8; rng=StableRNG(1), init_scale=scale)
+        for p in mres.pathfinder_results
+            @test all(abs.(first(p.optim_trace.points)) .<= scale)
+        end
+    end
+
+    @testset "init_sampler sets the starting point when init is not given" begin
+        good = FromValues(VarNamedTuple(; rate=exp(0.5)))
+        res = pathfinder(model; rng=StableRNG(1), init_sampler=good, ndraws=8)
+        @test first(res.optim_trace.points) ≈ [0.5]
+    end
+
+    @testset "init_scale sets the retry sampler" begin
+        bmodel = bounded_location(0.0)
+        bad = FromValues(VarNamedTuple(; x=10.0))
+        scale = 0.25
+        res = pathfinder(bmodel; rng=StableRNG(1), init=bad, init_scale=scale, ndraws=8)
+        @test res.num_tries >= 2
+        @test all(abs.(first(res.optim_trace.points)) .<= scale)
+        mres =
+            multipathfinder(bmodel, 8; rng=StableRNG(1), init=[bad, bad], init_scale=scale)
+        for p in mres.pathfinder_results
+            @test p.num_tries >= 2
+            @test all(abs.(first(p.optim_trace.points)) .<= scale)
+        end
     end
 end
 

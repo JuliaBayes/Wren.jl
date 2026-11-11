@@ -61,15 +61,18 @@ draws, not converged MCMC samples.
 ## Options
 
 Both methods accept `adtype`, as for [`nuts`](@ref), and forward Pathfinder options
-such as `history_length` and solver tolerances. `reduce_copies` has the same meaning as for
-[`VecModel`](@ref).
+such as `history_length` and solver tolerances.
 
 `init` sets the optimiser's starting point in model space, as a latent source such as
-`FromValues(VarNamedTuple(rate=2.0))`. By default, it is drawn from the prior. For
+`FromValues(VarNamedTuple(rate=2.0))`. By default, it is drawn from `init_sampler`
+(see below). For
 `multipathfinder`, `init` is a collection of latent sources whose length determines the
 number of fits instead of `nruns`. If an optimisation run fails, Pathfinder retries from a
-new starting point drawn from the prior. Pathfinder's own `init_sampler` and `init_scale`
-options, which work in unconstrained coordinates, are not supported.
+new starting point drawn from `init_sampler`, which is also a latent source. As in
+Pathfinder, it defaults to drawing each unconstrained coordinate uniformly from `[-s, s]`,
+where `s` is set by `init_scale` (default `2`); this is the same as
+`init_sampler=FromUnconstrainedInterval(-s, s)`. To start from the prior instead, pass
+`init_sampler=FromPrior()`.
 
 Both methods require `ntasks=1`; `multipathfinder` also requires `ntasks_per_run=1`.
 Wren's model arguments and AD preparation may hold mutable state, so both methods run
