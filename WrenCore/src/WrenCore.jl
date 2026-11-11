@@ -30,6 +30,7 @@ include("latents/latents.jl")
 include("latents/void.jl")
 include("latents/prior.jl")
 include("latents/values.jl")
+include("latents/interval.jl")
 
 # Accumulators
 include("accs/accs.jl")
@@ -100,6 +101,7 @@ export @wren,
     BenchmarkResult,
     FromValues,
     FromPrior,
+    FromUnconstrainedInterval,
     FromVector,
     FixedTransform,
     UnconstrainedSpace,

@@ -174,4 +174,49 @@ end
     @test parameters(fixed_vecmodel, fixed_params)[@vn(x)] ≈ only(fixed_params)
 end
 
+@wren function interval_model()
+    s ~ Exponential()
+    p ~ Beta(2, 2)
+    y ~ MvNormal(zeros(2), I)
+end
+
+@testset "FromUnconstrainedInterval" begin
+    model = interval_model()
+
+    @testset "constructors" begin
+        src = FromUnconstrainedInterval()
+        @test (src.lower, src.upper) === (-2.0, 2.0)
+        src = FromUnconstrainedInterval(Xoshiro(468))
+        @test (src.lower, src.upper) === (-2.0, 2.0)
+        src = FromUnconstrainedInterval(0, 1)
+        @test (src.lower, src.upper) === (0, 1)
+        @test eltype(parameters(interval_model(), src)[@vn(y)]) == Float64
+        @test FromUnconstrainedInterval(1.0, 1.0) isa FromUnconstrainedInterval
+        @test_throws ArgumentError FromUnconstrainedInterval(1.0, 0.0)
+    end
+
+    @testset "values lie in the interval in unconstrained space" begin
+        for seed in 1:50
+            ps = parameters(model, FromUnconstrainedInterval(Xoshiro(seed), -0.1, 0.1))
+            @test -0.1 <= log(ps[@vn(s)]) <= 0.1
+            @test -0.1 <= log(ps[@vn(p)] / (1 - ps[@vn(p)])) <= 0.1
+            @test all(y -> -0.1 <= y <= 0.1, ps[@vn(y)])
+        end
+    end
+
+    @testset "reproducible with the same rng" begin
+        p1 = parameters(model, FromUnconstrainedInterval(Xoshiro(468)))
+        p2 = parameters(model, FromUnconstrainedInterval(Xoshiro(468)))
+        @test p1 == p2
+    end
+
+    @testset "with VecModel" begin
+        src = FromUnconstrainedInterval(Xoshiro(468), -0.5, 0.5)
+        vecmodel = VecModel(model, AutoForwardDiff(); latent_source=src)
+        v = vector_parameters(vecmodel, FromUnconstrainedInterval(Xoshiro(468), -0.5, 0.5))
+        @test length(v) == 4
+        @test all(x -> -0.5 <= x <= 0.5, v)
+    end
+end
+
 end # module WrenEvaluateTests
