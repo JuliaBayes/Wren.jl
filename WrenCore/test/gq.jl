@@ -138,7 +138,7 @@ end
         @test gqs[@vn(reused)] ≈ a + 1
         @test gqs[@vn(reused_after)] ≈ a + 3
         @test collect(
-            keys(gq_values(model, GeneratedQuantityAccumulator(Only((:in_if,))))),
+            keys(gq_values(model, GeneratedQuantityAccumulator(SomeGQs((:in_if,))))),
         ) == [@vn(in_if)]
         @test !haskey(
             gq_values(gq_nested(false), GeneratedQuantityAccumulator()),
@@ -217,7 +217,7 @@ end
         a = parameters(accs)[@vn(a)]
         @test loglikelihood(accs) ≈ logpdf(MvNormal(a .+ [0.0, 1.0], I), [0.5, 1.5])
 
-        mu = gq_values(model, GeneratedQuantityAccumulator(Only((:mu,))))[@vn(mu)]
+        mu = gq_values(model, GeneratedQuantityAccumulator(SomeGQs((:mu,))))[@vn(mu)]
         @test mu ≈ mu[1] .+ [0.0, 1.0]
     end
 
@@ -231,22 +231,26 @@ end
             EvalContext{false}(),
         )
         @test haskey(parameters(accs), @vn(a))
-        @test isempty(gq_values(model, GeneratedQuantityAccumulator(Only((:a,)))))
+        @test isempty(gq_values(model, GeneratedQuantityAccumulator(SomeGQs((:a,)))))
         @test_throws "generated quantity was evaluated" rand(model)
     end
 
     @testset "selection" begin
         model = gq_demo([1.0, 2.0])
-        @test collect(keys(gq_values(model, GeneratedQuantityAccumulator(Only((:s,)))))) ==
-              [@vn(s)]
-        @test Set(keys(gq_values(model, GeneratedQuantityAccumulator(Only((:mu, :r)))))) ==
-              Set([@vn(mu), @vn(r)])
-        @test isempty(gq_values(model, GeneratedQuantityAccumulator(None())))
-        @test isempty(gq_values(model, GeneratedQuantityAccumulator(Only(()))))
+        @test collect(
+            keys(gq_values(model, GeneratedQuantityAccumulator(SomeGQs((:s,))))),
+        ) == [@vn(s)]
+        @test Set(
+            keys(gq_values(model, GeneratedQuantityAccumulator(SomeGQs((:mu, :r))))),
+        ) == Set([@vn(mu), @vn(r)])
+        @test isempty(gq_values(model, GeneratedQuantityAccumulator(NoGQs())))
+        @test isempty(gq_values(model, GeneratedQuantityAccumulator(SomeGQs(()))))
         @test length(keys(gq_values(model, GeneratedQuantityAccumulator()))) == 4
 
-        accs =
-            AccumulatorTuple(ParamsAccumulator(), GeneratedQuantityAccumulator(Only((:a,))))
+        accs = AccumulatorTuple(
+            ParamsAccumulator(),
+            GeneratedQuantityAccumulator(SomeGQs((:a,))),
+        )
         @test requests_gq(accs, Val(:a))
         @test !requests_gq(accs, Val(:b))
         @test !requests_gq(AccumulatorTuple(ParamsAccumulator()), Val(:a))
@@ -260,23 +264,26 @@ end
         @test haskey(all_gqs, @vn(b.z))
         @test haskey(all_gqs, @vn(c))
 
-        a_gqs = gq_values(model, GeneratedQuantityAccumulator(Only((:a,))))
+        a_gqs = gq_values(model, GeneratedQuantityAccumulator(SomeGQs((:a,))))
         @test haskey(a_gqs, @vn(a.z))
         @test !haskey(a_gqs, @vn(b))
         @test !haskey(a_gqs, @vn(c))
 
-        b_gqs = gq_values(model, GeneratedQuantityAccumulator(Only((:b,))))
+        b_gqs = gq_values(model, GeneratedQuantityAccumulator(SomeGQs((:b,))))
         @test !haskey(b_gqs, @vn(a))
         @test haskey(b_gqs, @vn(b.z))
 
         params = rand(model)
         @test params[@vn(a.z)] ≈ 2 * params[@vn(a.z0)]
 
+        scoped = @inferred WrenCore.scope(
+            GeneratedQuantityAccumulator(SomeGQs((:a,))),
+            @vn(a.b[1])
+        )
+        @test scoped isa GeneratedQuantityAccumulator{AllGQs}
         scoped =
-            @inferred WrenCore.scope(GeneratedQuantityAccumulator(Only((:a,))), @vn(a.b[1]))
-        @test scoped isa GeneratedQuantityAccumulator{All}
-        scoped = @inferred WrenCore.scope(GeneratedQuantityAccumulator(Only((:a,))), @vn(b))
-        @test scoped isa GeneratedQuantityAccumulator{None}
+            @inferred WrenCore.scope(GeneratedQuantityAccumulator(SomeGQs((:a,))), @vn(b))
+        @test scoped isa GeneratedQuantityAccumulator{NoGQs}
     end
 
     @testset "submodel result used only in a generated quantity" begin
@@ -306,16 +313,15 @@ end
             a ~ Normal()
             @gq a = 100.0
         end
-        clash_msg = "`a` is both a generated quantity and a model parameter"
-        @test_throws clash_msg rand(gq_clash())
-        @test_throws clash_msg Draw(FromPrior(), gq_clash())
+        @test rand(gq_clash())[@vn(a)] == 100.0
+        @test parameters(Draw(FromPrior(), gq_clash()))[@vn(a)] == 100.0
 
         @wren function gq_clash_indexed()
             a = zeros(2)
             a[1] ~ Normal()
             @gq a = 5.0
         end
-        @test_throws clash_msg rand(gq_clash_indexed())
+        @test rand(gq_clash_indexed())[@vn(a)] == 5.0
         @test haskey(parameters(rand_with_logp(gq_clash())), @vn(a))
     end
 
@@ -326,15 +332,18 @@ end
             @gq c = b
         end
         model = gq_chain()
-        @test isempty(gq_values(model, GeneratedQuantityAccumulator(None())))
-        @test_throws "b was evaluated" gq_values(model, GeneratedQuantityAccumulator(All()))
+        @test isempty(gq_values(model, GeneratedQuantityAccumulator(NoGQs())))
         @test_throws "b was evaluated" gq_values(
             model,
-            GeneratedQuantityAccumulator(Only((:c,))),
+            GeneratedQuantityAccumulator(AllGQs()),
         )
         @test_throws "b was evaluated" gq_values(
             model,
-            GeneratedQuantityAccumulator(Only((:b,))),
+            GeneratedQuantityAccumulator(SomeGQs((:c,))),
+        )
+        @test_throws "b was evaluated" gq_values(
+            model,
+            GeneratedQuantityAccumulator(SomeGQs((:b,))),
         )
 
         @wren function gq_transitive()
@@ -344,7 +353,7 @@ end
             @gq d = c + 1
         end
         model = gq_transitive()
-        d_only = gq_values(model, GeneratedQuantityAccumulator(Only((:d,))))
+        d_only = gq_values(model, GeneratedQuantityAccumulator(SomeGQs((:d,))))
         @test collect(keys(d_only)) == [@vn(d)]
         all_gqs = gq_values(model, GeneratedQuantityAccumulator())
         @test all_gqs[@vn(d)] ≈ all_gqs[@vn(b)] + 2

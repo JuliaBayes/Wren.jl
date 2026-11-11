@@ -70,7 +70,7 @@ end
         adtype::DI.AbstractADType=DI.AutoEnzyme(; mode=Enzyme.Reverse),
         progress::Bool=true,
         reduce_copies::Bool=true,
-        gqs::GeneratedQuantitySpec=All(),
+        gqs::GeneratedQuantitySpec=AllGQs(),
         dynamichmc_kwargs...
     ) -> FlexiChains.VNChain
 
@@ -88,7 +88,7 @@ function nuts(
     adtype::DI.AbstractADType=DI.AutoEnzyme(; mode=Reverse),
     progress::Bool=true,
     reduce_copies::Bool=true,
-    gqs::GeneratedQuantitySpec=All(),
+    gqs::GeneratedQuantitySpec=AllGQs(),
     dynamichmc_kwargs...,
 )
     return nuts(
@@ -111,7 +111,7 @@ function nuts(
     adtype::DI.AbstractADType=DI.AutoEnzyme(; mode=Reverse),
     progress::Bool=true,
     reduce_copies::Bool=true,
-    gqs::GeneratedQuantitySpec=All(),
+    gqs::GeneratedQuantitySpec=AllGQs(),
     dynamichmc_kwargs...,
 )
     # AD preparation

@@ -51,14 +51,14 @@ parameter_keys(chain) = Set(FlexiChains.parameters(chain))
     chn = prior_chain(StableRNG(468), gq_model_without_gqs(), 10, 2)
 
     gqs_all = generated_quantities(model, chn)
-    gqs_only = generated_quantities(model, chn, Only((:x2, :a)))
+    gqs_only = generated_quantities(model, chn, SomeGQs((:x2, :a)))
 
     @testset "keys" begin
         @test parameter_keys(gqs_all) == Set([@vn(x2), @vn(xp1), @vn(a.z)])
         @test parameter_keys(gqs_only) == Set([@vn(x2), @vn(a.z)])
-        @test parameter_keys(generated_quantities(model, chn, All())) ==
+        @test parameter_keys(generated_quantities(model, chn, AllGQs())) ==
               parameter_keys(gqs_all)
-        @test isempty(parameter_keys(generated_quantities(model, chn, None())))
+        @test isempty(parameter_keys(generated_quantities(model, chn, NoGQs())))
     end
 
     @testset "forms agree on shared keys" begin
@@ -94,7 +94,7 @@ parameter_keys(chain) = Set(FlexiChains.parameters(chain))
         @test issubset(Set([@vn(x2), @vn(xp1), @vn(a.z)]), parameter_keys(pdns))
         @test pdns[@vn(x2)] == chn[@vn(x)] .^ 2
 
-        pdns_only = predict(StableRNG(468), model, chn; gqs=Only((:x2,)))
+        pdns_only = predict(StableRNG(468), model, chn; gqs=SomeGQs((:x2,)))
         @test @vn(x2) in parameter_keys(pdns_only)
         @test !(@vn(xp1) in parameter_keys(pdns_only))
         @test !(@vn(a.z) in parameter_keys(pdns_only))

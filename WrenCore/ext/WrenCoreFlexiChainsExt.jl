@@ -12,7 +12,7 @@ using WrenCore: WrenCore
         [rng::Random.AbstractRNG=Random.default_rng(),]
         model::WrenCore.Model,
         chain::FlexiChains.VNChain;
-        gqs::GeneratedQuantitySpec=All(),
+        gqs::GeneratedQuantitySpec=AllGQs(),
     ) -> FlexiChains.VNChain
 
 Draw predictions from `model` for all iterations in `chain`.
@@ -39,7 +39,7 @@ function StatsAPI.predict(
     rng::AbstractRNG,
     model::WrenCore.Model,
     chain::VNChain;
-    gqs::WrenCore.GeneratedQuantitySpec=WrenCore.All(),
+    gqs::WrenCore.GeneratedQuantitySpec=WrenCore.AllGQs(),
 )
     accs = WrenCore.AccumulatorTuple(
         WrenCore.ParamsAccumulator(),
@@ -64,7 +64,7 @@ end
     generated_quantities(
         model::WrenCore.Model,
         chain::FlexiChains.VNChain,
-        gqs::GeneratedQuantitySpec=All(),
+        gqs::GeneratedQuantitySpec=AllGQs(),
     ) -> FlexiChains.VNChain
 
 Re-evaluate `model` at each iteration of `chain` and return a chain holding only the
@@ -77,7 +77,7 @@ depends on them.
 function WrenCore.generated_quantities(
     model::WrenCore.Model,
     chain::VNChain,
-    gqs::WrenCore.GeneratedQuantitySpec=WrenCore.All(),
+    gqs::WrenCore.GeneratedQuantitySpec=WrenCore.AllGQs(),
 )
     gq_acc = WrenCore.GeneratedQuantityAccumulator(gqs)
     results = _reevaluate(model, chain, WrenCore.AccumulatorTuple(gq_acc))

@@ -358,28 +358,23 @@ Reporting log-odds is nasty, so we instead transform them to odds ratios:
 @wren function logistic_regression(y)
     beta ~ Normal()
     for i in eachindex(y)
-        @observe y[i] ~ BernoulliLogit(beta)
+        y[i] ~ BernoulliLogit(beta)
     end
     @gq odds_ratio = exp(beta)
 end
 
 y = [0, 1, 0, 0, 0, 1]
-rand(logistic_regression(y))
+model = logistic_regression(y) | (; y)
+rand(model) # TODO check if this should now be simulate(model)?
 ```
 
-In this contrived example, it would have been easy to calculate the odds ratio without `@gq`, but in in more complicated scenarios that involve previous calculations in the model body, using `@gq` can spare us a lot of code duplication.
+You can write any expression on the right-hand of `@gq`, including `begin` or `let` blocks.
+However, naming generated quantities is more restrictive: a name must be a single symbol, so names like `@gq x[1]` or `@gq x.a` are not allowed.
 
-You can write any expression on the right-hand of `@gq`; this includes entire `begin` or `let` blocks!
+!!! note "Generated quantities are not copied"
+    After initialising a generated quantity `@gq my_array`, mutating `my_array` will change its values. To create a snapshot of `my_array` at the time it is initialised, you need to copy explicity `@gq snapshot = deepcopy(my_array)`.
 
-Keep these rules in mind when you use `@gq`:
-
-  1. The name must be a single symbol; you can't write `@gq x[1]` and `@gq x.a`.
-
-  2. If you define a generated quantity `@gq variable`, do not reuse it later in the model body, _and_ do not request collecting it (see [`Only`](@ref) or [`None`](@ref)), the right-hand side is removed from the compiled model. If the skipped GQ is computationally expensive, this can speed up model evaluations. By default, all generated quantities are collected.
-
-  3. A generated quantity must not have the same name as a model parameter; collecting both throws an error.
-
-  4. Values are not copied. For example, assume our model uses the array `x` and mutates it after `@gq x`, then recorded value changes too. If you want to create a snapshot, you should write `@gq x = deepcopy(x)` instead.
+### Opting out of generated quantities
 
 !!! note "No side effects... again"
     When the definition of a generated quantity `x` involves side effects, such as calling `push!` or drawing a random number, and `x` is not reused later, the side effects in its definition will not happen!

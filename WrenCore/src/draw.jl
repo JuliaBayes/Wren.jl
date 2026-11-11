@@ -14,7 +14,7 @@ end
 function _params_and_gqs(accs::AccumulatorTuple)
     params = VarNames.parameters(accs)
     hasacc(accs, Val(GQ_ACCNAME)) || return params
-    return merge_params_and_gqs(params, generated_quantities(accs))
+    return merge(params, generated_quantities(accs))
 end
 
 function _draw(accs::AccumulatorTuple, stats::NamedTuple, include_log_probs::Bool)
@@ -37,7 +37,7 @@ end
         model::Model,
         stats::NamedTuple=NamedTuple();
         include_log_probs::Bool=true,
-        gqs::GeneratedQuantitySpec=All(),
+        gqs::GeneratedQuantitySpec=AllGQs(),
     )
 
 Evaluate `model` using `source` and return its model-space parameters and the generated
@@ -49,7 +49,7 @@ function VarNames.Draw(
     model::Model,
     stats::NamedTuple=NamedTuple();
     include_log_probs::Bool=true,
-    gqs::GeneratedQuantitySpec=All(),
+    gqs::GeneratedQuantitySpec=AllGQs(),
 )
     accs = _draw_accumulators(include_log_probs, gqs)
     _, accs = evaluate(model, source, OriginalSpace(), accs, EvalContext{false}())
@@ -111,7 +111,7 @@ end
         vecmodel::VecModel,
         stats::NamedTuple=NamedTuple();
         include_log_probs::Bool=true,
-        gqs::GeneratedQuantitySpec=All(),
+        gqs::GeneratedQuantitySpec=AllGQs(),
     )
 
 Re-evaluate `vecmodel` at `params` and return model-space parameters and the generated
@@ -124,10 +124,10 @@ function VarNames.Draw(
     vecmodel::VecModel,
     stats::NamedTuple=NamedTuple();
     include_log_probs::Bool=true,
-    gqs::GeneratedQuantitySpec=All(),
+    gqs::GeneratedQuantitySpec=AllGQs(),
 )
     _check_vecmodel_dimension(params, vecmodel)
-    if !include_log_probs && gqs isa None && _all_fixed_transforms(vecmodel)
+    if !include_log_probs && gqs isa NoGQs && _all_fixed_transforms(vecmodel)
         raw_params = _raw_params_from_fixed_transforms(params, vecmodel.vecinfo)
         return VarNames.Draw(raw_params, stats)
     end

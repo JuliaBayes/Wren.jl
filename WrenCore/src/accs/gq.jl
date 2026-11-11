@@ -4,40 +4,40 @@ const GQ_ACCNAME = :GeneratedQuantities
     GeneratedQuantitySpec
 
 Selects which generated quantities (`@gq` statements) are evaluated and recorded. One of
-[`All`](@ref), [`Only`](@ref) or [`None`](@ref).
+[`AllGQs`](@ref), [`SomeGQs`](@ref) or [`NoGQs`](@ref).
 """
 abstract type GeneratedQuantitySpec end
 
 """
-    All()
+    AllGQs()
 
 Select every generated quantity.
 """
-struct All <: GeneratedQuantitySpec end
+struct AllGQs <: GeneratedQuantitySpec end
 
 """
-    None()
+    NoGQs()
 
 Select no generated quantities.
 """
-struct None <: GeneratedQuantitySpec end
+struct NoGQs <: GeneratedQuantitySpec end
 
 """
-    Only(names::Tuple{Vararg{Symbol}})
+    SomeGQs(names::Tuple{Vararg{Symbol}})
 
 Select the generated quantities named in `names`. The name of a submodel, such as `:a` in
 `a ~ sub(...)`, selects every generated quantity of that submodel.
 """
-struct Only{names} <: GeneratedQuantitySpec
-    Only(names::Tuple{Vararg{Symbol}}) = new{names}()
+struct SomeGQs{names} <: GeneratedQuantitySpec
+    SomeGQs(names::Tuple{Vararg{Symbol}}) = new{names}()
 end
 
-_gq_requested(::All, ::Val) = true
-_gq_requested(::None, ::Val) = false
-_gq_requested(::Only{names}, ::Val{sym}) where {names,sym} = sym in names
+_gq_requested(::AllGQs, ::Val) = true
+_gq_requested(::NoGQs, ::Val) = false
+_gq_requested(::SomeGQs{names}, ::Val{sym}) where {names,sym} = sym in names
 
 """
-    GeneratedQuantityAccumulator(spec::GeneratedQuantitySpec=All())
+    GeneratedQuantityAccumulator(spec::GeneratedQuantitySpec=AllGQs())
 
 Record the values of the `@gq` statements selected by `spec` in a `VarNamedTuple`.
 """
@@ -46,7 +46,7 @@ struct GeneratedQuantityAccumulator{S<:GeneratedQuantitySpec,V<:VarNamedTuple} <
     spec::S
     values::V
 end
-function GeneratedQuantityAccumulator(spec::GeneratedQuantitySpec=All())
+function GeneratedQuantityAccumulator(spec::GeneratedQuantitySpec=AllGQs())
     return GeneratedQuantityAccumulator(spec, VarNamedTuple())
 end
 
@@ -132,7 +132,7 @@ function combine(acc1::GeneratedQuantityAccumulator, acc2::GeneratedQuantityAccu
 end
 
 function scope(acc::GeneratedQuantityAccumulator, ::VarName{sym}) where {sym}
-    submodel_spec = _gq_requested(acc, Val{sym}()) ? All() : None()
+    submodel_spec = _gq_requested(acc, Val{sym}()) ? AllGQs() : NoGQs()
     return GeneratedQuantityAccumulator(submodel_spec, acc.values)
 end
 

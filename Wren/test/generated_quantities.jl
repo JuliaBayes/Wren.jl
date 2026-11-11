@@ -18,7 +18,7 @@ model = gq_model()
         @test Set(FlexiChains.parameters(chain)) == Set([@vn(x), @vn(x2)])
         @test chain[@vn(x2)] ≈ chain[@vn(x)] .^ 2
 
-        chain = prior(model, 10; progress=false, gqs=None())
+        chain = prior(model, 10; progress=false, gqs=NoGQs())
         @test Set(FlexiChains.parameters(chain)) == Set([@vn(x)])
     end
 
@@ -27,7 +27,7 @@ model = gq_model()
         @test Set(FlexiChains.parameters(chain)) == Set([@vn(x), @vn(x2)])
         @test chain[@vn(x2)] ≈ chain[@vn(x)] .^ 2
 
-        chain = nuts(model, 20; progress=false, gqs=Only(()))
+        chain = nuts(model, 20; progress=false, gqs=SomeGQs(()))
         @test Set(FlexiChains.parameters(chain)) == Set([@vn(x)])
     end
 end

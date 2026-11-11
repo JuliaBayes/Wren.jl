@@ -12,7 +12,7 @@ using Term.Progress: ProgressBar, addjob!, update!, start!, stop!, render
         niters::Integer,
         nchains::Integer=1;
         progress::Bool=true,
-        gqs::GeneratedQuantitySpec=All(),
+        gqs::GeneratedQuantitySpec=AllGQs(),
     ) -> FlexiChains.VNChain
 
 Sample from the prior distribution of a Wren model. The returned chain holds the generated
@@ -23,7 +23,7 @@ function prior(
     niters::Integer,
     nchains::Integer=1;
     progress::Bool=true,
-    gqs::GeneratedQuantitySpec=All(),
+    gqs::GeneratedQuantitySpec=AllGQs(),
 )
     return prior(Random.default_rng(), model, niters, nchains; progress, gqs)
 end
@@ -33,7 +33,7 @@ function prior(
     niters::Integer,
     nchains::Integer=1;
     progress::Bool=true,
-    gqs::GeneratedQuantitySpec=All(),
+    gqs::GeneratedQuantitySpec=AllGQs(),
 )
     if progress
         t = time()

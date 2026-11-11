@@ -54,7 +54,7 @@ function Base.rand(rng::AbstractRNG, model::Model)
         AccumulatorTuple(ParamsAccumulator(), GeneratedQuantityAccumulator()),
         EvalContext{false}(),
     )
-    return merge_params_and_gqs(VarNames.parameters(accs), generated_quantities(accs))
+    return merge(VarNames.parameters(accs), generated_quantities(accs))
 end
 Base.rand(model::Model) = rand(default_rng(), model)
 
