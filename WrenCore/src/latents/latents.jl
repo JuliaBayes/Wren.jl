@@ -8,6 +8,8 @@ Wren provides several subtypes of `AbstractLatentSource`:
 
 - [`FromPrior`](@ref): samples latent variables from their prior distributions
 - [`FromValues`](@ref): provides latent variables in a `VarNamedTuple`
+- [`FromUnconstrainedInterval`](@ref): samples latent variables uniformly from an interval
+  in unconstrained space
 - [`FromVector`](@ref): provides a vector of flattened latent variables, together with
   information about how to convert them back into the original space
 
