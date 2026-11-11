@@ -8,7 +8,6 @@ using ForwardDiff
 using LinearAlgebra
 using Random
 using Test
-using Plaice
 using WrenCore
 
 @wren function interface_model(y)
@@ -129,16 +128,6 @@ end
     @observe observation ~ Normal(x + y[1])
 end
 
-struct TestFixedSpace{T<:VarNamedTuple} <: AbstractParameterSpace
-    transforms::T
-end
-WrenCore.target_transform(space::TestFixedSpace, vn::VarName) = space.transforms[vn]
-
-@wren function prickly_model(should_error)
-    should_error[] && error("model was evaluated")
-    x ~ Normal()
-end
-
 @testset "parameters(vecmodel, params)" begin
     model = stats_model(0.7)
 
@@ -158,20 +147,6 @@ end
     @test_throws ArgumentError parameters(vecmodel, vector_params[1:(end-1)])
     @test_throws ArgumentError parameters(vecmodel, vcat(vector_params, 0.0))
 
-    should_error = Ref(false)
-    fixed_transforms = @vnt begin
-        x := FixedTransform(Plaice.from_vec(Normal()))
-    end
-    fixed_space = TestFixedSpace(fixed_transforms)
-    fixed_vecmodel = VecModel(
-        prickly_model(should_error),
-        nothing;
-        latent_source=FromPrior(Xoshiro(604)),
-        parameter_space=fixed_space,
-    )
-    fixed_params = copy(fixed_vecmodel.sample)
-    fixed_vecmodel.model.args.should_error[] = true
-    @test parameters(fixed_vecmodel, fixed_params)[@vn(x)] ≈ only(fixed_params)
 end
 
 @wren function interval_model()

@@ -193,36 +193,13 @@ function _check_vecmodel_dimension(params::AbstractVector, vecmodel::VecModel)
     return nothing
 end
 
-function _all_fixed_transforms(vecmodel::VecModel)
-    return all(
-        rt -> rt.transform isa FixedTransform,
-        values(vecmodel.vecinfo.varname_to_rat),
-    )
-end
-
-function _raw_params_from_fixed_transforms(params::AbstractVector, vecinfo::VecInfo)
-    varname_to_rat = vecinfo.varname_to_rat
-    raw_params = VarNamedTuple()
-    for (vn, rt) in pairs(varname_to_rat)
-        template = get(varname_to_rat.data, VarNames.getsym(vn), VarNames.NoTemplate())
-        raw_value = rt.transform.transform(params[rt.range])
-        raw_params = VarNames.templated_setindex!!(raw_params, raw_value, vn, template)
-    end
-    return raw_params
-end
-
 """
     VarNames.parameters(vecmodel::VecModel, params::AbstractVector)::VarNamedTuple
 
-Return the model-space parameters of `vecmodel` at `params`. If every transform is fixed,
-the raw parameters are recovered without evaluating the model.
+Return the model-space parameters of `vecmodel` at `params`.
 """
 function VarNames.parameters(vecmodel::VecModel, params::AbstractVector)
     _check_vecmodel_dimension(params, vecmodel)
-    if _all_fixed_transforms(vecmodel)
-        return _raw_params_from_fixed_transforms(params, vecmodel.vecinfo)
-    end
-
     source = FromVector(params, vecmodel.vecinfo)
     accs = AccumulatorTuple(ParamsAccumulator())
     _, accs = evaluate(
