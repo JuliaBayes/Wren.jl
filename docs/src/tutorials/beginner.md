@@ -9,11 +9,12 @@ We assume here that you have a basic understanding of probability distributions 
 ## Probabilistic functions
 
 'Probabilistic programming' really just means that we can represent the idea of probability or nondeterminism in our programming language.
-There are in fact many ways of doing this!
-The simplest is to just write a function that calls `rand()` directly:
+There are in fact many ways of doing this.
+You don't even need to load a package!
+You can just write a function that calls `rand()` directly:
 
 ```@example beginner
-using Wren.Dists
+using Wren.Dists  # Provides the distribution objects.
 using Random
 
 function probabilistic_basic(rng=Random.default_rng())
@@ -30,15 +31,7 @@ Each time you call this function, it will return a different value for `x`:
 [probabilistic_basic() for _ in 1:5]
 ```
 
-!!! note "Pseudo-random number generators"
-
-    Technically, the `rand` function is not _truly_ random, but rather [_pseudo-random_](https://en.wikipedia.org/wiki/Pseudorandomness).
-    This means that it takes an input value (a 'seed'), and uses that to deterministically generate a sequence of numbers that appear to be random.
-
-    This might seem like a very bad thing to do, but in fact it's very important: it means that we can reproduce our results exactly by running it with the same seed.
-    This can often help with debugging, but even more crucially, it also allows others to verify that your results are correct!
-
-Now, Wren provides a `@wren` macro, which lets you write code that represents the same idea of having a random variable `x`:
+Wren.jl provides a `@wren` macro, which lets you write code that represents the same idea of having a random variable `x`:
 
 ```@example beginner
 using Wren
@@ -195,7 +188,7 @@ flowchart LR
 
     However, it is often also very useful to be able to evaluate the model for a specific set of inputs.
     (We won't go into detail here, but this is often used in various inference algorithms, such as Markov chain Monte Carlo.)
-    This is another reason why Wren is more powerful than the 'basic' function: it allows you to replace the calls to `rand(distribution)` values that are specified ahead of time.
+    This is another reason why Wren is more powerful than the 'basic' function: it allows you to replace the calls to `rand(distribution)` with specific values that you are interested in.
     You could do this in the 'basic' version by supplying an optional argument, checking its value, and then calling `rand` only if it is not provided.
     But this gets quite cumbersome very quickly!
 
@@ -203,22 +196,23 @@ flowchart LR
 
 You might now be wondering why we might care about the probability of the parameters.
 You might also wonder what is the 'log-likelihood' field in the `ModelResult` object above, which is currently zero.
-It turns out that both of these are very much related.
+It turns out that both of these are very much related, in that they are both used to calculate the *posterior distribution* which Bayesian statistics is all about.
 
 Broadly speaking, the log-prior is the probability density associated with the parameters themselves.
+In other words, how plausible do we think a value of `d=10` (or `d=5`, or whatever value we obtained from `simulate` above) would be without taking any of our observations into account?
 That's why the log-densities of `s` and `d` were counted under the `logprior` field.
 
 The log-likelihood, on the other hand, is probability density associated with *outcomes* of the model.
 Often we call these 'data', or 'observations'.
-The reason for this is because in most modelling scenarios, the parameters themselves are not directly observable, but the outcomes of them are.
-Think, for example, about a medical trial: we don't know the true efficacy of a drug, but we can observe whether or not patients get better after taking it.
+That's because in most modelling scenarios, the parameters themselves are not directly observable, but the outcomes of them are.
+We can only use the data to 'reconstruct' or 'infer' the parameters, i.e., go backwards from data to parameters, effectively reversing the forward simulation we ran first.
 
 To demonstrate this, let's flip the example above on its head.
 Instead of me trying to simulate my own commute time, let's say that my manager at work has gotten tired of me turning up late and blaming the bad train service.
 She doesn't take the train to work and thus can't directly verify whether the train was delayed; and she *certainly* can't observe whether or not I overslept.
-All of these are now hidden, or *latent*, variables.
+All of these are now hidden variables; equivalently, they are parameters of the Wren model (which we will now want to infer).
 
-What she can record, though, is the time that we first see each other in the office.
+What my manager can record, though, is the time that we first see each other in the office.
 Now, because we might be doing different things when we get in, this time might not be _exactly_ the same time that I arrive at the office.
 
 Let's say that on average, we meet 10 minutes after I arrive, with a standard deviation of 3 minutes:
@@ -231,7 +225,7 @@ meet \sim \text{Normal}(commute + 10, 3)
 
     Technically speaking, it is possible that `meet < commute`, which corresponds to a spooky situation where we meet at the office before I've actually arrived!
     The probability of this happening is around 0.04%, which is fairly small, but not zero.
-    This could be improved by choosing a more realistic distribution.
+    This could be improved by choosing a more realistic distribution (see [this cheatsheet (PDF)](https://learnbayes.se/cheatsheets/common_distributions.pdf) for a few distributions commonly used in Bayesian statistics).
     We won't do so here for simplicity, but this is a convenient time to point out that a model is only as good as the assumptions that go into it.
 
 Anyway, let's add this to our model.

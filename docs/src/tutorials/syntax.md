@@ -378,15 +378,16 @@ which guarantees correctness, but might not be as efficient as the vectorised fo
 
     We strongly discourage the use of `@addloglikelihood`. It should only be considered if the model would otherwise not work (if you run into such a case, please let us know in an issue).
 
-Wren provides a macro, `@addloglikelihood [name=:name] expr`, which allows you to manually add `expr` to the model's log-likelihood.
+Wren provides a macro, `@addloglikelihood expr [name=:name]`, which allows you to manually add `expr` to the model's log-likelihood.
 
 ```@example model
 @wren function manual_likelihood()
     x ~ Normal()
-    @addloglikelihood name=:xsq x^2
+    @addloglikelihood x^2 name=:xsq
 end
 
 simulate(manual_likelihood())
 ```
 
-The `name` argument is optional and Wren currently does not use it, but hopefully will be wired up to pointwise logdensity calculations in the future.
+The `name` argument is optional and in fact Wren currently does not use it.
+However, hopefully this will in future be wired up to pointwise logdensity calculations in the future.
