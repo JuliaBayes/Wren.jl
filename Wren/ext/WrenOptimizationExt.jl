@@ -1,7 +1,7 @@
 module WrenOptimizationExt
 
-using Wren:
-    Wren, Model, DEFAULT_AD, FromPrior, logdensity, logjoint, lp, lp_and_grad!, parameters
+using Wren
+using WrenCore
 import DifferentiationInterface as DI
 import Optimization
 using VarNames: densify!!
@@ -15,7 +15,7 @@ function Wren.optimize(
     reduce_copies=true,
     kwargs...,
 )
-    density = logdensity(model, adtype; latent_source, lp_function, reduce_copies)
+    density = VecModel(model, adtype; latent_source, lp_function, reduce_copies)
     fg = function (gradient, x, p)
         gradient === nothing && return -lp(density, x)
         value, _ = lp_and_grad!(gradient, density, x)
