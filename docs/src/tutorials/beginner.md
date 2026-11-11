@@ -49,7 +49,7 @@ using Wren
 end
 
 model = probabilistic()
-rand(model)
+parameters(model)
 ```
 
 The output type is slightly different from above, but conceptually you can see that it's still a container that has a value for `x`.

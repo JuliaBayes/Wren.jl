@@ -160,7 +160,7 @@ xs_z = -3:0.1:3
 
 # Draw 20 posterior samples of the slope of body mass
 for _ in 1:20
-    vnt = parameters(rand(chain_post))
+    vnt = rand(chain_post; parameters_only=true)
     ys_z = vnt[@vn(beta2)] * xs_z
     ys = reconstruct(bill_zs, ys_z)
     xs = reconstruct(mass_zs, xs_z)
