@@ -31,5 +31,5 @@ model = f()
 
 ```@example intro
 # Sample from the prior
-rand(model)
+parameters(model)
 ```

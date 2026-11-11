@@ -6,6 +6,7 @@ using Test
     include("expr.jl")
     include("dataflow.jl")
     include("syntax.jl")
+    include("evaluate.jl")
     include("space.jl")
     include("batch/general.jl")
     include("batch/normal.jl")
@@ -20,8 +21,8 @@ using Test
     include("batch/typestability.jl")
     include("aliasing.jl")
     include("submodel.jl")
+    include("enzyme_conditioning.jl")
     include("vecmodel.jl")
-    include("draw.jl")
     include("ad.jl")
     include("reactant.jl")
     include("predict.jl")
@@ -29,7 +30,8 @@ using Test
     include("issues/55.jl")
     include("issues/69.jl")
     include("issues/132.jl")
-    include("issues/156.jl")
+    include("issues/146.jl")
+    include("issues/155.jl")
 end
 
 end # module WrenCoreTests

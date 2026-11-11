@@ -1,8 +1,6 @@
 using Random: Random
 using FlexiChains: VNChain
 
-# only for from_samples... could we remove this as a dep in FlexiChains?
-using AbstractMCMC: AbstractMCMC
 using MCMCProgress: Determinate, advance!, chain_at, close_phase!, open_phase!
 
 """
@@ -35,9 +33,9 @@ function prior(
 
     t = time()
     label = "Sampling $(model.name) from the prior"
-    draws = withprogress(progress, label, nchains) do run
+    results = withprogress(progress, label, nchains) do run
         tasks = @sync [Threads.@spawn _prior_chain(model, niters, run, j) for j in 1:nchains]
-        reduce(hcat, fetch.(tasks))
+        stack(fetch.(tasks))
     end
 
     if progress
@@ -45,26 +43,25 @@ function prior(
         t = time()
         print("Constructing chain... ")
     end
-    chn = AbstractMCMC.from_samples(VNChain, draws)
+    chn = WrenCore.to_flexichain(results)
     if progress
         println("took $(round(time() - t, digits=2)) seconds")
     end
     return chn
 end
 
-# Draw one chain, reporting it as chain `j` of `run`. A `nothing` run means no
-# display was asked for, so nothing is reported.
 function _prior_chain(model::WrenCore.Model, niters::Integer, run, j::Integer)
+    chain_model = WrenCore._copy_for_thread(model)
     phase = if run === nothing
         nothing
     else
         open_phase!(chain_at(run, j), "Sampling", Determinate(niters))
     end
-    chain_draws = Vector{Draw}(undef, niters)
-    for i in 1:niters
-        chain_draws[i] = Draw(FromPrior(Random.TaskLocalRNG()), model)
+    chain_results = map(1:niters) do i
+        result = WrenCore.simulate(chain_model, Random.TaskLocalRNG())
         phase === nothing || advance!(phase, i)
+        result
     end
     phase === nothing || close_phase!(phase)
-    return chain_draws
+    return chain_results
 end

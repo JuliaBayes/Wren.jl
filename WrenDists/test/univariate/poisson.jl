@@ -80,7 +80,7 @@ test_dist(
         @test isapprox(mean(xs), λ; rtol=1e-3)
     end
 end
-    
+
 @testset "batched Poisson support (issue #158)" begin
     for (scalar, batched, rates) in (
         (WrenDists.Poisson, WrenDists.BatchedPoisson, [0.0, 1.0]),

@@ -1,4 +1,4 @@
-# Bayesian workflow
+# [Bayesian workflow](@id workflow)
 
 In the worked example below, we demonstrate how Wren and the JuliaBayes ecosystem enable the [Bayesian Workflow](https://avehtari.github.io/Bayesian-Workflow/).
 
@@ -49,11 +49,11 @@ end
 
 ## Prior predictions
 
-We can now instatiate the Wren model and use it with `rand(model)` to draw from the prior (see [Working with models](@ref models)):
+We can now instatiate the Wren model and use it with `parameters(model)` to draw from the prior (see [Working with models](@ref models)):
 
 ```@example workflow
 model = bill_model(penguins.bill_length_mm, penguins.species_idx, penguins.body_mass_g)
-rand(model)
+parameters(model)
 ```
 
 !!! note
@@ -69,7 +69,7 @@ chain_prior = prior(model, 1000, 4; progress=false)
 summarystats(chain_prior[[@vn(beta1), @vn(beta2), @vn(sigma)]])
 ```
 
-While we could technically continue working with the chain, the `rand(model)` syntax lends itself nicely towards visualising individual samples from the prior distribution.
+While we could technically continue working with the chain, the `parameters(model)` syntax lends itself nicely towards visualising individual samples from the prior distribution.
 
 ```@example workflow
 using CairoMakie
@@ -82,7 +82,7 @@ xs_z = -3:0.1:3
 
 # Draw 20 prior predictions for the slope of body mass
 for _ in 1:20
-    vnt = rand(model)
+    vnt = parameters(model)
     ys_z = vnt[@vn(beta2)] * xs_z
     ys = reconstruct(bill_zs, ys_z)
     xs = reconstruct(mass_zs, xs_z)
@@ -118,7 +118,7 @@ Then we condition with `|` (see [`condition`](@ref)) and sample with [`nuts`](@r
 
 ```@example workflow
 import Enzyme
-model_cond = model | VarNamedTuple(bill_length=penguins.bill_length_mm)
+model_cond = model | (; bill_length=penguins.bill_length_mm)
 chain_post = nuts(model_cond, 1000, 4; progress=false)
 summarystats(chain_post)
 ```
