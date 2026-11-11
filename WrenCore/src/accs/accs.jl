@@ -31,7 +31,8 @@ In these functions:
 - `template` is a value that conveys the shape of the top-level symbol in `vn`, and is
   used specifically for accumulators that carry VarNamedTuples.
 - `sitename` is a compile-time `Val{::Symbol}` identifying the sampling site in the model
-  source code. Each distinct tilde statement has a unique `sitename`.
+  source code. It defaults to the left-hand side and can be overridden with `name=:site`.
+  Site names need not be unique; use `vn` to distinguish parameters that share a name.
 
 To be able to work with multi-threading, it should also implement:
 - `split(acc::T)`

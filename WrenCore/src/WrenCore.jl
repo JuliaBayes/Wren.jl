@@ -82,6 +82,7 @@ function available_posteriordb_models end
 export @wren,
     @addloglikelihood,
     @iid,
+    @sample,
     @observe,
     @batch,
     AbstractLatentSource,

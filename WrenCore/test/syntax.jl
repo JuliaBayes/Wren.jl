@@ -13,7 +13,54 @@ macro preserve(expr)
     return esc(expr)
 end
 
+struct SiteNames{T} <: AbstractAccumulator
+    names::T
+end
+WrenCore.accumulator_name(::Type{<:SiteNames}) = :sites
+WrenCore.reset(::SiteNames) = SiteNames(())
+Base.copy(acc::SiteNames) = acc
+record_site(acc::SiteNames, ::Val{name}) where {name} = SiteNames((acc.names..., name))
+WrenCore.accumulate_assume!!(acc::SiteNames, args...) = record_site(acc, last(args))
+WrenCore.accumulate_observe!!(acc::SiteNames, args...) = record_site(acc, last(args))
+
 @testset "syntax.jl" begin
+    @testset "named sites" begin
+        @wren function named_sites()
+            @sample name=:prior x ~ Normal()
+            y = 0.0
+            @observe name=:likelihood y ~ Normal(x)
+            @sample name=:outer_prior @iid a ~ Normal() size=2
+            @iid size=2 @sample name=:inner_prior b ~ Normal()
+            @observe name=:outer_likelihood @iid a ~ Normal()
+            @iid @observe name=:inner_likelihood b ~ Normal()
+            @sample @iid c ~ Normal() size=2 name=:prior
+            @observe @iid c ~ Normal() name=:trailing_likelihood
+            return x
+        end
+        values = VarNamedTuple(; x=0.5, a=[0.1, 0.2], b=[0.3, 0.4], c=[0.5, 0.6])
+        _, accs = evaluate(
+            named_sites(),
+            FromValues(values),
+            OriginalSpace(),
+            AccumulatorTuple(WrenCore.default_accumulators()..., SiteNames(())),
+            EvalContext{false}(),
+        )
+        @test parameters(accs) == values
+        @test accs[:sites].names == (
+            :prior,
+            :likelihood,
+            :outer_prior,
+            :inner_prior,
+            :outer_likelihood,
+            :inner_likelihood,
+            :prior,
+            :trailing_likelihood,
+        )
+        vm = VecModel(named_sites(), nothing; latent_source=FromValues(values))
+        x = vectorise_latents(FromValues(values), vm)
+        @test lp(vm, x) ≈ logjoint(accs)
+    end
+
     @testset "basic models" begin
         @testset "1x sample" begin
             @wren function simple_normal()

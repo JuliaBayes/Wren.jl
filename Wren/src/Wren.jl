@@ -23,6 +23,7 @@ using WrenCore:
     @wren,
     @addloglikelihood,
     @iid,
+    @sample,
     @observe,
     @batch,
     # Models
@@ -61,6 +62,7 @@ export WrenCore,
     @wren,
     @addloglikelihood,
     @iid,
+    @sample,
     @observe,
     @batch,
     # Models
