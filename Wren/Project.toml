@@ -25,10 +25,6 @@ Optimization = "7f7a1694-90dd-40f0-9382-eb1efda571ba"
 [extensions]
 WrenOptimizationExt = "Optimization"
 
-[sources]
-WrenCore = {path = "../WrenCore"}
-WrenDists = {path = "../WrenDists"}
-
 [compat]
 DensityInterface = "0.4"
 DifferentiationInterface = "0.7"
