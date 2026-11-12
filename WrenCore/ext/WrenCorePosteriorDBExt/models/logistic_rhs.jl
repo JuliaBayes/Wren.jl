@@ -2,7 +2,7 @@
 module LogisticRHS
 
 using PosteriorDB
-using WrenCore: @wren, @observe, @batch, @addloglikelihood, @iid, logdensityof
+using WrenCore: @wren, @observe, @batch, @iid
 using WrenDists: WrenDists as WD
 
 @wren function logistic_rhs(y, x, n, d, scale_icept, scale_global,
@@ -11,13 +11,7 @@ using WrenDists: WrenDists as WD
     @iid z ~ WD.Normal(0.0, 1.0) size=d
     tau ~ WD.HalfTDist(nu_global, 0.0, 2 * scale_global)
     @iid lambda ~ WD.HalfTDist(nu_local, 0.0, 1.0) size=d
-    raw_caux ~ WD.Flat()
-    caux = exp(raw_caux)
-    shape = 0.5 * slab_df
-    # InverseGamma(shape, shape) on caux is Gamma(shape, 1/shape) on 1/caux.
-    # Temporary until the native-prior choice tracked in #204 is settled.
-    @addloglikelihood logdensityof(WD.Gamma(shape, inv(shape)), inv(caux)) -
-        raw_caux
+    caux ~ WD.InverseGamma(0.5 * slab_df, 0.5 * slab_df)
     c2 = slab_scale^2 * caux
     beta = Vector{typeof(beta0 + tau + caux + z[1] + lambda[1])}(undef, d)
     for j in eachindex(z)

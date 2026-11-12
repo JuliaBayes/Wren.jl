@@ -2,6 +2,7 @@ module WrenCorePosteriorDBExt
 
 using WrenCore: WrenCore
 
+include("models/logaddexp.jl")
 include("models/ark.jl")
 include("models/accel_splines.jl")
 include("models/arma11.jl")

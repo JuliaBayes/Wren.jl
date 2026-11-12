@@ -22,18 +22,16 @@ end
 @wren function accel_gp(Y, Xgp, slambda, Xgp_sigma, slambda_sigma, prior_only)
     Intercept ~ WD.TDist(3.0, -13.0, 36.0)
     sdgp ~ WD.HalfTDist(3.0, 0.0, 36.0)
-    # Stan's lscale ~ inv_gamma(1.124909, 0.0177) is exactly equivalent to
-    # 1/lscale ~ Gamma(shape=1.124909, scale=1/0.0177).
-    inv_lscale ~ WD.Gamma(1.124909, 1 / 0.0177)
+    lscale ~ WD.InverseGamma(1.124909, 0.0177)
     @iid zgp ~ WD.Normal(0.0, 1.0) size=size(Xgp, 2)
     Intercept_sigma ~ WD.TDist(3.0, 0.0, 10.0)
     sdgp_sigma ~ WD.HalfTDist(3.0, 0.0, 36.0)
-    inv_lscale_sigma ~ WD.Gamma(1.124909, 1 / 0.0177)
+    lscale_sigma ~ WD.InverseGamma(1.124909, 0.0177)
     @iid zgp_sigma ~ WD.Normal(0.0, 1.0) size=size(Xgp_sigma, 2)
     if prior_only == 0
-        mu = Intercept .+ approximate_gp(Xgp, slambda, sdgp, inv(inv_lscale), zgp)
+        mu = Intercept .+ approximate_gp(Xgp, slambda, sdgp, lscale, zgp)
         sigma = exp.(Intercept_sigma .+ approximate_gp(Xgp_sigma, slambda_sigma,
-            sdgp_sigma, inv(inv_lscale_sigma), zgp_sigma))
+            sdgp_sigma, lscale_sigma, zgp_sigma))
         @batch for i in eachindex(Y)
             @observe Y[i] ~ WD.Normal(mu[i], sigma[i])
         end

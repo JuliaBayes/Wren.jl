@@ -26,6 +26,43 @@ using WrenDists: WrenDists
         point
     end
 
+    # Helpers shared by the density and gradient testsets below. Each oracle is
+    # written from the Stan program, independently of the Wren model.
+    logistic(x) = inv(1 + exp(-x))
+    logit_jacobian(x) = -log1p(exp(-x)) - log1p(exp(x))
+    posteriordb_data(name) = PosteriorDB.load(PosteriorDB.dataset(
+        PosteriorDB.posterior(PosteriorDB.database(), name)))
+    enzyme_model(name; kwargs...) =
+        VecModel(posteriordb_model(name), AutoEnzyme(; mode=Reverse); kwargs...)
+
+    # The density and the full native Enzyme gradient against an oracle.
+    function check(name, dimension, oracle, points; atol=1e-6)
+        vm = enzyme_model(name)
+        @test vm.dimension == dimension
+        for point in points
+            value, gradient = lp_and_grad(vm, point)
+            @test isapprox(value, oracle(point); atol)
+            @test isapprox(gradient, ForwardDiff.gradient(oracle, point); atol)
+        end
+    end
+
+    # For models too large for a full ForwardDiff gradient: the density, and the
+    # native Enzyme gradient in the `selected` coordinates.
+    function check_selected(vm, oracle, point, selected;
+            atol=1e-5, rtol=0.0, gradient_atol=atol, gradient_rtol=rtol)
+        @test vm.dimension == length(point)
+        value, gradient = lp_and_grad(vm, point)
+        @test isapprox(value, oracle(point); atol, rtol)
+        function selected_oracle(z)
+            full = Vector{eltype(z)}(point)
+            full[selected] .= z
+            return oracle(full)
+        end
+        @test isapprox(gradient[selected],
+            ForwardDiff.gradient(selected_oracle, point[selected]);
+            atol=gradient_atol, rtol=gradient_rtol)
+    end
+
     @testset "$name" for name in available_posteriordb_models()
         model = posteriordb_model(name)
         adtype = name == "state_wide_presidential_votes-hierarchical_gp" ||
@@ -45,7 +82,7 @@ using WrenDists: WrenDists
             v = [2.0, 1.0, 0.0, 0.0]
             @test isfinite(lp(vm, v))
         elseif name == "surgical_data-surgical_model"
-            # Gamma(shape=0.001) precision draws can underflow to zero.
+            # InverseGamma(shape=0.001) variance draws can overflow.
             v = vcat(-3.0, 0.0, fill(-3.0, 12))
             @test isfinite(lp(vm, v))
         elseif name == "mcycle_splines-accel_splines"
@@ -78,9 +115,7 @@ using WrenDists: WrenDists
     @testset "Imperial COVID-19 densities and native Enzyme gradients" begin
         for name in ("ecdc0401-covid19imperial_v2",
                 "ecdc0501-covid19imperial_v3")
-            data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-                PosteriorDB.database(), name,
-            )))
+            data = posteriordb_data(name)
             function covid_oracle(v)
                 mu = exp.(view(v, 1:14))
                 alpha_hier = exp.(view(v, 15:20))
@@ -118,35 +153,20 @@ using WrenDists: WrenDists
                 return density
             end
             point = covid_point()
-            vm = VecModel(posteriordb_model(name), AutoEnzyme(; mode=Reverse);
-                reduce_copies=false)
-            @test vm.dimension == 51
-            value, gradient = lp_and_grad(vm, point)
-            @test isapprox(value, covid_oracle(point); atol=1e-5)
+            vm = enzyme_model(name; reduce_copies=false)
             if name == "ecdc0401-covid19imperial_v2"
-                selected = [1, 15, 21, 22, 36, 37, 51]
-                positions = zeros(Int, length(point))
-                for (k, i) in enumerate(selected)
-                    positions[i] = k
-                end
-                function covid_selected_oracle(z)
-                    full = [positions[i] == 0 ? convert(eltype(z), point[i]) :
-                        z[positions[i]] for i in eachindex(point)]
-                    return covid_oracle(full)
-                end
-                selected_gradient = ForwardDiff.gradient(covid_selected_oracle,
-                    point[selected])
-                @test isapprox(gradient[selected], selected_gradient;
-                    atol=1e-4, rtol=1e-7)
+                check_selected(vm, covid_oracle, point, [1, 15, 21, 22, 36, 37, 51];
+                    gradient_atol=1e-4, gradient_rtol=1e-7)
+            else
+                @test vm.dimension == length(point)
+                @test isapprox(lp(vm, point), covid_oracle(point); atol=1e-5)
             end
         end
     end
 
     @testset "presidential hierarchical GP density and gradient" begin
         name = "state_wide_presidential_votes-hierarchical_gp"
-        data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-            PosteriorDB.database(), name,
-        )))
+        data = posteriordb_data(name)
         function gp_oracle(v)
             gp_region_std = reshape(view(v, 1:140), 14, 10)
             gp_state_std = reshape(view(v, 141:840), 14, 50)
@@ -204,44 +224,13 @@ using WrenDists: WrenDists
             end
             return density
         end
-        point = gp_point()
-        vm = VecModel(posteriordb_model(name), AutoEnzyme(; mode=Reverse);
-            reduce_copies=false)
-        @test vm.dimension == 933
-        value, gradient = lp_and_grad(vm, point)
-        @test isapprox(value, gp_oracle(point); atol=1e-5, rtol=1e-8)
-        selected = [1, 140, 141, 840, 912, 913, 928, 930, 933]
-        positions = zeros(Int, length(point))
-        for (k, i) in enumerate(selected)
-            positions[i] = k
-        end
-        function gp_selected_oracle(z)
-            full = [positions[i] == 0 ? convert(eltype(z), point[i]) :
-                z[positions[i]] for i in eachindex(point)]
-            return gp_oracle(full)
-        end
-        selected_gradient = ForwardDiff.gradient(gp_selected_oracle,
-            point[selected])
-        @test isapprox(gradient[selected], selected_gradient;
-            atol=1e-4, rtol=1e-7)
+        check_selected(enzyme_model(name; reduce_copies=false), gp_oracle,
+            gp_point(), [1, 140, 141, 840, 912, 913, 928, 930, 933];
+            rtol=1e-8, gradient_atol=1e-4, gradient_rtol=1e-7)
     end
 
     @testset "classical PosteriorDB densities and native Enzyme gradients" begin
-        logistic(x) = inv(1 + exp(-x))
-        logit_jacobian(x) = -log1p(exp(-x)) - log1p(exp(x))
-        function check(name, dimension, reference, points)
-            vm = VecModel(posteriordb_model(name), AutoEnzyme(; mode=Reverse))
-            @test vm.dimension == dimension
-            for point in points
-                value, gradient = lp_and_grad(vm, point)
-                @test isapprox(value, reference(point); atol=1e-6)
-                @test isapprox(gradient, ForwardDiff.gradient(reference, point); atol=1e-6)
-            end
-        end
-
-        seed_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-            PosteriorDB.database(), "seeds_data-seeds_model",
-        )))
+        seed_data = posteriordb_data("seeds_data-seeds_model")
         k, N, x1, x2 = seed_data["n"], seed_data["N"], seed_data["x1"], seed_data["x2"]
         nobs = length(k)
         log_choose = [logpdf(Binomial(N[i], 0.5), k[i]) + N[i] * log(2)
@@ -263,8 +252,7 @@ using WrenDists: WrenDists
                 seed_likelihood(alpha, b)
         end
         check("seeds_data-seeds_model", nobs + 5, seeds_reference,
-            [vcat([0.1, -0.2, 0.15, 0.3, -0.1], 0.05 .* sin.(1:nobs)),
-             vcat([-0.2, 0.3, -0.1, 0.1, 0.2], 0.04 .* cos.(1:nobs))])
+            [vcat([0.1, -0.2, 0.15, 0.3, -0.1], 0.05 .* sin.(1:nobs))])
 
         function seeds_cauchy_reference(v, centered)
             alpha = view(v, 1:4)
@@ -282,13 +270,10 @@ using WrenDists: WrenDists
         )
             reference(v) = seeds_cauchy_reference(v, centered)
             check(name, nobs + 5, reference,
-                [vcat([0.1, -0.2, 0.15, 0.3], 0.05 .* sin.(1:nobs), -0.1),
-                 vcat([-0.2, 0.3, -0.1, 0.1], 0.04 .* cos.(1:nobs), 0.2)])
+                [vcat([0.1, -0.2, 0.15, 0.3], 0.05 .* sin.(1:nobs), -0.1)])
         end
 
-        dugong_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-            PosteriorDB.database(), "dugongs_data-dugongs_model",
-        )))
+        dugong_data = posteriordb_data("dugongs_data-dugongs_model")
         function dugongs_reference(v)
             alpha, beta = v[1], v[2]
             lambda = 0.5 + 0.5 * logistic(v[3])
@@ -302,11 +287,9 @@ using WrenDists: WrenDists
                     for i in eachindex(y))
         end
         check("dugongs_data-dugongs_model", 4, dugongs_reference,
-            [[2.0, 1.0, -0.3, -0.1], [1.5, 0.6, 0.2, 0.3]])
+            [[2.0, 1.0, -0.3, -0.1]])
 
-        mixture_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-            PosteriorDB.database(), "normal_2-normal_mixture",
-        )))
+        mixture_data = posteriordb_data("normal_2-normal_mixture")
         function normal_mixture_reference(v)
             theta = logistic(v[1])
             mu1, mu2 = v[2], v[3]
@@ -316,12 +299,13 @@ using WrenDists: WrenDists
                         (1 - theta) * exp(logpdf(Normal(mu2, 1), yi)))
                     for yi in mixture_data["y"])
         end
+        # At zero both components are equal in every observation. A `logaddexp`
+        # that drops the derivative at a tie gives `[500, 4197.33, 0]` there
+        # instead of `[0, 2098.66, 2098.66]`.
         check("normal_2-normal_mixture", 3, normal_mixture_reference,
-            [[0.2, -0.8, 0.9], [-0.3, 0.4, -0.5]])
+            [zeros(3), [0.2, -0.8, 0.9]])
 
-        sesame_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-            PosteriorDB.database(), "sesame_data-sesame_one_pred_a",
-        )))
+        sesame_data = posteriordb_data("sesame_data-sesame_one_pred_a")
         function sesame_reference(v)
             sigma = exp(v[3])
             return v[3] + sum(logpdf(Normal(v[1] + v[2] *
@@ -329,11 +313,9 @@ using WrenDists: WrenDists
                 for i in eachindex(sesame_data["watched"]))
         end
         check("sesame_data-sesame_one_pred_a", 3, sesame_reference,
-            [[0.2, 0.3, log(0.8)], [-0.1, 0.5, log(1.2)]])
+            [[0.2, 0.3, log(0.8)]])
 
-        garch_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-            PosteriorDB.database(), "garch-garch11",
-        )))
+        garch_data = posteriordb_data("garch-garch11")
         function garch_reference(v)
             mu = v[1]
             alpha0 = exp(v[2])
@@ -353,32 +335,26 @@ using WrenDists: WrenDists
             end
             return prior + density
         end
+        # The last point is close to the boundary alpha1 + beta1 = 1.
         check("garch-garch11", 4, garch_reference,
-            [[0.0, log(0.2), -0.2, 0.1], [0.15, log(0.5), 0.3, -0.4],
-             [0.05, log(0.3), 4.0, 1.5]])
+            [[0.15, log(0.5), 0.3, -0.4], [0.05, log(0.3), 4.0, 1.5]])
 
-        surgical_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-            PosteriorDB.database(), "surgical_data-surgical_model",
-        )))
+        surgical_data = posteriordb_data("surgical_data-surgical_model")
         function surgical_reference(v)
             mu = v[1]
-            log_precision = v[2]
-            sigmasq = exp(-log_precision)
+            sigmasq = exp(v[2])
             sigma = sqrt(sigmasq)
             b = view(v, 3:length(v))
             return logpdf(Normal(0, 1000), mu) +
-                logpdf(InverseGamma(0.001, 0.001), sigmasq) - log_precision +
+                logpdf(InverseGamma(0.001, 0.001), sigmasq) + v[2] +
                 sum(logpdf(Normal(mu, sigma), bi) for bi in b) +
                 sum(logpdf(Binomial(surgical_data["n"][i], logistic(b[i])),
                     surgical_data["r"][i]) for i in eachindex(b))
         end
         check("surgical_data-surgical_model", 14, surgical_reference,
-            [vcat(-3.0, 0.0, -3.0 .+ 0.1 .* sin.(1:12)),
-             vcat(-2.5, -0.5, -2.5 .+ 0.1 .* cos.(1:12))])
+            [vcat(-2.5, 0.5, -2.5 .+ 0.1 .* cos.(1:12))])
 
-        prophet_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-            PosteriorDB.database(), "rstan_downloads-prophet",
-        )))
+        prophet_data = posteriordb_data("rstan_downloads-prophet")
         n_changes, n_beta = prophet_data["S"], prophet_data["K"]
         function prophet_reference(v)
             k, m = v[1], v[2]
@@ -403,29 +379,24 @@ using WrenDists: WrenDists
         check("rstan_downloads-prophet", 3 + n_changes + n_beta,
             prophet_reference,
             [vcat(0.1, 0.5, 0.01 .* sin.(1:n_changes), log(0.3),
-                0.01 .* cos.(1:n_beta)),
-             vcat(-0.1, 0.6, 0.02 .* cos.(1:n_changes), log(0.5),
-                -0.01 .* sin.(1:n_beta))])
+                0.01 .* cos.(1:n_beta))])
 
-        mcycle_gp_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-            PosteriorDB.database(), "mcycle_gp-accel_gp",
-        )))
+        mcycle_gp_data = posteriordb_data("mcycle_gp-accel_gp")
         function mcycle_gp_reference(v)
-            # The model samples 1/lscale, so v[3] and v[46] are -log(lscale).
-            intercept, sdgp, lscale = v[1], exp(v[2]), exp(-v[3])
+            intercept, sdgp, lscale = v[1], exp(v[2]), exp(v[3])
             zgp = view(v, 4:43)
             intercept_sigma, sdgp_sigma, lscale_sigma =
-                v[44], exp(v[45]), exp(-v[46])
+                v[44], exp(v[45]), exp(v[46])
             zgp_sigma = view(v, 47:66)
             alpha, beta = 1.124909, 0.0177
             student_t(mu, scale, x) = logpdf(TDist(3), (x - mu) / scale) - log(scale)
             prior = student_t(-13, 36, intercept) +
                 student_t(0, 36, sdgp) + log(2.0) + v[2] +
-                logpdf(InverseGamma(alpha, beta), lscale) - v[3] +
+                logpdf(InverseGamma(alpha, beta), lscale) + v[3] +
                 sum(logpdf(Normal(), zi) for zi in zgp) +
                 student_t(0, 10, intercept_sigma) +
                 student_t(0, 36, sdgp_sigma) + log(2.0) + v[45] +
-                logpdf(InverseGamma(alpha, beta), lscale_sigma) - v[46] +
+                logpdf(InverseGamma(alpha, beta), lscale_sigma) + v[46] +
                 sum(logpdf(Normal(), zi) for zi in zgp_sigma)
             function gp_values(X, frequencies, z, sd, lengthscale)
                 weights = [sqrt(sd^2 * sqrt(2 * pi) * lengthscale *
@@ -445,13 +416,11 @@ using WrenDists: WrenDists
             return prior + likelihood
         end
         check("mcycle_gp-accel_gp", 66, mcycle_gp_reference,
-            [vcat([-13.0, log(10.0), -log(0.05)], 0.05 .* sin.(1:40),
-                [3.0, log(2.0), -log(0.05)], 0.05 .* cos.(1:20))])
+            [vcat([-13.0, log(10.0), log(0.05)], 0.05 .* sin.(1:40),
+                [3.0, log(2.0), log(0.06)], 0.05 .* cos.(1:20))])
 
-        uk_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-            PosteriorDB.database(),
-            "uk_drivers-state_space_stochastic_level_stochastic_seasonal",
-        )))
+        uk_data = posteriordb_data(
+            "uk_drivers-state_space_stochastic_level_stochastic_seasonal")
         function uk_drivers_reference(v)
             n = uk_data["n"]
             y, x, w = uk_data["y"], uk_data["x"], uk_data["w"]
@@ -481,9 +450,7 @@ using WrenDists: WrenDists
 
         for name in ("ovarian-logistic_regression_rhs",
                 "prostate-logistic_regression_rhs")
-            data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-                PosteriorDB.database(), name,
-            )))
+            data = posteriordb_data(name)
             d, n = data["d"], data["n"]
             function rhs_reference(v)
                 beta0 = v[1]
@@ -514,34 +481,15 @@ using WrenDists: WrenDists
             point = vcat(0.1, 0.01 .* sin.(1:d),
                 log(2 * data["scale_global"]),
                 0.02 .* cos.(1:d), 0.0)
-            vm = VecModel(posteriordb_model(name), AutoEnzyme(; mode=Reverse))
-            @test vm.dimension == length(point)
-            value, gradient = lp_and_grad(vm, point)
-            @test isapprox(value, rhs_reference(point); atol=1e-5, rtol=1e-8)
-            selected = [1, 2, d + 1, d + 2, d + 3, 2d + 2, 2d + 3]
-            positions = zeros(Int, length(point))
-            for (k, i) in enumerate(selected)
-                positions[i] = k
-            end
-            function rhs_selected_reference(s)
-                full = [positions[i] == 0 ? convert(eltype(s), point[i]) :
-                    s[positions[i]] for i in eachindex(point)]
-                return rhs_reference(full)
-            end
-            selected_gradient = ForwardDiff.gradient(rhs_selected_reference,
-                point[selected])
-            @test isapprox(gradient[selected], selected_gradient;
-                atol=1e-5, rtol=1e-6)
+            check_selected(enzyme_model(name), rhs_reference, point,
+                [1, 2, d + 1, d + 2, d + 3, 2d + 2, 2d + 3];
+                rtol=1e-8, gradient_rtol=1e-6)
         end
     end
 
     @testset "additional Gaussian mixture densities and native Enzyme gradients" begin
-        logistic(x) = inv(1 + exp(-x))
-        logit_jacobian(x) = -log1p(exp(-x)) - log1p(exp(x))
         low_dim_name = "low_dim_gauss_mix_collapse-low_dim_gauss_mix_collapse"
-        low_dim_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-            PosteriorDB.database(), low_dim_name,
-        )))
+        low_dim_data = posteriordb_data(low_dim_name)
         function low_dim_reference(v)
             mu = view(v, 1:2)
             sigma = exp.(view(v, 3:4))
@@ -554,20 +502,12 @@ using WrenDists: WrenDists
                         (1 - theta) * exp(logpdf(Normal(mu[2], sigma[2]), yi)))
                     for yi in low_dim_data["y"])
         end
-        low_dim_vm = VecModel(posteriordb_model(low_dim_name), AutoEnzyme(; mode=Reverse))
-        @test low_dim_vm.dimension == 5
-        for point in (zeros(5), [0.2, -0.7, -0.1, 0.3, -0.4],
-                      [-0.5, 0.6, 0.2, -0.2, 0.3])
-            value, gradient = lp_and_grad(low_dim_vm, point)
-            @test isapprox(value, low_dim_reference(point); atol=1e-6)
-            @test isapprox(gradient, ForwardDiff.gradient(low_dim_reference, point);
-                atol=1e-6)
-        end
+        # At zero the two components are equal: a tie in every observation.
+        check(low_dim_name, 5, low_dim_reference,
+            [zeros(5), [0.2, -0.7, -0.1, 0.3, -0.4]])
 
         ordered_name = "low_dim_gauss_mix-low_dim_gauss_mix"
-        ordered_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-            PosteriorDB.database(), ordered_name,
-        )))
+        ordered_data = posteriordb_data(ordered_name)
         function ordered_reference(v)
             mu = [v[1], v[1] + exp(v[2])]
             sigma = exp.(view(v, 3:4))
@@ -580,20 +520,10 @@ using WrenDists: WrenDists
                         (1 - theta) * exp(logpdf(Normal(mu[2], sigma[2]), yi)))
                     for yi in ordered_data["y"])
         end
-        ordered_vm = VecModel(posteriordb_model(ordered_name), AutoEnzyme(; mode=Reverse))
-        @test ordered_vm.dimension == 5
-        for point in ([0.0, 0.0, -0.1, 0.2, 0.0],
-                      [-0.4, 0.3, 0.1, -0.2, 0.5])
-            value, gradient = lp_and_grad(ordered_vm, point)
-            @test isapprox(value, ordered_reference(point); atol=1e-6)
-            @test isapprox(gradient, ForwardDiff.gradient(ordered_reference, point);
-                atol=1e-6)
-        end
+        check(ordered_name, 5, ordered_reference, [[-0.4, 0.3, 0.1, -0.2, 0.5]])
 
         mixture_name = "normal_5-normal_mixture_k"
-        mixture_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-            PosteriorDB.database(), mixture_name,
-        )))
+        mixture_data = posteriordb_data(mixture_name)
         extension = Base.get_extension(WrenCore, :WrenCorePosteriorDBExt)
         theta = [0.08, 0.12, 0.20, 0.25, 0.35]
         mu = [-1.1, -0.4, 0.3, 0.9, 1.5]
@@ -618,20 +548,7 @@ using WrenDists: WrenDists
     end
 
     @testset "continuous PosteriorDB densities and native Enzyme gradients" begin
-        function check(name, dimension, reference, points)
-            vm = VecModel(posteriordb_model(name), AutoEnzyme(; mode=Reverse))
-            @test vm.dimension == dimension
-            for point in points
-                value, gradient = lp_and_grad(vm, point)
-                @test isapprox(value, reference(point); atol=1e-6)
-                @test isapprox(gradient, ForwardDiff.gradient(reference, point);
-                    atol=1e-6)
-            end
-        end
-
-        sblrc_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-            PosteriorDB.database(), "sblrc-blr",
-        )))
+        sblrc_data = posteriordb_data("sblrc-blr")
         function sblrc_reference(v)
             beta = view(v, 1:5)
             sigma = exp(v[6])
@@ -641,15 +558,10 @@ using WrenDists: WrenDists
                 sum(logpdf(Normal(mu[i], sigma), sblrc_data["y"][i])
                     for i in eachindex(mu))
         end
-        @test sblrc_data["D"] == 5
-        @test sblrc_data["N"] == length(sblrc_data["y"]) == 100
         check("sblrc-blr", 6, sblrc_reference,
-            [[0.1, -0.2, 0.3, 0.05, -0.1, -0.2],
-             [-0.1, 0.15, -0.05, 0.2, 0.1, 0.3]])
+            [[0.1, -0.2, 0.3, 0.05, -0.1, -0.2]])
 
-        gp_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-            PosteriorDB.database(), "gp_pois_regr-gp_pois_regr",
-        )))
+        gp_data = posteriordb_data("gp_pois_regr-gp_pois_regr")
         gp_dist_sq = (gp_data["x"] .- gp_data["x"]') .^ 2
         function gp_pois_reference(v)
             rho, alpha = exp(v[1]), exp(v[2])
@@ -663,14 +575,10 @@ using WrenDists: WrenDists
                 sum(logpdf(Poisson(exp(f[i])), gp_data["k"][i])
                     for i in eachindex(f))
         end
-        @test gp_data["N"] == 11
         check("gp_pois_regr-gp_pois_regr", 13, gp_pois_reference,
-            [vcat([log(5.0), log(2.0)], zeros(11)),
-             vcat([log(6.0), log(1.5)], 0.1 .* sin.(1:11))])
+            [vcat([log(6.0), log(1.5)], 0.1 .* sin.(1:11))])
 
-        spline_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-            PosteriorDB.database(), "mcycle_splines-accel_splines",
-        )))
+        spline_data = posteriordb_data("mcycle_splines-accel_splines")
         function spline_reference(v)
             intercept = v[1]
             bs = view(v, 2:2)
@@ -696,17 +604,11 @@ using WrenDists: WrenDists
             end
             return total
         end
-        @test spline_data["Ks"] == spline_data["Ks_sigma"] == 1
-        @test spline_data["knots_1"] == spline_data["knots_sigma_1"] == 38
         check("mcycle_splines-accel_splines", 82, spline_reference,
-            [vcat([-12.0, 0.1], zeros(38), [log(5.0), 0.5, -0.1],
-                  zeros(38), [log(2.0)]),
-             vcat([-10.0, -0.1], 0.01 .* sin.(1:38),
+            [vcat([-10.0, -0.1], 0.01 .* sin.(1:38),
                   [log(4.0), 0.2, 0.05], 0.01 .* cos.(1:38), [log(1.5)])])
 
-        arma_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-            PosteriorDB.database(), "arma-arma11",
-        )))
+        arma_data = posteriordb_data("arma-arma11")
         function arma_reference(v)
             mu, phi, theta, sigma = v[1], v[2], v[3], exp(v[4])
             y = arma_data["y"]
@@ -719,11 +621,9 @@ using WrenDists: WrenDists
                 log(2) + v[4] + sum(logpdf(Normal(0, sigma), e) for e in errors)
         end
         check("arma-arma11", 4, arma_reference,
-            [[0.2, 0.5, -0.3, -0.2], [-0.1, 0.3, 0.2, 0.1]])
+            [[0.2, 0.5, -0.3, -0.2]])
 
-        loss_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-            PosteriorDB.database(), "loss_curves-losscurve_sislob",
-        )))
+        loss_data = posteriordb_data("loss_curves-losscurve_sislob")
         function loss_reference(v)
             omega, theta = exp(v[1]), exp(v[2])
             mu_LR, sd_LR = v[3], exp(v[4])
@@ -748,12 +648,9 @@ using WrenDists: WrenDists
         end
         @test loss_data["growthmodel_id"] == 1
         check("loss_curves-losscurve_sislob", 15, loss_reference,
-            [vcat([0.0, 0.2, -0.1, -0.3], zeros(10), [-0.4]),
-             vcat([0.1, -0.2, 0.2, 0.1], fill(-0.2, 10), [0.2])])
+            [vcat([0.1, -0.2, 0.2, 0.1], -0.2 .+ 0.05 .* sin.(1:10), [0.2])])
 
-        diamonds_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-            PosteriorDB.database(), "diamonds-diamonds",
-        )))
+        diamonds_data = posteriordb_data("diamonds-diamonds")
         X = diamonds_data["X"]
         Xc = X[:, 2:end] .- mean(X[:, 2:end]; dims=1)
         function diamonds_reference(v)
@@ -769,17 +666,14 @@ using WrenDists: WrenDists
             end
             return total
         end
-        @test diamonds_data["K"] == 25
         check("diamonds-diamonds", 26, diamonds_reference,
-            [vcat(zeros(24), [8.0, log(10.0)])])
+            [vcat(0.02 .* sin.(1:24), [7.5, log(0.5)])])
 
-        soil_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-            PosteriorDB.database(), "soil_carbon-soil_incubation",
-        )))
+        soil_data = posteriordb_data("soil_carbon-soil_incubation")
         # Integrate the original two-pool equations independently of the
         # closed-form implementation. RK4 with a 0.05-day step resolves this
-        # public 42-day fixture well below the density tolerance.
-        function soil_reference(v)
+        # public 42-day fixture well below the density tolerance at slow rates.
+        function soil_reference(v; step=0.05)
             k1, k2, alpha21, alpha12 = exp.(view(v, 1:4))
             gamma, sigma = inv(1 + exp(-v[5])), exp(v[6])
             total = soil_data["totalC_t0"]
@@ -796,7 +690,7 @@ using WrenDists: WrenDists
                 logpdf(Cauchy(0, 1), sigma) + v[6] + 5log(2.0)
             for i in eachindex(soil_data["ts"])
                 current = soil_data["ts"][i]
-                steps = ceil(Int, (current - previous) / 0.05)
+                steps = ceil(Int, (current - previous) / step)
                 h = (current - previous) / steps
                 for _ in 1:steps
                     a1, b1 = rate(c1, c2)
@@ -812,10 +706,13 @@ using WrenDists: WrenDists
             end
             return density
         end
-        @test soil_data["N_t"] == 25
         check("soil_carbon-soil_incubation", 6, soil_reference,
-            [[log(0.2), log(0.02), log(0.3), log(0.1), 1.0, log(0.4)],
-             [log(0.1), log(0.03), log(0.2), log(0.15), 0.8, log(0.6)]])
+            [[log(0.2), log(0.02), log(0.3), log(0.1), 1.0, log(0.4)]])
+        # Fast pools that pass all carbon to each other keep the total constant.
+        # Evaluating the decaying and growing exponentials separately gave
+        # 0 * Inf = NaN here.
+        check("soil_carbon-soil_incubation", 6, v -> soil_reference(v; step=0.001),
+            [[log(18.0), log(18.0), 0.0, 0.0, 1.0, log(0.4)]])
     end
 end
 

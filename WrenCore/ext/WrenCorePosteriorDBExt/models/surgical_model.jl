@@ -14,10 +14,8 @@ end
 
 @wren function surgical_model(r, n)
     mu ~ WD.Normal(0.0, 1000.0)
-    # Stan's sigmasq ~ inv_gamma(0.001, 0.001) is exactly equivalent to
-    # precision = 1/sigmasq ~ Gamma(shape=0.001, scale=1000).
-    precision ~ WD.Gamma(0.001, 1000.0)
-    sigma = inv(sqrt(precision))
+    sigmasq ~ WD.InverseGamma(0.001, 0.001)
+    sigma = sqrt(sigmasq)
     @iid b ~ WD.Normal(mu, sigma) size=length(r)
     @batch for i in eachindex(r)
         @observe r[i] ~ WD.BinomialLogit(n[i], b[i])

@@ -1,10 +1,10 @@
 # PosteriorDB: normal_2-normal_mixture
 module NormalMixture
 
-using LogExpFunctions: logaddexp
 using PosteriorDB
 using WrenCore: @wren, @addloglikelihood, @iid, logdensityof
 using WrenDists: WrenDists as WD
+using ..LogAddExp: logaddexp
 
 const data = let
     pdb = PosteriorDB.database()

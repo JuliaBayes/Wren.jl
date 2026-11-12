@@ -4,6 +4,7 @@ module LowDimGaussMixCollapse
 using PosteriorDB
 using WrenCore: @wren, @addloglikelihood, @iid, logdensityof
 using WrenDists: WrenDists as WD
+using ..LogAddExp: logaddexp
 
 const data = let
     pdb = PosteriorDB.database()
@@ -12,16 +13,13 @@ const data = let
     )))
 end
 
-# Retain derivatives when the two component log weights happen to be equal.
-finite_logaddexp(a, b) = a < b ? b + log1p(exp(a - b)) : a + log1p(exp(b - a))
-
 function low_dim_mixture_logp(mu, sigma, theta, y)
     first_weight, second_weight = log(theta), log1p(-theta)
     total = zero(theta + mu[1] + sigma[1])
     for yi in y
         first = first_weight + logdensityof(WD.Normal(mu[1], sigma[1]), yi)
         second = second_weight + logdensityof(WD.Normal(mu[2], sigma[2]), yi)
-        total += finite_logaddexp(first, second)
+        total += logaddexp(first, second)
     end
     return total
 end
