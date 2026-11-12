@@ -349,7 +349,7 @@ which guarantees correctness, but might not be as efficient as the vectorised fo
 ## [Generated quantities](@id generated-quantities)
 
 After sampling from a model, we often want to transform these samples into other values we're interested in.
-Following the nomenclature established by Stan, we call these "generated quantities".
+Following the nomenclature established by Stan, we call these "generated quantities" (GQs).
 
 For example, consider logistic regression where parameters are often on the log-odds scale.
 Reporting log-odds is nasty, so we instead transform them to odds ratios:
@@ -358,14 +358,14 @@ Reporting log-odds is nasty, so we instead transform them to odds ratios:
 @wren function logistic_regression(y)
     beta ~ Normal()
     for i in eachindex(y)
-        y[i] ~ BernoulliLogit(beta)
+        @observe y[i] ~ BernoulliLogit(beta)
     end
     @gq odds_ratio = exp(beta)
 end
 
 y = [0, 1, 0, 0, 0, 1]
-model = logistic_regression(y) | (; y)
-rand(model) # TODO check if this should now be simulate(model)?
+model = logistic_regression(y)
+simulate(model)
 ```
 
 You can write any expression on the right-hand of `@gq`, including `begin` or `let` blocks.
