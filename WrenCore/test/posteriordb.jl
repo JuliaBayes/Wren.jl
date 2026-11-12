@@ -27,214 +27,108 @@ using WrenDists: WrenDists
 
     @test_throws ArgumentError posteriordb_model("not-a-posterior")
 
-    @testset "noncentered hierarchical radon: density and gradient" begin
-        for name in (
-            "radon_all-radon_hierarchical_intercept_noncentered",
-            "radon_mn-radon_hierarchical_intercept_noncentered",
+    @testset "radon densities and native Enzyme gradients" begin
+        # Sums of Normal log densities, and a half-normal(0, 1) scale on its log
+        # coordinate with the Jacobian. The oracles below are built from these.
+        normal_sum(x, mu, sigma) =
+            -length(x) * log(sigma * sqrt(2π)) - sum(abs2, x .- mu) / (2sigma^2)
+        half_normal_scale(log_sigma) =
+            log(2 / π) / 2 - exp(2log_sigma) / 2 + log_sigma
+
+        function hierarchical_intercept(data, v)
+            J = data["J"]
+            alpha_raw, beta, mu_alpha = view(v, 1:J), view(v, (J + 1):(J + 2)), v[J + 3]
+            sigma_alpha, sigma_y = exp(v[J + 4]), exp(v[J + 5])
+            alpha = mu_alpha .+ sigma_alpha .* alpha_raw
+            mu = alpha[data["county_idx"]] .+ beta[1] .* data["log_uppm"] .+
+                beta[2] .* data["floor_measure"]
+            return normal_sum(alpha_raw, 0, 1) + normal_sum(beta, 0, 10) +
+                normal_sum(mu_alpha, 0, 10) + half_normal_scale(v[J + 4]) +
+                half_normal_scale(v[J + 5]) + normal_sum(data["log_radon"], mu, sigma_y)
+        end
+        function partially_pooled(data, v)
+            J = data["J"]
+            alpha_raw, mu_alpha = view(v, 1:J), v[J + 1]
+            sigma_alpha, sigma_y = exp(v[J + 2]), exp(v[J + 3])
+            alpha = mu_alpha .+ sigma_alpha .* alpha_raw
+            return normal_sum(alpha_raw, 0, 1) + normal_sum(mu_alpha, 0, 10) +
+                half_normal_scale(v[J + 2]) + half_normal_scale(v[J + 3]) +
+                normal_sum(data["log_radon"], alpha[data["county_idx"]], sigma_y)
+        end
+        function variable_intercept(data, v)
+            J = data["J"]
+            alpha_raw, beta, mu_alpha = view(v, 1:J), v[J + 1], v[J + 2]
+            sigma_alpha, sigma_y = exp(v[J + 3]), exp(v[J + 4])
+            alpha = mu_alpha .+ sigma_alpha .* alpha_raw
+            mu = alpha[data["county_idx"]] .+ data["floor_measure"] .* beta
+            return normal_sum(alpha_raw, 0, 1) + normal_sum(beta, 0, 10) +
+                normal_sum(mu_alpha, 0, 10) + half_normal_scale(v[J + 3]) +
+                half_normal_scale(v[J + 4]) + normal_sum(data["log_radon"], mu, sigma_y)
+        end
+        function variable_slope(data, v)
+            J = data["J"]
+            alpha, beta_raw, mu_beta = v[1], view(v, 2:(J + 1)), v[J + 2]
+            sigma_beta, sigma_y = exp(v[J + 3]), exp(v[J + 4])
+            beta = mu_beta .+ sigma_beta .* beta_raw
+            mu = alpha .+ data["floor_measure"] .* beta[data["county_idx"]]
+            return normal_sum(beta_raw, 0, 1) + normal_sum(alpha, 0, 10) +
+                normal_sum(mu_beta, 0, 10) + half_normal_scale(v[J + 3]) +
+                half_normal_scale(v[J + 4]) + normal_sum(data["log_radon"], mu, sigma_y)
+        end
+        function variable_intercept_slope(data, v)
+            J = data["J"]
+            sigma_y, sigma_alpha, sigma_beta = exp(v[1]), exp(v[2]), exp(v[3])
+            alpha_raw, beta_raw = view(v, 4:(J + 3)), view(v, (J + 4):(2J + 3))
+            mu_alpha, mu_beta = v[2J + 4], v[2J + 5]
+            alpha = mu_alpha .+ sigma_alpha .* alpha_raw
+            beta = mu_beta .+ sigma_beta .* beta_raw
+            mu = alpha[data["county_idx"]] .+
+                data["floor_measure"] .* beta[data["county_idx"]]
+            return normal_sum(alpha_raw, 0, 1) + normal_sum(beta_raw, 0, 1) +
+                normal_sum(mu_alpha, 0, 10) + normal_sum(mu_beta, 0, 10) +
+                sum(half_normal_scale, view(v, 1:3)) +
+                normal_sum(data["log_radon"], mu, sigma_y)
+        end
+        function county_intercept(data, v)
+            J = data["J"]
+            alpha, beta, sigma_y = view(v, 1:J), v[J + 1], exp(v[J + 2])
+            mu = alpha[data["county_idx"]] .+ beta .* data["floor_measure"]
+            return normal_sum(alpha, 0, 10) + normal_sum(beta, 0, 10) +
+                half_normal_scale(v[J + 2]) + normal_sum(data["log_radon"], mu, sigma_y)
+        end
+
+        # One oracle and one point per model family.
+        families = (
+            ("radon_hierarchical_intercept_noncentered", hierarchical_intercept,
+                J -> vcat(0.05 .* sin.(1:J), [0.08, -0.11], 0.2, log(0.7), log(0.9))),
+            ("radon_partially_pooled_noncentered", partially_pooled,
+                J -> vcat(0.05 .* sin.(1:J), 0.2, log(0.7), log(0.9))),
+            ("radon_variable_intercept_noncentered", variable_intercept,
+                J -> vcat(0.05 .* sin.(1:J), 0.08, 0.2, log(0.7), log(0.9))),
+            ("radon_variable_slope_noncentered", variable_slope,
+                J -> vcat(0.08, 0.05 .* sin.(1:J), 0.2, log(0.7), log(0.9))),
+            ("radon_variable_intercept_slope_noncentered", variable_intercept_slope,
+                J -> vcat(log(0.9), log(0.7), log(0.8), 0.04 .* sin.(1:J),
+                    0.04 .* cos.(1:J), 0.2, -0.1)),
+            ("radon_county_intercept", county_intercept,
+                J -> vcat(0.04 .* sin.(1:J), 0.2, log(0.9))),
         )
+        for (variant, family, point_for) in families,
+                dataset in ("radon_mn", "radon_all")
+
+            name = "$dataset-$variant"
             data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
                 PosteriorDB.database(), name,
             )))
-            J = data["J"]
-            county_idx = data["county_idx"]
-            log_uppm = data["log_uppm"]
-            floor_measure = data["floor_measure"]
-            y = data["log_radon"]
-            function oracle(v)
-                alpha_raw = view(v, 1:J)
-                beta = view(v, J + 1:J + 2)
-                mu_alpha = v[J + 3]
-                sigma_alpha = exp(v[J + 4])
-                sigma_y = exp(v[J + 5])
-                alpha = mu_alpha .+ sigma_alpha .* alpha_raw
-                mu = alpha[county_idx] .+ beta[1] .* log_uppm .+
-                    beta[2] .* floor_measure
-                residual = y - mu
-                return -J * log(sqrt(2π)) - sum(abs2, alpha_raw) / 2 -
-                    2log(10sqrt(2π)) - sum(abs2, beta) / 200 -
-                    log(10sqrt(2π)) - mu_alpha^2 / 200 +
-                    log(2 / π) - (sigma_alpha^2 + sigma_y^2) / 2 -
-                    length(y) * log(sigma_y * sqrt(2π)) -
-                    sum(abs2, residual) / (2sigma_y^2) + v[J + 4] + v[J + 5]
-            end
+            oracle(v) = family(data, v)
+            point = point_for(data["J"])
             vm = VecModel(posteriordb_model(name), AutoEnzyme(; mode=Reverse))
-            @test vm.dimension == J + 5
-            for (log_sigma_alpha, log_sigma_y) in ((log(0.7), log(0.9)), (log(1.1), log(1.2)))
-                point = vcat(0.05 .* sin.(1:J), [0.08, -0.11], 0.2,
-                    log_sigma_alpha, log_sigma_y)
-                value, gradient = lp_and_grad(vm, point)
-                @test isapprox(value, oracle(point); atol=1e-5)
-                @test isapprox(gradient, ForwardDiff.gradient(oracle, point); atol=1e-5)
-            end
-        end
-    end
-
-    @testset "noncentered partially pooled radon: density and gradient" begin
-        for name in (
-            "radon_all-radon_partially_pooled_noncentered",
-            "radon_mn-radon_partially_pooled_noncentered",
-        )
-            data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-                PosteriorDB.database(), name,
-            )))
-            J = data["J"]
-            county_idx = data["county_idx"]
-            y = data["log_radon"]
-            function oracle(v)
-                alpha_raw = view(v, 1:J)
-                mu_alpha = v[J + 1]
-                sigma_alpha = exp(v[J + 2])
-                sigma_y = exp(v[J + 3])
-                alpha = mu_alpha .+ sigma_alpha .* alpha_raw
-                residual = y - alpha[county_idx]
-                return -J * log(sqrt(2π)) - sum(abs2, alpha_raw) / 2 -
-                    log(10sqrt(2π)) - mu_alpha^2 / 200 +
-                    log(2 / π) - (sigma_alpha^2 + sigma_y^2) / 2 -
-                    length(y) * log(sigma_y * sqrt(2π)) -
-                    sum(abs2, residual) / (2sigma_y^2) + v[J + 2] + v[J + 3]
-            end
-            vm = VecModel(posteriordb_model(name), AutoEnzyme(; mode=Reverse))
-            @test vm.dimension == J + 3
-            for (log_sigma_alpha, log_sigma_y) in ((log(0.7), log(0.9)), (log(1.1), log(1.2)))
-                point = vcat(0.05 .* sin.(1:J), 0.2, log_sigma_alpha, log_sigma_y)
-                value, gradient = lp_and_grad(vm, point)
-                @test isapprox(value, oracle(point); atol=1e-5)
-                @test isapprox(gradient, ForwardDiff.gradient(oracle, point); atol=1e-5)
-            end
-        end
-    end
-
-    @testset "noncentered variable radon: density and gradient" begin
-        for dataset in ("radon_all", "radon_mn")
-            for variant in ("radon_variable_intercept_noncentered",
-                            "radon_variable_slope_noncentered")
-                name = "$dataset-$variant"
-                data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-                    PosteriorDB.database(), name,
-                )))
-                J = data["J"]
-                county_idx = data["county_idx"]
-                floor_measure = data["floor_measure"]
-                y = data["log_radon"]
-                oracle = if variant == "radon_variable_intercept_noncentered"
-                    v -> begin
-                        alpha_raw = view(v, 1:J)
-                        beta = v[J + 1]
-                        mu_alpha = v[J + 2]
-                        sigma_alpha = exp(v[J + 3])
-                        sigma_y = exp(v[J + 4])
-                        alpha = mu_alpha .+ sigma_alpha .* alpha_raw
-                        residual = y - (alpha[county_idx] .+ floor_measure .* beta)
-                        return -J * log(sqrt(2π)) - sum(abs2, alpha_raw) / 2 -
-                            2log(10sqrt(2π)) - (beta^2 + mu_alpha^2) / 200 +
-                            log(2 / π) - (sigma_alpha^2 + sigma_y^2) / 2 -
-                            length(y) * log(sigma_y * sqrt(2π)) -
-                            sum(abs2, residual) / (2sigma_y^2) + v[J + 3] + v[J + 4]
-                    end
-                else
-                    v -> begin
-                        alpha = v[1]
-                        beta_raw = view(v, 2:J + 1)
-                        mu_beta = v[J + 2]
-                        sigma_beta = exp(v[J + 3])
-                        sigma_y = exp(v[J + 4])
-                        beta = mu_beta .+ sigma_beta .* beta_raw
-                        residual = y - (alpha .+ floor_measure .* beta[county_idx])
-                        return -J * log(sqrt(2π)) - sum(abs2, beta_raw) / 2 -
-                            2log(10sqrt(2π)) - (alpha^2 + mu_beta^2) / 200 +
-                            log(2 / π) - (sigma_beta^2 + sigma_y^2) / 2 -
-                            length(y) * log(sigma_y * sqrt(2π)) -
-                            sum(abs2, residual) / (2sigma_y^2) + v[J + 3] + v[J + 4]
-                    end
-                end
-                vm = VecModel(posteriordb_model(name), AutoEnzyme(; mode=Reverse))
-                @test vm.dimension == J + 4
-                for (log_sigma, log_sigma_y) in ((log(0.7), log(0.9)), (log(1.1), log(1.2)))
-                    point = variant == "radon_variable_intercept_noncentered" ?
-                        vcat(0.05 .* sin.(1:J), 0.08, 0.2, log_sigma, log_sigma_y) :
-                        vcat(0.08, 0.05 .* sin.(1:J), 0.2, log_sigma, log_sigma_y)
-                    value, gradient = lp_and_grad(vm, point)
-                    @test isapprox(value, oracle(point); atol=1e-5)
-                    @test isapprox(gradient, ForwardDiff.gradient(oracle, point); atol=1e-5)
-                end
-            end
-        end
-    end
-
-    @testset "noncentered variable intercept and slope radon" begin
-        for name in (
-            "radon_all-radon_variable_intercept_slope_noncentered",
-            "radon_mn-radon_variable_intercept_slope_noncentered",
-        )
-            data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-                PosteriorDB.database(), name,
-            )))
-            J = data["J"]
-            county_idx = data["county_idx"]
-            floor_measure = data["floor_measure"]
-            y = data["log_radon"]
-            function oracle(v)
-                sigma_y = exp(v[1])
-                sigma_alpha = exp(v[2])
-                sigma_beta = exp(v[3])
-                alpha_raw = view(v, 4:J + 3)
-                beta_raw = view(v, J + 4:2J + 3)
-                mu_alpha = v[2J + 4]
-                mu_beta = v[2J + 5]
-                alpha = mu_alpha .+ sigma_alpha .* alpha_raw
-                beta = mu_beta .+ sigma_beta .* beta_raw
-                residual = y - (alpha[county_idx] .+ floor_measure .* beta[county_idx])
-                return -2J * log(sqrt(2π)) -
-                    (sum(abs2, alpha_raw) + sum(abs2, beta_raw)) / 2 -
-                    2log(10sqrt(2π)) - (mu_alpha^2 + mu_beta^2) / 200 +
-                    1.5log(2 / π) - (sigma_y^2 + sigma_alpha^2 + sigma_beta^2) / 2 -
-                    length(y) * log(sigma_y * sqrt(2π)) -
-                    sum(abs2, residual) / (2sigma_y^2) + v[1] + v[2] + v[3]
-            end
-            vm = VecModel(posteriordb_model(name), AutoEnzyme(; mode=Reverse))
-            @test vm.dimension == 2J + 5
-            for (log_sigma_y, log_sigma_alpha, log_sigma_beta) in (
-                (log(0.9), log(0.7), log(0.8)),
-                (log(1.2), log(1.1), log(0.9)),
-            )
-                point = vcat(log_sigma_y, log_sigma_alpha, log_sigma_beta,
-                    0.04 .* sin.(1:J), 0.04 .* cos.(1:J), 0.2, -0.1)
-                value, gradient = lp_and_grad(vm, point)
-                @test isapprox(value, oracle(point); atol=1e-5)
-                @test isapprox(gradient, ForwardDiff.gradient(oracle, point); atol=1e-5)
-            end
-        end
-    end
-
-    @testset "county-intercept radon" begin
-        for name in (
-            "radon_all-radon_county_intercept",
-            "radon_mn-radon_county_intercept",
-        )
-            data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-                PosteriorDB.database(), name,
-            )))
-            J = data["J"]
-            county_idx = data["county_idx"]
-            floor_measure = data["floor_measure"]
-            y = data["log_radon"]
-            function oracle(v)
-                alpha = view(v, 1:J)
-                beta = v[J + 1]
-                sigma_y = exp(v[J + 2])
-                residual = y - (alpha[county_idx] .+ beta .* floor_measure)
-                return -(J + 1) * log(10sqrt(2π)) -
-                    (sum(abs2, alpha) + beta^2) / 200 +
-                    0.5log(2 / π) - sigma_y^2 / 2 -
-                    length(y) * log(sigma_y * sqrt(2π)) -
-                    sum(abs2, residual) / (2sigma_y^2) + v[J + 2]
-            end
-            vm = VecModel(posteriordb_model(name), AutoEnzyme(; mode=Reverse))
-            @test vm.dimension == J + 2
-            for (beta, log_sigma_y) in ((0.2, log(0.9)), (-0.1, log(1.2)))
-                point = vcat(0.04 .* sin.(1:J), beta, log_sigma_y)
-                value, gradient = lp_and_grad(vm, point)
-                @test isapprox(value, oracle(point); atol=1e-5)
+            @test vm.dimension == length(point)
+            value, gradient = lp_and_grad(vm, point)
+            @test isapprox(value, oracle(point); atol=1e-5)
+            # Both datasets bind the same model definition, so the full gradient is
+            # checked on the smaller Minnesota dataset only.
+            if dataset == "radon_mn"
                 @test isapprox(gradient, ForwardDiff.gradient(oracle, point); atol=1e-5)
             end
         end
