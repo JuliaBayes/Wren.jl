@@ -8,6 +8,19 @@ It mixes regular Julia code with two probabilistic primitives:
 
 Function arguments have no special meaning in Wren: they're just quantities that are passed into the model.
 
+You can assign a site name with `@sample x ~ Normal() name=:prior` or `@observe y ~ Normal(x) name=:obs`.
+Site names must be literal Symbols.
+This does not change parameter names, which still follow the left-hand side.
+Site names identify sites for latent sources and accumulators.
+With `@iid`, put the options after the distribution: `@sample @iid x ~ Normal() size=2 name=:prior`.
+
+Site names need not be unique: distinct statements may share a name, and a site in a loop
+uses the same name on every iteration. Each occurrence contributes separately to the density,
+but custom accumulators keyed only by site name may group these contributions.
+Use distinct names when those accumulators should distinguish the statements.
+For sampling sites encountered more than once during preparation, vectorised models use
+parameter names for lookup instead of caching a single parameter under the shared site name.
+
 ## `sample` with distributions
 
 **All** `x ~ y` statements are lowered into `sample` statements.
@@ -26,16 +39,15 @@ model = f()
 
 This model has a single latent variable, `x`, drawn from `Normal()`.
 
-Wren uses a concept of *accumulators* to represent outputs from a model.
-We'll use a few of Wren's functions to extract information from these; we won't explain them here, but please do see [Models](@ref models) for more usage details.
+Wren uses a `ModelResult` type to represent all the information that can be obtained by evaluating a model.
+We'll use a few of Wren's functions to extract information from these.
 
 ```@example model
-accs = rand_with_logp(model)
-logprior(accs), loglikelihood(accs), parameters(accs)
+result = simulate(model)
+logprior(result), loglikelihood(result), parameters(result)
 ```
 
-Here we can see that a value was sampled for `x`, and that the log-prior (and not
-log-likelihood) was updated.
+Here we can see that a value was sampled for `x`, and that the log-prior (and not log-likelihood) was updated.
 
 ## Arrays and structs
 
@@ -66,7 +78,7 @@ end
 my_y = zeros(3)
 yarg_model = yarg(my_y)
 
-rand(Xoshiro(468), yarg_model)
+parameters(yarg_model, Xoshiro(468))
 ```
 
 And this is permitted because `y` is defined in the model body:
@@ -81,7 +93,7 @@ And this is permitted because `y` is defined in the model body:
 end
 ydef_model = ydef()
 
-rand(Xoshiro(468), ydef_model)
+parameters(ydef_model, Xoshiro(468))
 ```
 
 It should be noted that the two models above are actually semantically equivalent: in both models, all `y[i]` are latent variables, regardless of whether `y` is an argument or defined in the model body.
@@ -129,7 +141,7 @@ model.args.y
 Evaluating the model will now mutate `y`:
 
 ```@example model
-rand(model);
+parameters(model);
 model.args.y
 ```
 
@@ -142,6 +154,22 @@ This is because when Wren _constructs_ a model (i.e., when calling `mutable(y_ou
 y_outside
 ```
 
+!!! warning "Don't mutate latent variables or conditioned values"
+
+    The guarantee above only applies to model arguments.
+    Wren does **not** copy the values of latent variables, nor the values you condition on (see the next section).
+    For performance, the value a model receives for a latent variable may be a view into the caller's parameter vector (for example, the vector passed to [`lp`](@ref), or a sampler's current position), and a conditioned value is the same object that you passed to `|`.
+
+    So, writing into one of these inside a model, e.g.
+
+    ```julia
+    x ~ MvNormal(zeros(2), I)
+    x[1] += 1.0
+    ```
+
+    is not supported: it can change the caller's data, make repeated evaluations return different log-densities, and break samplers.
+    If you need a modified version, make a copy first (e.g. `x2 = copy(x); x2[1] += 1.0`), or write it without mutation (e.g. `x2 = x .+ [1.0, 0.0]`).
+
 ## Conditioning
 
 Now, we would almost certainly like to progress from the starting point above where everything is a latent variable.
@@ -149,39 +177,37 @@ To condition on some observed data, we can use the `|` operator on the model.
 For example, we can condition on the entire `y` array in one go:
 
 ```@example model
-yarg_model_cond = yarg_model | VarNamedTuple(y=[1.0, 2.0, 3.0])
+yarg_model_cond = yarg_model | (; y=[1.0, 2.0, 3.0])
 
-accs = rand_with_logp(Xoshiro(468), yarg_model_cond)
-logprior(accs), loglikelihood(accs), parameters(accs)
+res = simulate(yarg_model_cond, Xoshiro(468))
+logprior(res), loglikelihood(res), parameters(res)
 ```
 
 Now the only latent variable is `x`, and the `y` array is observed.
 
-Note that the values in the argument passed to the model are now no longer used!
-As before, the `y` model argument only serves to declare the shape of the latent array.
-When the model is evaluated, it will use the values passed to `|` instead of the values in the argument.
+Conditioning on a model argument replaces the argument.
+Inside the model, `y` is `[1.0, 2.0, 3.0]` from the first line, and the values in `my_y` are never used.
 
-We can do the exact same with `ydef`, and in exactly the same way, the definition of `y` inside the model body will be ignored:
-
-```@example model
-ydef_model_cond = ydef_model | VarNamedTuple(y=[1.0, 2.0, 3.0])
-
-accs = rand_with_logp(Xoshiro(468), ydef_model_cond)
-logprior(accs), loglikelihood(accs), parameters(accs)
-```
-
-One can perform partial conditioning by only specifying part of the latent array (see the [VarNames.jl](https://juliabayes.org/VarNames.jl/stable/vnt/api/#VarNames.@vnt) docs for more details on the `@vnt` macro):
+We can do the same with `ydef`.
+Here `y = zeros(3)` is only a template: as when sampling, the value of each `y[i]` arrives at its tilde-statement, so `y[i]` holds `0.0` until then.
 
 ```@example model
-cond = @vnt begin
-    @template y = zeros(3)
-    y[1] := 1.0
-    y[3] := 3.0
-end
+ydef_model_cond = ydef_model | (; y=[1.0, 2.0, 3.0])
 
-yarg_model_partial_cond = yarg_model | cond
-rand(yarg_model_partial_cond)
+res = simulate(ydef_model_cond, Xoshiro(468))
+logprior(res), loglikelihood(res), parameters(res)
 ```
+
+Only whole variables can be conditioned. Partial array or field conditioning is not supported.
+To mix observed and latent values, use separate variables or condition whole variables in a submodel.
+
+When a whole array is conditioned, every tilde-statement on it must index into it.
+For example, conditioning `y` on a 2-element array in `ydef` makes `y[3] ~ Normal(x)` throw a `BoundsError` instead of creating a new latent variable.
+
+!!! warning "Conditioned values are read-only"
+
+    Wren does not copy conditioned values, so inside the model a conditioned argument is the same array that you passed to `|`.
+    Mutating it inside the model mutates your data.
 
 ## Enforced observations
 
@@ -201,7 +227,7 @@ end
 In this model, even though `y` is defined in the model, the subsequent statement `y ~ Normal()` will treat `y` as a latent variable, and will sample a new value for it, which will certainly not be equal to `x + 1`:
 
 ```@example model
-rand_with_logp(y_not_obs())
+simulate(y_not_obs())
 ```
 
 To force `y` to be observed, Wren provides a macro `@observe`:
@@ -213,13 +239,13 @@ To force `y` to be observed, Wren provides a macro `@observe`:
     @observe y ~ Normal()
 end
 
-accs = rand_with_logp(y_obs())
+res = simulate(y_obs())
 ```
 
 We can check that these values are consistent:
 
 ```@example model
-loglikelihood(accs) ≈ logdensityof(Normal(), parameters(accs)[@vn(x)] + 1)
+loglikelihood(res) ≈ logdensityof(Normal(), parameters(res)[@vn(x)] + 1)
 ```
 
 You can in principle use this to enforce that model arguments are observed:
@@ -232,7 +258,7 @@ You can in principle use this to enforce that model arguments are observed:
     end
 end
 
-rand(yarg_obs([1.0, 2.0, 3.0]))
+parameters(yarg_obs([1.0, 2.0, 3.0]))
 ```
 
 However, note that once a statement has been marked with `@observe`, you cannot 'uncondition' it without modifying the model's stored AST itself.
@@ -248,8 +274,8 @@ Array-valued data are often modelled as independent draws from a single distribu
 end
 
 y = [1.0, 2.0, 3.0]
-accs = rand_with_logp(iid_obs(y))
-loglikelihood(accs) ≈ sum(logdensityof.(Normal(parameters(accs)[@vn(mu)]), y))
+res = simulate(iid_obs(y))
+loglikelihood(res) ≈ sum(logdensityof.(Normal(parameters(res)[@vn(mu)]), y))
 ```
 
 When specifying priors for independent groups `@iid mu ~ dist`, there is typically no way for `@iid` to derive `size(mu)` because `mu` is not yet defined. You can instead specify `size` via an argument:
@@ -281,7 +307,7 @@ This is done using the `@batch` macro:
     end
 end
 x, y = randn(1000), randn(1000)
-model = batched(x, y) | VarNamedTuple(y=y)
+model = batched(x, y) | (; y=y)
 ```
 
 Batched for-loops have the same semantics as regular for-loops.
@@ -348,6 +374,10 @@ which guarantees correctness, but might not be as efficient as the vectorised fo
 
 ## [Manual log-likelihood addition](@id addloglike)
 
+!!! danger "We do NOT recommend this"
+
+    We strongly discourage the use of `@addloglikelihood`. It should only be considered if the model would otherwise not work (if you run into such a case, please let us know in an issue).
+
 Wren provides a macro, `@addloglikelihood [name=:name] expr`, which allows you to manually add `expr` to the model's log-likelihood.
 
 ```@example model
@@ -356,7 +386,7 @@ Wren provides a macro, `@addloglikelihood [name=:name] expr`, which allows you t
     @addloglikelihood name=:xsq x^2
 end
 
-rand_with_logp(manual_likelihood())
+simulate(manual_likelihood())
 ```
 
 The `name` argument is optional and Wren currently does not use it, but hopefully will be wired up to pointwise logdensity calculations in the future.

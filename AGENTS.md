@@ -36,8 +36,8 @@ end
 model = f(1.0)
 ```
 
-  - `rand(model)` draws a sample from the model.
-  - `rand_with_logp(model)` draws a sample plus the components of log density.
+  - `parameters(model)` draws a sample from the model.
+  - `simulate(model)` draws a sample plus the components of log density.
 
 For more information about model syntax, see `docs/src/syntax.md`.
 
@@ -45,7 +45,7 @@ For more information about model syntax, see `docs/src/syntax.md`.
 
 ```
 vecmodel = VecModel(model, AutoEnzyme(; mode=Reverse)) # or any other adtype
-v = rand(vecmodel) # draws a vector
+v = vector_parameters(vecmodel) # draws a vector
 ```
 
   - `lp(vecmodel, v)` computes the log density.

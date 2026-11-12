@@ -113,6 +113,7 @@ _ladj(b, x) = Plaice.logabsdet_jacobian(b, x)
 _ladj(::Plaice.TypedIdentity, x) = zero(x)
 _ladj(::Plaice.Exp, y) = y
 _ladj(b::Plaice.Log, x) = -log(b.sign * (x - b.bound))
+_ladj(b::Plaice.Truncate, y) = last(@inline Plaice.with_logabsdet_jacobian(b, y))
 _apply(b, x) = b(x)
 
 const IdentityLike = Union{Plaice.TypedIdentity,AbstractArray{Plaice.TypedIdentity}}

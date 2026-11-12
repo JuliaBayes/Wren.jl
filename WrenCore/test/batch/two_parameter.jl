@@ -43,6 +43,7 @@ end
 @testset "batch: two-parameter distributions" begin
     @testset "$D" for D in (
         WrenDists.Gamma,
+        WrenDists.InverseGamma,
         WrenDists.Beta,
         WrenDists.Weibull,
         WrenDists.NegativeBinomial,

@@ -27,7 +27,7 @@ using WrenDists: WrenDists
             params = WrenCore.VarNames.templated_setindex!!(params, topic_init,
                 @vn(theta[:, m]), topic_template)
         end
-        return FromParams(params)
+        return FromValues(params)
     end
 
     @testset "$name" for name in available_posteriordb_models()
@@ -64,8 +64,8 @@ using WrenDists: WrenDists
                 zeros(M * J + J * (K - 1) + J + K - 1))
             @test isfinite(lp(vm, v))
         else
-            @test isfinite(logjoint(model, rand(StableRNG(468), model)))
-            v = rand(StableRNG(468), vm)
+            @test isfinite(logjoint(model, parameters(model, StableRNG(468))))
+            v = vector_parameters(vm, StableRNG(468))
         end
         @test length(v) == vm.dimension
         logp, grad = lp_and_grad(vm, v)

@@ -11,7 +11,11 @@ Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
 FlexiChains = "4a37a8b9-6e57-4b92-8664-298d46e639f7"
 LiveServer = "16fef848-5104-11e9-1b77-fb7a48bbb589"
 LogDensityProblems = "6fdf6af0-433a-55f7-b3ed-c6c6e0b8df7c"
+LogExpFunctions = "2ab3a3ac-af41-5b50-aa03-7779005ae688"
+Optimization = "7f7a1694-90dd-40f0-9382-eb1efda571ba"
+OptimizationOptimJL = "36348300-93cb-4f02-beb5-3c3902f8871e"
 PalmerPenguins = "8b842266-38fa-440a-9b57-31493939ab85"
+PosteriorDB = "1c4bc282-d2f5-44f9-b6d1-8c4424a23ad4"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
@@ -19,5 +23,5 @@ Wren = "bcabdda7-19af-429b-97ac-a6b557ca0f6c"
 WrenCore = "008b59e7-bbda-4991-901b-b08f5cfc584d"
 WrenDists = "2ad4af40-d7c9-42b2-92b0-e09d37d1e75a"
 
-[sources]
-DocumenterMermaid = {url = "https://github.com/penelopeysm/DocumenterMermaid.jl", rev = "main"}
+[compat]
+LogExpFunctions = "0.3, 1"

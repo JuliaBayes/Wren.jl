@@ -2,7 +2,7 @@
 
 A probabilistic programming language is nothing without its distributions!
 
-Wren has a fully generic interface which allows you to plug in any object that provides:
+Wren has a fully generic interface which allows you to create [custom distributions](@ref custom-distributions) so long as they provide:
 
   - `Base.rand(rng, dist)`
   - `DensityInterface.logdensityof(dist, sample)`
