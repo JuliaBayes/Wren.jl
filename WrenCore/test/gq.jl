@@ -54,32 +54,6 @@ end
     @gq c = 1.0
 end
 
-@wren function gq_nested(flag)
-    a ~ Normal()
-    for i in 1:3
-        @gq in_for = a + i
-    end
-    if flag
-        @gq in_if = 2a
-    end
-    k = 0
-    while k < 2
-        k += 1
-        @gq in_while = k
-    end
-    let z = a^2
-        @gq in_let = z
-    end
-    begin
-        @gq in_begin = a
-    end
-    @gq reused = a + 1
-    for i in 1:2
-        reused += 1
-    end
-    @gq reused_after = reused
-end
-
 # Draw from the prior and return the parameters merged with the generated quantities.
 function params_and_gqs(model)
     result = simulate(model)
@@ -136,6 +110,32 @@ end
     end
 
     @testset "inside control flow" begin
+        @wren function gq_nested(flag)
+            a ~ Normal()
+            for i in 1:3
+                @gq in_for = a + i
+            end
+            if flag
+                @gq in_if = 2a
+            end
+            k = 0
+            while k < 2
+                k += 1
+                @gq in_while = k
+            end
+            let z = a^2
+                @gq in_let = z
+            end
+            begin
+                @gq in_begin = a
+            end
+            @gq reused = a + 1
+            for i in 1:2
+                reused += 1
+            end
+            @gq reused_after = reused
+        end
+
         model = gq_nested(true)
         gqs = gq_values(model, GeneratedQuantityAccumulator())
         a = gqs[@vn(in_begin)]
