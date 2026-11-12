@@ -45,6 +45,9 @@ end
 function DensityInterface.logdensityof(d::BatchedBernoulliLogit, x)
     η = d.logitp
     return if within_compile()
+        # Promote as the scalar and native paths do, so integer logits have a float
+        # mass and Float32 logits keep the precision of Float64 outcomes.
+        η = convert.(float(promote_type(eltype(x), eltype(η))), η)
         sum(bernoullilogit_logmass.(η, x))
     else
         T = float(promote_type(eltype(x), eltype(η)))

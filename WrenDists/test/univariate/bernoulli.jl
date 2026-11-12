@@ -106,3 +106,23 @@ test_dist(
         @test logdensityof(WrenDists.BatchedBernoulliLogit([0.0]), [y]) == -Inf
     end
 end
+
+if RUN_REACTANT
+    @testset "BatchedBernoulliLogit compiled promotion" begin
+        # The compiled path promotes like the native one: integer logits work, and
+        # Float32 logits with Float64 outcomes give a Float64 result.
+        for (logits, x) in (
+            ([2, -1, 0], [1.0, 0.0, 1.0]),
+            (Float32[2, -1, 0], [1.0, 0.0, 1.0]),
+            (Float32[2, -1, 0], [1, 0, 1]),
+            ([40.0, -50.0, 0.0], [1.0, 0.0, 2.0]),
+        )
+            d = WrenDists.BatchedBernoulliLogit(logits)
+            native = logdensityof(d, x)
+            d_ra, x_ra = Reactant.to_rarray(d), Reactant.to_rarray(x)
+            compiled = Reactant.@jit logdensityof(d_ra, x_ra)
+            @test Reactant.unwrapped_eltype(compiled) == typeof(native)
+            @test typeof(native)(compiled) ≈ native rtol = 1e-12 atol = 0
+        end
+    end
+end
