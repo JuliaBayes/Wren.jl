@@ -17,6 +17,15 @@ if RUN_REACTANT
     using Reactant
 end
 
+@testset "Laplace large finite scale" begin
+    for T in (Float32, Float64)
+        b = T(0.75) * floatmax(T)
+        d = WrenDists.Laplace(zero(T), b)
+        @test logdensityof(d, zero(T)) ≈ -log(T(2)) - log(b)
+        RUN_REACTANT && WrenDists.test_dist_reactant(d, T[0])
+    end
+end
+
 test_dist(
     "Laplace",
     WrenDists.Laplace(1.0, 2.0),

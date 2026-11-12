@@ -9,11 +9,58 @@ function remove_escapes(expr::Expr)
     return Expr(expr.head, map(remove_escapes, expr.args)...)
 end
 
+
+# In submodel.jl we override this when `val` is an `UncollectedParams` sentinel, so that we
+# don't ever actually try to set it into the parent object, which can cause type instability
+# issues (and consequently Enzyme errors) if the parent object is e.g. an array with a
+# eltype that `UncollectedParams` doesn't subtype.
+set_lhs!!(obj, optic, val) = Accessors.set(obj, optic, val)
+
+set_namespace_copy(obj, optic, val) = Accessors.set(obj, optic, val)
+# A deconditioned child namespace may be absent from the observed record.
+set_namespace_copy(obj::NamedTuple, ::VarNames.Property{sym}, val) where {sym} =
+    merge(obj, NamedTuple{(sym,)}((val,)))
+function set_namespace_copy(obj::Array{T}, optic::VarNames.Index, val::V) where {T,V}
+    U = Union{T,V}
+    if Base.isbitsunion(U) && all(i -> i isa Union{Integer,CartesianIndex}, optic.ix)
+        # For example, replacing (y=1.0,) with VarNamedTuple(a=0.5) should use
+        # Union{typeof((y=1.0,)),typeof(VarNamedTuple(a=0.5))}, not Any. Accessors.set
+        # and BangBang.setindex!! use promote_type here, which widens these records to
+        # Any and boxes the remaining observed entries. Copy before the first write:
+        # BangBang.setindex!! alone can also mutate a shared array when its eltype fits.
+        result = copyto!(similar(obj, U), obj)
+        Base.setindex!(result, val, optic.ix...; optic.kw...)
+        return result
+    end
+    return Accessors.set(obj, optic, val)
+end
+
+# Copy a shared namespace container at its first write, preserving observed siblings.
+# Later writes can mutate the owned container without copying it again.
+@inline function set_namespace_lhs!!(obj, observed, optic, val)
+    head, tail = VarNames.ohead(optic), VarNames.otail(optic)
+    inner = if tail isa VarNames.Iden
+        val
+    else
+        set_namespace_lhs!!(
+            _scope_conditioned(obj, head),
+            _scope_conditioned(observed, head),
+            tail,
+            val,
+        )
+    end
+    return if obj isa NamedTuple || obj === observed
+        set_namespace_copy(obj, head, inner)
+    else
+        Accessors.set(obj, VarNames.with_mutation(head), inner)
+    end
+end
+
 assign_or_set!!(lhs::Symbol, rhs, vn) = :($lhs = $rhs)
 function assign_or_set!!(lhs::Expr, rhs, vn)
     left_top_sym = get_top_level_symbol(lhs)
     return :(
-        $left_top_sym = $(Accessors.set)(
+        $left_top_sym = $(set_lhs!!)(
             $left_top_sym,
             $(VarNames.with_mutation)($(VarNames.getoptic)($vn)),
             $rhs,
@@ -55,28 +102,64 @@ function emit_model_expr(
     parameter_space,
     ctx,
 )
-    @gensym rhs val tval init_tval logjac vn child_accs child_params
+    @gensym rhs val tval init_tval logjac vn child_accs child_params scoped_args
     rhs_expr =
         emit_model_expr(stmt.rhs, accs, conditioned, latent_source, parameter_space, ctx)
     vn_expr = remove_escapes(varname(stmt.lhs, false))
     template = get_top_level_symbol(stmt.lhs)
     collect_submodel_params =
         stmt.lhs_is_reused ? CollectSubmodelParams() : DiscardSubmodelParams()
+    assign_child_params = assign_or_set!!(stmt.lhs, child_params, vn)
+    if stmt.lhs isa Expr
+        # This generator only has a symbol for `conditioned`: the cached evaluation
+        # function is shared by condition/decondition and parent-supplied overrides.
+        # Julia folds this key check when specialising on the NamedTuple's type.
+        assign_child_params = quote
+            if $(haskey)($conditioned, $(QuoteNode(template)))
+                $template = $(set_namespace_lhs!!)(
+                    $template,
+                    $(getproperty)($conditioned, $(QuoteNode(template))),
+                    $(VarNames.getoptic)($vn),
+                    $child_params,
+                )
+            else
+                $assign_child_params
+            end
+        end
+    end
     return quote
         $rhs = $rhs_expr
         $vn = $vn_expr
         if $(WrenCore.is_submodel)(typeof($rhs))
-            $val, $child_params, $child_accs = $(evaluate_submodel)(
-                $rhs,
-                $latent_source,
-                $parameter_space,
-                $accs,
-                $conditioned,
-                $vn,
-                $collect_submodel_params,
-                $ctx,
-            )
-            $(assign_or_set!!(stmt.lhs, child_params, vn))
+            if $rhs isa $(Model)
+                # Scope before recursive evaluation can widen the site's VarName.
+                $scoped_args = $(_scope_submodel)(
+                    $rhs,
+                    $latent_source,
+                    $parameter_space,
+                    $accs,
+                    $conditioned,
+                    $vn,
+                )
+                $val, $child_params, $child_accs = $(_evaluate_scoped_submodel)(
+                    $rhs,
+                    $scoped_args...,
+                    $collect_submodel_params,
+                    $ctx,
+                )
+            else
+                $val, $child_params, $child_accs = $(evaluate_submodel)(
+                    $rhs,
+                    $latent_source,
+                    $parameter_space,
+                    $accs,
+                    $conditioned,
+                    $vn,
+                    $collect_submodel_params,
+                    $ctx,
+                )
+            end
+            $assign_child_params
             $accs = $(combine_with_namespace)(
                 $accs,
                 $child_accs,
@@ -84,9 +167,15 @@ function emit_model_expr(
                 $(stmt.lhs isa Symbol ? nothing : template),
             )
         else
-            if $(haskey)($conditioned, $vn)
-                $val = $(getindex)($conditioned, $vn)
-                $(assign_or_set!!(stmt.lhs, val, vn))
+            # Whole-symbol membership is known from the NamedTuple's type.
+            if $(haskey)($conditioned, $(QuoteNode(template)))
+                $val = $(VarNames.getvalue)($conditioned, $vn)
+                # Nothing reads an observed element back unless the symbol is reused. A
+                # plain symbol is always bound, since it is the template below.
+                $(
+                    stmt.lhs_is_reused || stmt.lhs isa Symbol ?
+                    assign_or_set!!(stmt.lhs, val, vn) : nothing
+                )
                 $accs = $(accumulate_observe!!)(
                     $accs,
                     $val,
@@ -233,8 +322,10 @@ function _unindex(indexed::Indexed, i)
     _issue_error("cannot safely unindex type $(typeof(indexed))")
 end
 function batched(iters::I, ::Val{F}, args...; kwargs...) where {I,F}
-    # Default fallback for batching-unaware calls
-    return independent([F((_unindex(a, i) for a in args)...; kwargs...) for i in iters])
+    # Arguments are already sliced, so index their positions rather than the loop values.
+    return independent([
+        F((_unindex(a, i) for a in args)...; kwargs...) for i in LinearIndices(iters)
+    ])
 end
 
 # This returns `WrenCore.independent([$rhs for $loop_idx in $loop_iters])`.
@@ -611,6 +702,7 @@ function emit_model_expr(
         $vn = $vn_expr
         $accs =
             $(accumulate_observe!!)($accs, $val, $vn, $rhs, $template, $(Val{stmt.name}()))
+        $val
     end
 end
 

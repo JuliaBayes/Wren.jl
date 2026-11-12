@@ -66,14 +66,19 @@ function _poisson_quantile(::Type{T}, d::Poisson, q::Number) where {T<:AbstractF
     # A normal approximation with a continuity correction starts within a step or two.
     z = convert(T, -sqrt2 * erfcinvt(2 * p))
     k = clamp(floor(λ + z * sqrt(λ) - one(T) / 2), zero(T), hi)
-    while (k > zero(T)) && (_poisson_cdf(T, d, k - one(T)) >= p)
-        k -= one(T)
+    while (k > zero(T)) && (_poisson_cdf(T, d, _prevcount(k)) >= p)
+        k = _prevcount(k)
     end
     while (k < hi) && (_poisson_cdf(T, d, k) < p)
-        k += one(T)
+        k = _nextcount(k)
     end
     return k
 end
+
+# Above `maxintfloat(T)`, `k ± 1` rounds back to `k`, so step to the adjacent float instead.
+# Every float that large is an integer.
+@inline _nextcount(k::AbstractFloat) = max(k + one(k), nextfloat(k))
+@inline _prevcount(k::AbstractFloat) = min(k - one(k), prevfloat(k))
 
 # CDF inversion avoids the `exp(-λ)` underflow in product-of-uniforms sampling.
 @inline function Base.rand(rng::AbstractRNG, d::Poisson)
@@ -92,14 +97,12 @@ function DensityInterface.logdensityof(d::BatchedPoisson, x)
     # Benchmarks @ https://github.com/JuliaBayes/Wren.jl/issues/104
     λ = d.λ
     return if within_compile()
-        sum(@. x * log(λ) - λ - loggamma(x + one(x)))
+        sum(((λi, xi) -> logdensityof(Poisson(λi), xi)).(λ, x))
     else
         T = float(promote_type(eltype(x), eltype(λ)))
         s = zero(T)
         for i in eachindex(x, λ)
-            s +=
-                convert(T, x[i]) * log(convert(T, λ[i])) - convert(T, λ[i]) -
-                loggamma(convert(T, x[i]) + one(T))
+            s += logdensityof(Poisson(λ[i]), x[i])
         end
         s
     end

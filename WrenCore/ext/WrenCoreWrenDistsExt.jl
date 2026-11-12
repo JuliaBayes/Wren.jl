@@ -11,6 +11,7 @@ using WrenDists:
     BatchedCategorical,
     BatchedExponential,
     BatchedGamma,
+    BatchedInverseGamma,
     BatchedLogNormal,
     BatchedNegativeBinomial,
     BatchedNormal,
@@ -28,6 +29,7 @@ using WrenDists:
     Gamma,
     IIDTDist,
     Independent,
+    InverseGamma,
     LogNormal,
     MultivariateDist,
     NegativeBinomial,
@@ -106,7 +108,11 @@ function WrenCore.batched(
 end
 
 # One-parameter calls with unit scale.
-for (D, B) in ((:Gamma, :BatchedGamma), (:Weibull, :BatchedWeibull))
+for (D, B) in (
+    (:Gamma, :BatchedGamma),
+    (:InverseGamma, :BatchedInverseGamma),
+    (:Weibull, :BatchedWeibull),
+)
     @eval function WrenCore.batched(iters, ::Val{$D}, indexed::WrenCore.Indexed; _kwargs...)
         return $B(indexed.data, Fill(one(eltype(indexed.data)), size(iters)))
     end
@@ -120,6 +126,7 @@ for (D, B) in (
     (:Normal, :BatchedNormal),
     (:LogNormal, :BatchedLogNormal),
     (:Gamma, :BatchedGamma),
+    (:InverseGamma, :BatchedInverseGamma),
     (:Beta, :BatchedBeta),
     (:Weibull, :BatchedWeibull),
     (:NegativeBinomial, :BatchedNegativeBinomial),

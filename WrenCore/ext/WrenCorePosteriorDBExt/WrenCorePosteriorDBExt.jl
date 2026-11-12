@@ -103,6 +103,15 @@ const MODELS = Dict(
 )
 const MODEL_NAMES = sort!(collect(keys(MODELS)))
 
+"""
+    posteriordb_model(name::AbstractString) -> WrenCore.Model
+
+Return a Wren model for the PosteriorDB posterior called `name`, e.g. `"arK-arK"`, using the
+data from PosteriorDB.
+
+This requires PosteriorDB.jl and WrenDists.jl to be loaded. Only some posteriors are
+available; an error is thrown for any others, which lists the available ones.
+"""
 function WrenCore.posteriordb_model(name::AbstractString)
     haskey(MODELS, name) || throw(
         ArgumentError(
@@ -114,6 +123,11 @@ function WrenCore.posteriordb_model(name::AbstractString)
     return MODELS[name].wren_model
 end
 
+"""
+    available_posteriordb_models() -> Vector{String}
+
+Return a vector of PosteriorDB model names which WrenCore has implementations for.
+"""
 WrenCore.available_posteriordb_models() = MODEL_NAMES
 
 end # module
