@@ -1,4 +1,4 @@
-struct TruncatedFlat{T<:AbstractFloat,L<:Real,U<:Real} <: UnivariateDist
+struct TruncatedFlat{T<:AbstractFloat,L<:Number,U<:Number} <: UnivariateDist
     lower::L
     upper::U
 end
@@ -13,7 +13,13 @@ parameter, as in a Stan `real<lower=0>` declaration without a prior.
 
 `rand` draws an initial value by sampling uniformly from `(-2, 2)` in the
 unconstrained coordinate and mapping it into the bounds. It is not a draw from
-the improper distribution. The bounds must satisfy `lower < upper`.
+the improper distribution.
+
+The bounds may depend on other parameters, as in `truncated(Flat(); upper=1 - alpha)`,
+and may be traced numbers when the model is compiled with Reactant. As for other
+distributions with invalid parameters, bounds with `lower >= upper` give a log-density of
+`-Inf` everywhere rather than an error, so a dependent bound that rounds to an empty
+interval rejects that point instead of stopping the sampler.
 
 Only `Flat` supports this method. Truncating a proper distribution also requires
 its probability mass inside the bounds to normalise the density.
@@ -21,8 +27,7 @@ its probability mass inside the bounds to normalise the density.
 **Customised batched implementations**: Not yet (will fall back to a product of
 scalar distributions).
 """
-function truncated(::Flat{T}; lower::Real=T(-Inf), upper::Real=T(Inf)) where {T}
-    lower < upper || throw(ArgumentError("lower must be less than upper"))
+function truncated(::Flat{T}; lower::Number=T(-Inf), upper::Number=T(Inf)) where {T}
     return TruncatedFlat{T,typeof(lower),typeof(upper)}(lower, upper)
 end
 
@@ -31,8 +36,9 @@ end
 
 @inline function DensityInterface.logdensityof(d::TruncatedFlat, x::Number)
     value = zero(float(x))
-    return select((x >= d.lower) & (x <= d.upper), () -> value,
-        () -> oftype(value, -Inf))
+    # `&` rather than `&&`, so the check also compiles for traced bounds.
+    valid = (d.lower < d.upper) & (x >= d.lower) & (x <= d.upper)
+    return select(valid, () -> value, () -> oftype(value, -Inf))
 end
 
 @inline function Base.rand(rng::AbstractRNG, d::TruncatedFlat)

@@ -29,4 +29,10 @@ using Test
     @test WD.logdensityof(bounded, 1.0) == 0.0 # No Uniform normaliser.
 
     @test rand(Xoshiro(1), WD.truncated(WD.Flat{Float32}(); lower=0)) isa Float32
+
+    # An empty interval, e.g. a dependent bound that rounds to `lower == upper`,
+    # rejects every point instead of throwing.
+    empty = WD.truncated(WD.Flat(); lower=1.0, upper=1.0)
+    @test WD.logdensityof(empty, 1.0) == -Inf
+    @test WD.logdensityof(WD.truncated(WD.Flat(); lower=2.0, upper=1.0), 1.5) == -Inf
 end
