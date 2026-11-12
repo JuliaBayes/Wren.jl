@@ -38,7 +38,7 @@ struct DiscardSubmodelParams <: CollectOrDiscardSubmodelParams end
         latent_source::AbstractLatentSource,
         parameter_space::AbstractParameterSpace,
         accs::AccumulatorTuple,
-        conditioned::VarNamedTuple,
+        conditioned::NamedTuple,
         vn::VarName,
         collect_params::CollectOrDiscardSubmodelParams,
         ctx::EvalContext,
@@ -51,38 +51,51 @@ require access to the parameters of the submodel as a top-level variable. `ctx` 
 parent model's [`EvalContext`](@ref), which should be passed on when evaluating the
 submodel.
 """
-@generated function evaluate_submodel(
+function evaluate_submodel(
+    rhs,
+    latent_source::AbstractLatentSource,
+    parameter_space::AbstractParameterSpace,
+    accs::AccumulatorTuple,
+    conditioned::NamedTuple,
+    # TODO(penelopeysm): allow for no-prefix?
+    # https://github.com/JuliaBayes/Wren.jl/issues/4
+    vn::VarName,
+    collect_params::CollectOrDiscardSubmodelParams,
+    ctx::EvalContext,
+)
+    scoped_args =
+        _scope_submodel(rhs, latent_source, parameter_space, accs, conditioned, vn)
+    return _evaluate_scoped_submodel(rhs, scoped_args..., collect_params, ctx)
+end
+
+function _scope_submodel(rhs, latent_source, parameter_space, accs, conditioned, vn)
+    child_source = scope(latent_source, vn)
+    child_space = scope(parameter_space, vn)
+    child_accs = scope(map(split, accs), vn)
+    child_conditioned = merge(rhs.conditioned, scope(conditioned, vn))
+    return child_source, child_space, child_accs, child_conditioned
+end
+
+@generated function _evaluate_scoped_submodel(
     rhs,
     latent_source::AbstractLatentSource,
     parameter_space::AbstractParameterSpace,
     accs::AccumulatorTuple{<:Any,<:NamedTuple{names}},
-    conditioned::VarNamedTuple,
-    # TODO(penelopeysm): allow for no-prefix?
-    # https://github.com/JuliaBayes/Wren.jl/issues/4
-    vn::VarName,
+    conditioned::NamedTuple,
     ::CollectSubmodelParams,
     ctx::EvalContext,
 ) where {names}
     parent_has_params_acc = PARAMS_ACCNAME in names
     expr = Expr(:block)
-    push!(expr.args, :(child_source = scope(latent_source, vn)))
-    push!(expr.args, :(child_space = scope(parameter_space, vn)))
-    push!(expr.args, :(child_accs = scope(map(split, accs), vn)))
-    push!(expr.args, :(child_conditioned = merge(rhs.conditioned, scope(conditioned, vn))))
+    push!(expr.args, :(child_accs = accs))
     if !parent_has_params_acc
         push!(expr.args, :(child_accs = setacc!!(child_accs, ParamsAccumulator())))
     end
     push!(
         expr.args,
         :(
-            (retval, child_accs) = evaluate(
-                rhs,
-                child_source,
-                child_space,
-                child_accs,
-                ctx,
-                child_conditioned,
-            )
+            (retval, child_accs) =
+                evaluate(rhs, latent_source, parameter_space, child_accs, ctx, conditioned)
         ),
     )
     push!(expr.args, :(child_params = VarNames.parameters(child_accs)))
@@ -113,26 +126,44 @@ end
 function Base.getproperty(::UncollectedParams, ::Symbol)
     _issue_error("submodel parameters are not available as a top-level variable")
 end
+# in e.g. `x[1] ~ submodel`, if we don't need the params, don't needlessly set them back
+# into `x` as that can trigger type instabilities.
+set_lhs!!(obj, optic, ::UncollectedParams) = obj
+set_namespace_lhs!!(obj, observed, optic, ::UncollectedParams) = obj
 
-function evaluate_submodel(
+function _evaluate_scoped_submodel(
     rhs,
     latent_source::AbstractLatentSource,
     parameter_space::AbstractParameterSpace,
     accs::AccumulatorTuple,
-    conditioned::VarNamedTuple,
-    vn::VarName,
+    conditioned::NamedTuple,
     ::DiscardSubmodelParams,
     ctx::EvalContext,
 )
-    child_source = scope(latent_source, vn)
-    child_space = scope(parameter_space, vn)
-    child_accs = scope(map(split, accs), vn)
-    child_conditioned = merge(rhs.conditioned, scope(conditioned, vn))
     retval, child_accs =
-        evaluate(rhs, child_source, child_space, child_accs, ctx, child_conditioned)
+        evaluate(rhs, latent_source, parameter_space, accs, ctx, conditioned)
     return retval, UncollectedParams(), child_accs
 end
 
 # The parent's conditioned values for the submodel at `vn`, keyed relative to `vn`.
-scope(conditioned::VarNamedTuple, vn::VarName) =
-    haskey(conditioned, vn) ? conditioned[vn] : VarNamedTuple()
+function scope(conditioned::NamedTuple, vn::VarName)
+    if haskey(conditioned, VarNames.getsym(vn))
+        return _scope_conditioned(
+            getproperty(conditioned, VarNames.getsym(vn)),
+            VarNames.getoptic(vn),
+        )
+    else
+        return NamedTuple()
+    end
+end
+
+_scope_conditioned(values, ::VarNames.Iden) = values
+function _scope_conditioned(values::NamedTuple, optic::VarNames.Property{sym}) where {sym}
+    if haskey(values, sym)
+        return _scope_conditioned(getproperty(values, sym), optic.child)
+    else
+        return NamedTuple()
+    end
+end
+_scope_conditioned(values, optic::Union{VarNames.Property,VarNames.Index}) =
+    _scope_conditioned(VarNames.ohead(optic)(values), VarNames.otail(optic))

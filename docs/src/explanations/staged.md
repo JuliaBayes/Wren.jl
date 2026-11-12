@@ -86,7 +86,7 @@ for d in (Normal(), Exponential())
     end
 
     model = oops_closed_over_local()
-    rand(model)
+    parameters(model)
 end
 ```
 
@@ -149,5 +149,5 @@ Obviously, this leaks internal details of Wren, and is not exactly a user-friend
 However, it does show that it should be possible to construct the `stmts` array programmatically, generate a Wren model from it, and then use that model:
 
 ```@example staged
-rand(manual_model)
+parameters(manual_model)
 ```

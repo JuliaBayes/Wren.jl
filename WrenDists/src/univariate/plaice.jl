@@ -20,7 +20,8 @@ Plaice.scalar_to_scalar_bijector(::DiscreteUnivariateDist) = Plaice.TypedIdentit
 Plaice.scalar_to_scalar_bijector(::PositiveUnivariateDist) = Plaice.Log(0.0, 1)
 
 # Bounded distributions use Untruncate
-Plaice.scalar_to_scalar_bijector(::Beta) = Plaice.Untruncate(0.0, 1.0)
+Plaice.scalar_to_scalar_bijector(d::Beta) =
+    Plaice.Untruncate(zero(noisetype(d)), one(noisetype(d)))
 Plaice.scalar_to_scalar_bijector(d::Uniform) = Plaice.Untruncate(d.a, d.b)
 Plaice.scalar_to_scalar_bijector(d::TruncatedFlat) =
     Plaice.Untruncate(d.lower, d.upper)

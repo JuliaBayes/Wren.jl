@@ -11,14 +11,14 @@ end
 
 @testset "#192 positive flat scale" begin
     vm = VecModel(positive_flat_scale(1.0), AutoEnzyme(; mode=Reverse);
-        latent_source=FromParams(VarNamedTuple(sigma=2.0)), reduce_copies=false)
+        latent_source=FromValues(VarNamedTuple(sigma=2.0)), reduce_copies=false)
     u = log(2.0)
     value, gradient = lp_and_grad(vm, [u])
     @test value ≈ logdensityof(WD.Normal(0.0, 2.0), 1.0) + u
     @test gradient ≈ [0.25]
 
     prior_vm = VecModel(positive_flat_scale(1.0), AutoEnzyme(; mode=Reverse))
-    @test isfinite(lp(prior_vm, rand(prior_vm)))
+    @test isfinite(lp(prior_vm, vector_parameters(prior_vm)))
 end
 
 end
