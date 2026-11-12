@@ -4,7 +4,7 @@ module LDAPridePrejudice
 using PosteriorDB
 using WrenCore: @wren, @addloglikelihood
 using WrenDists: WrenDists as WD
-using ..LDAThreeDocs: logaddexp
+using ..LogAddExp: logaddexp
 
 function lda_logdensity(w, doc, theta, phi)
     total = zero(theta[1, 1] + phi[1][1])

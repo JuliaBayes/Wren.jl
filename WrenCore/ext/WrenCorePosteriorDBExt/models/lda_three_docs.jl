@@ -4,6 +4,7 @@ module LDAThreeDocs
 using PosteriorDB
 using WrenCore: @wren, @addloglikelihood
 using WrenDists: WrenDists as WD
+using ..LogAddExp: logaddexp
 
 const data = let
     pdb = PosteriorDB.database()
@@ -11,8 +12,6 @@ const data = let
         pdb, "three_docs1200-ldaK2",
     )))
 end
-
-logaddexp(a, b) = a > b ? a + log1p(exp(b - a)) : b + log1p(exp(a - b))
 
 function lda_logdensity(w, doc, theta, phi)
     total = zero(theta[1, 1] + phi[1, 1])

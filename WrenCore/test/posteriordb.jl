@@ -8,7 +8,7 @@ using Distributions: Bernoulli, Beta, Binomial, Cauchy, Dirichlet, Exponential, 
 using Enzyme
 import ForwardDiff
 using PosteriorDB: PosteriorDB
-using Statistics: mean
+using Statistics: mean, std
 using StableRNGs
 using Test
 using WrenCore
@@ -28,6 +28,45 @@ using WrenDists: WrenDists
                 @vn(theta[:, m]), topic_template)
         end
         return FromValues(params)
+    end
+
+    # Helpers shared by the density and gradient testsets below. Each oracle is
+    # written from the Stan program, independently of the Wren model.
+    logistic(x) = inv(1 + exp(-x))
+    logit_jacobian(x) = -log1p(exp(-x)) - log1p(exp(x))
+    logaddexp(a, b) = a > b ? a + log1p(exp(b - a)) : b + log1p(exp(a - b))
+    bernoulli_logit(y, eta) = y * eta - log1p(exp(eta))
+    posteriordb_data(name) = PosteriorDB.load(PosteriorDB.dataset(
+        PosteriorDB.posterior(PosteriorDB.database(), name)))
+    enzyme_model(name; kwargs...) =
+        VecModel(posteriordb_model(name), AutoEnzyme(; mode=Reverse); kwargs...)
+
+    # The density and the full native Enzyme gradient against an oracle.
+    function check(name, dimension, oracle, points; atol=1e-5)
+        vm = enzyme_model(name)
+        @test vm.dimension == dimension
+        for point in points
+            value, gradient = lp_and_grad(vm, point)
+            @test isapprox(value, oracle(point); atol)
+            @test isapprox(gradient, ForwardDiff.gradient(oracle, point); atol)
+        end
+    end
+
+    # For models too large for a full ForwardDiff gradient: the density, and the
+    # native Enzyme gradient in the `selected` coordinates.
+    function check_selected(vm, oracle, point, selected;
+            atol=1e-5, rtol=0.0, gradient_rtol=rtol)
+        @test vm.dimension == length(point)
+        value, gradient = lp_and_grad(vm, point)
+        @test isapprox(value, oracle(point); atol, rtol)
+        function selected_oracle(z)
+            full = Vector{eltype(z)}(point)
+            full[selected] .= z
+            return oracle(full)
+        end
+        @test isapprox(gradient[selected],
+            ForwardDiff.gradient(selected_oracle, point[selected]);
+            atol, rtol=gradient_rtol)
     end
 
     @testset "$name" for name in available_posteriordb_models()
@@ -76,24 +115,23 @@ using WrenDists: WrenDists
 
     @test_throws ArgumentError posteriordb_model("not-a-posterior")
 
-    @testset "discrete PosteriorDB densities and native Enzyme gradients" begin
-        logistic(x) = inv(1 + exp(-x))
-        logit_jacobian(x) = -log1p(exp(-x)) - log1p(exp(x))
-        logaddexp(a, b) = a > b ? a + log1p(exp(b - a)) : b + log1p(exp(a - b))
-        bernoulli_logit(y, eta) = y * eta - log1p(exp(eta))
-        function check(name, dimension, oracle, points)
-            vm = VecModel(posteriordb_model(name), AutoEnzyme(; mode=Reverse))
-            @test vm.dimension == dimension
-            for point in points
-                value, gradient = lp_and_grad(vm, point)
-                @test isapprox(value, oracle(point); atol=1e-5)
-                @test isapprox(gradient, ForwardDiff.gradient(oracle, point); atol=1e-5)
-            end
-        end
+    @testset "logaddexp shared by the marginalised models" begin
+        logaddexp_model =
+            Base.get_extension(WrenCore, :WrenCorePosteriorDBExt).LogAddExp.logaddexp
+        @test logaddexp_model(0.3, -1.2) ≈ log(exp(0.3) + exp(-1.2))
+        @test logaddexp_model(-Inf, 0.5) == 0.5
+        @test logaddexp_model(-Inf, -Inf) == -Inf
+        @test logaddexp_model(Inf, Inf) == Inf
+        @test isnan(logaddexp_model(NaN, 1.0))
+        @test isnan(logaddexp_model(1.0, NaN))
+        # Both arguments get half of the derivative at a tie.
+        pair(v) = logaddexp_model(v[1], v[2])
+        @test only(Enzyme.gradient(Enzyme.Reverse, pair, [0.7, 0.7])) ≈ [0.5, 0.5]
+        @test ForwardDiff.gradient(pair, [0.7, 0.7]) ≈ [0.5, 0.5]
+    end
 
-        election_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-            PosteriorDB.database(), "election88-election88_full",
-        )))
+    @testset "discrete PosteriorDB densities and native Enzyme gradients" begin
+        election_data = posteriordb_data("election88-election88_full")
         na, nb, nc, nd, ne = (election_data[k] for k in
             ("n_age", "n_edu", "n_age_edu", "n_state", "n_region_full"))
         function election_oracle(v)
@@ -126,9 +164,7 @@ using WrenDists: WrenDists
         check("election88-election88_full", 10 + na + nb + nc + nd + ne,
             election_oracle, [election_point])
 
-        hmm_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-            PosteriorDB.database(), "hmm_example-hmm_example",
-        )))
+        hmm_data = posteriordb_data("hmm_example-hmm_example")
         function hmm_oracle(v)
             p11, p21 = logistic(v[1]), logistic(v[2])
             mu1 = exp(v[3])
@@ -151,9 +187,7 @@ using WrenDists: WrenDists
             [[0.8, -1.2, log(3.0), log(7.0)],
              [-0.3, 0.4, log(2.5), log(6.5)]])
 
-        hmm_gaussian_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-            PosteriorDB.database(), "hmm_gaussian_simulated-hmm_gaussian",
-        )))
+        hmm_gaussian_data = posteriordb_data("hmm_gaussian_simulated-hmm_gaussian")
         function simplex3_oracle(a, b)
             z1 = logistic(a - log(2))
             z2 = logistic(b)
@@ -171,7 +205,10 @@ using WrenDists: WrenDists
             sigma = exp.(v[12:14])
             jacobian += v[10] + v[11] + sum(v[12:14])
             y = hmm_gaussian_data["y"]
-            alpha = [log(pi[j]) + logpdf(Normal(mu[j], sigma[j]), y[1]) for j in 1:3]
+            # Stan's `log(pi1) + normal_lpdf(y[1] | mu, sigma)` adds the summed
+            # emission density of all three states to every state.
+            first_emission = sum(logpdf(Normal(mu[j], sigma[j]), y[1]) for j in 1:3)
+            alpha = [log(pi[j]) + first_emission for j in 1:3]
             for t in 2:length(y)
                 alpha = [logpdf(Normal(mu[j], sigma[j]), y[t]) +
                     logaddexp(logaddexp(alpha[1] + log(A[1, j]),
@@ -186,9 +223,8 @@ using WrenDists: WrenDists
              [-0.2, 0.3, -0.4, 0.2, 0.3, -0.5, -0.1, 0.4,
               11.0, log(10.0), log(10.0), log(6.0), log(5.0), log(4.0)]])
 
-        bball_data = [PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-            PosteriorDB.database(), "bball_drive_event_$(i)-hmm_drive_$(i)",
-        ))) for i in 0:1]
+        bball_data = [posteriordb_data("bball_drive_event_$(i)-hmm_drive_$(i)")
+            for i in 0:1]
         function bball_oracle(v, fixture, gaussian)
             p11, p21 = logistic(v[1]), logistic(v[2])
             phi1 = gaussian ? v[3] : exp(v[3])
@@ -227,9 +263,7 @@ using WrenDists: WrenDists
             [[0.7, -0.5, -1.8, log(1.5), 3.9, log(1.0)],
              [-0.1, 0.3, -1.7, log(1.4), 3.8, log(1.2)]])
 
-        iohmm_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-            PosteriorDB.database(), "iohmm_reg_simulated-iohmm_reg",
-        )))
+        iohmm_data = posteriordb_data("iohmm_reg_simulated-iohmm_reg")
         function iohmm_oracle(v)
             pi, jacobian = simplex3_oracle(v[1], v[2])
             w = reshape(v[3:14], 4, 3)
@@ -255,14 +289,15 @@ using WrenDists: WrenDists
             end
             return prior + jacobian + logaddexp(logaddexp(g[1], g[2]), g[3])
         end
+        # At zero all three states tie in every forward step. A `logaddexp` that
+        # drops the derivative at a tie gives 0.889 instead of 8189.55 for the
+        # second residual scale there.
         check("iohmm_reg_simulated-iohmm_reg", 29, iohmm_oracle,
-            [vcat([0.2, -0.4], 0.1 .* sin.(1:24), fill(log(3.0), 3)),
+            [zeros(29),
              vcat([-0.3, 0.5], 0.15 .* cos.(1:24),
                  [log(2.5), log(3.5), log(4.0)])])
 
-        butterfly_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-            PosteriorDB.database(), "butterfly-multi_occupancy",
-        )))
+        butterfly_data = posteriordb_data("butterfly-multi_occupancy")
         function butterfly_oracle(v)
             alpha, beta = v[1], v[2]
             omega = logistic(v[3])
@@ -310,9 +345,7 @@ using WrenDists: WrenDists
         check("butterfly-multi_occupancy", 6 + 2butterfly_S,
             butterfly_oracle, [butterfly_point])
 
-        dog_nonhier_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-            PosteriorDB.database(), "dogs-dogs_nonhierarchical",
-        )))
+        dog_nonhier_data = posteriordb_data("dogs-dogs_nonhierarchical")
         function dog_nonhier_oracle(v)
             mu1, mu2 = v[1], v[2]
             sigma1, sigma2 = exp(v[3]), exp(v[4])
@@ -348,9 +381,7 @@ using WrenDists: WrenDists
         check("dogs-dogs_nonhierarchical", 5 + 2dog_nonhier_J,
             dog_nonhier_oracle, [dog_nonhier_point])
 
-        sat_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-            PosteriorDB.database(), "sat-hier_2pl",
-        )))
+        sat_data = posteriordb_data("sat-hier_2pl")
         function sat_oracle(v)
             I, J = sat_data["I"], sat_data["J"]
             theta = view(v, 1:J)
@@ -380,39 +411,21 @@ using WrenDists: WrenDists
         sat_point = vcat(0.2 .* sin.(1:sat_J),
             0.03 .* sin.(1:sat_I), 0.03 .* cos.(1:sat_I),
             [0.0, 0.0, log(0.5), log(1.0), 0.1])
-        sat_vm = VecModel(posteriordb_model("sat-hier_2pl"),
-            AutoEnzyme(; mode=Reverse))
-        @test sat_vm.dimension == length(sat_point)
-        sat_value, sat_gradient = lp_and_grad(sat_vm, sat_point)
-        @test isapprox(sat_value, sat_oracle(sat_point); atol=1e-5)
-        selected = [1, sat_J, sat_J + 1, sat_J + sat_I,
-            sat_J + sat_I + 1, sat_J + 2sat_I,
-            sat_J + 2sat_I + 1, sat_J + 2sat_I + 2,
-            sat_J + 2sat_I + 3, sat_J + 2sat_I + 4,
-            sat_J + 2sat_I + 5]
-        positions = zeros(Int, length(sat_point))
-        for (k, i) in enumerate(selected)
-            positions[i] = k
-        end
-        function sat_selected_oracle(z)
-            full = [positions[i] == 0 ? convert(eltype(z), sat_point[i]) :
-                z[positions[i]] for i in eachindex(sat_point)]
-            return sat_oracle(full)
-        end
-        sat_selected_gradient = ForwardDiff.gradient(sat_selected_oracle,
-            sat_point[selected])
-        @test isapprox(sat_gradient[selected], sat_selected_gradient; atol=1e-5)
+        check_selected(enzyme_model("sat-hier_2pl"), sat_oracle, sat_point,
+            [1, sat_J, sat_J + 1, sat_J + sat_I, sat_J + sat_I + 1,
+             sat_J + 2sat_I, sat_J + 2sat_I + 1, sat_J + 2sat_I + 2,
+             sat_J + 2sat_I + 3, sat_J + 2sat_I + 4, sat_J + 2sat_I + 5])
 
-        fims_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-            PosteriorDB.database(), "fims_Aus_Jpn_irt-2pl_latent_reg_irt",
-        )))
+        fims_data = posteriordb_data("fims_Aus_Jpn_irt-2pl_latent_reg_irt")
         fims_I, fims_J, fims_K = (fims_data[k] for k in ("I", "J", "K"))
         fims_W = fims_data["W"]
         @test all(fims_W[:, 1] .== 1)
-        @test all(k -> all(x -> x == 0 || x == 1, fims_W[:, k]), 2:fims_K)
+        # The Stan source scales every covariate by twice its standard deviation;
+        # its range branch for two-valued covariates is never taken.
         fims_W_adj = Float64.(fims_W)
         for k in 2:fims_K
-            fims_W_adj[:, k] .-= sum(fims_W[:, k]) / fims_J
+            fims_W_adj[:, k] = (fims_W[:, k] .- mean(fims_W[:, k])) ./
+                (2 * std(fims_W[:, k]))
         end
         function fims_oracle(v)
             alpha = exp.(view(v, 1:fims_I))
@@ -435,32 +448,13 @@ using WrenDists: WrenDists
         fims_point = vcat(0.03 .* sin.(1:fims_I),
             0.1 .* cos.(1:(fims_I - 1)),
             0.1 .* sin.(1:fims_J), [0.1, -0.2, 0.3, -0.1])
-        fims_vm = VecModel(posteriordb_model(
-            "fims_Aus_Jpn_irt-2pl_latent_reg_irt"), AutoEnzyme(; mode=Reverse))
-        @test fims_vm.dimension == length(fims_point)
-        fims_value, fims_gradient = lp_and_grad(fims_vm, fims_point)
-        @test isapprox(fims_value, fims_oracle(fims_point); atol=1e-5)
-        fims_selected = [1, fims_I, fims_I + 1, 2fims_I - 1,
-            2fims_I, 2fims_I + fims_J - 1,
-            2fims_I + fims_J, 2fims_I + fims_J + 1,
-            2fims_I + fims_J + 2, 2fims_I + fims_J + 3]
-        fims_positions = zeros(Int, length(fims_point))
-        for (k, i) in enumerate(fims_selected)
-            fims_positions[i] = k
-        end
-        function fims_selected_oracle(z)
-            full = [fims_positions[i] == 0 ? convert(eltype(z), fims_point[i]) :
-                z[fims_positions[i]] for i in eachindex(fims_point)]
-            return fims_oracle(full)
-        end
-        fims_selected_gradient = ForwardDiff.gradient(fims_selected_oracle,
-            fims_point[fims_selected])
-        @test isapprox(fims_gradient[fims_selected], fims_selected_gradient;
-            atol=1e-5)
+        check_selected(enzyme_model("fims_Aus_Jpn_irt-2pl_latent_reg_irt"),
+            fims_oracle, fims_point,
+            [1, fims_I, fims_I + 1, 2fims_I - 1, 2fims_I, 2fims_I + fims_J - 1,
+             2fims_I + fims_J, 2fims_I + fims_J + 1, 2fims_I + fims_J + 2,
+             2fims_I + fims_J + 3])
 
-        science_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-            PosteriorDB.database(), "science_irt-grsm_latent_reg_irt",
-        )))
+        science_data = posteriordb_data("science_irt-grsm_latent_reg_irt")
         science_I, science_J = science_data["I"], science_data["J"]
         science_m = maximum(science_data["y"])
         @test science_data["K"] == 1
@@ -494,45 +488,25 @@ using WrenDists: WrenDists
             0.05 .* cos.(1:(science_I - 1)),
             0.05 .* sin.(1:(science_m - 1)),
             0.1 .* sin.(1:science_J), [0.1])
-        science_vm = VecModel(posteriordb_model(
-            "science_irt-grsm_latent_reg_irt"), AutoEnzyme(; mode=Reverse))
-        @test science_vm.dimension == length(science_point)
-        science_value, science_gradient = lp_and_grad(science_vm, science_point)
-        @test isapprox(science_value, science_oracle(science_point); atol=1e-5)
-        science_selected = [1, science_I, science_I + 1, 2science_I - 1,
-            2science_I, 2science_I + science_m - 2,
-            2science_I + science_m - 1,
-            2science_I + science_m + science_J - 2, length(science_point)]
-        science_positions = zeros(Int, length(science_point))
-        for (k, i) in enumerate(science_selected)
-            science_positions[i] = k
-        end
-        function science_selected_oracle(z)
-            full = [science_positions[i] == 0 ?
-                convert(eltype(z), science_point[i]) : z[science_positions[i]]
-                for i in eachindex(science_point)]
-            return science_oracle(full)
-        end
-        science_selected_gradient = ForwardDiff.gradient(science_selected_oracle,
-            science_point[science_selected])
-        @test isapprox(science_gradient[science_selected],
-            science_selected_gradient; atol=1e-5)
+        check_selected(enzyme_model("science_irt-grsm_latent_reg_irt"),
+            science_oracle, science_point,
+            [1, science_I, science_I + 1, 2science_I - 1, 2science_I,
+             2science_I + science_m - 2, 2science_I + science_m - 1,
+             2science_I + science_m + science_J - 2, length(science_point)])
 
-        timss_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-            PosteriorDB.database(), "timssAusTwn_irt-gpcm_latent_reg_irt",
-        )))
+        timss_data = posteriordb_data("timssAusTwn_irt-gpcm_latent_reg_irt")
         timss_I, timss_J, timss_K = (timss_data[k] for k in ("I", "J", "K"))
         timss_m = [maximum(timss_data["y"][n]
             for n in 1:timss_data["N"] if timss_data["ii"][n] == i)
             for i in 1:timss_I]
         timss_pos = cumsum([1; timss_m[1:(end - 1)]])
         timss_steps = sum(timss_m)
-        @test all(timss_data["W"][:, 1] .== 1)
-        @test all(k -> all(x -> x == 0 || x == 1, timss_data["W"][:, k]),
-            2:timss_K)
-        timss_W_adj = Float64.(timss_data["W"])
+        timss_W = timss_data["W"]
+        @test all(timss_W[:, 1] .== 1)
+        timss_W_adj = Float64.(timss_W)
         for k in 2:timss_K
-            timss_W_adj[:, k] .-= sum(timss_data["W"][:, k]) / timss_J
+            timss_W_adj[:, k] = (timss_W[:, k] .- mean(timss_W[:, k])) ./
+                (2 * std(timss_W[:, k]))
         end
         function timss_oracle(v)
             alpha = exp.(view(v, 1:timss_I))
@@ -560,32 +534,13 @@ using WrenDists: WrenDists
         timss_point = vcat(1 .+ 0.03 .* sin.(1:timss_I),
             0.05 .* cos.(1:(timss_steps - 1)),
             0.1 .* sin.(1:timss_J), 0.1 .* cos.(1:timss_K))
-        timss_vm = VecModel(posteriordb_model(
-            "timssAusTwn_irt-gpcm_latent_reg_irt"), AutoEnzyme(; mode=Reverse))
-        @test timss_vm.dimension == length(timss_point)
-        timss_value, timss_gradient = lp_and_grad(timss_vm, timss_point)
-        @test isapprox(timss_value, timss_oracle(timss_point); atol=1e-5)
-        timss_selected = [1, timss_I, timss_I + 1,
-            timss_I + timss_steps - 1, timss_I + timss_steps,
-            timss_I + timss_steps + timss_J - 1,
-            timss_I + timss_steps + timss_J, length(timss_point)]
-        timss_positions = zeros(Int, length(timss_point))
-        for (k, i) in enumerate(timss_selected)
-            timss_positions[i] = k
-        end
-        function timss_selected_oracle(z)
-            full = [timss_positions[i] == 0 ? convert(eltype(z), timss_point[i]) :
-                z[timss_positions[i]] for i in eachindex(timss_point)]
-            return timss_oracle(full)
-        end
-        timss_selected_gradient = ForwardDiff.gradient(timss_selected_oracle,
-            timss_point[timss_selected])
-        @test isapprox(timss_gradient[timss_selected], timss_selected_gradient;
-            atol=1e-5)
+        check_selected(enzyme_model("timssAusTwn_irt-gpcm_latent_reg_irt"),
+            timss_oracle, timss_point,
+            [1, timss_I, timss_I + 1, timss_I + timss_steps - 1,
+             timss_I + timss_steps, timss_I + timss_steps + timss_J - 1,
+             timss_I + timss_steps + timss_J, length(timss_point)])
 
-        lda_docs_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-            PosteriorDB.database(), "three_docs1200-ldaK2",
-        )))
+        lda_docs_data = posteriordb_data("three_docs1200-ldaK2")
         function lda_docs_oracle(v)
             theta1 = logistic.(view(v, 1:3))
             phi1, jac1 = simplex3_oracle(v[4], v[5])
@@ -616,9 +571,7 @@ using WrenDists: WrenDists
         end
         for (name, M) in (("three_men1-ldaK2", 6),
                 ("three_men2-ldaK2", 14), ("three_men3-ldaK2", 9))
-            data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-                PosteriorDB.database(), name,
-            )))
+            data = posteriordb_data(name)
             V = data["V"]
             dimension = M + 2(V - 1)
             function men_lda_oracle(v)
@@ -633,32 +586,14 @@ using WrenDists: WrenDists
                     for n in 1:data["N"])
                 return prior + likelihood
             end
-            point = 0.01 .* sin.(1:dimension)
-            vm = VecModel(posteriordb_model(name), AutoEnzyme(; mode=Reverse))
-            @test vm.dimension == dimension
-            value, gradient = lp_and_grad(vm, point)
-            @test isapprox(value, men_lda_oracle(point); atol=1e-5, rtol=1e-8)
-            selected = [1, M, M + 1, M + V - 1, M + V, dimension]
-            positions = zeros(Int, dimension)
-            for (k, i) in enumerate(selected)
-                positions[i] = k
-            end
-            function men_lda_selected_oracle(z)
-                full = [positions[i] == 0 ? convert(eltype(z), point[i]) :
-                    z[positions[i]] for i in eachindex(point)]
-                return men_lda_oracle(full)
-            end
-            selected_gradient = ForwardDiff.gradient(men_lda_selected_oracle,
-                point[selected])
-            @test isapprox(gradient[selected], selected_gradient;
-                atol=1e-5, rtol=1e-8)
+            check_selected(enzyme_model(name), men_lda_oracle,
+                0.01 .* sin.(1:dimension),
+                [1, M, M + 1, M + V - 1, M + V, dimension]; rtol=1e-8)
         end
 
         for (name, M) in (("prideprejudice_chapter-ldaK5", 61),
                 ("prideprejudice_paragraph-ldaK5", 2025))
-            data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-                PosteriorDB.database(), name,
-            )))
+            data = posteriordb_data(name)
             V = data["V"]
             dimension = 4M + 5(V - 1)
             function pride_lda_oracle(v)
@@ -685,32 +620,20 @@ using WrenDists: WrenDists
                 return prior + likelihood
             end
             point = 0.01 .* sin.(1:dimension)
-            vm = VecModel(posteriordb_model(name), AutoEnzyme(; mode=Reverse);
-                latent_source=pride_lda_source(M), reduce_copies=false)
-            @test vm.dimension == dimension
-            value, gradient = lp_and_grad(vm, point)
-            @test isapprox(value, pride_lda_oracle(point); atol=1e-5, rtol=1e-8)
+            vm = enzyme_model(name; latent_source=pride_lda_source(M),
+                reduce_copies=false)
             if M == 61
-                selected = [1, 4M, 4M + 1, 4M + V - 1, 4M + V, dimension]
-                positions = zeros(Int, dimension)
-                for (k, i) in enumerate(selected)
-                    positions[i] = k
-                end
-                function pride_lda_selected_oracle(z)
-                    full = [positions[i] == 0 ? convert(eltype(z), point[i]) :
-                        z[positions[i]] for i in eachindex(point)]
-                    return pride_lda_oracle(full)
-                end
-                selected_gradient = ForwardDiff.gradient(pride_lda_selected_oracle,
-                    point[selected])
-                @test isapprox(gradient[selected], selected_gradient;
+                check_selected(vm, pride_lda_oracle, point,
+                    [1, 4M, 4M + 1, 4M + V - 1, 4M + V, dimension]; rtol=1e-8)
+            else
+                # 2025 documents: the density only.
+                @test vm.dimension == dimension
+                @test isapprox(lp(vm, point), pride_lda_oracle(point);
                     atol=1e-5, rtol=1e-8)
             end
         end
 
-        traffic_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-            PosteriorDB.database(), "traffic_accident_nyc-bym2_offset_only",
-        )))
+        traffic_data = posteriordb_data("traffic_accident_nyc-bym2_offset_only")
         traffic_N = traffic_data["N"]
         traffic_log_E = log.(traffic_data["E"])
         traffic_log_factorial = [sum(log, 1:y; init=0.0)
@@ -738,32 +661,11 @@ using WrenDists: WrenDists
         end
         traffic_point = vcat([-4.0, log(0.2), 0.3],
             0.01 .* sin.(1:traffic_N), 0.01 .* cos.(1:traffic_N))
-        traffic_vm = VecModel(posteriordb_model(
-            "traffic_accident_nyc-bym2_offset_only"), AutoEnzyme(; mode=Reverse))
-        @test traffic_vm.dimension == length(traffic_point)
-        traffic_value, traffic_gradient = lp_and_grad(traffic_vm, traffic_point)
-        @test isapprox(traffic_value, traffic_oracle(traffic_point);
-            atol=1e-5, rtol=1e-8)
-        traffic_selected = [1, 2, 3, 4, 3 + traffic_N,
-            4 + traffic_N, 3 + 2traffic_N]
-        traffic_positions = zeros(Int, length(traffic_point))
-        for (k, i) in enumerate(traffic_selected)
-            traffic_positions[i] = k
-        end
-        function traffic_selected_oracle(z)
-            full = [traffic_positions[i] == 0 ?
-                convert(eltype(z), traffic_point[i]) : z[traffic_positions[i]]
-                for i in eachindex(traffic_point)]
-            return traffic_oracle(full)
-        end
-        traffic_selected_gradient = ForwardDiff.gradient(traffic_selected_oracle,
-            traffic_point[traffic_selected])
-        @test isapprox(traffic_gradient[traffic_selected],
-            traffic_selected_gradient; atol=1e-5, rtol=1e-8)
+        check_selected(enzyme_model("traffic_accident_nyc-bym2_offset_only"),
+            traffic_oracle, traffic_point,
+            [1, 2, 3, 4, 3 + traffic_N, 4 + traffic_N, 3 + 2traffic_N]; rtol=1e-8)
 
-        mnist_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-            PosteriorDB.database(), "mnist_100-nn_rbm1bJ10",
-        )))
+        mnist_data = posteriordb_data("mnist_100-nn_rbm1bJ10")
         mnist_M, mnist_J, mnist_K = mnist_data["M"], 10, mnist_data["K"]
         mnist_x = Float64.(mnist_data["x"])
         mnist_s2_alpha = (0.05 / mnist_M^2)^2
@@ -802,32 +704,13 @@ using WrenDists: WrenDists
             1e-4 .* cos.(1:(mnist_J * (mnist_K - 1))),
             0.02 .* sin.(1:mnist_J),
             0.02 .* cos.(1:(mnist_K - 1)))
-        mnist_vm = VecModel(posteriordb_model("mnist_100-nn_rbm1bJ10"),
-            AutoEnzyme(; mode=Reverse))
-        @test mnist_vm.dimension == mnist_dimension
-        mnist_value, mnist_gradient = lp_and_grad(mnist_vm, mnist_point)
-        @test isapprox(mnist_value, mnist_oracle(mnist_point);
-            atol=1e-5, rtol=1e-8)
-        mnist_selected = [1, 2, 3, mnist_alpha_end,
-            mnist_alpha_end + 1, mnist_beta_end,
-            mnist_beta_end + 1, mnist_dimension]
-        mnist_positions = zeros(Int, mnist_dimension)
-        for (k, i) in enumerate(mnist_selected)
-            mnist_positions[i] = k
-        end
-        function mnist_selected_oracle(z)
-            full = [mnist_positions[i] == 0 ? convert(eltype(z), mnist_point[i]) :
-                z[mnist_positions[i]] for i in eachindex(mnist_point)]
-            return mnist_oracle(full)
-        end
-        mnist_selected_gradient = ForwardDiff.gradient(mnist_selected_oracle,
-            mnist_point[mnist_selected])
-        @test isapprox(mnist_gradient[mnist_selected], mnist_selected_gradient;
-            atol=1e-5, rtol=1e-6)
+        check_selected(enzyme_model("mnist_100-nn_rbm1bJ10"), mnist_oracle,
+            mnist_point,
+            [1, 2, 3, mnist_alpha_end, mnist_alpha_end + 1, mnist_beta_end,
+             mnist_beta_end + 1, mnist_dimension];
+            rtol=1e-8, gradient_rtol=1e-6)
 
-        dog_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-            PosteriorDB.database(), "dogs-dogs",
-        )))
+        dog_data = posteriordb_data("dogs-dogs")
         dog_y = dog_data["y"]
         dog_count, trials = size(dog_y)
         dog_shocks = [sum((dog_y[j, s] for s in 1:(t - 1)); init=0)
@@ -861,9 +744,7 @@ using WrenDists: WrenDists
         check("dogs-dogs_log", 2, dogs_log_oracle,
             [[-0.2, 0.3], [-0.1, 0.1]])
 
-        glmm_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-            PosteriorDB.database(), "GLMM_data-GLMM1_model",
-        )))
+        glmm_data = posteriordb_data("GLMM_data-GLMM1_model")
         nsite = glmm_data["nsite"]
         obs = glmm_data["obs"]
         obssite = glmm_data["obssite"]
@@ -883,9 +764,7 @@ using WrenDists: WrenDists
             [vcat(0.04 .* sin.(1:nsite), 0.2, -0.1),
              vcat(0.03 .* cos.(1:nsite), -0.1, 0.2)])
 
-        nes_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-            PosteriorDB.database(), "nes_logit_data-nes_logit_model",
-        )))
+        nes_data = posteriordb_data("nes_logit_data-nes_logit_model")
         function nes_oracle(v)
             eta = v[1] .+ v[2] .* nes_data["income"]
             return sum(bernoulli_logit.(nes_data["vote"], eta))
@@ -893,9 +772,7 @@ using WrenDists: WrenDists
         check("nes_logit_data-nes_logit_model", 2, nes_oracle,
             [[0.2, -0.1], [-0.1, 0.1]])
 
-        survey_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-            PosteriorDB.database(), "Survey_data-Survey_model",
-        )))
+        survey_data = posteriordb_data("Survey_data-Survey_model")
         k = survey_data["k"]
         nmax = survey_data["nmax"]
         nmin = maximum(k)
@@ -903,35 +780,14 @@ using WrenDists: WrenDists
             theta = logistic(v[1])
             parts = [sum(logpdf(Binomial(n, theta), ki) for ki in k) - log(nmax)
                 for n in nmin:nmax]
-            mixture = first(parts)
-            for part in Iterators.drop(parts, 1)
-                mixture = max(mixture, part) + log1p(exp(-abs(mixture - part)))
-            end
-            return mixture + logit_jacobian(v[1])
+            return reduce(logaddexp, parts) + logit_jacobian(v[1])
         end
         check("Survey_data-Survey_model", 1, survey_oracle, [[0.2], [-0.3]])
     end
 
     @testset "capture-recapture densities and native Enzyme gradients" begin
-        logistic(x) = inv(1 + exp(-x))
-        logit_jacobian(x) = -log1p(exp(-x)) - log1p(exp(x))
-        bernoulli_logit(y, eta) = y * eta - log1p(exp(eta))
-        logsumexp2(a, b) = max(a, b) + log1p(exp(-abs(a - b)))
-
-        function check(name, dimension, reference, points)
-            vm = VecModel(posteriordb_model(name), AutoEnzyme(; mode=Reverse))
-            @test vm.dimension == dimension
-            for point in points
-                value, gradient = lp_and_grad(vm, point)
-                @test isapprox(value, reference(point); atol=1e-6)
-                @test isapprox(gradient, ForwardDiff.gradient(reference, point); atol=1e-6)
-            end
-        end
-
         function capture_data(name)
-            data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-                PosteriorDB.database(), name,
-            )))
+            data = posteriordb_data(name)
             y = data["y"]
             return y, vec(sum(y; dims=2))
         end
@@ -939,7 +795,7 @@ using WrenDists: WrenDists
         function marginalized(omega, rowlogp, counts)
             present, absent = log(omega), log1p(-omega)
             return sum(counts[i] > 0 ? present + rowlogp[i] :
-                logsumexp2(present + rowlogp[i], absent) for i in eachindex(counts))
+                logaddexp(present + rowlogp[i], absent) for i in eachindex(counts))
         end
 
         y0, counts0 = capture_data("M0_data-M0_model")
@@ -949,7 +805,8 @@ using WrenDists: WrenDists
             rowlogp = [logpdf(Binomial(trials0, p), count) for count in counts0]
             return sum(logit_jacobian, v) + marginalized(omega, rowlogp, counts0)
         end
-        check("M0_data-M0_model", 2, m0_reference, [[0.1, -0.2], [-0.3, 0.2]])
+        check("M0_data-M0_model", 2, m0_reference, [[0.1, -0.2], [-0.3, 0.2]];
+            atol=1e-6)
 
         yb, countsb = capture_data("Mb_data-Mb_model")
         function mb_reference(v)
@@ -961,7 +818,7 @@ using WrenDists: WrenDists
             return sum(logit_jacobian, v) + marginalized(omega, rowlogp, countsb)
         end
         check("Mb_data-Mb_model", 3, mb_reference,
-            [[0.1, -0.2, 0.3], [-0.3, 0.2, -0.1]])
+            [[0.1, -0.2, 0.3], [-0.3, 0.2, -0.1]]; atol=1e-6)
 
         yt, countst = capture_data("Mt_data-Mt_model")
         trials_t = size(yt, 2)
@@ -973,7 +830,8 @@ using WrenDists: WrenDists
             return sum(logit_jacobian, v) + marginalized(omega, rowlogp, countst)
         end
         check("Mt_data-Mt_model", trials_t + 1, mt_reference,
-            [0.2 .* sin.(1:(trials_t + 1)), -0.2 .* cos.(1:(trials_t + 1))])
+            [0.2 .* sin.(1:(trials_t + 1)), -0.2 .* cos.(1:(trials_t + 1))];
+            atol=1e-6)
 
         yh, countsh = capture_data("Mth_data-Mth_model")
         m_h, t_h = size(yh)
@@ -989,7 +847,7 @@ using WrenDists: WrenDists
                 marginalized(omega, rowlogp, countsh)
         end
         check("Mth_data-Mth_model", m_h + t_h + 2, mth_reference,
-            [vcat(0.2 .* sin.(1:(t_h + 2)), 0.03 .* cos.(1:m_h))])
+            [vcat(0.2 .* sin.(1:(t_h + 2)), 0.03 .* cos.(1:m_h))]; atol=1e-6)
 
         ybh, countsbh = capture_data("Mtbh_data-Mtbh_model")
         m_bh, t_bh = size(ybh)
@@ -1009,27 +867,11 @@ using WrenDists: WrenDists
                 marginalized(omega, rowlogp, countsbh)
         end
         check("Mtbh_data-Mtbh_model", m_bh + t_bh + 3, mtbh_reference,
-            [vcat(0.2 .* cos.(1:(t_bh + 3)), 0.03 .* sin.(1:m_bh))])
+            [vcat(0.2 .* cos.(1:(t_bh + 3)), 0.03 .* sin.(1:m_bh))]; atol=1e-6)
     end
 
     @testset "item-response densities and native Enzyme gradients" begin
-        logistic(x) = inv(1 + exp(-x))
-        logit_jacobian(x) = -log1p(exp(-x)) - log1p(exp(x))
-        bernoulli_logit(y, eta) = y * eta - log1p(exp(eta))
-        function check(name, dimension, reference, points)
-            vm = VecModel(posteriordb_model(name), AutoEnzyme(; mode=Reverse))
-            @test vm.dimension == dimension
-            for point in points
-                value, gradient = lp_and_grad(vm, point)
-                @test isapprox(value, reference(point); atol=1e-6)
-                @test isapprox(gradient, ForwardDiff.gradient(reference, point);
-                    atol=1e-6)
-            end
-        end
-
-        irt_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-            PosteriorDB.database(), "irt_2pl-irt_2pl",
-        )))
+        irt_data = posteriordb_data("irt_2pl-irt_2pl")
         I, J = irt_data["I"], irt_data["J"]
         function irt_reference(v)
             sigma_theta = exp(v[1])
@@ -1056,11 +898,9 @@ using WrenDists: WrenDists
         irt_dimension = J + 2I + 4
         check("irt_2pl-irt_2pl", irt_dimension, irt_reference,
             [vcat([0.1], 0.1 .* sin.(1:J), [-0.2], 0.1 .* cos.(1:I),
-                  [0.2, -0.1], 0.1 .* sin.(1:I))])
+                  [0.2, -0.1], 0.1 .* sin.(1:I))]; atol=1e-6)
 
-        bones_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-            PosteriorDB.database(), "bones_data-bones_model",
-        )))
+        bones_data = posteriordb_data("bones_data-bones_model")
         function bones_reference(v)
             total = sum(logpdf(Normal(0, 36), x) for x in v)
             grade, gamma, delta, ncat = (bones_data[k] for k in
@@ -1078,11 +918,9 @@ using WrenDists: WrenDists
         end
         check("bones_data-bones_model", bones_data["nChild"], bones_reference,
             [0.1 .* sin.(1:bones_data["nChild"]),
-             0.2 .* cos.(1:bones_data["nChild"])])
+             0.2 .* cos.(1:bones_data["nChild"])]; atol=1e-6)
 
-        lsat_data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-            PosteriorDB.database(), "lsat_data-lsat_model",
-        )))
+        lsat_data = posteriordb_data("lsat_data-lsat_model")
         T, N = lsat_data["T"], lsat_data["N"]
         function lsat_reference(v)
             alpha = view(v, 1:T)
@@ -1104,8 +942,7 @@ using WrenDists: WrenDists
             end
             return total
         end
-        lsat_vm = VecModel(posteriordb_model("lsat_data-lsat_model"),
-            AutoEnzyme(; mode=Reverse))
+        lsat_vm = enzyme_model("lsat_data-lsat_model")
         @test lsat_vm.dimension == T + N + 1
         point = vcat(0.1 .* sin.(1:T), 0.05 .* cos.(1:N), [0.2])
         value, gradient = lp_and_grad(lsat_vm, point)

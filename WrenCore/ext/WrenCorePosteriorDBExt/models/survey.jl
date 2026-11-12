@@ -1,10 +1,10 @@
 # PosteriorDB: Survey_data-Survey_model
 module Survey
 
-using LogExpFunctions: logaddexp
 using PosteriorDB
 using WrenCore: @wren, @addloglikelihood, logdensityof
 using WrenDists: WrenDists as WD
+using ..LogAddExp: logaddexp
 
 const data = let
     pdb = PosteriorDB.database()

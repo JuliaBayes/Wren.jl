@@ -2,7 +2,7 @@
 module CaptureMtbh
 
 using PosteriorDB
-using LogExpFunctions: logaddexp
+using ..LogAddExp: logaddexp
 using WrenCore: @wren, @addloglikelihood, @iid, logdensityof
 using WrenDists: WrenDists as WD
 using ..CaptureCommon: capture_counts

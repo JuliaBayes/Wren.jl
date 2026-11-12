@@ -3,17 +3,22 @@ module IRTCommon
 using Statistics: mean, std
 using WrenCore: logdensityof
 using WrenDists: WrenDists as WD
+using ..LogAddExp: logaddexp
 
+# Centre every covariate after the intercept and divide it by twice its standard
+# deviation. The Stan sources mean to divide a two-valued covariate by its range
+# instead, but count the matching rows as
+#     minmax_count = minmax_count + W[j, k] == min_w || W[j, k] == max_w;
+# which Stan parses as `(minmax_count + W[j, k] == min_w) || (W[j, k] == max_w)`.
+# That is 0 or 1, never `rows(W)`, so the range branch is not taken for more than
+# one person and the PosteriorDB targets use `2 * sd` for every covariate.
 function adjusted_covariates(W)
     J, K = size(W)
     W_adj = Matrix{Float64}(undef, J, K)
     W_adj[:, 1] .= W[:, 1]
     for k in 2:K
         column = view(W, :, k)
-        lo, hi = extrema(column)
-        scale = all(x -> x == lo || x == hi, column) ? hi - lo : 2 * std(column)
-        center = mean(column)
-        W_adj[:, k] .= (column .- center) ./ scale
+        W_adj[:, k] .= (column .- mean(column)) ./ (2 * std(column))
     end
     return W_adj
 end
@@ -46,7 +51,5 @@ function graded_logdensity(y, eta, thresholds, offset, first, m)
     end
     return selected - lognormalizer
 end
-
-logaddexp(a, b) = a > b ? a + log1p(exp(b - a)) : b + log1p(exp(a - b))
 
 end

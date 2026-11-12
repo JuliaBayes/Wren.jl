@@ -4,6 +4,7 @@ module MNIST100RBM
 using PosteriorDB
 using WrenCore: @wren, @addloglikelihood, @iid, logdensityof
 using WrenDists: WrenDists as WD
+using ..LogAddExp: logaddexp
 
 const data = let
     pdb = PosteriorDB.database()
@@ -11,8 +12,6 @@ const data = let
         pdb, "mnist_100-nn_rbm1bJ10",
     )))
 end
-
-logaddexp(a, b) = a > b ? a + log1p(exp(b - a)) : b + log1p(exp(a - b))
 
 function mnist_logdensity(y, x, alpha, beta, alpha1, beta1)
     J = length(alpha1)

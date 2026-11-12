@@ -2,7 +2,7 @@
 module HMMGaussian
 
 using PosteriorDB
-using LogExpFunctions: logaddexp
+using ..LogAddExp: logaddexp
 using WrenCore: @wren, @addloglikelihood, logdensityof
 using WrenDists: WrenDists as WD
 
@@ -35,9 +35,17 @@ end
     # Native ordered priors are tracked in #207; positive-flat scales in #192.
     @addloglikelihood raw_gap2 + raw_gap3 + raw_sigma1 + raw_sigma2 + raw_sigma3
 
-    g1 = log(pi[1]) + logdensityof(WD.Normal(mu1, sigma1), y[1])
-    g2 = log(pi[2]) + logdensityof(WD.Normal(mu2, sigma2), y[1])
-    g3 = log(pi[3]) + logdensityof(WD.Normal(mu3, sigma3), y[1])
+    # The Stan source starts the forward pass with
+    #     logalpha[1] = log(pi1) + normal_lpdf(y[1] | mu, sigma);
+    # where the vectorised `normal_lpdf` is one number, the sum over all three
+    # states. Every state therefore gets the same first emission term. This is the
+    # PosteriorDB target, not the usual per-state emission.
+    first_emission = logdensityof(WD.Normal(mu1, sigma1), y[1]) +
+        logdensityof(WD.Normal(mu2, sigma2), y[1]) +
+        logdensityof(WD.Normal(mu3, sigma3), y[1])
+    g1 = log(pi[1]) + first_emission
+    g2 = log(pi[2]) + first_emission
+    g3 = log(pi[3]) + first_emission
     for t in 2:length(y)
         next1 = logdensityof(WD.Normal(mu1, sigma1), y[t]) +
             logaddexp(logaddexp(g1 + log(a1[1]), g2 + log(a2[1])),

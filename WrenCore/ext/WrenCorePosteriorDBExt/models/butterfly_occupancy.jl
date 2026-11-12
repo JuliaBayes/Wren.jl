@@ -2,7 +2,8 @@
 module ButterflyOccupancy
 
 using PosteriorDB
-using LogExpFunctions: logaddexp, log1pexp
+using LogExpFunctions: log1pexp
+using ..LogAddExp: logaddexp
 using WrenCore: @wren, @addloglikelihood, @iid, logdensityof
 using WrenDists: WrenDists as WD
 

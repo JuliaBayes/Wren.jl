@@ -2,7 +2,7 @@
 module CaptureMb
 
 using PosteriorDB
-using LogExpFunctions: logaddexp
+using ..LogAddExp: logaddexp
 using WrenCore: @wren, @addloglikelihood, logdensityof
 using WrenDists: WrenDists as WD
 using ..CaptureCommon: capture_counts
