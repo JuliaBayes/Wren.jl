@@ -73,7 +73,7 @@ end
 # The rule returns dense tangents. Differentiate the loop for Fill and other wrappers.
 EnzymeRules.@easy_rule(
     _beta_loop(α::Array, β::Array, x::Array),
-    @setup(ψ = digamma.(α .+ β)),
+    @setup(ψ=digamma.(α .+ β)),
     (
         log.(x) .- digamma.(α) .+ ψ,
         log1p.(-x) .- digamma.(β) .+ ψ,
@@ -101,4 +101,5 @@ function DensityInterface.logdensityof(d::BatchedBeta, x)
         _beta_loop(α, β, x)
     end
 end
-Plaice.scalar_to_scalar_bijector(::BatchedBeta) = Plaice.Untruncate(0.0, 1.0)
+Plaice.scalar_to_scalar_bijector(d::BatchedBeta) =
+    Plaice.Untruncate(zero(noisetype(d)), one(noisetype(d)))

@@ -21,16 +21,13 @@ end
 @inline function DensityInterface.logdensityof(d::PoissonLog, x::Number)
     T = masstype(d, x)
     logλ, k = convert(T, d.logλ), convert(T, x)
+    λ = exp(logλ)
     # Define `0 * log(0)` as zero, so `logλ = -Inf` puts all mass on zero.
     a = select(k == zero(T), () -> zero(T), () -> k * logλ)
     # `loggamma` rejects negative integers before the support check runs.
     g = loggamma(max(k, zero(T)) + one(T))
     # If `log(k!)` overflows, the mass is zero; avoid `Inf - Inf`.
-    return select(
-        insupport(d, x) & isfinite(g),
-        () -> a - exp(logλ) - g,
-        () -> convert(T, -Inf),
-    )
+    return select(insupport(d, x) & isfinite(g), () -> a - λ - g, () -> convert(T, -Inf))
 end
 
 @inline Base.rand(rng::AbstractRNG, d::PoissonLog) = rand(rng, Poisson(exp(d.logλ)))
@@ -45,13 +42,12 @@ Base.rand(rng::AbstractRNG, d::BatchedPoissonLog) = rand.(Ref(rng), PoissonLog.(
 function DensityInterface.logdensityof(d::BatchedPoissonLog, x)
     logλ = d.logλ
     return if within_compile()
-        sum(@. x * logλ - exp(logλ) - loggamma(x + one(x)))
+        sum(((logλi, xi) -> logdensityof(PoissonLog(logλi), xi)).(logλ, x))
     else
         T = float(promote_type(eltype(x), eltype(logλ)))
         s = zero(T)
         for i in eachindex(x, logλ)
-            ki, logλi = convert(T, x[i]), convert(T, logλ[i])
-            s += ki * logλi - exp(logλi) - loggamma(ki + one(T))
+            s += logdensityof(PoissonLog(logλ[i]), x[i])
         end
         s
     end

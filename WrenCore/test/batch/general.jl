@@ -60,8 +60,8 @@ fcategorical(ps) = Categorical(ps)
                     x[i] ~ Normal(a)
                 end
             end
-            model1 = conditioned1(zeros(3)) | VarNamedTuple(x=ones(3))
-            model2 = conditioned2(zeros(3)) | VarNamedTuple(x=ones(3))
+            model1 = conditioned1(zeros(3)) | (; x=ones(3))
+            model2 = conditioned2(zeros(3)) | (; x=ones(3))
             test_model_equivalence(model1, model2, adtype)
         end
 
@@ -168,6 +168,29 @@ fcategorical(ps) = Categorical(ps)
             )
         end
 
+        @testset "runtime fallback indices (issue #157)" begin
+            @wren function batch_unknown_indices(y, indices)
+                mu ~ iid(Normal(), length(y))
+                @batch for i in indices
+                    @observe y[i] ~ fnormal(mu[i])
+                end
+            end
+            @wren function nobatch_unknown_indices(y, indices)
+                mu ~ iid(Normal(), length(y))
+                for i in indices
+                    @observe y[i] ~ fnormal(mu[i])
+                end
+            end
+            y = [0.0, 2.0, 3.0]
+            for indices in ([2, 1], 2:3)
+                test_model_equivalence(
+                    batch_unknown_indices(y, indices),
+                    nobatch_unknown_indices(y, indices),
+                    adtype,
+                )
+            end
+        end
+
         @testset "issue #79" begin
             # https://github.com/JuliaBayes/Wren.jl/issues/79
             @wren function batch_diagonal(x, y)
@@ -232,10 +255,10 @@ fcategorical(ps) = Categorical(ps)
             ps = reshape(ps, 2, 2, 1)
             # Without batching it should be fine
             model = fail_nobatch_slice([1, 2], ps)
-            @test rand(model) isa Any
+            @test parameters(model) isa Any
             # With batching this should throw
             model = fail_batch_slice([1, 2], ps)
-            @test_throws "cannot safely unindex" rand(model)
+            @test_throws "cannot safely unindex" parameters(model)
         end
     end
 end

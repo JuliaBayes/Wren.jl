@@ -17,6 +17,27 @@ if RUN_REACTANT
     using Reactant
 end
 
+@testset "BatchedBernoulli support" begin
+    d = WrenDists.BatchedBernoulli(Float32[0, 1])
+    points = [Float32[0, 1], Float32[1, 0]]
+    @test logdensityof(d, points[1]) == 0
+    @test logdensityof(d, points[2]) == -Inf
+    interior = WrenDists.BatchedBernoulli(Float32[0.2, 0.8])
+    @test logdensityof(interior, [2.0, 1.0]) == -Inf
+    f(p, x) = logdensityof(WrenDists.BatchedBernoulli(p), x)
+    for (_, adtype) in Base.get_extension(WrenDists, :WrenDistsTestUtils).TESTED_ADTYPES
+        @test last(DI.value_and_gradient(f, adtype, d.p, DI.Constant(points[1]))) ≈ [-1, 1]
+    end
+    if RUN_REACTANT
+        WrenDists.test_dist_reactant(d, points)
+        WrenDists.test_dist_reactant(interior, [[0.0, 1.0], [2.0, 1.0]])
+        p, x = Reactant.to_rarray.((d.p, points[1]))
+        grad(p, x) = Enzyme.gradient(Enzyme.Reverse, f, p, Enzyme.Const(x))[1]
+        compiled = Reactant.@compile grad(p, x)
+        @test Array(compiled(p, x)) ≈ [-1, 1]
+    end
+end
+
 test_dist(
     "Bernoulli",
     WrenDists.Bernoulli(0.3),

@@ -25,7 +25,7 @@ However, it is designed to be much more general and performant than a simple `Di
 
 ## Drawing samples
 
-Calling `rand(model)` gives you a _trace_, i.e., a collection of variable names and values.
+Calling `parameters(model)` gives you a _trace_, i.e., a collection of variable names and values.
 Given the above discussion you should not be surprised to learn that the trace is a `VarNamedTuple`!
 
 ```@example models
@@ -39,7 +39,7 @@ using Wren, Distributions, LinearAlgebra
 end
 model = f(1.0)
 
-trace = rand(model)
+trace = parameters(model)
 ```
 
 To access the values inside the trace, you can index into the `VarNamedTuple` with a `VarName`.
@@ -70,15 +70,18 @@ This seems a bit wasteful: can't we do both at once?
 Indeed, Wren gives you a function for this:
 
 ```@example models
-accs = rand_with_logp(model)
+result = simulate(model)
 ```
 
-which returns a new object, an [`AccumulatorTuple`](@ref).
-You can access the trace with `parameters(accs)`, and the log-density with `logjoint(accs)`.
+which returns a new object, a [`ModelResult`](@ref).
+You can access the trace with `parameters(result)`, and the log-density with `logjoint(result)`.
 
 ## General evaluation
 
-At this point, you are probably wondering what an `AccumulatorTuple` is.
+!!! danger
+
+    TODO(penelopeysm): This should be shifted to another page; I'll do so in a separate PR.
+
 This is a good point to talk about the general evaluation framework that Wren uses, which is heavily lifted from DynamicPPL.
 
 The entry point for _all_ Wren model evaluation is the [`WrenCore.evaluate`](@ref) function.
@@ -109,7 +112,7 @@ FromPrior(Xoshiro(468))
 or we can say, 'I have one stored in this `VarNamedTuple`! Please use it':
 
 ```@example models
-FromParams(trace)
+FromValues(trace)
 ```
 
 An accumulator, on the other hand, is a struct that holds information that is collected during model evaluation.
@@ -132,7 +135,7 @@ Now that we have the ingredients, let's put it all together:
 using WrenCore: evaluate, OriginalSpace, EvalContext
 
 retval, accs =
-    evaluate(model, FromParams(trace), OriginalSpace(), accs, EvalContext{false}());
+    evaluate(model, FromValues(trace), OriginalSpace(), accs, EvalContext{false}());
 ```
 
 The last argument, [`EvalContext`](@ref), controls whether model arguments are copied during evaluation.
@@ -155,54 +158,37 @@ Please see their respective docs for more information!
 
 ## Conditioning
 
-This is in some ways more fundamental, but we had to explain what a `VarNamedTuple` was first. :-)
-
-To condition a model on some observed data, you can use the `|` operator:
+To condition a model on observed data, pass a `NamedTuple` to the `|` operator:
 
 ```@example models
-vnt = VarNamedTuple(y=1.0)
+observed = (y=1.0,)
 
 @wren function f_orig()
     x ~ Normal()
     y ~ Normal(x + 1)
 end
 
-cond_model = f_orig() | vnt
+cond_model = f_orig() | observed
 ```
 
-or the equivalent [`condition`](@ref) function:
+The equivalent function is [`condition`](@ref):
 
 ```@example models
-cond_model = condition(f_orig(), vnt)
+cond_model = condition(f_orig(), observed)
 ```
 
-Unfortunately, the `VarNamedTuple`s that you use for conditioning will almost certainly not be the same as those drawn from a model.
-Thus, you will likely have to construct a `VarNamedTuple` yourself.
-More thorough docs on this will hopefully come at some point in time but here are some syntax examples:
+Each key names a whole variable. For example, `(y=[1.0, 2.0],)` observes every
+`y[i] ~ dist` statement. Partial conditioning of an array or field is not supported.
+A `missing` entry does not make that entry latent.
+To mix observations and latent values, use separate variables or condition whole
+variables in a submodel.
 
-```@example models
-# NamedTuple-like syntax.
-VarNamedTuple(y=1.0, z=zeros(3))
-
-# From an AbstractDict{VarName}.
-VarNamedTuple(Dict(@vn(y) => 1.0, @vn(z.a) => zeros(3)))
-
-# With a macro.
-@vnt begin
-    # Note the use of `:=` rather than `=`
-    y := 1.0
-    z.a := zeros(3)
-
-    # This says that `vect[1]` is part of a three-element vector, and that
-    # its first value is 1.0. The other values of `vect` are NOT part of
-    # the resulting `VarNamedTuple`. This allows you to condition only part
-    # of a vector. Note that the template should have the same shape as
-    # whatever `vect` in the model will be.
-    @template vect = zeros(3)
-    vect[1] := 1.0
-end
-nothing # hide
-```
+Conditioning replaces the entire value of each supplied key.
+To remove conditioning, use `decondition(cond_model, :y)`, or
+`decondition(cond_model)` to remove all conditioning.
+See [Conditioning submodels](@ref submodel-conditioning) for nested observations
+and deconditioning variables inside child models.
+Latent parameters remain `VarNamedTuple`s, as described above.
 
 ## [Vectorisation](@id vectorisation)
 
@@ -224,17 +210,17 @@ noad_vecmodel = VecModel(model, nothing)
 This is mostly useful when you want to handoff a Wren model to a different library which expects a vector interface.
 In particular, `VecModel`s obey the [LogDensityProblems.jl interface](https://github.com/tpapp/LogDensityProblems.jl), and thus can be used with a wide range of other Julia packages that expect this.
 
-You can draw a vectorised sample from a `VecModel` with the `rand` function:
+You can draw a vectorised sample from a `VecModel` with [`vector_parameters`](@ref):
 
 ```@example models
-v = rand(vecmodel)
+v = vector_parameters(vecmodel)
 ```
 
-or you can convert existing parameters into a vectorised form with [`vectorise_latents`](@ref):
+or you can convert existing parameters into a vectorised form with [`vector_parameters`](@ref):
 
 ```@example models
-ps = FromParams(rand(model))         # This is a VarNamedTuple in original model space.
-v = vectorise_latents(ps, vecmodel)  # Convert it to vectorised (and unconstrained) form.
+ps = parameters(model)               # This is a VarNamedTuple in original model space.
+v = vector_parameters(vecmodel, ps)  # Convert it to vectorised (and unconstrained) form.
 ```
 
 Then you can calculate the log-density of these vectorised parameters, and their gradient:
@@ -253,6 +239,8 @@ LDP.logdensity_and_gradient(vecmodel, v)  # Requires an adtype.
 Wren in fact exports shorter functions for these, namely [`lp`](@ref) and [`lp_and_grad`](@ref), which are directly equivalent to the above.
 Additionally, Wren provides an in-place gradient [`lp_and_grad!`](@ref) function, which may be useful for squeezing every last bit of performance out.
 LogDensityProblems.jl does not provide this (but if you have a good usecase for it, please consider [adding a comment on this issue](https://github.com/tpapp/LogDensityProblems.jl/issues/115)!).
+
+None of these functions copy the parameter vector, so the model must not write into its latent variables; see the "Mutability" section of the syntax tutorial.
 
 By default, `VecModel`s are always run in [`UnconstrainedSpace()`](@ref): that is, all parameters are transformed into a form where they can take any value in ℝ^n.
 The log-density calculation will then include the log-Jacobian term corresponding to this transformation.

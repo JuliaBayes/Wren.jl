@@ -7,7 +7,9 @@ obtained.
 Wren provides several subtypes of `AbstractLatentSource`:
 
 - [`FromPrior`](@ref): samples latent variables from their prior distributions
-- [`FromParams`](@ref): provides latent variables in a `VarNamedTuple`
+- [`FromValues`](@ref): provides latent variables in a `VarNamedTuple`
+- [`FromUnconstrainedInterval`](@ref): samples latent variables uniformly from an interval
+  in unconstrained space
 - [`FromVector`](@ref): provides a vector of flattened latent variables, together with
   information about how to convert them back into the original space
 
@@ -20,6 +22,25 @@ Custom subtypes of this can be created to customise model execution. To be a val
   latent source used to evaluate `submodel` is obtained by calling `scope(source, @vn(a))`.
 """
 abstract type AbstractLatentSource end
+
+"""
+    to_latent_source(x)::AbstractLatentSource
+
+Convert `x` into an [`AbstractLatentSource`](@ref). Functions that take a latent source,
+such as [`simulate`](@ref), call this on their argument, so they also accept:
+
+- an `AbstractRNG`, which becomes [`FromPrior(rng)`](@ref FromPrior), i.e. latent
+  variables are drawn from the prior using `rng`;
+- a `VarNamedTuple`, which becomes [`FromValues(values)`](@ref FromValues). There is no
+  fallback, so it must contain every latent variable of the model.
+
+An `AbstractLatentSource` is returned unchanged.
+"""
+to_latent_source(source::AbstractLatentSource) = source
+to_latent_source(rng::AbstractRNG) = FromPrior(rng)
+to_latent_source(values::VarNamedTuple) = FromValues(values)
+to_latent_source(@nospecialize(x)) =
+    throw(ArgumentError("Cannot convert $(typeof(x)) into a latent source."))
 
 """
     get_latent(
@@ -60,7 +81,7 @@ end
 ```
 
 When evaluating `outer`, the latent source may contain a value for the variable `a.x`. For
-example, you might have `FromParams(VarNamedTuple(a=VarNamedTuple(x=1.0)))`. However, when
+example, you might have `FromValues(VarNamedTuple(a=VarNamedTuple(x=1.0)))`. However, when
 evaluating `inner`, the submodel does not know about the prefix `a`: Wren will call `scope`
 to obtain a subsetted latent source which only contains the variable `x`.
 """
