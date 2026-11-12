@@ -1,8 +1,7 @@
 module WrenCorePredictTests
 
-@info "testing predict"
+@info "testing predict.jl"
 
-using AbstractMCMC: AbstractMCMC
 using Distributions
 using FlexiChains: FlexiChains, Extra, Parameter, VNChain
 using LinearAlgebra
@@ -10,6 +9,7 @@ using OffsetArrays: OffsetArray
 using Random
 using StableRNGs
 using Test
+using VarNames: VarNames
 using WrenCore
 
 """
@@ -18,11 +18,12 @@ from the posterior of `cond_model`; each draw is re-evaluated in `cond_model` so
 chain holds the same log-probabilities an MCMC sampler would record.
 """
 function exact_posterior_chain(rng, posterior_model, cond_model, niters, nchains)
-    draws = map(Iterators.product(1:niters, 1:nchains)) do _
-        posterior_params = rand(rng, posterior_model)
-        Draw(FromParams(posterior_params), cond_model, (acceptance_rate=1.0,))
+    results = map(Iterators.product(1:niters, 1:nchains)) do _
+        posterior_params = parameters(posterior_model, rng)
+        simulate(cond_model, posterior_params)
     end
-    return AbstractMCMC.from_samples(VNChain, draws)
+    stats = fill((acceptance_rate=1.0,), niters, nchains)
+    return WrenCore.to_flexichain(results, stats)
 end
 
 @testset "predict" begin
@@ -45,7 +46,7 @@ end
         end
         x ~ Normal(2.0, sqrt(0.5))
     end
-    model = f(zeros(2)) | VarNamedTuple(y=4.0)
+    model = f(zeros(2)) | (; y=4.0)
     chn = exact_posterior_chain(StableRNG(468), f_posterior(zeros(2)), model, 1000, 2)
 
     # Sanity check
@@ -54,6 +55,20 @@ end
     @test isapprox(mean(chn[@vn(m[2])]), 0.0; atol=0.1)
     @test isapprox(mean(chn[@vn(p[1])]), 0.0; atol=0.1)
     @test isapprox(mean(chn[@vn(p[2])]), 0.0; atol=0.1)
+
+    @testset "logprior / loglikelihood / logjoint / return_value on a chain" begin
+        expected = map(vnt -> simulate(model, vnt), FlexiChains.parameters_at(chn))
+        @test Array(logprior(model, chn)) ≈ Array(map(logprior, expected))
+        @test Array(loglikelihood(model, chn)) ≈ Array(map(loglikelihood, expected))
+        @test Array(logjoint(model, chn)) ≈ Array(map(logjoint, expected))
+        @test Array(return_value(model, chn)) == Array(map(return_value, expected))
+        # The chain was built by evaluating `model`, so re-evaluating gives the same values.
+        @test Array(logjoint(model, chn)) ≈ Array(chn[Extra(:logjoint)])
+        # Without conditioning, `y` is latent but not in the chain, which is an error.
+        for f_chain in (logprior, loglikelihood, logjoint, return_value)
+            @test_throws "No latent value provided for variable y" f_chain(f(zeros(2)), chn)
+        end
+    end
 
     @testset "chain values are actually used" begin
         pdns = predict(StableRNG(468), f(zeros(2)), chn)
@@ -124,7 +139,7 @@ end
             x[-2] ~ Normal(1.0, sqrt(0.5))
         end
         offset_arg() = OffsetArray(zeros(2), -2:-1)
-        cond_model = offset2(offset_arg()) | VarNamedTuple(y=2.0)
+        cond_model = offset2(offset_arg()) | (; y=2.0)
         chn = exact_posterior_chain(
             StableRNG(468),
             offset2_posterior(offset_arg()),

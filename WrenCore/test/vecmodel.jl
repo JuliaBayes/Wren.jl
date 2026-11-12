@@ -77,7 +77,7 @@ end
                 @info nameof(typeof(d)), name
 
                 vm = VecModel(f(d), adtype)
-                x = rand(vm)
+                x = vector_parameters(vm)
                 N = length(x)
                 @test N == Plaice.unconstrained_vec_length(d)
 
@@ -119,7 +119,7 @@ end
 
         for noad in (nothing, DI.ADTypes.NoAutoDiff())
             vm = VecModel(model, noad)
-            yvec = rand(vm)
+            yvec = vector_parameters(vm)
             # Should still be able to calculate logp
             @test LDP.capabilities(typeof(vm)) == LDP.LogDensityOrder{0}()
             @test LDP.dimension(vm) == vm.dimension
@@ -132,7 +132,7 @@ end
         end
     end
 
-    @testset "vectorise_latents and rand" begin
+    @testset "vector_parameters" begin
         @wren function fexp()
             x ~ Exponential()
         end
@@ -140,23 +140,54 @@ end
 
         vm = VecModel(model, nothing)
 
-        x = @inferred rand(vm)
+        x = @inferred vector_parameters(vm)
         @test x isa AbstractVector{<:Real}
         @test length(x) == 1
 
         # check reproducibility
-        @test rand(Xoshiro(468), vm) == rand(Xoshiro(468), vm)
+        @test vector_parameters(vm, Xoshiro(468)) == vector_parameters(vm, Xoshiro(468))
 
         # check that there are some negative values, i.e., it's unconstrained space
-        xs = vcat([rand(StableRNG(i), vm) for i in 1:100]...)
+        xs = vcat([vector_parameters(vm, StableRNG(i)) for i in 1:100]...)
         @test any(xs .< 0)
 
         for X in [0.1, 1.0, 10.0]
-            prms = FromParams(VarNamedTuple(x=X), nothing)
-            x = @inferred vectorise_latents(prms, vm)
+            prms = FromValues(VarNamedTuple(x=X))
+            x = @inferred vector_parameters(vm, prms)
             @test x ≈ [log(X)]
         end
     end
+end
+
+@testset "posterior and optimization densities through LogDensityProblems" begin
+    @wren function poisson_rate(count)
+        rate ~ Gamma(2.0, 1.0)
+        @observe count ~ Poisson(rate)
+    end
+    model = poisson_rate(3)
+    initial = FromValues(VarNamedTuple(rate=1.5))
+    x = [log(1.5)]
+    posterior = logdensity(model, DI.AutoForwardDiff(); latent_source=initial)
+    value, gradient = LDP.logdensity_and_gradient(posterior, x)
+    @test value ≈ 5log(1.5) - 3.0 - log(6.0)
+    @test gradient ≈ [5 - 2 * 1.5]
+    @test LDP.logdensity(logdensity(model; latent_source=initial), x) ≈ value
+
+    map_density =
+        logdensity(model, DI.AutoForwardDiff(); latent_source=initial, lp_function=logjoint)
+    value, gradient = LDP.logdensity_and_gradient(map_density, x)
+    @test value ≈ 4log(1.5) - 3.0 - log(6.0)
+    @test gradient ≈ [4 - 2 * 1.5]
+
+    likelihood = logdensity(
+        model,
+        DI.AutoForwardDiff();
+        latent_source=initial,
+        lp_function=loglikelihood,
+    )
+    value, gradient = LDP.logdensity_and_gradient(likelihood, x)
+    @test value ≈ 3log(1.5) - 1.5 - log(6.0)
+    @test gradient ≈ [3 - 1.5]
 end
 
 end # module WrenVecModelTests

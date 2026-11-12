@@ -17,6 +17,12 @@ if RUN_REACTANT
     using Reactant
 end
 
+@testset "Gamma negative observations" begin
+    d = WrenDists.Gamma(2.0f0, 1.0f0)
+    @test logdensityof(d, -1.0f0) == -Inf
+    RUN_REACTANT && WrenDists.test_dist_reactant(d, Float32[-1])
+end
+
 test_dist(
     "Gamma",
     WrenDists.Gamma(2.0, 1.0),

@@ -63,8 +63,8 @@ using WrenDists: WrenDists
                 zeros(d), 0.0)
             @test isfinite(lp(vm, v))
         else
-            @test isfinite(logjoint(model, rand(StableRNG(468), model)))
-            v = rand(StableRNG(468), vm)
+            @test isfinite(logjoint(model, parameters(model, StableRNG(468))))
+            v = vector_parameters(vm, StableRNG(468))
         end
         @test length(v) == vm.dimension
         logp, grad = lp_and_grad(vm, v)

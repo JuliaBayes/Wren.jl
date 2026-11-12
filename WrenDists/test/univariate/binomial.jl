@@ -17,6 +17,29 @@ if RUN_REACTANT
     using Reactant
 end
 
+@testset "Binomial batch support" for (D, parameter) in (
+    (WrenDists.BatchedBinomial, 0.5),
+    (WrenDists.BatchedBinomialLogit, 0.0),
+)
+    d = D([3], [parameter])
+    for x in (-1.0, 1.5, 4.0)
+        @test logdensityof(d, [x]) == -Inf
+    end
+    if RUN_REACTANT
+        dr = Reactant.to_rarray(d)
+        compiled = Reactant.@compile logdensityof(dr, Reactant.to_rarray([1.5]))
+        for x in (-1.0, 1.5, 4.0)
+            @test Float64(compiled(dr, Reactant.to_rarray([x]))) == -Inf
+        end
+        f(p, x) = logdensityof(D([3], p), x)
+        gradient(p, x) = first(Enzyme.gradient(Reverse, f, p, x))
+        p = Reactant.to_rarray([parameter])
+        x = Reactant.to_rarray([NaN])
+        compiled_gradient = Reactant.@compile gradient(p, x)
+        @test Array(compiled_gradient(p, x)) == [0.0]
+    end
+end
+
 test_dist(
     "Binomial",
     WrenDists.Binomial(20, 0.4),

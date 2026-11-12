@@ -98,7 +98,7 @@ end
 
 # Draw plain noise `z`, then return `μ + Lz`.
 function Base.rand(rng::AbstractRNG, d::MvNormalScale)
-    return unwhiten(d, randn(rng, noisetype(d), length(d.μ)))
+    return unwhiten(d, randn(rng, rngtype(d), length(d.μ)))
 end
 
 # --- Batched MvNormalScale ---
