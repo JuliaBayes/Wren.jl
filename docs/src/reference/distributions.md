@@ -26,6 +26,7 @@ WrenDists.Flat
 WrenDists.LogNormal
 WrenDists.Exponential
 WrenDists.Gamma
+WrenDists.InverseGamma
 WrenDists.Weibull
 WrenDists.HalfNormal
 WrenDists.HalfCauchy

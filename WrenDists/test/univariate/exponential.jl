@@ -17,6 +17,16 @@ if RUN_REACTANT
     using Reactant
 end
 
+@testset "BatchedExponential support" begin
+    d = WrenDists.BatchedExponential(Float32[1, 1])
+    points = [Float32[0, 0], Float32[-1, 0]]
+    @test logdensityof(d, points[1]) == 0
+    @test logdensityof(d, points[2]) == -Inf
+    if RUN_REACTANT
+        WrenDists.test_dist_reactant(d, points)
+    end
+end
+
 test_dist(
     "Exponential",
     WrenDists.Exponential(3.0),

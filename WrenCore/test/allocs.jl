@@ -11,9 +11,9 @@ using Test
 using Chairmarks
 
 function test_zero_allocs(model)
-    @test iszero((@b rand($model)).allocs)
+    @test iszero((@b parameters($model)).allocs)
     v = VecModel(model, nothing)
-    x = rand(v)
+    x = vector_parameters(v)
     @test iszero((@b lp($v, $x)).allocs)
 end
 
@@ -34,7 +34,7 @@ end
                 z[i] ~ Normal(x)
             end
         end
-        model = f2(ones(5)) | VarNamedTuple(z=zeros(5))
+        model = f2(ones(5)) | (; z=zeros(5))
         test_zero_allocs(model)
     end
 

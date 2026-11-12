@@ -25,7 +25,7 @@ struct TDist{N<:Number,M<:Number,S<:Number} <: UnconstrainedUnivariateDist
 end
 
 TDist(ν::Number, μ::Number) = TDist(ν, μ, one(μ))
-TDist(ν::Number) = TDist(ν, 0.0, 1.0)
+TDist(ν::Number) = TDist(ν, zero(ν), one(ν))
 
 @inline function _valuetype(d::TDist, x::Number)
     return float(promote_type(typeof(d.ν), typeof(d.μ), typeof(d.σ), typeof(x)))
@@ -57,8 +57,8 @@ end
   applied afterwards so automatic differentiation can follow them.
 =#
 @inline function Base.rand(rng::AbstractRNG, d::TDist)
-    F = noisetype(d)
-    ν = convert(F, d.ν)
+    F = rngtype(d)
+    ν = convert(noisetype(d), d.ν)
     z = randn(rng, F)
     u = rand(rng, F)
     logv = gammalogquantile(ν / 2, u)
@@ -78,7 +78,7 @@ end
 Base.size(d::BatchedTDist) = size(d.μ)
 
 function Base.rand(rng::AbstractRNG, d::BatchedTDist)
-    F = noisetype(d)
+    F = rngtype(d)
     N = length(d.μ)
     z = randn(rng, F, N)
     u = rand(rng, F, N)
@@ -146,8 +146,8 @@ end
 Base.size(d::IIDTDist) = d.size
 
 function Base.rand(rng::AbstractRNG, d::IIDTDist)
-    F = noisetype(d)
-    ν = convert(F, d.ν)
+    F = rngtype(d)
+    ν = convert(noisetype(d), d.ν)
     z = randn(rng, F, d.size)
     u = rand(rng, F, d.size)
     logv = gammalogquantile.(ν / 2, u)
