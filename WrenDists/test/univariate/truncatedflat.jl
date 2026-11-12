@@ -3,6 +3,14 @@ using Plaice
 using Random: Xoshiro
 using Test
 
+const RUN_REACTANT = !Sys.iswindows()
+
+if RUN_REACTANT
+    using Pkg
+    Pkg.add("Reactant")
+    using Reactant
+end
+
 @testset "truncated Flat" begin
     for (bounds, u, x, logjac) in (
         ((lower=0.0,), log(2.0), 2.0, log(2.0)),
@@ -35,4 +43,18 @@ using Test
     empty = WD.truncated(WD.Flat(); lower=1.0, upper=1.0)
     @test WD.logdensityof(empty, 1.0) == -Inf
     @test WD.logdensityof(WD.truncated(WD.Flat(); lower=2.0, upper=1.0), 1.5) == -Inf
+end
+
+if RUN_REACTANT
+    @testset "truncated Flat with a traced bound" begin
+        # A bound that depends on another parameter is a traced number when the
+        # density is compiled. An empty interval cannot throw there.
+        density(alpha, x) =
+            WD.logdensityof(WD.truncated(WD.Flat(); lower=0.0, upper=1 - alpha), x)
+        for (alpha, x) in ((0.3, 0.5), (0.3, 0.7), (0.3, 0.9), (1.2, 0.1))
+            alpha_ra = Reactant.to_rarray(alpha; track_numbers=true)
+            x_ra = Reactant.to_rarray(x; track_numbers=true)
+            @test Float64(Reactant.@jit density(alpha_ra, x_ra)) == density(alpha, x)
+        end
+    end
 end
