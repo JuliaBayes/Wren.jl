@@ -58,11 +58,11 @@ The output type is slightly different from above, but conceptually you can see t
 A probabilistic model allows us to write down a relationship between a model's _variables_—its parameters, which we can't directly see—and the _observations_ which we do see.
 
 The best way to understand this is to construct a simple (and sadly very realistic) example.
-To get to work each morning, I have to take [the train](https://en.wikipedia.org/wiki/London_Underground) to work.
+To get to work each morning, I have to take [the train](https://en.wikipedia.org/wiki/London_Underground).
 Although the train is usually pretty reliable, [there are often delays](https://tfl.gov.uk/tube-dlr-overground/status/).
 This introduces some randomness into my commute time.
 
-For example, we might say that the time I spend on the train is 30 minutes, plus some `delay` that's between 0 and 15 minutes.
+For example, we might say that the time I spend on the train is 30 minutes, plus some delay `d` that's between 0 and 15 minutes.
 Assuming that every possible value for the delay is equally likely, we could write this as:
 
 ```math
@@ -202,7 +202,7 @@ Broadly speaking, the log-prior is the probability density associated with the p
 In other words, how plausible do we think a value of `d=10` (or `d=5`, or whatever value we obtained from `simulate` above) would be without taking any of our observations into account?
 That's why the log-densities of `s` and `d` were counted under the `logprior` field.
 
-The log-likelihood, on the other hand, is probability density associated with *outcomes* of the model.
+The log-likelihood, on the other hand, is the probability density associated with *outcomes* of the model.
 Often we call these 'data', or 'observations'.
 That's because in most modelling scenarios, the parameters themselves are not directly observable, but the outcomes of them are.
 We can only use the data to 'reconstruct' or 'infer' the parameters, i.e., go backwards from data to parameters, effectively reversing the forward simulation we ran first.
@@ -228,7 +228,6 @@ meet \sim \text{Normal}(commute + 10, 3)
     This could be improved by choosing a more realistic distribution (see [this cheatsheet (PDF)](https://learnbayes.se/cheatsheets/common_distributions.pdf) for a few distributions commonly used in Bayesian statistics).
     We won't do so here for simplicity, but this is a convenient time to point out that a model is only as good as the assumptions that go into it.
 
-Anyway, let's add this to our model.
 Because our meeting time is an observation, we mark it with the `@observe` macro.
 We also need to specify a value for `meet`.
 The easiest way to do this is to pass it as an argument to the function:
@@ -239,6 +238,7 @@ The easiest way to do this is to pass it as an argument to the function:
     d ~ Uniform(0, 15)                      # Train delay
     commute = 30 + d + (s * 10)             # Total commute time
     @observe meet ~ Normal(commute + 10, 3) # Time we meet in the office
+    return nothing
 end
 ```
 
@@ -272,7 +272,7 @@ flowchart LR
     M --> L
 ```
 
-When we call `simulate` on this model, we now can see that the `loglike` field is no longer zero.
+When we call `simulate` on this model, we now can see that the `loglikelihood` field is no longer zero.
 That's because we've picked up a log-likelihood term from the `meet` observation:
 
 ```@example beginner
@@ -281,9 +281,57 @@ simulate(model)
 
 What's important about this is that **collectively, the log-probabilities allow us to judge whether a set of parameter values are plausible or not**.
 By trying out lots of different values for the parameters `s` and `d`, and seeing how the log-probabilities vary with them, we can start to form updated beliefs about what the real values of the parameters were.
+Concretely, we're going to use the following algorithm to get our updated beliefs:
 
-TODO(penelopeysm) Code up an importance sampler to demonstrate this.
-A full explanation of IS can be deferred to a textbook, but conceptually we have the forward sampling bit which accounts for the logprior (the chance of getting a specific result is proportional to the prior), and then we just need to 'reweight' by taking into account the loglike.
+ 1. Perform lots of forward simulations.
+    Recall that using `simulate` is equivalent to calling `rand(...)` on each of the parameters' distributions.
+    This means that when we use `simulate`, we are drawing from the *prior* distribution of the model; that is, although the log-likelihood is nonzero, it does not affect the trajectory of the simulation.
+
+ 2. Having collected lots of *prior* simulations, we need to look at each of their log-likelihoods.
+    If a simulation has a large likelihood, or equivalently a less negative log-likelihood, then the parameters in that simulation are to be considered more plausible (i.e., it is more likely that they could have given rise to the observations).
+
+ 3. We draw new samples from the prior simulations, but we *reweight* them according to their log-likelihood.
+    Formally, if simulation ``i`` has log-likelihood ``\ell_i``, then the probability of re-selecting that simulation will be equal to ``\exp(\ell_i) / \sum_j \exp(\ell_j)``.
+    This is also known as a ['softmax' operation](https://en.wikipedia.org/wiki/Softmax_function), and we'll use a function called `softmax` to do this for us in a numerically stable way.
+
+If you want to read more, this algorithm is known as 'sampling–importance–resampling' (SIR), or sometimes loosely just 'importance sampling' (IS).
+However, for the purposes of this page, you should just convince yourself that the description above is intuitively reasonable: we first draw samples according to the prior, and then 'correct' for the likelihood term which was ignored in the first step.
+
+```@example beginner
+samples = [simulate(model) for _ in 1:30_000]
+
+using LogExpFunctions: softmax
+loglikelihoods = [loglikelihood(spl) for spl in samples]
+weights = softmax(loglikelihoods)
+
+using StatsBase
+posterior_samples = sample(samples, Weights(weights), 10_000)
+nothing # hide
+```
+
+Let's look at one of these new samples:
+
+```@example beginner
+posterior_samples[1]
+```
+
+It is just a `ModelResult`, exactly like what `simulate` returns.
+The difference, though, is that `posterior_samples` contains a distribution of samples that are from the posterior distribution.
+To illustrate this, let's look at the percentage of samples where `s = 1` (i.e., I overslept):
+
+```@example beginner
+oversleeps = [parameters(spl)[@vn(s)] for spl in posterior_samples]
+mean(oversleeps)
+```
+
+!!! note "Chain objects with Wren"
+
+    It might appear a little bit cumbersome to continually map over vectors.
+    However, the code above has been written with a minimal amount of dependencies in order to illustrate what's going on.
+    When using Wren for inference, you will obtain a [`FlexiChains.VNChain`](https://juliabayes.org/FlexiChains.jl) object, which lets you perform operations such as calculating summary statistics much more easily.
+
+It turns out that the *posterior probability* of me oversleeping—that is, my manager's updated belief about whether I overslept, based on what she saw of me—is smaller!
+Conceptually, this means that other factors like the train delay are sufficient to explain my tardiness on that particular day.
 
 !!! note "Choosing priors"
 
@@ -298,15 +346,15 @@ A full explanation of IS can be deferred to a textbook, but conceptually we have
     Just like the likelihood term where we pointed out that the choice of distribution can make a model better or worse, so can the choice of prior distributions.
     We don't have the space to discuss this in detail here, but if you're interested do check out the resources in the [Further reading](@ref beginner-further-reading) section below.
 
-## Bayes theorem
+## Bayes' theorem
 
-Fundamentally, the components of the probability above are related to Bayes theorem:
+Fundamentally, the components of the probability above are related to Bayes' theorem:
 
 ```math
 p(\mathbf{\theta} | \mathcal{D}) = \frac{p(\mathcal{D} | \mathbf{\theta}) p(\mathbf{\theta})}{p(\mathcal{D})}
 ```
 
-Here, `\mathbf{\theta}` represents the parameters (`s` and `d` in our case), and `\mathcal{D}` is the set of observations (`meet` in our case).
+Here, ``\mathbf{\theta}`` represents the parameters (`s` and `d` in our case), and ``\mathcal{D}`` is the set of observations (`meet` in our case).
 Taking the logarithm of both sides:
 
 ```math
@@ -323,17 +371,92 @@ Thus, we can sum the log-prior and log-likelihood to get the *log-posterior*, up
 
 It's very common to call the sum of these two terms the 'log-joint', since that is technically what it represents (mathematically, it's ``\log p(\mathbf{\theta}, \mathcal{D})``).
 However, as far as Bayesian inference is concerned, the two are for all intents and purposes interchangeable.
-(Indeed, it turns out that in very many algorithms, this constant will simply cancel out.)
+(Indeed, we won't go into the details in this page, but it turns out that in very many algorithms this constant will simply cancel out.)
 
-## Expanding this model
+## Expanding this model with hierarchical relationships
 
-Having seen a fairly simple example of a probabilistic model, we offer a couple of ideas for how to expand it to make it more realistic.
-In 'real-life' models you will likely see some of these elements.
+Having seen a fairly simple example of a probabilistic model, this section will attempt to make it more realistic by adding some extra features.
+In 'real-life' models, you will likely see some of these elements.
 
-TODO(penelopeysm)
+Try not to focus too much on the syntax of Wren here!
+These models are just intended as illustrations of typical practices in Bayesian modelling, rather than a specific tutorial on how to use Wren.
 
-  - Hierarchical relationships
-  - Multiple observations
+### Multiple observations
+
+In real life, it's very unlikely that my manager will have developed suspicions of me oversleeping simply based on one day of me being late.
+It's more likely that she will have noticed a consistent pattern of me being late over a period of time.
+
+We can represent this by having multiple observations of `meet` over a period of time.
+The model is exactly the same, except that we now pass in a vector of observations and loop over them:
+
+```@example beginner
+@wren function time_to_office_expanded_1(meets)
+    s ~ Bernoulli(0.1)                           # Oversleeping
+    d ~ Uniform(0, 15)                           # Train delay
+    commute = 30 + d + (s * 10)                  # Total commute time
+    for meet in meets
+        @observe meet ~ Normal(commute + 10, 3)  # Time we meet on each day
+    end
+    return nothing
+end
+
+meets = [50.0, 55.0, 60.0]    # Example observations.
+model = time_to_office_expanded_1(meets)
+```
+
+You can rerun this model with the same sampling algorithm as before, and you should see that the posterior probabilities will have shifted.
+
+However, there is a problem with this model: it only has a *single* parameter `s` for whether or not I overslept.
+This means that the model assumes that I either overslept on all days, or on none of them, which is not realistic!
+Thus, we might want to change the model to have a vector of parameters `sleeps` instead, one for each day.
+(In theory, we should probably also make a vector of train delays, but for simplicity we'll ignore this for now.)
+
+```@example beginner
+@wren function time_to_office_expanded_2(sleeps, meets)
+    d ~ Uniform(0, 15)                               # Train delay
+    for i in eachindex(meets)
+        sleeps[i] ~ Bernoulli(0.1)                   # Oversleeping on day i
+        commute = 30 + d + (sleeps[i] * 10)
+        @observe meets[i] ~ Normal(commute + 10, 3)  # Time we meet on day i
+    end
+    return nothing
+end
+
+sleeps = zeros(length(meets))   # An empty placeholder for the vector of parameters
+model = time_to_office_expanded_2(sleeps, meets)
+nothing # hide
+```
+
+We can then abstract this even further and make the probability of oversleeping on each day itself a distribution, instead of a fixed value of 0.1:
+
+```@example beginner
+@wren function time_to_office_hierarchical(sleeps, meets)
+    laziness ~ Beta(1, 9)                            # Probability of oversleeping
+    d ~ Uniform(0, 15)                               # Train delay
+    for i in eachindex(meets)
+        sleeps[i] ~ Bernoulli(laziness)              # Oversleeping on day i
+        commute = 30 + d + (sleeps[i] * 10)
+        @observe meets[i] ~ Normal(commute + 10, 3)  # Time we meet on day i
+    end
+    return nothing
+end
+
+model = time_to_office_hierarchical(sleeps, meets)
+nothing # hide
+```
+
+Why would you want to introduce an extra parameter like `laziness`?
+As it happens, the individual `sleeps[i]` are not _that_ interesting to my manager; it doesn't really matter that much whether I overslept on one particular day or not.
+However, logically, all the `sleeps[i]` should be correlated: they all stem from an underlying tendency of me to oversleep, represented by `laziness`, and it makes sense that they can 'share' information with each other through this parameter.
+If my manager were to run this model, she could therefore infer a posterior distribution for `laziness`, which would give her a much better case to bring to HR.
+
+!!! warning "Don't use the algorithm above on this model"
+
+    You might be tempted to run our simple sampling–importance–resampling algorithm on this model.
+    Unfortunately, although it will certainly give you some results, the quality of those results will rapidly degrade as you add more days (and hence more parameters) to the model.
+    In such a case, you'll need to use a more sophisticated inference algorithm to get good results.
+
+Situations like these where you have a way to 'partition' your data into groups, each of which has its own parameters that then depend on other parameters, are often referred to as *hierarchical models*.
 
 ## [Further reading](@id beginner-further-reading)
 
