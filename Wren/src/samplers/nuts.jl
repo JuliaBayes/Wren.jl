@@ -2,7 +2,6 @@ using Random: Random
 import DifferentiationInterface as DI
 using EnzymeCore: Reverse
 using FlexiChains: VNChain
-using AbstractMCMC: AbstractMCMC
 using DynamicHMC: DynamicHMC
 using Term.Progress: ProgressBar, ProgressJob, addjob!, update!, start!, stop!, render
 
@@ -149,7 +148,7 @@ function nuts(
                     reporter,
                     dynamichmc_kwargs...,
                 )
-                to_draws(results, vm, gqs)
+                _nuts_results_and_stats(results, vm, gqs)
             catch e
                 if progress
                     put!(channel, ErrorUpdate(j))
@@ -207,8 +206,10 @@ function nuts(
         t = time()
         print("Constructing chain... ")
     end
-    draws = reduce(hcat, fetch.(tasks))
-    chn = AbstractMCMC.from_samples(VNChain, draws)
+    outputs = fetch.(tasks)
+    model_results = stack(first.(outputs))
+    stats = stack(last.(outputs))
+    chn = WrenCore.to_flexichain(model_results, stats)
     if progress
         println("took $(round(time() - t, digits=2)) seconds")
     end
@@ -226,14 +227,14 @@ function _nuts_stats(tree_stat, step_size)
         log_density=tree_stat.π,
     )
 end
-function to_draws(
+function _nuts_results_and_stats(
     results::NamedTuple,
     vecmodel::WrenCore.VecModel,
     gqs::GeneratedQuantitySpec,
 )
     ϵ = results.ϵ
-    return [
-        Draw(col, vecmodel, _nuts_stats(ts, ϵ); gqs) for
-        (col, ts) in zip(eachcol(results.posterior_matrix), results.tree_statistics)
-    ]
+    model_results =
+        [WrenCore.simulate(vecmodel, col; gqs) for col in eachcol(results.posterior_matrix)]
+    stats = [_nuts_stats(ts, ϵ) for ts in results.tree_statistics]
+    return model_results, stats
 end

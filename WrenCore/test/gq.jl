@@ -78,6 +78,12 @@ end
     @gq reused_after = reused
 end
 
+# Draw from the prior and return the parameters merged with the generated quantities.
+function params_and_gqs(model)
+    result = simulate(model)
+    return merge(parameters(result), generated_quantities(result))
+end
+
 function gq_values(model, acc)
     _, accs = evaluate(
         model,
@@ -175,7 +181,7 @@ end
 
     @testset "values" begin
         x = [1.0, 2.0]
-        params = rand(gq_demo(x))
+        params = params_and_gqs(gq_demo(x))
         a, b = params[@vn(a)], params[@vn(b)]
         mu = a .+ b .* x
         @test params[@vn(mu)] ≈ mu
@@ -190,7 +196,7 @@ end
             @gq m = 1.0
             return m
         end
-        @test rand(gq_bind_return())[@vn(m)] == 1.0
+        @test generated_quantities(simulate(gq_bind_return()))[@vn(m)] == 1.0
         retval, _ = evaluate(
             gq_bind_return(),
             FromPrior(),
@@ -232,7 +238,7 @@ end
         )
         @test haskey(parameters(accs), @vn(a))
         @test isempty(gq_values(model, GeneratedQuantityAccumulator(SomeGQs((:a,)))))
-        @test_throws "generated quantity was evaluated" rand(model)
+        @test_throws "generated quantity was evaluated" simulate(model)
     end
 
     @testset "selection" begin
@@ -273,7 +279,7 @@ end
         @test !haskey(b_gqs, @vn(a))
         @test haskey(b_gqs, @vn(b.z))
 
-        params = rand(model)
+        params = params_and_gqs(model)
         @test params[@vn(a.z)] ≈ 2 * params[@vn(a.z0)]
 
         scoped = @inferred WrenCore.scope(
@@ -291,38 +297,43 @@ end
             x ~ gq_inner()
             @gq doubled = 2 * x[@vn(z0)]
         end
-        params = rand(gq_uses_submodel())
+        params = params_and_gqs(gq_uses_submodel())
         @test params[@vn(doubled)] ≈ 2 * params[@vn(x.z0)]
     end
 
     @testset "entry points" begin
         model = gq_demo([1.0, 2.0])
-        @test haskey(rand(model), @vn(mu))
-
-        accs = rand_with_logp(model)
-        @test Set(keys(generated_quantities(accs))) ==
+        result = simulate(model)
+        @test Set(keys(generated_quantities(result))) ==
               Set([@vn(mu), @vn(mu1), @vn(s), @vn(r)])
-        @test haskey(parameters(accs), @vn(a))
-        @test !haskey(parameters(accs), @vn(mu))
+        @test haskey(parameters(result), @vn(a))
+        @test !haskey(parameters(result), @vn(mu))
+        @test !haskey(parameters(model), @vn(mu))
+        @test isempty(generated_quantities(simulate(model; gqs=NoGQs())))
 
-        draw = Draw(FromPrior(), model)
-        @test haskey(parameters(draw), @vn(mu))
-        @test haskey(parameters(draw), @vn(a))
+        @test Set(keys(generated_quantities(model))) ==
+              Set([@vn(mu), @vn(mu1), @vn(s), @vn(r)])
+        @test collect(keys(generated_quantities(model, SomeGQs((:s,))))) == [@vn(s)]
+        @test isempty(generated_quantities(model, FromPrior(), NoGQs()))
+        latents = VarNamedTuple(; a=1.0, b=2.0, y=[0.0, 0.0])
+        gqs = generated_quantities(model, latents)
+        @test gqs[@vn(mu)] ≈ [3.0, 5.0]
+        @test collect(keys(generated_quantities(model, latents, SomeGQs((:r,))))) ==
+              [@vn(r)]
 
         @wren function gq_clash()
             a ~ Normal()
             @gq a = 100.0
         end
-        @test rand(gq_clash())[@vn(a)] == 100.0
-        @test parameters(Draw(FromPrior(), gq_clash()))[@vn(a)] == 100.0
+        @test params_and_gqs(gq_clash())[@vn(a)] == 100.0
 
         @wren function gq_clash_indexed()
             a = zeros(2)
             a[1] ~ Normal()
             @gq a = 5.0
         end
-        @test rand(gq_clash_indexed())[@vn(a)] == 5.0
-        @test haskey(parameters(rand_with_logp(gq_clash())), @vn(a))
+        @test params_and_gqs(gq_clash_indexed())[@vn(a)] == 5.0
+        @test haskey(parameters(simulate(gq_clash())), @vn(a))
     end
 
     @testset "generated quantities used only by other generated quantities" begin
@@ -366,9 +377,8 @@ end
     end
 
     @testset "type stability" begin
-        @inferred rand(gq_demo([1.0, 2.0]))
-        @inferred rand(gq_outer())
-        @inferred rand_with_logp(gq_demo([1.0, 2.0]))
+        @inferred simulate(gq_demo([1.0, 2.0]))
+        @inferred simulate(gq_outer())
     end
 end
 

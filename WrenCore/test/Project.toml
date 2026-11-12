@@ -1,6 +1,5 @@
 [deps]
 ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
-AbstractMCMC = "80f14c24-f653-4e6a-9b94-39d6b0f70001"
 Chairmarks = "0ca39b1e-fe0b-4e98-acfc-b1656634c4de"
 DensityInterface = "b429d917-457f-4dbc-8f4c-0cc954292b1d"
 DifferentiationInterface = "a0c0ee7d-e4b9-4e03-894e-1c5f64a51d63"
@@ -24,12 +23,8 @@ VarNames = "09a315b2-63fc-4165-8d7f-d59368e770cc"
 WrenCore = "008b59e7-bbda-4991-901b-b08f5cfc584d"
 WrenDists = "2ad4af40-d7c9-42b2-92b0-e09d37d1e75a"
 
-[sources]
-Plaice = {rev = "main", url = "https://github.com/JuliaBayes/Plaice.jl"}
-
 [compat]
 ADTypes = "1"
-AbstractMCMC = "5"
 DifferentiationInterface = "0.7"
 Enzyme = "0.13"
 FlexiChains = "0.7"

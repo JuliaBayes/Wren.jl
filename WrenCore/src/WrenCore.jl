@@ -30,6 +30,7 @@ include("latents/latents.jl")
 include("latents/void.jl")
 include("latents/prior.jl")
 include("latents/values.jl")
+include("latents/interval.jl")
 
 # Accumulators
 include("accs/accs.jl")
@@ -70,32 +71,20 @@ include("accs/vec_sample.jl")
 include("vecmodel.jl")
 
 # User-facing interface
-include("interface.jl")
-include("draw.jl")
+include("evaluate.jl")
+include("condition.jl")
 include("test_ad.jl")
 include("test_utils.jl")
 
-"""
-    posteriordb_model(name::AbstractString) -> WrenCore.Model
-
-Return a Wren model for the PosteriorDB posterior called `name`, e.g. `"arK-arK"`, using the
-data from PosteriorDB.
-
-This requires PosteriorDB.jl and WrenDists.jl to be loaded. Only some posteriors are
-available; an error is thrown for any others, which lists the available ones.
-"""
+# Overloaded in extensions
+function to_flexichain end
 function posteriordb_model end
-
-"""
-    available_posteriordb_models() -> Vector{String}
-
-Return a vector of PosteriorDB model names which WrenCore has implementations for.
-"""
 function available_posteriordb_models end
 
 export @wren,
     @addloglikelihood,
     @iid,
+    @sample,
     @observe,
     @batch,
     @gq,
@@ -117,15 +106,16 @@ export @wren,
     BenchmarkResult,
     FromValues,
     FromPrior,
+    FromUnconstrainedInterval,
     FromVector,
-    FixedTransform,
     UnconstrainedSpace,
     AsOriginal,
     TransformedValue,
     VecModel,
+    logdensity,
     DEFAULT_AD,
     VectorisedParamsAccumulator,
-    vectorise_latents,
+    vector_parameters,
     WithBackend,
     WithExpectedResult,
     OriginalSpace,
@@ -135,7 +125,9 @@ export @wren,
     decondition,
     iid,
     independent,
-    rand_with_logp,
+    simulate,
+    ModelResult,
+    return_value,
     generated_quantities,
     GeneratedQuantitySpec,
     AllGQs,
@@ -144,7 +136,6 @@ export @wren,
     evaluate,
     EvalContext,
     get_latent,
-    vectorised_params,
     logjac,
     logjoint,
     logjoint_transformed,
@@ -158,13 +149,15 @@ export @wren,
     test_ad,
     reduce_copies,
     target_transform,
+    # FlexiChains
+    to_flexichain,
     # PosteriorDB
     posteriordb_model,
     available_posteriordb_models
 
 # Reexports
-using VarNames: @vn, @vnt, VarNamedTuple, VarName, Draw, parameters, extras
-export @vn, @vnt, VarNamedTuple, VarName, Draw, parameters, extras
+using VarNames: @vn, @vnt, VarNamedTuple, VarName, parameters
+export @vn, @vnt, VarNamedTuple, VarName, parameters
 
 using DensityInterface: logdensityof
 export logdensityof

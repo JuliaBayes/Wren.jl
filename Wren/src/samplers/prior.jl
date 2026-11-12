@@ -1,8 +1,6 @@
 using Random: Random
 using FlexiChains: VNChain
 
-# only for from_samples... could we remove this as a dep in FlexiChains?
-using AbstractMCMC: AbstractMCMC
 using Term.Progress: ProgressBar, addjob!, update!, start!, stop!, render
 
 """
@@ -50,17 +48,18 @@ function prior(
 
     tasks = [
         Threads.@spawn begin
-            chain_draws = Vector{Draw}(undef, niters)
-            for i in 1:niters
-                chain_draws[i] = Draw(FromPrior(Random.TaskLocalRNG()), model; gqs)
+            chain_model = WrenCore._copy_for_thread(model)
+            chain_results = map(1:niters) do i
+                result = WrenCore.simulate(chain_model, Random.TaskLocalRNG(); gqs)
                 if progress && i % update_every == 0
                     put!(progress_channel, (j, i))
                 end
+                result
             end
             if progress && niters % update_every != 0
                 put!(progress_channel, (j, niters))
             end
-            chain_draws
+            chain_results
         end for j in 1:nchains
     ]
 
@@ -83,8 +82,7 @@ function prior(
         t = time()
         print("Constructing chain... ")
     end
-    draws = reduce(hcat, fetch.(tasks))
-    chn = AbstractMCMC.from_samples(VNChain, draws)
+    chn = WrenCore.to_flexichain(stack(fetch.(tasks)))
     if progress
         println("took $(round(time() - t, digits=2)) seconds")
     end

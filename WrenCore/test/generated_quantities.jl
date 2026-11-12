@@ -2,7 +2,6 @@ module WrenCoreGeneratedQuantitiesTests
 
 @info "testing generated_quantities.jl"
 
-using AbstractMCMC: AbstractMCMC
 using Distributions
 using FlexiChains: FlexiChains, Parameter, VNChain
 using StableRNGs
@@ -38,10 +37,10 @@ end
 end
 
 function prior_chain(rng, model, niters, nchains)
-    draws = map(Iterators.product(1:niters, 1:nchains)) do _
-        Draw(FromPrior(rng), model)
+    results = map(Iterators.product(1:niters, 1:nchains)) do _
+        simulate(model, rng)
     end
-    return AbstractMCMC.from_samples(VNChain, draws)
+    return WrenCore.to_flexichain(results)
 end
 
 parameter_keys(chain) = Set(FlexiChains.parameters(chain))

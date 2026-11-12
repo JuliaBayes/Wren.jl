@@ -3,7 +3,7 @@ const VEC_SAMPLE_ACCNAME = :VecSample
 """
     VecSampleAccumulator
 
-An accumulator that holds a full `AbstractVector`, the eventual result of `rand(ldf)` or
+An accumulator that holds a full `AbstractVector`, the eventual result of `vector_parameters(vecmodel)` or
 similar. This is filled in chunk-by-chunk during model evaluation.
 """
 struct VecSampleAccumulator{T<:AbstractVector,R<:VecInfo} <: AbstractAccumulator
