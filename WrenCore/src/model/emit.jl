@@ -702,6 +702,7 @@ function emit_model_expr(
         $vn = $vn_expr
         $accs =
             $(accumulate_observe!!)($accs, $val, $vn, $rhs, $template, $(Val{stmt.name}()))
+        $val
     end
 end
 
