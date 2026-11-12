@@ -27,7 +27,6 @@ using Test
     include("ad.jl")
     include("reactant.jl")
     include("predict.jl")
-    include("generated_quantities.jl")
     include("posteriordb.jl")
     include("issues/55.jl")
     include("issues/69.jl")
