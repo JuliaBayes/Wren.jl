@@ -61,9 +61,8 @@ end
     Observe
 
 Representation of `@observe lhs ~ rhs`. Note that `Sample` statements that are conditioned
-on do become observations, but do not become `Observe` nodes in the AST. This is because the
-conditioning status must be determined at runtime (consider e.g. `y[i] ~ Normal()` with a
-partial conditioning array -- thus the status depends on the runtime value of `i`).
+on do become observations, but do not become `Observe` nodes in the AST. The same model
+can be evaluated with different sets of whole variables conditioned on.
 """
 struct Observe{L,R} <: AbstractWrenExpr
     name::Symbol
@@ -194,42 +193,51 @@ lower_to_wren(expr, ::Module, ::Bool=false) = expr
 _is_macrocall(expr, name::Symbol) = Meta.isexpr(expr, :macrocall) && expr.args[1] == name
 _macro_args(expr::Expr) = filter(a -> !(a isa LineNumberNode), expr.args[2:end])
 
-# Error if `@observe`'s own macro arguments hold more than the single `lhs ~ rhs`
-# expression -- typically a `size=...` that ends up bound to `@observe` because
-# `@iid` isn't the innermost macro, e.g. `@iid @observe lhs ~ rhs size=N`.
-function _check_observe_args(expr::Expr)
-    args = _macro_args(expr)
-    length(args) <= 1 && return nothing
-    for arg in args
-        arg isa Expr &&
-            arg.head == :(=) &&
-            arg.args[1] == :size &&
-            error("@observe: invalid `size` argument, use `@iid` as the innermost macro")
-    end
-    error("@observe: unexpected argument(s) `$(args[2:end])`")
+function _name_option(macro_name, arg)
+    value = arg.args[2]
+    value isa QuoteNode && value.value isa Symbol ||
+        error("$macro_name: `name` must be a single Symbol (e.g. `name=:site`)")
+    return value.value
 end
 
-# Lower the `lhs ~ rhs` inside `@observe lhs ~ rhs` into an `Observe` node.
-function _lower_observe(observed_expr, mod::Module)
-    if !(
-        observed_expr isa Expr &&
-        observed_expr.head == :call &&
-        observed_expr.args[1] == :~
-    )
-        error("@observe: expected an expression of the form `value ~ distribution`")
+function _tilde_macro_args(expr::Expr)
+    name, inner = nothing, nothing
+    macro_name = expr.args[1]
+    for arg in _macro_args(expr)
+        if Meta.isexpr(arg, :(=)) && arg.args[1] == :name
+            name = _name_option(macro_name, arg)
+        elseif Meta.isexpr(arg, :(=)) && arg.args[1] == :size
+            error("$macro_name: invalid `size` argument, use `@iid` as the innermost macro")
+        elseif inner === nothing
+            inner = arg
+        else
+            error("$macro_name: unexpected argument `$arg`")
+        end
     end
-    length(observed_expr.args) == 3 || error("@observe: expected ~ to have 2 arguments")
-    lhs, rhs = observed_expr.args[2:3]
-    return Observe(Symbol(lhs), lhs, lower_to_wren(rhs, mod))
+    return name, inner
 end
 
-# Extract the optional `size=...` argument and the tilde-statement of `@iid ...`.
-function _iid_args(expr::Expr)
+function _lower_tilde(expr, mod::Module, macro_name::Symbol, name=nothing)
+    if !(Meta.isexpr(expr, :call) && expr.args[1] == :~)
+        error("$macro_name: expected an expression of the form `value ~ distribution`")
+    end
+    length(expr.args) == 3 || error("$macro_name: expected ~ to have 2 arguments")
+    lhs, rhs = expr.args[2:3]
+    sitename = name === nothing ? Symbol(lhs) : name
+    right = lower_to_wren(rhs, mod)
+    macro_name == Symbol("@observe") && return Observe(sitename, lhs, right)
+    return Sample(sitename, lhs, right, get_top_level_symbol(lhs), true)
+end
+
+# Trailing options belong to the innermost macro, including a surrounding macro's name.
+function _iid_args(expr::Expr, macro_name=nothing, name=nothing)
     size_expr = nothing
     inner = nothing
     for arg in _macro_args(expr)
         if arg isa Expr && arg.head == :(=) && arg.args[1] == :size
             size_expr = arg.args[2]
+        elseif macro_name !== nothing && Meta.isexpr(arg, :(=)) && arg.args[1] == :name
+            name = _name_option(macro_name, arg)
         elseif inner === nothing
             inner = arg
         else
@@ -238,33 +246,26 @@ function _iid_args(expr::Expr)
     end
     inner === nothing &&
         error("@iid: expected a single expression of the form `value ~ distribution`")
-    return size_expr, inner
+    return size_expr, inner, name
 end
 
 function lower_to_wren(expr::Expr, mod::Module, statement_position::Bool=false)
-    if expr.head == :macrocall && expr.args[1] == Symbol("@observe")
-        statement_position || error("@observe must be used as a statement")
-        observed_expr = last(expr.args)
-        if _is_macrocall(observed_expr, Symbol("@iid"))
-            # @observe @iid lhs ~ rhs
-            size_expr, inner = _iid_args(observed_expr)
-            return IID(_lower_observe(inner, mod), size_expr)
+    if expr.head == :macrocall && expr.args[1] in (Symbol("@sample"), Symbol("@observe"))
+        macro_name = expr.args[1]
+        statement_position || error("$macro_name must be used as a statement")
+        name, inner = _tilde_macro_args(expr)
+        if _is_macrocall(inner, Symbol("@iid"))
+            size_expr, inner, name = _iid_args(inner, macro_name, name)
+            return IID(_lower_tilde(inner, mod, macro_name, name), size_expr)
         end
-        _check_observe_args(expr)
-        return _lower_observe(observed_expr, mod)
+        return _lower_tilde(inner, mod, macro_name, name)
     end
 
     if expr.head == :macrocall && expr.args[1] == Symbol("@iid")
         statement_position || error("@iid must be used as a statement")
-        size_expr, inner = _iid_args(expr)
-        if _is_macrocall(inner, Symbol("@observe"))
-            # @iid @observe lhs ~ rhs
-            _check_observe_args(inner)
-            return IID(_lower_observe(last(inner.args), mod), size_expr)
-        end
-        # @iid lhs ~ rhs
+        size_expr, inner, _ = _iid_args(expr)
         lowered = lower_to_wren(inner, mod, true)
-        lowered isa Sample ||
+        lowered isa Union{Sample,Observe} ||
             error("@iid: expected an expression of the form `value ~ distribution`")
         return IID(lowered, size_expr)
     end
@@ -279,10 +280,7 @@ function lower_to_wren(expr::Expr, mod::Module, statement_position::Bool=false)
             if arg isa Expr && arg.head == :(=) && arg.args[1] == :size
                 size_expr = arg.args[2]
             elseif arg isa Expr && arg.head == :(=) && arg.args[1] == :name
-                name_val = arg.args[2]
-                name_val isa QuoteNode && name_val.value isa Symbol ||
-                    error("@batch: `name` must be a single Symbol (e.g. `name=:obs`)")
-                name_expr = name_val.value
+                name_expr = _name_option(expr.args[1], arg)
             elseif arg isa Expr && arg.head == :for
                 for_expr = arg
             else
@@ -308,11 +306,7 @@ function lower_to_wren(expr::Expr, mod::Module, statement_position::Bool=false)
         value_expr = nothing
         for arg in addloglik_args
             if arg isa Expr && arg.head == :(=) && arg.args[1] == :name
-                name_val = arg.args[2]
-                name_val isa QuoteNode && name_val.value isa Symbol || error(
-                    "@addloglikelihood: `name` must be a single Symbol (e.g. `name=:penalty`)",
-                )
-                name_expr = name_val.value
+                name_expr = _name_option(expr.args[1], arg)
             else
                 value_expr !== nothing &&
                     error("@addloglikelihood: expected a single expression")
@@ -343,10 +337,7 @@ function lower_to_wren(expr::Expr, mod::Module, statement_position::Bool=false)
     end
 
     if expr.head == :call && expr.args[1] == :~
-        length(expr.args) == 3 || error("@wren: expected ~ to have 2 arguments")
-        lhs, rhs = expr.args[2:3]
-        lhs_top_level_symbol = get_top_level_symbol(lhs)
-        return Sample(Symbol(lhs), lhs, lower_to_wren(rhs, mod), lhs_top_level_symbol, true)
+        return _lower_tilde(expr, mod, Symbol("@wren"))
     end
 
     if expr.head == :return
@@ -394,10 +385,17 @@ _tilde_expr(stmt::Union{Sample,Observe}) =
     Expr(:call, :~, stmt.lhs, _wren_expr_to_display_expr(stmt.rhs))
 
 function _wren_expr_to_display_expr(stmt::Sample)
-    return _tilde_expr(stmt)
+    expr = _tilde_expr(stmt)
+    return stmt.name == Symbol(stmt.lhs) ? expr : _tilde_macrocall(stmt, expr)
 end
 function _wren_expr_to_display_expr(stmt::Observe)
-    return Expr(:macrocall, Symbol("@observe"), nothing, _tilde_expr(stmt))
+    return _tilde_macrocall(stmt, _tilde_expr(stmt))
+end
+function _tilde_macrocall(stmt, expr)
+    macro_name = stmt isa Observe ? Symbol("@observe") : Symbol("@sample")
+    args = Any[macro_name, nothing, expr]
+    stmt.name == Symbol(stmt.lhs) || push!(args, Expr(:(=), :name, QuoteNode(stmt.name)))
+    return Expr(:macrocall, args...)
 end
 function _wren_expr_to_display_expr(stmt::IID)
     args = Any[Symbol("@iid"), nothing, _tilde_expr(stmt.tilde)]
@@ -408,8 +406,10 @@ function _wren_expr_to_display_expr(stmt::IID)
     # An observed statement prints as `@observe @iid lhs ~ rhs size=dims`, with `@observe`
     # outermost: written the other way round, the inner `@observe` macrocall absorbs the
     # trailing `size=dims`, so the printed code no longer parses back to this node.
-    stmt.tilde isa Observe || return iid_expr
-    return Expr(:macrocall, Symbol("@observe"), nothing, iid_expr)
+    if stmt.tilde isa Observe || stmt.tilde.name != Symbol(stmt.tilde.lhs)
+        return _tilde_macrocall(stmt.tilde, iid_expr)
+    end
+    return iid_expr
 end
 function _wren_expr_to_display_expr(stmt::AddLogLikelihood)
     args = Any[Symbol("@addloglikelihood"), nothing]

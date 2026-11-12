@@ -32,7 +32,7 @@ end
     α, θ, y = convert(T, d.α), convert(T, d.θ), convert(T, x)
     # `loggamma` throws for a non-positive argument, so an invalid shape takes `NaN`.
     lg = select(α > zero(T), () -> loggamma(α), () -> convert(T, NaN))
-    value = muladd(α - one(T), log(y), -(y / θ)) - lg - α * log(θ)
+    value = muladd(α - one(T), log(abs(y)), -(y / θ)) - lg - α * log(θ)
     # At `x = 0` the formula settles every shape but `α = 1`, where `0 * log(0)` is `NaN`.
     atzero = select(α == one(T), () -> -log(θ), () -> value)
     return select(
