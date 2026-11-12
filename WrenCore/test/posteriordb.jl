@@ -95,13 +95,6 @@ using WrenDists: WrenDists
             @test isfinite(lp(vm, v))
         elseif pride_m !== nothing
             v = 0.01 .* sin.(1:vm.dimension)
-        elseif name == "mnist_100-nn_rbm1bJ10"
-            M, J, K = 784, 10, 10
-            s2_alpha = (0.05 / M^2)^2
-            s2_beta = (0.05 / J^2)^2
-            v = vcat([log(s2_alpha), log(s2_beta)],
-                zeros(M * J + J * (K - 1) + J + K - 1))
-            @test isfinite(lp(vm, v))
         else
             @test isfinite(logjoint(model, parameters(model, StableRNG(468))))
             v = vector_parameters(vm, StableRNG(468))

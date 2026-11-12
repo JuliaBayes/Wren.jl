@@ -2,7 +2,7 @@
 module MNIST100RBM
 
 using PosteriorDB
-using WrenCore: @wren, @addloglikelihood, @iid, logdensityof
+using WrenCore: @wren, @addloglikelihood, @iid
 using WrenDists: WrenDists as WD
 using ..LogAddExp: logaddexp
 
@@ -33,22 +33,12 @@ function mnist_logdensity(y, x, alpha, beta, alpha1, beta1)
 end
 
 @wren function rbm(y, x, N, M, K, J, s2_alpha, s2_beta)
-    raw_sigma2_alpha ~ WD.Flat()
-    raw_sigma2_beta ~ WD.Flat()
-    sigma2_alpha = exp(raw_sigma2_alpha)
-    sigma2_beta = exp(raw_sigma2_beta)
+    sigma2_alpha ~ WD.InverseGamma(0.25, 0.25 * s2_alpha)
+    sigma2_beta ~ WD.InverseGamma(0.25, 0.25 * s2_beta)
     @iid alpha ~ WD.Normal(0.0, sqrt(sigma2_alpha)) size=(M, J)
     @iid beta ~ WD.Normal(0.0, sqrt(sigma2_beta)) size=(J, K - 1)
     @iid alpha1 ~ WD.Normal(0.0, 1.0) size=J
     @iid beta1 ~ WD.Normal(0.0, 1.0) size=(K - 1)
-    a = 0.25
-    b_alpha = 0.25 * s2_alpha
-    b_beta = 0.25 * s2_beta
-    # Reciprocal-Gamma encoding of two inverse-gamma variances; tracked in #204.
-    @addloglikelihood logdensityof(WD.Gamma(a, inv(b_alpha)),
-        inv(sigma2_alpha)) - raw_sigma2_alpha +
-        logdensityof(WD.Gamma(a, inv(b_beta)),
-        inv(sigma2_beta)) - raw_sigma2_beta
     @addloglikelihood mnist_logdensity(y, x, alpha, beta, alpha1, beta1)
     return nothing
 end
