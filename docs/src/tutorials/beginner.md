@@ -373,15 +373,13 @@ It's very common to call the sum of these two terms the 'log-joint', since that 
 However, as far as Bayesian inference is concerned, the two are for all intents and purposes interchangeable.
 (Indeed, we won't go into the details in this page, but it turns out that in very many algorithms this constant will simply cancel out.)
 
-## Expanding this model with hierarchical relationships
+## A hierarchical model
 
 Having seen a fairly simple example of a probabilistic model, this section will attempt to make it more realistic by adding some extra features.
 In 'real-life' models, you will likely see some of these elements.
 
 Try not to focus too much on the syntax of Wren here!
 These models are just intended as illustrations of typical practices in Bayesian modelling, rather than a specific tutorial on how to use Wren.
-
-### Multiple observations
 
 In real life, it's very unlikely that my manager will have developed suspicions of me oversleeping simply based on one day of me being late.
 It's more likely that she will have noticed a consistent pattern of me being late over a period of time.
