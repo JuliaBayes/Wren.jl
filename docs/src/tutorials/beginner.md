@@ -445,10 +445,23 @@ model = time_to_office_hierarchical(sleeps, meets)
 nothing # hide
 ```
 
+```mermaid
+flowchart LR
+    meets[meets: fixed data] --> M
+    subgraph inputs [Inputs: parameters]
+        L[laziness] --> S["sleeps[i]"]
+        D[d]
+    end
+    inputs --> M[time_to_office_hierarchical model]
+    M --> O[Outputs: return value, log-probability]
+```
+
 Why would you want to introduce an extra parameter like `laziness`?
 As it happens, the individual `sleeps[i]` are not _that_ interesting to my manager; it doesn't really matter that much whether I overslept on one particular day or not.
-However, logically, all the `sleeps[i]` should be correlated: they all stem from an underlying tendency of me to oversleep, represented by `laziness`, and it makes sense that they can 'share' information with each other through this parameter.
-If my manager were to run this model, she could therefore infer a posterior distribution for `laziness`, which would give her a much better case to bring to HR.
+
+However, logically, all the `sleeps[i]` should be correlated: they all stem from an underlying tendency of me to oversleep, represented by `laziness`.
+Making them collectively depend on a single parameter allows us to express this correlation.
+Furthermore, if my manager were to run this model, she could therefore infer a posterior distribution for `laziness`, which would give her a much better case to bring to HR.
 
 !!! warning "Don't use the algorithm above on this model"
 
