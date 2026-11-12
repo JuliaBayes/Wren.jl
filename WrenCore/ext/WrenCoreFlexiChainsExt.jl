@@ -40,9 +40,10 @@ function WrenCore.to_flexichain(
     dicts = Matrix{OrderedDict{ParameterOrExtra{<:VarName},Any}}(undef, niters, nchains)
     structures = Matrix{VarNamedTuple}(undef, niters, nchains)
     for (i, (result, stat)) in enumerate(zip(results, stats))
-        # Parameters and generated quantities
+        # Parameters and generated quantities. If a generated quantity has the same name as
+        # a parameter, the parameter takes precedence.
         params = VarNames.densify!!(
-            merge(parameters(result), WrenCore.generated_quantities(result)),
+            merge(WrenCore.generated_quantities(result), parameters(result)),
         )
 
         d = OrderedDict{ParameterOrExtra{<:VarName},Any}(

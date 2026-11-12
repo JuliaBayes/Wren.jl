@@ -54,23 +54,6 @@ end
     @gq c = 1.0
 end
 
-# Draw from the prior and return the parameters merged with the generated quantities.
-function params_and_gqs(model)
-    result = simulate(model)
-    return merge(parameters(result), generated_quantities(result))
-end
-
-function gq_values(model, acc)
-    _, accs = evaluate(
-        model,
-        FromPrior(),
-        OriginalSpace(),
-        AccumulatorTuple(acc),
-        EvalContext{false}(),
-    )
-    return generated_quantities(accs)
-end
-
 @testset "generated quantities" begin
     @testset "lowering" begin
         function lower(expr)
@@ -137,7 +120,7 @@ end
         end
 
         model = gq_nested(true)
-        gqs = gq_values(model, GeneratedQuantityAccumulator())
+        gqs = generated_quantities(model)
         a = gqs[@vn(in_begin)]
         @test gqs[@vn(in_for)] ≈ a + 3
         @test gqs[@vn(in_if)] ≈ 2a
@@ -145,13 +128,8 @@ end
         @test gqs[@vn(in_let)] ≈ a^2
         @test gqs[@vn(reused)] ≈ a + 1
         @test gqs[@vn(reused_after)] ≈ a + 3
-        @test collect(
-            keys(gq_values(model, GeneratedQuantityAccumulator(SomeGQs((:in_if,))))),
-        ) == [@vn(in_if)]
-        @test !haskey(
-            gq_values(gq_nested(false), GeneratedQuantityAccumulator()),
-            @vn(in_if)
-        )
+        @test collect(keys(generated_quantities(model, SomeGQs((:in_if,))))) == [@vn(in_if)]
+        @test !haskey(generated_quantities(gq_nested(false)), @vn(in_if))
     end
 
     @testset "invalid positions" begin
@@ -183,22 +161,23 @@ end
 
     @testset "values" begin
         x = [1.0, 2.0]
-        params = params_and_gqs(gq_demo(x))
+        result = simulate(gq_demo(x))
+        params, gqs = parameters(result), generated_quantities(result)
         a, b = params[@vn(a)], params[@vn(b)]
         mu = a .+ b .* x
-        @test params[@vn(mu)] ≈ mu
-        @test params[@vn(mu1)] ≈ mu[1]
-        @test params[@vn(s)] ≈ sum(mu) / 2
-        @test params[@vn(r)] ≈ a^2 + b
+        @test gqs[@vn(mu)] ≈ mu
+        @test gqs[@vn(mu1)] ≈ mu[1]
+        @test gqs[@vn(s)] ≈ sum(mu) / 2
+        @test gqs[@vn(r)] ≈ a^2 + b
         @test haskey(params, @vn(y))
     end
 
-    @testset "@gq binds its name when it is used later" begin
+    @testset "later uses of GQs trigger evaluation, even without GQ acc" begin
         @wren function gq_bind_return()
             @gq m = 1.0
             return m
         end
-        @test generated_quantities(simulate(gq_bind_return()))[@vn(m)] == 1.0
+        @test generated_quantities(gq_bind_return())[@vn(m)] == 1.0
         retval, _ = evaluate(
             gq_bind_return(),
             FromPrior(),
@@ -225,7 +204,7 @@ end
         a = parameters(accs)[@vn(a)]
         @test loglikelihood(accs) ≈ logpdf(MvNormal(a .+ [0.0, 1.0], I), [0.5, 1.5])
 
-        mu = gq_values(model, GeneratedQuantityAccumulator(SomeGQs((:mu,))))[@vn(mu)]
+        mu = generated_quantities(model, SomeGQs((:mu,)))[@vn(mu)]
         @test mu ≈ mu[1] .+ [0.0, 1.0]
     end
 
@@ -239,21 +218,18 @@ end
             EvalContext{false}(),
         )
         @test haskey(parameters(accs), @vn(a))
-        @test isempty(gq_values(model, GeneratedQuantityAccumulator(SomeGQs((:a,)))))
+        @test isempty(generated_quantities(model, SomeGQs((:a,))))
         @test_throws "generated quantity was evaluated" simulate(model)
     end
 
     @testset "selection" begin
         model = gq_demo([1.0, 2.0])
-        @test collect(
-            keys(gq_values(model, GeneratedQuantityAccumulator(SomeGQs((:s,))))),
-        ) == [@vn(s)]
-        @test Set(
-            keys(gq_values(model, GeneratedQuantityAccumulator(SomeGQs((:mu, :r))))),
-        ) == Set([@vn(mu), @vn(r)])
-        @test isempty(gq_values(model, GeneratedQuantityAccumulator(NoGQs())))
-        @test isempty(gq_values(model, GeneratedQuantityAccumulator(SomeGQs(()))))
-        @test length(keys(gq_values(model, GeneratedQuantityAccumulator()))) == 4
+        @test collect(keys(generated_quantities(model, SomeGQs((:s,))))) == [@vn(s)]
+        @test Set(keys(generated_quantities(model, SomeGQs((:mu, :r))))) ==
+              Set([@vn(mu), @vn(r)])
+        @test isempty(generated_quantities(model, NoGQs()))
+        @test isempty(generated_quantities(model, SomeGQs(())))
+        @test length(keys(generated_quantities(model))) == 4
 
         accs = AccumulatorTuple(
             ParamsAccumulator(),
@@ -267,22 +243,22 @@ end
 
     @testset "submodels" begin
         model = gq_outer()
-        all_gqs = gq_values(model, GeneratedQuantityAccumulator())
+        all_gqs = generated_quantities(model)
         @test haskey(all_gqs, @vn(a.z))
         @test haskey(all_gqs, @vn(b.z))
         @test haskey(all_gqs, @vn(c))
 
-        a_gqs = gq_values(model, GeneratedQuantityAccumulator(SomeGQs((:a,))))
+        a_gqs = generated_quantities(model, SomeGQs((:a,)))
         @test haskey(a_gqs, @vn(a.z))
         @test !haskey(a_gqs, @vn(b))
         @test !haskey(a_gqs, @vn(c))
 
-        b_gqs = gq_values(model, GeneratedQuantityAccumulator(SomeGQs((:b,))))
+        b_gqs = generated_quantities(model, SomeGQs((:b,)))
         @test !haskey(b_gqs, @vn(a))
         @test haskey(b_gqs, @vn(b.z))
 
-        params = params_and_gqs(model)
-        @test params[@vn(a.z)] ≈ 2 * params[@vn(a.z0)]
+        result = simulate(model)
+        @test generated_quantities(result)[@vn(a.z)] ≈ 2 * parameters(result)[@vn(a.z0)]
 
         scoped = @inferred WrenCore.scope(
             GeneratedQuantityAccumulator(SomeGQs((:a,))),
@@ -299,8 +275,9 @@ end
             x ~ gq_inner()
             @gq doubled = 2 * x[@vn(z0)]
         end
-        params = params_and_gqs(gq_uses_submodel())
-        @test params[@vn(doubled)] ≈ 2 * params[@vn(x.z0)]
+        result = simulate(gq_uses_submodel())
+        @test generated_quantities(result)[@vn(doubled)] ≈
+              2 * parameters(result)[@vn(x.z0)]
     end
 
     @testset "entry points" begin
@@ -311,7 +288,7 @@ end
         @test haskey(parameters(result), @vn(a))
         @test !haskey(parameters(result), @vn(mu))
         @test !haskey(parameters(model), @vn(mu))
-        @test isempty(generated_quantities(simulate(model; gqs=NoGQs())))
+        @test isempty(generated_quantities(model, NoGQs()))
 
         @test Set(keys(generated_quantities(model))) ==
               Set([@vn(mu), @vn(mu1), @vn(s), @vn(r)])
@@ -322,20 +299,27 @@ end
         @test gqs[@vn(mu)] ≈ [3.0, 5.0]
         @test collect(keys(generated_quantities(model, latents, SomeGQs((:r,))))) ==
               [@vn(r)]
+    end
 
+    @testset "Wren keeps GQs and parameters separate" begin
+        # GQs and params do get smushed together when creating FlexiChains, but as far as
+        # WrenCore is concerned, they're stored separately.
         @wren function gq_clash()
-            a ~ Normal()
+            a ~ Uniform(0.0, 1.0)
             @gq a = 100.0
         end
-        @test params_and_gqs(gq_clash())[@vn(a)] == 100.0
+        res = simulate(gq_clash())
+        @test parameters(res)[@vn(a)] < 1.0
+        @test generated_quantities(res)[@vn(a)] == 100.0
 
         @wren function gq_clash_indexed()
             a = zeros(2)
-            a[1] ~ Normal()
-            @gq a = 5.0
+            a[1] ~ Uniform(0.0, 1.0)
+            @gq a = 100.0
         end
-        @test params_and_gqs(gq_clash_indexed())[@vn(a)] == 5.0
-        @test haskey(parameters(simulate(gq_clash())), @vn(a))
+        res = simulate(gq_clash_indexed())
+        @test parameters(res)[@vn(a[1])] < 1.0
+        @test generated_quantities(res)[@vn(a)] == 100.0
     end
 
     @testset "generated quantities used only by other generated quantities" begin
@@ -345,19 +329,10 @@ end
             @gq c = b
         end
         model = gq_chain()
-        @test isempty(gq_values(model, GeneratedQuantityAccumulator(NoGQs())))
-        @test_throws "b was evaluated" gq_values(
-            model,
-            GeneratedQuantityAccumulator(AllGQs()),
-        )
-        @test_throws "b was evaluated" gq_values(
-            model,
-            GeneratedQuantityAccumulator(SomeGQs((:c,))),
-        )
-        @test_throws "b was evaluated" gq_values(
-            model,
-            GeneratedQuantityAccumulator(SomeGQs((:b,))),
-        )
+        @test isempty(generated_quantities(model, NoGQs()))
+        @test_throws "b was evaluated" generated_quantities(model, AllGQs())
+        @test_throws "b was evaluated" generated_quantities(model, SomeGQs((:c,)))
+        @test_throws "b was evaluated" generated_quantities(model, SomeGQs((:b,)))
 
         @wren function gq_transitive()
             a ~ Normal()
@@ -366,16 +341,10 @@ end
             @gq d = c + 1
         end
         model = gq_transitive()
-        d_only = gq_values(model, GeneratedQuantityAccumulator(SomeGQs((:d,))))
+        d_only = generated_quantities(model, SomeGQs((:d,)))
         @test collect(keys(d_only)) == [@vn(d)]
-        all_gqs = gq_values(model, GeneratedQuantityAccumulator())
+        all_gqs = generated_quantities(model)
         @test all_gqs[@vn(d)] ≈ all_gqs[@vn(b)] + 2
-    end
-
-    @testset "VecModel does not evaluate generated quantities" begin
-        vecmodel = VecModel(gq_throws(), nothing)
-        @test lp(vecmodel, [0.1]) ≈ logpdf(Normal(), 0.1)
-        @test logjoint(gq_throws(), VarNamedTuple(; a=0.1)) ≈ logpdf(Normal(), 0.1)
     end
 
     @testset "type stability" begin
@@ -389,27 +358,8 @@ end
     @gq z = 2z0
 end
 
-@wren function gq_model()
-    x ~ Normal()
-    a ~ gq_sub()
-    @gq x2 = x^2
-    @gq xp1 = x + 1
-    y ~ Normal(x)
-end
-
 @wren function sub_without_gqs()
     z0 ~ Normal()
-end
-
-@wren function gq_model_without_gqs()
-    x ~ Normal()
-    a ~ sub_without_gqs()
-    y ~ Normal(x)
-end
-
-@wren function gq_model_without_submodel()
-    x ~ Normal()
-    y ~ Normal(x)
 end
 
 function prior_chain(rng, model, niters, nchains)
@@ -422,6 +372,25 @@ end
 parameter_keys(chain) = Set(FlexiChains.parameters(chain))
 
 @testset "on chains" begin
+    @wren function gq_model()
+        x ~ Normal()
+        a ~ gq_sub()
+        @gq x2 = x^2
+        @gq xp1 = x + 1
+        y ~ Normal(x)
+    end
+
+    @wren function gq_model_without_gqs()
+        x ~ Normal()
+        a ~ sub_without_gqs()
+        y ~ Normal(x)
+    end
+
+    @wren function gq_model_without_submodel()
+        x ~ Normal()
+        y ~ Normal(x)
+    end
+
     model = gq_model()
     chn = prior_chain(StableRNG(468), gq_model_without_gqs(), 10, 2)
 
@@ -473,6 +442,27 @@ parameter_keys(chain) = Set(FlexiChains.parameters(chain))
         @test @vn(x2) in parameter_keys(pdns_only)
         @test !(@vn(xp1) in parameter_keys(pdns_only))
         @test !(@vn(a.z) in parameter_keys(pdns_only))
+    end
+
+    @testset "parameters take precedence over generated quantities" begin
+        @wren function chain_clash()
+            a ~ Uniform(0.0, 1.0)
+            @gq a = 100.0
+        end
+        result = simulate(chain_clash())
+        clash_chn = WrenCore.to_flexichain(reshape([result], 1, 1))
+        @test parameter_keys(clash_chn) == Set([@vn(a)])
+        @test only(clash_chn[@vn(a)]) == parameters(result)[@vn(a)]
+
+        @wren function chain_clash_indexed()
+            a = zeros(2)
+            a[1] ~ Uniform(0.0, 1.0)
+            @gq a = 100.0
+        end
+        result = simulate(chain_clash_indexed())
+        clash_chn = WrenCore.to_flexichain(reshape([result], 1, 1))
+        @test parameter_keys(clash_chn) == Set([@vn(a[1])])
+        @test only(clash_chn[@vn(a[1])]) == parameters(result)[@vn(a[1])]
     end
 end
 
