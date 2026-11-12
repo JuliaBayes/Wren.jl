@@ -29,6 +29,25 @@ using WrenDists: WrenDists
 
     @test_throws ArgumentError posteriordb_model("not-a-posterior")
 
+    # A Gaussian regression `y ~ Normal(X * beta, sigma)` with flat priors: besides
+    # the likelihood, the density has only the Jacobian of `sigma = exp(v[end])`.
+    function check_flat_gaussian_regression(name, X, y, points; atol)
+        dimension = size(X, 2) + 1
+        vm = VecModel(posteriordb_model(name), AutoEnzyme(; mode=Reverse))
+        @test vm.dimension == dimension
+        function reference(v)
+            mu = X * view(v, 1:(dimension - 1))
+            sigma = exp(v[end])
+            return v[end] + sum(logpdf(Normal(mu[i], sigma), y[i])
+                for i in eachindex(y))
+        end
+        for point in points
+            value, gradient = lp_and_grad(vm, point)
+            @test isapprox(value, reference(point); atol)
+            @test isapprox(gradient, ForwardDiff.gradient(reference, point); atol)
+        end
+    end
+
     @testset "Kilpisjarvi Gaussian regression density and native Enzyme gradient" begin
         name = "kilpisjarvi_mod-kilpisjarvi"
         data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
@@ -144,21 +163,9 @@ using WrenDists: WrenDists
                 hcat(ones(length(work)), work .== 2, work .== 3, work .== 4)),
         )
         for (name, X) in cases
-            vm = VecModel(posteriordb_model(name), AutoEnzyme(; mode=Reverse))
-            @test vm.dimension == 5
-            function reference(v)
-                mu = X * view(v, 1:4)
-                sigma = exp(v[5])
-                return v[5] + sum(logpdf(Normal(mu[i], sigma), data["kid_score"][i])
-                    for i in eachindex(mu))
-            end
-            for point in ([100.0, 2.0, 0.2, 0.1, log(15.0)],
-                          [95.0, -1.0, 0.3, -0.1, log(20.0)])
-                value, gradient = lp_and_grad(vm, point)
-                @test isapprox(value, reference(point); atol=1e-5)
-                @test isapprox(gradient, ForwardDiff.gradient(reference, point);
-                    atol=1e-5)
-            end
+            check_flat_gaussian_regression(name, X, data["kid_score"],
+                ([100.0, 2.0, 0.2, 0.1, log(15.0)],
+                 [95.0, -1.0, 0.3, -0.1, log(20.0)]); atol=1e-5)
         end
     end
 
@@ -172,23 +179,10 @@ using WrenDists: WrenDists
             X = hcat(ones(data["N"]), data["real_ideo"], data["race_adj"],
                 age .== 2, age .== 3, age .== 4, data["educ1"], data["gender"],
                 data["income"])
-            vm = VecModel(posteriordb_model(name), AutoEnzyme(; mode=Reverse))
-            @test vm.dimension == 10
-            function reference(v)
-                mu = X * view(v, 1:9)
-                sigma = exp(v[10])
-                return v[10] + sum(logpdf(Normal(mu[i], sigma), data["partyid7"][i])
-                    for i in eachindex(mu))
-            end
-            for point in (
-                [3.0, 0.2, 0.1, -0.1, 0.2, 0.1, -0.1, 0.2, 0.1, log(1.5)],
-                [4.0, -0.1, 0.2, 0.1, -0.1, 0.2, 0.1, -0.1, 0.2, log(2.0)],
-            )
-                value, gradient = lp_and_grad(vm, point)
-                @test isapprox(value, reference(point); atol=1e-5)
-                @test isapprox(gradient, ForwardDiff.gradient(reference, point);
-                    atol=1e-5)
-            end
+            check_flat_gaussian_regression(name, X, data["partyid7"],
+                ([3.0, 0.2, 0.1, -0.1, 0.2, 0.1, -0.1, 0.2, 0.1, log(1.5)],
+                 [4.0, -0.1, 0.2, 0.1, -0.1, 0.2, 0.1, -0.1, 0.2, log(2.0)]);
+                atol=1e-5)
         end
     end
 
@@ -212,22 +206,9 @@ using WrenDists: WrenDists
                 hcat(ones(N), log.(height), male)),
         )
         for (name, y, X) in cases
-            vm = VecModel(posteriordb_model(name), AutoEnzyme(; mode=Reverse))
-            dimension = size(X, 2) + 1
-            @test vm.dimension == dimension
-            function reference(v)
-                mu = X * view(v, 1:(dimension - 1))
-                sigma = exp(v[end])
-                return v[end] + sum(logpdf(Normal(mu[i], sigma), y[i])
-                    for i in eachindex(y))
-            end
-            for scale in (0.1, -0.2)
-                point = vcat(scale .* sin.(1:(dimension - 1)), log(20.0))
-                value, gradient = lp_and_grad(vm, point)
-                @test isapprox(value, reference(point); atol=1e-4)
-                @test isapprox(gradient, ForwardDiff.gradient(reference, point);
-                    atol=1e-4)
-            end
+            points = [vcat(scale .* sin.(1:size(X, 2)), log(20.0))
+                for scale in (0.1, -0.2)]
+            check_flat_gaussian_regression(name, X, y, points; atol=1e-4)
         end
     end
 
@@ -259,22 +240,9 @@ using WrenDists: WrenDists
                 hcat(ones(N), logvolume)),
         )
         for (name, y, X) in cases
-            vm = VecModel(posteriordb_model(name), AutoEnzyme(; mode=Reverse))
-            dimension = size(X, 2) + 1
-            @test vm.dimension == dimension
-            function reference(v)
-                mu = X * view(v, 1:(dimension - 1))
-                sigma = exp(v[end])
-                return v[end] + sum(logpdf(Normal(mu[i], sigma), y[i])
-                    for i in eachindex(y))
-            end
-            for scale in (0.1, -0.2)
-                point = vcat(scale .* sin.(1:(dimension - 1)), log(20.0))
-                value, gradient = lp_and_grad(vm, point)
-                @test isapprox(value, reference(point); atol=1e-6)
-                @test isapprox(gradient, ForwardDiff.gradient(reference, point);
-                    atol=1e-6)
-            end
+            points = [vcat(scale .* sin.(1:size(X, 2)), log(20.0))
+                for scale in (0.1, -0.2)]
+            check_flat_gaussian_regression(name, X, y, points; atol=1e-6)
         end
     end
 
