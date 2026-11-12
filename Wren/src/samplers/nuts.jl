@@ -8,11 +8,12 @@ using MCMCProgress:
 
 mutable struct ChainReporter
     const run::RunProgress
-    const index::Int
+    const chain_index::Int
     phase::Union{MCMCProgress.Phase,Nothing}
 end
 
-ChainReporter(run::RunProgress, index::Integer) = ChainReporter(run, Int(index), nothing)
+ChainReporter(run::RunProgress, chain_index::Integer) =
+    ChainReporter(run, Int(chain_index), nothing)
 
 function DynamicHMC.make_mcmc_reporter(
     reporter::ChainReporter,
@@ -20,10 +21,12 @@ function DynamicHMC.make_mcmc_reporter(
     currently_warmup::Bool=false,
     meta...,
 )
-    name = currently_warmup ? "Warmup" : "Sampling"
-    closephases!(reporter)
-    reporter.phase =
-        open_phase!(chain_at(reporter.run, reporter.index), name, Determinate(total_steps))
+    close_phases!(reporter)
+    reporter.phase = open_phase!(
+        chain_at(reporter.run, reporter.chain_index),
+        currently_warmup ? "Warmup" : "Sampling",
+        Determinate(total_steps),
+    )
     return reporter
 end
 
@@ -32,12 +35,12 @@ DynamicHMC.report(reporter::ChainReporter, step::Integer; meta...) =
 
 DynamicHMC.report(::ChainReporter, ::AbstractString; meta...) = nothing
 
-function closephases!(reporter::ChainReporter)
+function close_phases!(reporter::ChainReporter)
     reporter.phase === nothing || close_phase!(reporter.phase)
     reporter.phase = nothing
     return nothing
 end
-closephases!(::DynamicHMC.NoProgressReport) = nothing
+close_phases!(::DynamicHMC.NoProgressReport) = nothing
 
 """
     nuts(
@@ -103,7 +106,7 @@ function nuts(
 
     t = time()
     label = "Sampling $(model.name)"
-    outputs = withprogress(progress, label, nchains) do run
+    outputs = with_progress(progress, label, nchains) do run
         tasks = @sync [
             Threads.@spawn _nuts_chain(vm_single, niters, run, j; dynamichmc_kwargs...) for j in 1:nchains
         ]
@@ -140,7 +143,7 @@ function _nuts_chain(
         reporter,
         dynamichmc_kwargs...,
     )
-    closephases!(reporter)
+    close_phases!(reporter)
     return _nuts_results_and_stats(results, vm)
 end
 

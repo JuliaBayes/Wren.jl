@@ -33,7 +33,7 @@ function prior(
 
     t = time()
     label = "Sampling $(model.name) from the prior"
-    results = withprogress(progress, label, nchains) do run
+    results = with_progress(progress, label, nchains) do run
         tasks = @sync [Threads.@spawn _prior_chain(model, niters, run, j) for j in 1:nchains]
         stack(fetch.(tasks))
     end
