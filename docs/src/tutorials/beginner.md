@@ -212,7 +212,7 @@ Instead of me trying to simulate my own commute time, let's say that my manager 
 She doesn't take the train to work and thus can't directly verify whether the train was delayed; and she *certainly* can't observe whether or not I overslept.
 To my manager, these are all hidden variables, and thus parameters of the Wren model she'll use to infer if I'm telling her the truth about my commute.
 
-What my manager can record, though, is the time that we first see each other in the office.
+What my manager can observe, though, is the time that we first see each other in the office.
 Now, because we might be doing different things when we get in, this time might not be _exactly_ the same time that I arrive at the office.
 
 Let's say that on average, we meet 10 minutes after I arrive, with a standard deviation of 3 minutes:
@@ -253,8 +253,9 @@ model = time_to_office_with_observation(50.0)
 ```
 
 Note that although `meet` is now an argument to the model constructor, it's not a parameter of the model!
-The parameters here are still only `s` and `d`; `meet` plays the role of a constant that the model depends on.
-Another way of describing it is that the model has now been _conditioned_ on the value `meet = 50`.
+The parameters here are still only `s` and `d`. 
+`meet` takes a different role: it informs us which parameter configurations are more or less plausible.
+We typically say that the model has now been _conditioned_ on the value `meet = 50` - the observation is like a constant that the model is now stuck with, and it'll try to find parameters that can accommodate it.
 
 ```mermaid
 flowchart LR
