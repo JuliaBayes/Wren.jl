@@ -377,7 +377,7 @@ However, as far as Bayesian inference is concerned, the two are for all intents 
 ## A hierarchical model
 
 Having seen a fairly simple example of a probabilistic model, this section will attempt to make it more realistic by adding some extra features.
-In 'real-life' models, you will likely see some of these elements.
+You will likely see some of these elements in the models you encounter as you learn more about Bayesian statistics.
 
 Try not to focus too much on the syntax of Wren here!
 These models are just intended as illustrations of typical practices in Bayesian modelling, rather than a specific tutorial on how to use Wren.
