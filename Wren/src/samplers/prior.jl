@@ -1,7 +1,7 @@
 using Random: Random
 using FlexiChains: VNChain
 
-using Term.Progress: ProgressBar, addjob!, update!, start!, stop!, render
+using MCMCProgress: Determinate, advance!, chain_at, close_phase!, open_phase!
 
 """
     prior(
@@ -29,48 +29,13 @@ function prior(
     nchains::Integer=1;
     progress::Bool=true,
 )
-    if progress
-        t = time()
-    end
-
     copy!(Random.TaskLocalRNG(), rng)
 
-    if progress
-        pbar = ProgressBar(; columns=:default, transient=false)
-        jobs = [addjob!(pbar; N=niters, description="Chain $j/$nchains") for j in 1:nchains]
-        progress_channel = Channel{Tuple{Int,Int}}(nchains * 2)
-        update_every = max(1, niters ÷ 100)
-    end
-
-    tasks = [
-        Threads.@spawn begin
-            chain_model = WrenCore._copy_for_thread(model)
-            chain_results = map(1:niters) do i
-                result = WrenCore.simulate(chain_model, Random.TaskLocalRNG())
-                if progress && i % update_every == 0
-                    put!(progress_channel, (j, i))
-                end
-                result
-            end
-            if progress && niters % update_every != 0
-                put!(progress_channel, (j, niters))
-            end
-            chain_results
-        end for j in 1:nchains
-    ]
-
-    if progress
-        start!(pbar)
-        chains_done = 0
-        while chains_done < nchains
-            (j, i) = take!(progress_channel)
-            update!(jobs[j]; i=i)
-            render(pbar)
-            if i == niters
-                chains_done += 1
-            end
-        end
-        stop!(pbar)
+    t = time()
+    label = "Sampling $(model.name) from the prior"
+    results = with_progress(progress, label, nchains) do run
+        tasks = @sync [Threads.@spawn _prior_chain(model, niters, run, j) for j in 1:nchains]
+        stack(fetch.(tasks))
     end
 
     if progress
@@ -78,9 +43,25 @@ function prior(
         t = time()
         print("Constructing chain... ")
     end
-    chn = WrenCore.to_flexichain(stack(fetch.(tasks)))
+    chn = WrenCore.to_flexichain(results)
     if progress
         println("took $(round(time() - t, digits=2)) seconds")
     end
     return chn
+end
+
+function _prior_chain(model::WrenCore.Model, niters::Integer, run, j::Integer)
+    chain_model = WrenCore._copy_for_thread(model)
+    phase = if run === nothing
+        nothing
+    else
+        open_phase!(chain_at(run, j), "Sampling", Determinate(niters))
+    end
+    chain_results = map(1:niters) do i
+        result = WrenCore.simulate(chain_model, Random.TaskLocalRNG())
+        phase === nothing || advance!(phase, i)
+        result
+    end
+    phase === nothing || close_phase!(phase)
+    return chain_results
 end
