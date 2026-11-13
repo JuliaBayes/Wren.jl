@@ -32,7 +32,7 @@ LogNormal() = LogNormal(0.0, 1.0)
 end
 
 # Apply `μ` and `σ` after drawing noise so automatic differentiation can follow them.
-@inline Base.rand(rng::AbstractRNG, d::LogNormal) = xval(d, randn(rng, noisetype(d)))
+@inline Base.rand(rng::AbstractRNG, d::LogNormal) = xval(d, randn(rng, rngtype(d)))
 
 # --- Batched LogNormal ---
 
@@ -76,7 +76,7 @@ end
 # The rule returns dense tangents. Differentiate the loop for Fill.
 EnzymeRules.@easy_rule(
     _lognormal_loop(mu::StridedArray, sigma::StridedArray, x::StridedArray),
-    @setup(z = (log.(x) .- mu) ./ sigma),
+    @setup(z=(log.(x) .- mu) ./ sigma),
     (z ./ sigma, (abs2.(z) .- 1) ./ sigma, -(z ./ (x .* sigma) .+ inv.(x))),
 )
 

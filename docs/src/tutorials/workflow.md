@@ -49,11 +49,11 @@ end
 
 ## Prior predictions
 
-We can now instantiate the Wren model and use it with `rand(model)` to draw from the prior (see [Working with models](@ref models)):
+We can now instantiate the Wren model and use it with `simulate(model)` to draw from the prior (see [Working with models](@ref models)):
 
 ```@example workflow
 model = bill_model(penguins.bill_length_mm, penguins.species_idx, penguins.body_mass_g)
-rand(model)
+simulate(model)
 ```
 
 !!! note
@@ -69,7 +69,7 @@ chain_prior = prior(model, 1000, 4; progress=false)
 summarystats(chain_prior[[@vn(beta1), @vn(beta2), @vn(sigma)]])
 ```
 
-While we could technically continue working with the chain, the `rand(model)` syntax lends itself nicely towards visualising individual samples from the prior distribution.
+While we could technically continue working with the chain, the `simulate(model)` syntax lends itself nicely towards visualising individual samples from the prior distribution.
 
 ```@example workflow
 using CairoMakie
@@ -82,7 +82,7 @@ xs_z = -3:0.1:3
 
 # Draw 20 prior predictions for the slope of body mass
 for _ in 1:20
-    vnt = rand(model)
+    vnt = simulate(model)
     ys_z = vnt[@vn(beta2)] * xs_z
     ys = reconstruct(bill_zs, ys_z)
     xs = reconstruct(mass_zs, xs_z)
@@ -133,11 +133,11 @@ A posterior predictive check uses the fitted parameters and values of the covari
 This can be done with either the same covariate values used to fit the model, or with a new set of covariate values.
 A new set could either represent a hypothetical new group of penguins that we want to predict for, or help us visualise how `bill_length` changes with `body_mass`, resulting in a plot similar to the prior slope visualisation above.
 
-We'll begin with the former and use [`predict`](@ref) to predict for the same covariates we fit the model with.
+We'll begin with the former and once again use [`simulate`](@ref) - but this time we'll simulate from the conditioned model instead of the prior!
 `FlexiChains.pushforward_hist` then plots histograms for our posterior prediction and overlays the observed data, giving us an opportunity to spot if the two would clearly diverge:
 
 ```@example workflow
-chain_pred = predict(model, chain_post)
+chain_pred = simulate(model, chain_post)
 chain_pred =
     transform_values(chain_pred, @vn(bill_length) => (v -> reconstruct(bill_zs, v)))
 FlexiChains.Makie.pushforward_hist(
@@ -160,7 +160,7 @@ xs_z = -3:0.1:3
 
 # Draw 20 posterior samples of the slope of body mass
 for _ in 1:20
-    vnt = parameters(rand(chain_post))
+    vnt = parameters(simulate(chain_post))
     ys_z = vnt[@vn(beta2)] * xs_z
     ys = reconstruct(bill_zs, ys_z)
     xs = reconstruct(mass_zs, xs_z)
@@ -174,15 +174,14 @@ As we may have expected, more penguin means more bill!
 
 ## Generated quantities
 
-Most of the time in applied statistical modelling, we're after a quantity that we can't express as a single parameter of our model.
-Rather, it's often some downstream quantity that we compute by combining several parameters with (often new) observations.
-These downstream quantities are typically called generated quantities.
+Quite regularly in applied statistical modelling, we're after a quantity that we can't express as a single parameter of our model.
+Rather, it's often some downstream quantity that we compute by combining several parameters with (potentially new / hypothetical) observations.
+These downstream quantities are typically called [generated quantities](@ref generated quantities) (GQs).
 
-Continuing with the penguin example, let's assume that there is something special about the conditions on each island.
-These conditions make _all_ the penguins on a given island more similar to each other, because there might be better food sources near some islands than others.
-And of course, all penguin species would benefit from more fish (at least... I would think all penguins like fish?! And krill of course, ok).
+Continuing with the penguin model from before, let's now assume that there is something special about the conditions on each island.
+These conditions make _all_ the penguins on a given island more similar to each other; that could for example be caused by better food sources near some islands than others, or some islands being more prone to disruptive weather events than others.
 
-We can express this nestedness in Bayesian modelling with a hierarchical model.
+We can express these correlated observations in Bayesian modelling with a hierarchical model.
 Since this model component is quite common and thus reusable, it's a good candidate to be written as a [submodel](@ref):
 
 ```@example workflow
@@ -194,10 +193,23 @@ Since this model component is quite common and thus reusable, it's a good candid
 end
 ```
 
+!!! note "Intro to hierarchical models"
+  In this hierarchical model, we define a global average bill length across all islands $\mu$ and the heterogeneity between islands $\tau$.
+  To illustrate this, let's assume a scenario where $\tau$ is rather small - this would correspond to a world where conditions between islands aren't that different after all.
+  It might be helpful to also consider the most extreme setting where $\tau = 0$: here, all islands would have identical conditions, and the hierarchical structure would disappear entirely.
+  This scenario is called "complete pooling".
+  On the contrary, if we assume $\tau$ to be really, really large, this would correspond to a scenario where islands are _so different_ that we might as well estimate each of their means individually.
+  This is called "no pooling".
+
+  In short, learning $\tau$ from the data ("partial pooling") infers _just how much_ information we should share between islands. 
+  This comes with many nice benefits like avoiding overfitting!
+
 Assume we're mostly interested in the contrast between species 1 and 2.
 We could then consider dropping species 3 before fitting the model, but we still have reason to keep species 3 as it'll contribute to estimating `beta2` and `beta3` better.
 
 ```@example workflow
+const SCARY_BILL_MM = 50.0
+
 @wren function bill_model_hierarchical(bill_length, island, species, body_mass)
     n_species = maximum(species)
     n_islands = maximum(island)
@@ -212,8 +224,7 @@ We could then consider dropping species 3 before fitting the model, but we still
         bill_length[i] ~ Normal(mu[i], sigma)
     end
 
-    # TODO what would be a good contrast here?
-    @gq contrast = ...
+    @gq scary_bill_ratio = mean(mu .> SCARY_BILL_MM)
 end
 ```
 
@@ -228,8 +239,8 @@ model = bill_model_hierarchical(
   penguins.island_idx,
   penguins.species_idx,
   penguins.body_mass_g,
-)
-chain = nuts(model | VarNamedTuple(bill_length=penguins.bill_length_mm), 1000, 4; progress=false)
+) | (bill_length=penguins.bill_length_mm,)
+chain = nuts(model, 1000, 4; progress=false)
 ```
 
 TODO Simon: 
@@ -239,7 +250,7 @@ TODO Simon:
 n_new = 200
 island_new = 1:n_new
 species_new = repeat([1, 2], div(n_new, 2))
-# Not sure about this one, need to think again what we should draw here
+# Need to think again what we should draw here, this might be wrong
 body_mass_g_new = rand(penguins.body_mass_g, n_new)
 ```
 
@@ -249,5 +260,5 @@ TODO Simon:
 ```@example workflow
 chain_sub = chain[filter(!=(@vn(island_effects.z)), FlexiChains.parameters(chain))]
 model_new = bill_model_hierarchical(zeros(n_new), island_new, species_new, body_mass_g_new)
-chain_new = predict(model_new, chain_sub)
+chain_new = simulate(model_new, chain_sub)
 ```

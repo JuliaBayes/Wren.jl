@@ -2,7 +2,6 @@ using Random: Random
 import DifferentiationInterface as DI
 using EnzymeCore: Reverse
 using FlexiChains: VNChain
-using AbstractMCMC: AbstractMCMC
 using DynamicHMC: DynamicHMC
 using Term.Progress: ProgressBar, ProgressJob, addjob!, update!, start!, stop!, render
 
@@ -70,12 +69,13 @@ end
         adtype::DI.AbstractADType=DI.AutoEnzyme(; mode=Enzyme.Reverse),
         progress::Bool=true,
         reduce_copies::Bool=true,
+        gqs::GeneratedQuantitySpec=AllGQs(),
         dynamichmc_kwargs...
     ) -> FlexiChains.VNChain
 
 No U-Turn Sampler (NUTS) for a Wren model. All `dynamichmc_kwargs` are passed to
 [`DynamicHMC.mcmc_with_warmup`](@extref), allowing you to customise the warmup and sampling
-behaviour.
+behaviour. The returned chain holds the generated quantities selected by `gqs`.
 
 `reduce_copies` is passed to [`VecModel`](@ref): when sampling with Enzyme, it skips copies
 of model arguments that turn out not to be needed (see [`reduce_copies`](@ref)).
@@ -87,6 +87,7 @@ function nuts(
     adtype::DI.AbstractADType=DI.AutoEnzyme(; mode=Reverse),
     progress::Bool=true,
     reduce_copies::Bool=true,
+    gqs::GeneratedQuantitySpec=AllGQs(),
     dynamichmc_kwargs...,
 )
     return nuts(
@@ -97,6 +98,7 @@ function nuts(
         adtype,
         progress,
         reduce_copies,
+        gqs,
         dynamichmc_kwargs...,
     )
 end
@@ -108,6 +110,7 @@ function nuts(
     adtype::DI.AbstractADType=DI.AutoEnzyme(; mode=Reverse),
     progress::Bool=true,
     reduce_copies::Bool=true,
+    gqs::GeneratedQuantitySpec=AllGQs(),
     dynamichmc_kwargs...,
 )
     # AD preparation
@@ -145,7 +148,7 @@ function nuts(
                     reporter,
                     dynamichmc_kwargs...,
                 )
-                to_draws(results, vm)
+                _nuts_results_and_stats(results, vm, gqs)
             catch e
                 if progress
                     put!(channel, ErrorUpdate(j))
@@ -203,8 +206,10 @@ function nuts(
         t = time()
         print("Constructing chain... ")
     end
-    draws = reduce(hcat, fetch.(tasks))
-    chn = AbstractMCMC.from_samples(VNChain, draws)
+    outputs = fetch.(tasks)
+    model_results = stack(first.(outputs))
+    stats = stack(last.(outputs))
+    chn = WrenCore.to_flexichain(model_results, stats)
     if progress
         println("took $(round(time() - t, digits=2)) seconds")
     end
@@ -222,10 +227,14 @@ function _nuts_stats(tree_stat, step_size)
         log_density=tree_stat.π,
     )
 end
-function to_draws(results::NamedTuple, vecmodel::WrenCore.VecModel)
+function _nuts_results_and_stats(
+    results::NamedTuple,
+    vecmodel::WrenCore.VecModel,
+    gqs::GeneratedQuantitySpec,
+)
     ϵ = results.ϵ
-    return [
-        Draw(col, vecmodel, _nuts_stats(ts, ϵ)) for
-        (col, ts) in zip(eachcol(results.posterior_matrix), results.tree_statistics)
-    ]
+    model_results =
+        [WrenCore.simulate(vecmodel, col; gqs) for col in eachcol(results.posterior_matrix)]
+    stats = [_nuts_stats(ts, ϵ) for ts in results.tree_statistics]
+    return model_results, stats
 end

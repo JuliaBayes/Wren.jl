@@ -677,7 +677,30 @@ _samples(stmts) = filter(s -> s isa WrenCore.Sample, stmts)
         end
         ir, _ = run_dataflow_analysis(ir, args)
         gqs = filter(s -> s isa WrenCore.GeneratedQuantity, ir)
-        @test [(s.name, s.name_is_reused) for s in gqs] == [(:mu, true), (:rss, false)]
+        @test [(s.name, s.always_evaluated) for s in gqs] == [(:mu, true), (:rss, false)]
+
+        @test first(analyse(@wren internal_to_ir=true function r11()
+            a ~ Normal()
+            @gq b = a
+            @gq c = b
+        end)) == Set{Symbol}([:a])
+
+        ir, args = @wren internal_to_ir=true function r12()
+            a ~ Normal()
+            @gq b = a
+            @gq c = b
+            @gq d = c
+            @gq e = a
+            f ~ Normal(e)
+        end
+        ir, _ = run_dataflow_analysis(ir, args)
+        gqs = filter(s -> s isa WrenCore.GeneratedQuantity, ir)
+        @test [(s.name, s.always_evaluated, s.gqs_triggering_evaluation) for s in gqs] == [
+            (:b, false, [:c, :d]),
+            (:c, false, [:d]),
+            (:d, false, Symbol[]),
+            (:e, true, Symbol[]),
+        ]
     end
 
     @testset "lhs_top_level_symbol" begin

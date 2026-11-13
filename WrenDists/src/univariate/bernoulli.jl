@@ -44,5 +44,18 @@ end
 function DensityInterface.logdensityof(d::BatchedBernoulli, x)
     # Benchmarks @ https://github.com/JuliaBayes/Wren.jl/issues/102
     p = d.p
-    return sum(@. x * log(p) + (one(x) - x) * log1p(-p))
+    return if within_compile()
+        p = convert.(float(promote_type(eltype(p), eltype(x))), p)
+        # Compiled selects evaluate both branches; keep inactive logarithms finite.
+        sum(
+            @. ifelse(
+                (x == zero(x)) | (x == one(x)),
+                log(ifelse(x == one(x), p, one(p))) +
+                log1p(-ifelse(x == zero(x), p, zero(p))),
+                oftype(p, -Inf),
+            )
+        )
+    else
+        sum(((p, x) -> logdensityof(Bernoulli(p), x)).(p, x))
+    end
 end

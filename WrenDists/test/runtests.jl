@@ -1,6 +1,9 @@
 using Test
 
 @testset "WrenDists" begin
+    include("precision.jl")
+    include("sampling.jl")
+
     # Continuous unconstrained
     include("univariate/normal.jl")
     include("univariate/laplace.jl")

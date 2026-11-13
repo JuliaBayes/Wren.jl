@@ -13,10 +13,10 @@ using WrenDists: WrenDists
 @testset "posteriordb.jl" begin
     @testset "$name" for name in available_posteriordb_models()
         model = posteriordb_model(name)
-        @test isfinite(logjoint(model, rand(StableRNG(468), model)))
+        @test isfinite(logjoint(model, parameters(model, StableRNG(468))))
 
         vm = VecModel(model, DI.AutoForwardDiff())
-        v = rand(StableRNG(468), vm)
+        v = vector_parameters(vm, StableRNG(468))
         @test length(v) == vm.dimension
         logp, grad = lp_and_grad(vm, v)
         @test isfinite(logp)
