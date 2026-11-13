@@ -55,11 +55,11 @@ function _gq_requested(acc::GeneratedQuantityAccumulator, sym::Val)
 end
 
 """
-    requests_gq(accs::AccumulatorTuple, ::Val{sym})
+    is_accumulating_gq(accs::AccumulatorTuple, ::Val{sym})
 
 Return `true` if `accs` contains a [`GeneratedQuantityAccumulator`](@ref) that selects `sym`.
 """
-function requests_gq(accs::AccumulatorTuple, sym::Val)
+function is_accumulating_gq(accs::AccumulatorTuple, sym::Val)
     hasacc(accs, Val(GQ_ACCNAME)) || return false
     return _gq_requested(getacc(accs, Val(GQ_ACCNAME)), sym)
 end

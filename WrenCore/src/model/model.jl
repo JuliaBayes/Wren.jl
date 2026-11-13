@@ -402,7 +402,9 @@ Record the value of `expr` as the generated quantity `name` in a `@wren` model.
 inside functions defined in the model; we discourage using it inside `@submodel`.
 
 If `name` is used later in the model body, `expr` is also assigned to `name` and runs on
-every evaluation of the model. Otherwise `name` is not defined in the model body.
+every evaluation of the model. If `name` is used only by later generated quantities, it
+is assigned only when one of those generated quantities is requested. Otherwise `name` is
+not defined in the model body.
 
 !!! warning
     If `name` is not used later in the model body and the generated quantity is not
@@ -413,7 +415,7 @@ every evaluation of the model. Otherwise `name` is not defined in the model body
     that assignment happens only when `name` is requested.
 """
 macro gq(args...)
-    error("@gq must be used at the top level of a @wren model body")
+    error("@gq must be used inside a @wren model body")
 end
 
 function _wren(expr::Expr, mod::Module; internal_to_ir::Bool=false)

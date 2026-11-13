@@ -8,7 +8,7 @@ using LinearAlgebra
 using StableRNGs
 using Test
 using WrenCore
-using WrenCore: GeneratedQuantity, requests_gq
+using WrenCore: GeneratedQuantity, is_accumulating_gq
 
 # Run `@wren` on a quoted function definition and return the error message it throws.
 function wren_error(ex)
@@ -235,10 +235,10 @@ end
             ParamsAccumulator(),
             GeneratedQuantityAccumulator(SomeGQs((:a,))),
         )
-        @test requests_gq(accs, Val(:a))
-        @test !requests_gq(accs, Val(:b))
-        @test !requests_gq(AccumulatorTuple(ParamsAccumulator()), Val(:a))
-        @test requests_gq(AccumulatorTuple(GeneratedQuantityAccumulator()), Val(:b))
+        @test is_accumulating_gq(accs, Val(:a))
+        @test !is_accumulating_gq(accs, Val(:b))
+        @test !is_accumulating_gq(AccumulatorTuple(ParamsAccumulator()), Val(:a))
+        @test is_accumulating_gq(AccumulatorTuple(GeneratedQuantityAccumulator()), Val(:b))
     end
 
     @testset "submodels" begin

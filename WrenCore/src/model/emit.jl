@@ -681,10 +681,10 @@ function emit_model_expr(
     end
 end
 
-# The `let` keeps locals of the expression out of the model body. If the name is not reused,
-# `expr` sits inside a `requests_gq` branch, which the compiler removes when neither the
-# quantity nor any of its dependent generated quantities is requested. Without dependents,
-# the value is assigned to a gensym so that it cannot shadow a variable of the same name.
+# If the GQ is not `always_evaluated`, `expr` is inside an `is_accumulating_gq`
+# branch, which the compiler removes when neither the GQ itself nor any quantity in
+# `gqs_triggering_evaluation` is requested. If `gqs_triggering_evaluation` is empty, the
+# value is assigned to a gensym so that it cannot shadow a variable of the same name.
 function emit_model_expr(
     stmt::GeneratedQuantity,
     accs,
@@ -693,35 +693,44 @@ function emit_model_expr(
     parameter_space,
     ctx,
 )
+    # If either `stmt.always_evaluated` is true, or one of the GQs in `stmt.gqs_triggering_evaluation`
+    # is being collected, then we need to _evaluate_ the value of this GQ. This is separate to whether
+    # or not it is collected (in the GQ accumulator), which happens only if `stmt.name` was requested.
     @gensym gq_value
     value_expr =
         emit_model_expr(stmt.expr, accs, conditioned, latent_source, parameter_space, ctx)
-    is_requested = :($(requests_gq)($accs, $(Val{stmt.name}())))
-    return if stmt.name_is_reused
+    is_being_accumulated = :($(is_accumulating_gq)($accs, $(Val{stmt.name}())))
+    return if stmt.always_evaluated
         quote
+            # `let` keeps locals of the expression outside of the model body
             $(stmt.name) = let
                 $value_expr
             end
-            if $is_requested
+            if $is_being_accumulated
                 $accs = $(accumulate_gq!!)($accs, $(stmt.name), $(VarName{stmt.name}()))
             end
-            nothing
+            $(stmt.name)
         end
     else
-        value_name = isempty(stmt.dependent_gqs) ? gq_value : stmt.name
-        is_needed = foldl(stmt.dependent_gqs; init=is_requested) do condition, dependent
-            :($condition || $(requests_gq)($accs, $(Val{dependent}())))
+        value_name = isempty(stmt.gqs_triggering_evaluation) ? gq_value : stmt.name
+        is_needed = foldl(
+            stmt.gqs_triggering_evaluation;
+            init=is_being_accumulated,
+        ) do condition, dependent
+            :($condition || $(is_accumulating_gq)($accs, $(Val{dependent}())))
         end
         quote
             if $is_needed
                 $value_name = let
                     $value_expr
                 end
-                if $is_requested
+                if $is_being_accumulated
                     $accs = $(accumulate_gq!!)($accs, $value_name, $(VarName{stmt.name}()))
                 end
+                $value_name
+            else
+                nothing
             end
-            nothing
         end
     end
 end

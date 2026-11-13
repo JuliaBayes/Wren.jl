@@ -126,17 +126,17 @@ end
 Represents `@gq name = expr`, or `@gq name` (short for `@gq name = name`).
 `name` must be a single Symbol.
 
-`name_is_reused` and `dependent_gqs` are set by dataflow analysis. If `name_is_reused` is
-`true`, `name` appears in a later statement other than a generated quantity that is itself
-not reused, so `expr` is evaluated on every model evaluation and bound to `name` in the
-model body. Otherwise `expr` is evaluated only when the quantity or one of the generated
-quantities in `dependent_gqs` is requested.
+`always_evaluated` and `gqs_triggering_evaluation` are set by dataflow analysis.
+If an `expr` is `always_evaluated`, we know its `name` appears in a later statement
+(other than a different GQ that is not `always_evaluated`), and `expr` needs to be
+evaluated on every model evaluation. Otherwise `expr` is evaluated only when the quantity
+or one of the generated quantities in `gqs_triggering_evaluation` is requested.
 """
 struct GeneratedQuantity{E} <: AbstractWrenExpr
     name::Symbol
     expr::E
-    name_is_reused::Bool
-    dependent_gqs::Vector{Symbol}
+    always_evaluated::Bool
+    gqs_triggering_evaluation::Vector{Symbol}
 end
 
 """
@@ -196,11 +196,7 @@ function to_wren_exprs!(dest, lnn::LineNumberNode, ::Module)
     return dest
 end
 function to_wren_exprs!(dest, expr, mod::Module)
-    lowered = if _is_macrocall(expr, Symbol("@gq"))
-        _lower_gq(expr, mod)
-    else
-        lower_to_wren(expr, mod, true)
-    end
+    lowered = lower_to_wren(expr, mod, true)
     push!(dest, lowered isa AbstractWrenExpr ? lowered : OtherStatement(lowered))
     return dest
 end

@@ -249,9 +249,14 @@ end
 reconstruct_statement(stmt::Observe, ::DataflowAnalysisResult) = stmt
 # The expression of a GeneratedQuantity cannot contain Samples.
 function reconstruct_statement(stmt::GeneratedQuantity, result::DataflowAnalysisResult)
-    name_is_reused = stmt.name in result.required_syms
-    dependent_gqs = get(result.gq_dependents, stmt.name, Symbol[])
-    return GeneratedQuantity(stmt.name, stmt.expr, name_is_reused, dependent_gqs)
+    always_evaluated = stmt.name in result.required_syms
+    gqs_triggering_evaluation = get(result.gq_dependents, stmt.name, Symbol[])
+    return GeneratedQuantity(
+        stmt.name,
+        stmt.expr,
+        always_evaluated,
+        gqs_triggering_evaluation,
+    )
 end
 # The contents of an OtherStatement are not lowered, so they can't contain Samples.
 reconstruct_statement(stmt::OtherStatement, ::DataflowAnalysisResult) = stmt

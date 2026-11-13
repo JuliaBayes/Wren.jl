@@ -677,7 +677,7 @@ _samples(stmts) = filter(s -> s isa WrenCore.Sample, stmts)
         end
         ir, _ = run_dataflow_analysis(ir, args)
         gqs = filter(s -> s isa WrenCore.GeneratedQuantity, ir)
-        @test [(s.name, s.name_is_reused) for s in gqs] == [(:mu, true), (:rss, false)]
+        @test [(s.name, s.always_evaluated) for s in gqs] == [(:mu, true), (:rss, false)]
 
         @test first(analyse(@wren internal_to_ir=true function r11()
             a ~ Normal()
@@ -695,7 +695,7 @@ _samples(stmts) = filter(s -> s isa WrenCore.Sample, stmts)
         end
         ir, _ = run_dataflow_analysis(ir, args)
         gqs = filter(s -> s isa WrenCore.GeneratedQuantity, ir)
-        @test [(s.name, s.name_is_reused, s.dependent_gqs) for s in gqs] == [
+        @test [(s.name, s.always_evaluated, s.gqs_triggering_evaluation) for s in gqs] == [
             (:b, false, [:c, :d]),
             (:c, false, [:d]),
             (:d, false, Symbol[]),
