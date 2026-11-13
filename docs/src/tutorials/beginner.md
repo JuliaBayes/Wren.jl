@@ -210,7 +210,7 @@ We can only use the data to 'reconstruct' or 'infer' the parameters, i.e., go ba
 To demonstrate this, let's flip the example above on its head.
 Instead of me trying to simulate my own commute time, let's say that my manager at work has gotten tired of me turning up late and blaming the bad train service.
 She doesn't take the train to work and thus can't directly verify whether the train was delayed; and she *certainly* can't observe whether or not I overslept.
-All of these are now hidden variables; equivalently, they are parameters of the Wren model (which we will now want to infer).
+To my manager, these are all hidden variables, and thus parameters of the Wren model she'll use to infer if I'm telling her the truth about my commute.
 
 What my manager can record, though, is the time that we first see each other in the office.
 Now, because we might be doing different things when we get in, this time might not be _exactly_ the same time that I arrive at the office.
