@@ -155,8 +155,7 @@ end
                 y = (@gq x = 1.0)
             end)),
         )
-        @test_throws "@gq must be used at the top level of a @wren model body" @eval @gq x =
-            1.0
+        @test_throws "@gq must be used inside" @eval @gq x = 1.0
     end
 
     @testset "values" begin
@@ -276,8 +275,7 @@ end
             @gq doubled = 2 * x[@vn(z0)]
         end
         result = simulate(gq_uses_submodel())
-        @test generated_quantities(result)[@vn(doubled)] ≈
-              2 * parameters(result)[@vn(x.z0)]
+        @test generated_quantities(result)[@vn(doubled)] ≈ 2 * parameters(result)[@vn(x.z0)]
     end
 
     @testset "entry points" begin
