@@ -61,3 +61,38 @@ test_dist(
         end,
     ),
 )
+
+@testset "MvNormalScale shape checks" begin
+    @testset "scale factor must match mean" begin
+        @test_throws "scale factor must have size (3, 3), got (2, 2)" WrenDists.MvNormalScale(
+            zeros(3),
+            [1.0 0.0; 0.5 1.0],
+        )
+        @test_throws "scale factor must have size (2, 2), got (2, 3)" WrenDists.MvNormalScale(
+            zeros(2),
+            ones(2, 3),
+        )
+        @test_throws "scale factor must have 3 diagonal entries, got 2" WrenDists.MvNormalScale(
+            zeros(3),
+            Diagonal(ones(2)),
+        )
+    end
+
+    @testset "logdensityof rejects $name with wrong length" for (name, d) in (
+        ("full rank", WrenDists.MvNormalScale(zeros(3), Matrix(1.0I, 3, 3))),
+        ("diagonal", WrenDists.MvNormalScale(zeros(3), Diagonal(ones(3)))),
+        ("isotropic", WrenDists.MvNormalScale(zeros(3), I)),
+    )
+        @test_throws DimensionMismatch logdensityof(d, zeros(4))
+        @test_throws "expected size (3,), got (4,)" logdensityof(d, zeros(4))
+        @test_throws "expected size (3,), got (2,)" logdensityof(d, zeros(2))
+    end
+
+    @testset "zero-dimensional $name has log density 0" for (name, L) in (
+        ("full rank", zeros(0, 0)),
+        ("diagonal", Diagonal(Float64[])),
+        ("isotropic", I),
+    )
+        @test logdensityof(WrenDists.MvNormalScale(Float64[], L), Float64[]) == 0.0
+    end
+end
