@@ -174,7 +174,7 @@ flowchart LR
     end
     subgraph outputs [Outputs]
         R[return value: commute]
-        L[log-probability]
+        L[log-probabilities]
     end
     inputs --> M[time_to_office model]
     M --> R
@@ -192,7 +192,7 @@ flowchart LR
     You could do this in the 'basic' version by supplying an optional argument, checking its value, and then calling `rand` only if it is not provided.
     But this gets quite cumbersome very quickly!
 
-## Inference
+### Prior and likelihood
 
 You might now be wondering why we might care about the probability of the parameters.
 You might also wonder what is the 'log-likelihood' field in the `ModelResult` object above, which is currently zero.
@@ -206,6 +206,43 @@ The log-likelihood, on the other hand, is the probability density associated wit
 Often we call these 'data', or 'observations'.
 That's because in most modelling scenarios, the parameters themselves are not directly observable, but the outcomes of them are.
 We can only use the data to 'reconstruct' or 'infer' the parameters, i.e., go backwards from data to parameters, effectively reversing the forward simulation we ran first.
+
+In our model, we haven't yet defined any observations, which is why the log-likelihood is zero.
+
+!!! details "Bayes' theorem (click to expand)"
+
+    Fundamentally, the components of the probability above are related to Bayes' theorem:
+
+    ```math
+    p(\mathbf{\theta} | \mathcal{D}) = \frac{p(\mathcal{D} | \mathbf{\theta}) p(\mathbf{\theta})}{p(\mathcal{D})}
+    ```
+
+    Here, ``\mathbf{\theta}`` represents the parameters (`s` and `d` in our case), and ``\mathcal{D}`` is the set of observations (`meet` in our case).
+    Taking the logarithm of both sides:
+
+    ```math
+    \underbrace{\log p(\mathbf{\theta} | \mathcal{D})}_{\text{log-posterior}}
+        = \underbrace{\log p(\mathcal{D} | \mathbf{\theta})}_{\text{log-likelihood}}
+        + \underbrace{\log p(\mathbf{\theta})}_{\text{log-prior}}
+        - \underbrace{\log p(\mathcal{D})}_{\text{constant}}
+    ```
+
+    It turns out that the term ``\log p(\mathbf{\theta})`` corresponds precisely to `logprior`, and ``\log p(\mathcal{D} | \mathbf{\theta})`` to `loglikelihood`, both of which are given to us by Wren's `simulate` function.
+    Furthermore, ``\log p(\mathcal{D})`` is a constant with respect to the parameters.
+    This means that even when we're trying out different parameter values, we can just ignore it: as long as we don't change ``\mathcal{D}`` itself, this is just a constant.
+    Thus, we can sum the log-prior and log-likelihood to get the *log-posterior*, up to a normalising constant.
+
+    It's very common to call the sum of these two terms the 'log-joint', since that is technically what it represents (mathematically, it's ``\log p(\mathbf{\theta}, \mathcal{D})``).
+    However, as far as Bayesian inference is concerned, the two are for all intents and purposes interchangeable.
+    (Indeed, we won't go into the details in this page, but it turns out that in very many algorithms this constant will simply cancel out.)
+
+## Inference
+
+Now, we get to the heart of a probabilistic programming language: the ability to perform *inference*.
+As mentioned above, in a model we have parameters (which we can't see, and contribute to the prior); and observations (which we can see, and contribute to the likelihood).
+Inference is the process of using observations to learn something about the parameters.
+
+### Adding observations to our model
 
 To demonstrate this, let's flip the example above on its head.
 Instead of me trying to simulate my own commute time, let's say that my manager at work has gotten tired of me turning up late and blaming the bad train service.
@@ -253,7 +290,7 @@ model = time_to_office_with_observation(50.0)
 ```
 
 Note that although `meet` is now an argument to the model constructor, it's not a parameter of the model!
-The parameters here are still only `s` and `d`. 
+The parameters here are still only `s` and `d`.
 `meet` takes a different role: it informs us which parameter configurations are more or less plausible.
 We typically say that the model has now been _conditioned_ on the value `meet = 50` - the observation is like a constant that the model is now stuck with, and it'll try to find parameters that can accommodate it.
 
@@ -266,7 +303,7 @@ flowchart LR
     end
     subgraph outputs [Outputs]
         R[return value: nothing]
-        L[log-probability]
+        L[log-probabilities]
     end
     inputs --> M[time_to_office_with_observation model]
     M --> R
@@ -282,6 +319,9 @@ simulate(model)
 
 What's important about this is that **collectively, the log-probabilities allow us to judge whether a set of parameter values are plausible or not**.
 By trying out lots of different values for the parameters `s` and `d`, and seeing how the log-probabilities vary with them, we can start to form updated beliefs about what the real values of the parameters were.
+
+### Using probabilities for inference
+
 Concretely, we're going to use the following algorithm to get our updated beliefs:
 
  1. Perform lots of forward simulations.
@@ -347,34 +387,26 @@ Conceptually, this means that other factors like the train delay are sufficient 
     Just like the likelihood term where we pointed out that the choice of distribution can make a model better or worse, so can the choice of prior distributions.
     We don't have the space to discuss this in detail here, but if you're interested do check out the resources in the [Further reading](@ref beginner-further-reading) section below.
 
-## Bayes' theorem
+## What's probabilistic about it?
 
-Fundamentally, the components of the probability above are related to Bayes' theorem:
+Inference, in general, is a very braod term, and can refer to any process of drawing conclusions from data.
+However, in the context of probabilistic programming, the specific information that we obtain comes in the form of a *distribution*.
 
-```math
-p(\mathbf{\theta} | \mathcal{D}) = \frac{p(\mathcal{D} | \mathbf{\theta}) p(\mathbf{\theta})}{p(\mathcal{D})}
+That is to say, we don't just get a single value for the parameters: we can't answer the question of 'did I oversleep or not?' with a binary yes/no answer.
+Instead, we get from our algorithm a number of _samples_ for the variable `s`, each of which can either be 0 or 1.
+This allows us to effectively express our confidence in the results ('what was the probability that I overslept?') in a way that a single value cannot.
+
+For a more interesting example, we could also look at the distribution of `d`, the train delay.
+This reflects my manager's updated belief about how late the train was on that day, given her observations:
+
+```@example beginner
+using CairoMakie: density
+
+delays = [parameters(spl)[@vn(d)] for spl in posterior_samples]
+density(delays)
 ```
 
-Here, ``\mathbf{\theta}`` represents the parameters (`s` and `d` in our case), and ``\mathcal{D}`` is the set of observations (`meet` in our case).
-Taking the logarithm of both sides:
-
-```math
-\underbrace{\log p(\mathbf{\theta} | \mathcal{D})}_{\text{log-posterior}}
-    = \underbrace{\log p(\mathcal{D} | \mathbf{\theta})}_{\text{log-likelihood}}
-    + \underbrace{\log p(\mathbf{\theta})}_{\text{log-prior}}
-    - \underbrace{\log p(\mathcal{D})}_{\text{constant}}
-```
-
-It turns out that the term ``\log p(\mathbf{\theta})`` corresponds precisely to `logprior`, and ``\log p(\mathcal{D} | \mathbf{\theta})`` to `loglikelihood`, which Wren's `simulate` function gives us.
-Furthermore, ``\log p(\mathcal{D})`` is a constant with respect to the parameters.
-This means that even when we're trying out different parameter values, we can just ignore it: as long as we don't change ``\mathcal{D}`` itself, this is just a constant.
-Thus, we can sum the log-prior and log-likelihood to get the *log-posterior*, up to a normalising constant.
-
-It's very common to call the sum of these two terms the 'log-joint', since that is technically what it represents (mathematically, it's ``\log p(\mathbf{\theta}, \mathcal{D})``).
-However, as far as Bayesian inference is concerned, the two are for all intents and purposes interchangeable.
-(Indeed, we won't go into the details in this page, but it turns out that in very many algorithms this constant will simply cancel out.)
-
-## Extending a model
+## Extending our model
 
 Having seen a fairly simple example of a probabilistic model, this section will attempt to make it more realistic by adding some extra features.
 You will likely see some of these elements in the models you encounter as you learn more about Bayesian statistics.
@@ -452,7 +484,7 @@ flowchart LR
         D[d]
     end
     inputs --> M[time_to_office_hierarchical model]
-    M --> O[Outputs: return value, log-probability]
+    M --> O[Outputs: return value, log-probabilities]
 ```
 
 Why would we want to introduce an extra parameter like `laziness`?
