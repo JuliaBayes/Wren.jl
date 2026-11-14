@@ -374,7 +374,7 @@ It's very common to call the sum of these two terms the 'log-joint', since that 
 However, as far as Bayesian inference is concerned, the two are for all intents and purposes interchangeable.
 (Indeed, we won't go into the details in this page, but it turns out that in very many algorithms this constant will simply cancel out.)
 
-## A hierarchical model
+## Extending a model
 
 Having seen a fairly simple example of a probabilistic model, this section will attempt to make it more realistic by adding some extra features.
 You will likely see some of these elements in the models you encounter as you learn more about Bayesian statistics.
