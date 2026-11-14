@@ -1,5 +1,9 @@
 # [Syntax and semantics](@id syntax)
 
+!!! danger "Due to be rewritten"
+
+    penelopeysm: This page will be rewritten into something that is much more formal, like a grammar.
+
 A Wren model is a Julia function marked with the `@wren` macro.
 It mixes regular Julia code with two probabilistic primitives:
 

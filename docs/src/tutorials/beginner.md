@@ -1,4 +1,4 @@
-# Probabilistic programming
+# [Probabilistic programming](@id beginner)
 
 This page is intended to be a very gentle introduction to what probabilistic programming is all about.
 
@@ -141,6 +141,10 @@ result = simulate(model)
 
 The [`simulate`](@ref) function returns a bundle of not only the model's return value, but also the corresponding values of the parameters `s` and `d`, as well as the probability of those values occurring.
 (We always track the logarithm of the probability rather than the probability itself: this allows us to accurately represent very small probabilities.)
+
+!!! note "Generated quantities"
+
+    There is an extra field on this struct, called `generated_quantities`; feel free to ignore this for now.
 
 We can see that all the information is consistent with the model that we wrote above.
 In particular, the return value is clearly equal to `30 + d + 10s`.
@@ -387,7 +391,7 @@ Conceptually, this means that other factors like the train delay are sufficient 
     Just like the likelihood term where we pointed out that the choice of distribution can make a model better or worse, so can the choice of prior distributions.
     We don't have the space to discuss this in detail here, but if you're interested do check out the resources in the [Further reading](@ref beginner-further-reading) section below.
 
-## What's probabilistic about it?
+## What's 'probabilistic' about it?
 
 Inference, in general, is a very braod term, and can refer to any process of drawing conclusions from data.
 However, in the context of probabilistic programming, the specific information that we obtain comes in the form of a *distribution*.
@@ -400,11 +404,17 @@ For a more interesting example, we could also look at the distribution of `d`, t
 This reflects my manager's updated belief about how late the train was on that day, given her observations:
 
 ```@example beginner
-using CairoMakie: density
+using CairoMakie: density, save
 
 delays = [parameters(spl)[@vn(d)] for spl in posterior_samples]
-density(delays)
+figure = density(delays)
+save("beginner__density_d.png", figure); # hide
 ```
+
+![Density plot of train delays](beginner__density_d.png)
+
+Recall that we started our model off by thinking that the train delay was `Uniform(0, 15)`, i.e., all values inside that interval were equally likely.
+This posterior distribution clearly shows that we have formed some beliefs about which values of `d` were more likely than others!
 
 ## Extending our model
 

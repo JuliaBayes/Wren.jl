@@ -37,7 +37,7 @@ makedocs(;
         "index.md",
         "Tutorials" => [
             "tutorials/beginner.md",
-            "tutorials/syntax.md",
+            "tutorials/defining_models.md",
             "tutorials/models.md",
             "tutorials/distributions.md",
             "tutorials/submodels.md",
@@ -56,7 +56,7 @@ makedocs(;
             "explanations/batch.md",
             "explanations/staged.md",
         ],
-        "Reference" => ["reference/distributions.md", "reference/api.md"],
+        "Reference" => ["reference/syntax.md", "reference/distributions.md", "reference/api.md"],
     ],
     checkdocs=:exports,
     warnonly=false,
