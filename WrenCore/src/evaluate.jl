@@ -118,9 +118,7 @@ simulate(model::Model) = simulate(model, FromPrior())
 """
     simulate(model::Model, latents::AbstractArray)
 
-Call [`simulate`](@ref) on `model` once per element of `latents` and return the
-[`ModelResult`](@ref)s in an array with the same axes as `latents`. Each element is
-converted with [`to_latent_source`](@ref).
+Evaluate `model` once per element of `latents`, returning an array of `ModelResult`s.
 """
 function simulate(model::Model, latents::AbstractArray)
     return map(latent_source -> simulate(model, latent_source), latents)
