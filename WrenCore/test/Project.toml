@@ -23,9 +23,6 @@ VarNames = "09a315b2-63fc-4165-8d7f-d59368e770cc"
 WrenCore = "008b59e7-bbda-4991-901b-b08f5cfc584d"
 WrenDists = "2ad4af40-d7c9-42b2-92b0-e09d37d1e75a"
 
-[sources]
-Plaice = {rev = "main", url = "https://github.com/JuliaBayes/Plaice.jl"}
-
 [compat]
 ADTypes = "1"
 DifferentiationInterface = "0.7"
