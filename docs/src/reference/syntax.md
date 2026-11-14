@@ -24,7 +24,7 @@ This is especially so if you make use of Wren's copy-elision optimisations.
 It is quite hard to _accidentally_ trigger such behaviour in an observable manner, and if you do so you will probably be able to guess that you are doing something wrong.
 Here is a rather contrived example:
 
-```@example model
+```julia
 @wren function mutable(y)
     # This reads the value of `y[1]`.
     @observe y[1] ~ Normal()
@@ -39,7 +39,7 @@ model.args.y
 
 Evaluating the model will now mutate `y`:
 
-```@example model
+```julia
 parameters(model);
 model.args.y
 ```
@@ -49,7 +49,7 @@ and if we evaluate it again, the log-density associated with the `@observe` stat
 However, Wren guarantees that the value of `y_outside` will never be mutated.
 This is because when Wren _constructs_ a model (i.e., when calling `mutable(y_outside)`), it will copy the value of `y_outside`.
 
-```@example model
+```julia
 y_outside
 ```
 
@@ -75,7 +75,7 @@ Now, we would almost certainly like to progress from the starting point above wh
 To condition on some observed data, we can use the `|` operator on the model.
 For example, we can condition on the entire `y` array in one go:
 
-```@example model
+```julia
 yarg_model_cond = yarg_model | (; y=[1.0, 2.0, 3.0])
 
 res = simulate(yarg_model_cond, Xoshiro(468))
@@ -90,7 +90,7 @@ Inside the model, `y` is `[1.0, 2.0, 3.0]` from the first line, and the values i
 We can do the same with `ydef`.
 Here `y = zeros(3)` is only a template: as when sampling, the value of each `y[i]` arrives at its tilde-statement, so `y[i]` holds `0.0` until then.
 
-```@example model
+```julia
 ydef_model_cond = ydef_model | (; y=[1.0, 2.0, 3.0])
 
 res = simulate(ydef_model_cond, Xoshiro(468))
@@ -115,7 +115,7 @@ However, you might not be able to provide this information at the time of model 
 
 Take for example:
 
-```@example model
+```julia
 @wren function y_not_obs()
     x ~ Normal()
     y = x + 1
@@ -125,13 +125,13 @@ end
 
 In this model, even though `y` is defined in the model, the subsequent statement `y ~ Normal()` will treat `y` as a latent variable, and will sample a new value for it, which will certainly not be equal to `x + 1`:
 
-```@example model
+```julia
 simulate(y_not_obs())
 ```
 
 To force `y` to be observed, Wren provides a macro `@observe`:
 
-```@example model
+```julia
 @wren function y_obs()
     x ~ Normal()
     y = x + 1
@@ -143,13 +143,13 @@ res = simulate(y_obs())
 
 We can check that these values are consistent:
 
-```@example model
+```julia
 loglikelihood(res) ≈ logdensityof(Normal(), parameters(res)[@vn(x)] + 1)
 ```
 
 You can in principle use this to enforce that model arguments are observed:
 
-```@example model
+```julia
 @wren function yarg_obs(y)
     x ~ Normal()
     for i in eachindex(y)
@@ -166,7 +166,7 @@ However, note that once a statement has been marked with `@observe`, you cannot 
 
 Array-valued data are often modelled as independent draws from a single distribution. Writing this as a loop over `@observe y[i] ~ dist` works, but evaluates one scalar density per element. Wren provides `@iid`, which lowers `@iid y ~ dist` to `y ~ Wren.iid(dist, size(y))`: one array-valued distribution of independent draws from `dist` with the same shape as `y`. Backends can specialise `Wren.iid` for their distribution types, so this also lets them evaluate the whole array at once.
 
-```@example model
+```julia
 @wren function iid_obs(y)
     mu ~ Normal()
     @observe @iid y ~ Normal(mu)
@@ -179,7 +179,7 @@ loglikelihood(res) ≈ sum(logdensityof.(Normal(parameters(res)[@vn(mu)]), y))
 
 When specifying priors for independent groups `@iid mu ~ dist`, there is typically no way for `@iid` to derive `size(mu)` because `mu` is not yet defined. You can instead specify `size` via an argument:
 
-```@example model
+```julia
 @wren function iid_prior(y, group)
     n_groups = maximum(group)
     @iid mu ~ Normal() size=n_groups
@@ -197,7 +197,7 @@ end
 One of Wren's unique features is syntax-level batching of tilde-statements.
 This is done using the `@batch` macro:
 
-```@example model
+```julia
 @wren function batched(x, y)
     N = length(x)
     @batch for i in 1:N
@@ -279,7 +279,7 @@ which guarantees correctness, but might not be as efficient as the vectorised fo
 
 Wren provides a macro, `@addloglikelihood expr [name=:name]`, which allows you to manually add `expr` to the model's log-likelihood.
 
-```@example model
+```julia
 @wren function manual_likelihood()
     x ~ Normal()
     @addloglikelihood x^2 name=:xsq
