@@ -225,13 +225,13 @@ const SCARY_BILL_ZSCALE = (50.0 - mean(bill_length_mm)) / std(bill_length_mm)
         bill_length[i] ~ Normal(mu[i], sigma)
     end
 
-    @gq scary_bill_ratio = mean(mu .> SCARY_BILL_ZSCALE)
+    @gq scary_bill_pct = mean(mu .> SCARY_BILL_ZSCALE)
 end
 ```
 
-TODO Simon: 
-- describe the GQ more
-- describe that we now first fit the model with the data we observed
+The GQ we're after in this example is the percentage of penguins with a dangerously long bill (there's no domain knowledge in this, we just assume that bills longer than 50 mm are scary).
+
+Let's condition our expanded model on the observations again and sample.
 
 ```@example workflow
 transform!(penguins, :island => denserank => :island_idx)
@@ -242,25 +242,40 @@ model =
         penguins.species_idx,
         penguins.body_mass_g,
     ) | (bill_length=penguins.bill_length_mm,)
-chain = nuts(model, 1000, 4; progress=false)
+chain_gq = nuts(model, 1000, 4; progress=false)
+summarystats(chain_gq)
 ```
 
-TODO Simon: 
-- describe the estimate that we're after (contrast on hypothetical islands)
+So far so good.
+The results in `chain_gq` show us what we'd expect for the _specific_ islands we collected data from.
+But that's not the only thing we could be after when working with hierarchical models. 
+We may also be interested in new islands ("individuals") sampled from the inferred population, which we could draw from `Normal(island_effects.mu, island_effects.sigma)`.
+
+Since we've already estimate the GQ in the observed islands, let's now estimate it for new islands.
+
+We'll first define a new data set with 210 hypothetical new islands.
+The number 210 is arbitrary (apart from the fact that it nicely distributes across the three penguin species). 
+We just need a sufficiently large sample size represent the population distribution.
 
 ```@example workflow
 n_new = 210
 island_new = 1:n_new
+# Equally many of each species
 species_new = repeat([1, 2, 3], div(n_new, 3))
-# Need to think again what we should draw here, this might be wrong
+# Average over the observed body weights
 body_mass_g_new = rand(penguins.body_mass_g, n_new)
 ```
 
-TODO Simon: 
-- describe why subsetting the chain gets us where we want to be here
+Now you may wonder how we can tell our model to ignore the individual `island_effect.z` parameters in the model.
+The key here is that `simulate` will use the parameters stored in the `chain` _if_ it can find them, and otherwise fall back to sampling from the prior.
+
+That's exactly what we want here! 
+
+By sampling `island_effect.z` from the prior, we get draws from `Normal(island_effects.mu, island_effects.sigma)`:
 
 ```@example workflow
 chain_sub = chain[filter(!=(@vn(island_effects.z)), FlexiChains.parameters(chain))]
 model_new = bill_model_hierarchical(zeros(n_new), island_new, species_new, body_mass_g_new)
 chain_new = simulate(model_new, chain_sub)
+summarystats(chain_new)
 ```
