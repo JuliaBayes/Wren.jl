@@ -116,15 +116,6 @@ simulate(model::Model, latents) = simulate(model, to_latent_source(latents))
 simulate(model::Model) = simulate(model, FromPrior())
 
 """
-    simulate(model::Model, latents::AbstractArray)
-
-Evaluate `model` once per element of `latents`, returning an array of `ModelResult`s.
-"""
-function simulate(model::Model, latents::AbstractArray)
-    return map(latent_source -> simulate(model, latent_source), latents)
-end
-
-"""
     simulate(vecmodel::VecModel, params::AbstractVector)::ModelResult
 
 Evaluate the model of `vecmodel` at the parameter vector `params`, which is in the parameter

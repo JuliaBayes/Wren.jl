@@ -103,11 +103,10 @@ function WrenCore.simulate(
     chain::VNChain;
     rng::AbstractRNG=default_rng(),
 )
-    prior_source = WrenCore.FromPrior(rng)
-    latent_sources = map(FlexiChains.parameters_at(chain)) do vnt
-        WrenCore.FromValues(vnt, prior_source)
+    fallback = WrenCore.FromPrior(rng)
+    results = map(FlexiChains.parameters_at(chain)) do vnt
+        simulate(model, WrenCore.FromValues(vnt, fallback))
     end
-    results = WrenCore.simulate(model, latent_sources)
     simulated_chain = WrenCore.to_flexichain(
         results;
         iter_indices=FlexiChains.iter_indices(chain),
@@ -120,9 +119,7 @@ end
     logprior(model::WrenCore.Model, chain::FlexiChains.VNChain) -> DimMatrix
 
 Return the log-prior of `model` at each iteration of `chain`.
-
-Unlike [`simulate`](@ref WrenCore.simulate), this errors on a variable that `model` requires
-and `chain` does not hold, rather than sampling it.
+All variables required by `model` must be stored in `chain`.
 """
 function WrenCore.logprior(model::WrenCore.Model, chain::VNChain)
     return map(vnt -> WrenCore.logprior(model, vnt), FlexiChains.parameters_at(chain))
@@ -132,9 +129,7 @@ end
     loglikelihood(model::WrenCore.Model, chain::FlexiChains.VNChain) -> DimMatrix
 
 Return the log-likelihood of `model` at each iteration of `chain`.
-
-Unlike [`simulate`](@ref WrenCore.simulate), this errors on a variable that `model` requires
-and `chain` does not hold, rather than sampling it.
+All variables required by `model` must be stored in `chain`.
 """
 function StatsAPI.loglikelihood(model::WrenCore.Model, chain::VNChain)
     return map(vnt -> StatsAPI.loglikelihood(model, vnt), FlexiChains.parameters_at(chain))
@@ -145,9 +140,7 @@ end
 
 Return the log-joint (log-prior plus log-likelihood) of `model` at each iteration of
 `chain`.
-
-Unlike [`simulate`](@ref WrenCore.simulate), this errors on a variable that `model` requires
-and `chain` does not hold, rather than sampling it.
+All variables required by `model` must be stored in `chain`.
 """
 function WrenCore.logjoint(model::WrenCore.Model, chain::VNChain)
     return map(vnt -> WrenCore.logjoint(model, vnt), FlexiChains.parameters_at(chain))
@@ -157,9 +150,7 @@ end
     return_value(model::WrenCore.Model, chain::FlexiChains.VNChain) -> DimMatrix
 
 Return the return value of `model` at each iteration of `chain`.
-
-Unlike [`simulate`](@ref WrenCore.simulate), this errors on a variable that `model` requires
-and `chain` does not hold, rather than sampling it.
+All variables required by `model` must be stored in `chain`.
 """
 function WrenCore.return_value(model::WrenCore.Model, chain::VNChain)
     return map(vnt -> WrenCore.return_value(model, vnt), FlexiChains.parameters_at(chain))
