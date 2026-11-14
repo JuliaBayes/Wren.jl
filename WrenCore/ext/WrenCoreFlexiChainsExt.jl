@@ -71,16 +71,17 @@ function WrenCore.to_flexichain(
 end
 
 """
-    predict(
-        [rng::Random.AbstractRNG=Random.default_rng(),]
+    simulate(
         model::WrenCore.Model,
-        chain::FlexiChains.VNChain,
+        chain::FlexiChains.VNChain;
+        rng::Random.AbstractRNG=Random.default_rng(),
     ) -> FlexiChains.VNChain
 
-Draw predictions from `model` for all iterations in `chain`.
+Simulate from `model` at every iteration in `chain`. Variables that `chain` does not hold
+are drawn from the prior using `rng`.
 
-The returned `FlexiChain` by default will contain all the predicted variables, as well as
-the variables already present in the input `chain`, which implies that:
+The returned `FlexiChain` will contain all the simulated variables, as well as the variables
+already present in the input `chain`, which implies that:
 
 - variables that are in the `chain` are fixed to their respective values;
 - variables that arent in the `chain` are resampled according to the model;
@@ -91,27 +92,28 @@ variable (more about subsetting chains
 [here](https://juliabayes.org/FlexiChains.jl/stable/api#Subsetting-chains)).
 
 The returned chain will also contain log-probabilities corresponding to the re-evaluation of
-the model. In particular, the log probability for the newly predicted variables are now
+the model. In particular, the log probability for the newly simulated variables are now
 considered as prior terms. However, note that the log-prior of the returned chain will also
 contain the log-prior terms of the parameters already present in the input `chain`. Thus, if
-you want to obtain the log-probability of the predicted variables only, you can subtract the
+you want to obtain the log-probability of the simulated variables only, you can subtract the
 two log-prior terms.
 """
-function StatsAPI.predict(rng::AbstractRNG, model::WrenCore.Model, chain::VNChain)
-    fallback = WrenCore.FromPrior(rng)
-    results = map(FlexiChains.parameters_at(chain)) do vnt
-        WrenCore.simulate(model, WrenCore.FromValues(vnt, fallback))
+function WrenCore.simulate(
+    model::WrenCore.Model,
+    chain::VNChain;
+    rng::AbstractRNG=default_rng(),
+)
+    prior_source = WrenCore.FromPrior(rng)
+    latent_sources = map(FlexiChains.parameters_at(chain)) do vnt
+        WrenCore.FromValues(vnt, prior_source)
     end
-    preds = WrenCore.to_flexichain(
+    results = WrenCore.simulate(model, latent_sources)
+    simulated_chain = WrenCore.to_flexichain(
         results;
         iter_indices=FlexiChains.iter_indices(chain),
         chain_indices=FlexiChains.chain_indices(chain),
     )
-    return merge(FlexiChains.subset_extras(chain), preds)
-end
-
-function StatsAPI.predict(model::WrenCore.Model, chain::VNChain)
-    return StatsAPI.predict(default_rng(), model, chain)
+    return merge(FlexiChains.subset_extras(chain), simulated_chain)
 end
 
 """
@@ -119,7 +121,7 @@ end
 
 Return the log-prior of `model` at each iteration of `chain`.
 
-Unlike [`predict`](@ref StatsAPI.predict), this errors on a variable that `model` requires
+Unlike [`simulate`](@ref WrenCore.simulate), this errors on a variable that `model` requires
 and `chain` does not hold, rather than sampling it.
 """
 function WrenCore.logprior(model::WrenCore.Model, chain::VNChain)
@@ -131,7 +133,7 @@ end
 
 Return the log-likelihood of `model` at each iteration of `chain`.
 
-Unlike [`predict`](@ref StatsAPI.predict), this errors on a variable that `model` requires
+Unlike [`simulate`](@ref WrenCore.simulate), this errors on a variable that `model` requires
 and `chain` does not hold, rather than sampling it.
 """
 function StatsAPI.loglikelihood(model::WrenCore.Model, chain::VNChain)
@@ -144,7 +146,7 @@ end
 Return the log-joint (log-prior plus log-likelihood) of `model` at each iteration of
 `chain`.
 
-Unlike [`predict`](@ref StatsAPI.predict), this errors on a variable that `model` requires
+Unlike [`simulate`](@ref WrenCore.simulate), this errors on a variable that `model` requires
 and `chain` does not hold, rather than sampling it.
 """
 function WrenCore.logjoint(model::WrenCore.Model, chain::VNChain)
@@ -156,7 +158,7 @@ end
 
 Return the return value of `model` at each iteration of `chain`.
 
-Unlike [`predict`](@ref StatsAPI.predict), this errors on a variable that `model` requires
+Unlike [`simulate`](@ref WrenCore.simulate), this errors on a variable that `model` requires
 and `chain` does not hold, rather than sampling it.
 """
 function WrenCore.return_value(model::WrenCore.Model, chain::VNChain)

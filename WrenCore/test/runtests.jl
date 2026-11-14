@@ -25,7 +25,7 @@ using Test
     include("vecmodel.jl")
     include("ad.jl")
     include("reactant.jl")
-    include("predict.jl")
+    include("simulate.jl")
     include("posteriordb.jl")
     include("issues/55.jl")
     include("issues/69.jl")

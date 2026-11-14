@@ -5,7 +5,7 @@ Modules = [Wren, WrenCore, WrenCore.Expressions]
 ```
 
 ```@docs
-predict
+WrenCore.simulate(::WrenCore.Model, ::Wren.VNChain)
 logjoint
 loglikelihood
 logprior

@@ -1,6 +1,6 @@
-module WrenCorePredictTests
+module WrenCoreSimulateChainTests
 
-@info "testing predict.jl"
+@info "testing simulate.jl"
 
 using Distributions
 using FlexiChains: FlexiChains, Extra, Parameter, VNChain
@@ -26,10 +26,36 @@ function exact_posterior_chain(rng, posterior_model, cond_model, niters, nchains
     return WrenCore.to_flexichain(results, stats)
 end
 
-@testset "predict" begin
+@testset "simulate on an array of latent sources" begin
+    @wren function g()
+        x ~ Normal()
+        y ~ Normal(x)
+    end
+    model = g()
+    first_values = @vnt begin
+        x := 1.0
+        y := 2.0
+    end
+    second_values = @vnt begin
+        x := 3.0
+        y := 4.0
+    end
+    latent_values = OffsetArray([first_values, second_values], -1:0)
+    results = simulate(model, latent_values)
+    @test axes(results) == axes(latent_values)
+    for i in eachindex(results, latent_values)
+        @test parameters(results[i]) == latent_values[i]
+        @test logjoint(results[i]) ≈ logjoint(model, latent_values[i])
+    end
+
+    rngs = [Xoshiro(1) Xoshiro(2); Xoshiro(3) Xoshiro(4)]
+    @test size(simulate(model, rngs)) == (2, 2)
+end
+
+@testset "simulate on a chain" begin
     # `m` is stored in the chain as a single variable. `p` is sampled element by element,
     # so the model builds it as a partial array and the chain stores it densified; this
-    # exercises the densification path in `predict`.
+    # exercises the densification path in `simulate`.
     @wren function f(p)
         m ~ MvNormal(zeros(2), I)
         for i in eachindex(p)
@@ -71,7 +97,7 @@ end
     end
 
     @testset "chain values are actually used" begin
-        pdns = predict(StableRNG(468), f(zeros(2)), chn)
+        pdns = simulate(f(zeros(2)), chn; rng=StableRNG(468))
         # Sanity check.
         @test pdns[@vn(x)] == chn[@vn(x)]
         @test pdns[@vn(m)] == chn[@vn(m)]
@@ -83,7 +109,7 @@ end
     end
 
     @testset "logp" begin
-        pdns = predict(f(zeros(2)), chn)
+        pdns = simulate(f(zeros(2)), chn)
         # Since we deconditioned `y`, there are no likelihood terms.
         @test all(iszero, pdns[Extra(:loglikelihood)])
         # The logprior should be the same as that of the original chain, but with an extra
@@ -97,37 +123,37 @@ end
     end
 
     @testset "non-parameter keys are preserved" begin
-        pdns = predict(f(zeros(2)), chn)
-        # Check that the only new thing added was the prediction for y.
+        pdns = simulate(f(zeros(2)), chn)
+        # Check that the only new thing added was the simulated y.
         @test only(setdiff(Set(keys(pdns)), Set(keys(chn)))) == Parameter(@vn(y))
         # Check that no other keys originally in `chn` were removed.
         @test isempty(setdiff(Set(keys(chn)), Set(keys(pdns))))
     end
 
     @testset "indices are preserved" begin
-        pdns = predict(f(zeros(2)), chn[iter=501:1000])
+        pdns = simulate(f(zeros(2)), chn[iter=501:1000])
         @test FlexiChains.iter_indices(pdns) == 501:1000
         @test FlexiChains.chain_indices(pdns) == FlexiChains.chain_indices(chn)
     end
 
     @testset "no sampling time and sampler state" begin
-        # it just doesn't really make sense for the predictions to carry those
+        # it just doesn't really make sense for the simulated chain to carry those
         # information
-        pdns = predict(f(zeros(2)), chn)
+        pdns = simulate(f(zeros(2)), chn)
         @test all(ismissing, FlexiChains.sampling_time(pdns))
         @test all(ismissing, FlexiChains.last_sampler_state(pdns))
     end
 
     @testset "rng is respected" begin
-        pdns1 = predict(Xoshiro(468), f(zeros(2)), chn)
-        pdns2 = predict(Xoshiro(468), f(zeros(2)), chn)
+        pdns1 = simulate(f(zeros(2)), chn; rng=Xoshiro(468))
+        pdns2 = simulate(f(zeros(2)), chn; rng=Xoshiro(468))
         @test FlexiChains.has_same_data(pdns1, pdns2)
-        pdns3 = predict(Xoshiro(469), f(zeros(2)), chn)
+        pdns3 = simulate(f(zeros(2)), chn; rng=Xoshiro(469))
         @test !FlexiChains.has_same_data(pdns1, pdns3)
     end
 
     @testset "with non-standard Array variables" begin
-        # This essentially tests that templates are correctly used when calling predict().
+        # This essentially tests that templates are correctly used when calling simulate().
         @wren function offset2(x)
             # Don't sample all elements of `x` to prevent it from being densified, thus
             # bypassing the code that we want to check.
@@ -148,10 +174,10 @@ end
             1,
         )
         @test mean(chn[@vn(x[-2])]) ≈ 1.0 atol = 0.05
-        pdns = predict(StableRNG(468), offset2(offset_arg()), chn)
+        pdns = simulate(offset2(offset_arg()), chn; rng=StableRNG(468))
         @test pdns[@vn(x[-2])] == chn[@vn(x[-2])]
         @test mean(pdns[@vn(y)]) ≈ 1.0 atol = 0.05
     end
 end
 
-end # module WrenCorePredictTests
+end # module WrenCoreSimulateChainTests

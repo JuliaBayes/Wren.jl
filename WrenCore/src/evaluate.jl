@@ -116,6 +116,17 @@ simulate(model::Model, latents) = simulate(model, to_latent_source(latents))
 simulate(model::Model) = simulate(model, FromPrior())
 
 """
+    simulate(model::Model, latents::AbstractArray)
+
+Call [`simulate`](@ref) on `model` once per element of `latents` and return the
+[`ModelResult`](@ref)s in an array with the same axes as `latents`. Each element is
+converted with [`to_latent_source`](@ref).
+"""
+function simulate(model::Model, latents::AbstractArray)
+    return map(latent_source -> simulate(model, latent_source), latents)
+end
+
+"""
     simulate(vecmodel::VecModel, params::AbstractVector)::ModelResult
 
 Evaluate the model of `vecmodel` at the parameter vector `params`, which is in the parameter
