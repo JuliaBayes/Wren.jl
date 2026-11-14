@@ -1,4 +1,14 @@
-# [Working with models](@id models)
+# [Working with `Model`s](@id models)
+
+!!! danger "To be rewritten"
+
+    (penelopeysm) This page will be completely overhauled soon.
+
+    The current page should more or less only discuss the `simulate`, `return_value`, etc. family of functions (i.e., the 'high-level' interface for working wiht a mdoel). One could call it 'evaluating models'.
+    We can cover VN/VNT as well.
+    Note that conditioning will be covered in the 'defining models' page so we don't need to cover it here. (That conceptually also makes a lot of sense since conditioning is related to defining the probabilistic model, and this page is more about working with the `Model` struct)
+
+    The lower level details of latent sources, accumulator tuples, etc. will be deferred to an explanation page instead.
 
 Once you have defined a model you will likely want to do something with it!
 This page will give you a whirlwind tour of how to work with models.

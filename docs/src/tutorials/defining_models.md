@@ -21,7 +21,8 @@ end
 
 The function body can be thought of as a specification of how to perform the forward simulation of the probabilistic model.
 
-To then instantiate an actual [`Model`](@ref) object, you need to call the function, passing in any required arguments.
+Wren defines a [`Model`](@ref) struct, which can be thought of as a representation of a probabilistic model.
+To instantiate one of these `Model`s, you need to call the function, passing in any required arguments.
 This may be confusing, because calling a normal Julia function will give you its return value (here `nothing`).
 However, in this case, the `@wren` macro overloads this to instead return the `Model` object.
 
@@ -36,7 +37,7 @@ model = my_model(0.0)
     This is not the case in Wren.
     In Wren, **arguments have no special meaning**: they are just quantities that can be used inside the model body.
 
-As can be seen, this `Model` object contains its own arguments (here `m = 0.0`), plus the function body.
+As can be seen, this `Model` contains its own arguments (here `m = 0.0`), plus the function body.
 (We'll come to `conditioned` later on this page.)
 It is this object that is then passed to all the APIs of Wren.
 
