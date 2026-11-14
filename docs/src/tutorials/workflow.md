@@ -82,7 +82,7 @@ xs_z = -3:0.1:3
 
 # Draw 20 prior predictions for the slope of body mass
 for _ in 1:20
-    vnt = simulate(model)
+    vnt = parameters(simulate(model))
     ys_z = vnt[@vn(beta2)] * xs_z
     ys = reconstruct(bill_zs, ys_z)
     xs = reconstruct(mass_zs, xs_z)
@@ -118,7 +118,7 @@ Then we condition with `|` (see [`condition`](@ref)) and sample with [`nuts`](@r
 
 ```@example workflow
 import Enzyme
-model_cond = model | VarNamedTuple(bill_length=penguins.bill_length_mm)
+model_cond = model | (bill_length=penguins.bill_length_mm,)
 chain_post = nuts(model_cond, 1000, 4; progress=false)
 summarystats(chain_post)
 ```
@@ -208,7 +208,8 @@ Assume we're mostly interested in the contrast between species 1 and 2.
 We could then consider dropping species 3 before fitting the model, but we still have reason to keep species 3 as it'll contribute to estimating `beta2` and `beta3` better.
 
 ```@example workflow
-const SCARY_BILL_MM = 50.0
+bill_length_mm = reconstruct(bill_zs, penguins.bill_length_mm)
+const SCARY_BILL_ZSCALE = (50.0 - mean(bill_length_mm)) / std(bill_length_mm)
 
 @wren function bill_model_hierarchical(bill_length, island, species, body_mass)
     n_species = maximum(species)
@@ -218,13 +219,13 @@ const SCARY_BILL_MM = 50.0
     beta2 ~ Normal(0, 1)
     beta3 = (island_effects ~ hierarchical(n_islands))
     sigma ~ Exponential(1)
-    
+
     mu = beta1[species] .+ beta2 .* body_mass .+ beta3[island]
     @batch for i in eachindex(bill_length)
         bill_length[i] ~ Normal(mu[i], sigma)
     end
 
-    @gq scary_bill_ratio = mean(mu .> SCARY_BILL_MM)
+    @gq scary_bill_ratio = mean(mu .> SCARY_BILL_ZSCALE)
 end
 ```
 
@@ -234,12 +235,13 @@ TODO Simon:
 
 ```@example workflow
 transform!(penguins, :island => denserank => :island_idx)
-model = bill_model_hierarchical(
-  penguins.bill_length_mm,
-  penguins.island_idx,
-  penguins.species_idx,
-  penguins.body_mass_g,
-) | (bill_length=penguins.bill_length_mm,)
+model =
+    bill_model_hierarchical(
+        penguins.bill_length_mm,
+        penguins.island_idx,
+        penguins.species_idx,
+        penguins.body_mass_g,
+    ) | (bill_length=penguins.bill_length_mm,)
 chain = nuts(model, 1000, 4; progress=false)
 ```
 
@@ -247,9 +249,9 @@ TODO Simon:
 - describe the estimate that we're after (contrast on hypothetical islands)
 
 ```@example workflow
-n_new = 200
+n_new = 210
 island_new = 1:n_new
-species_new = repeat([1, 2], div(n_new, 2))
+species_new = repeat([1, 2, 3], div(n_new, 3))
 # Need to think again what we should draw here, this might be wrong
 body_mass_g_new = rand(penguins.body_mass_g, n_new)
 ```
