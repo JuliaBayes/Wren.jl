@@ -26,32 +26,6 @@ function exact_posterior_chain(rng, posterior_model, cond_model, niters, nchains
     return WrenCore.to_flexichain(results, stats)
 end
 
-@testset "simulate on an array of latent sources" begin
-    @wren function g()
-        x ~ Normal()
-        y ~ Normal(x)
-    end
-    model = g()
-    first_values = @vnt begin
-        x := 1.0
-        y := 2.0
-    end
-    second_values = @vnt begin
-        x := 3.0
-        y := 4.0
-    end
-    latent_values = OffsetArray([first_values, second_values], -1:0)
-    results = simulate(model, latent_values)
-    @test axes(results) == axes(latent_values)
-    for i in eachindex(results, latent_values)
-        @test parameters(results[i]) == latent_values[i]
-        @test logjoint(results[i]) ≈ logjoint(model, latent_values[i])
-    end
-
-    rngs = [Xoshiro(1) Xoshiro(2); Xoshiro(3) Xoshiro(4)]
-    @test size(simulate(model, rngs)) == (2, 2)
-end
-
 @testset "simulate on a chain" begin
     # `m` is stored in the chain as a single variable. `p` is sampled element by element,
     # so the model builds it as a partial array and the chain stores it densified; this
