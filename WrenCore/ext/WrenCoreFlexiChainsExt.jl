@@ -105,7 +105,7 @@ function WrenCore.simulate(
 )
     fallback = WrenCore.FromPrior(rng)
     results = map(FlexiChains.parameters_at(chain)) do vnt
-        simulate(model, WrenCore.FromValues(vnt, fallback))
+        WrenCore.simulate(model, WrenCore.FromValues(vnt, fallback))
     end
     simulated_chain = WrenCore.to_flexichain(
         results;
