@@ -457,11 +457,14 @@ flowchart LR
 
 Why would we want to introduce an extra parameter like `laziness`?
 
-As it happens, the individual `sleeps[i]` are not _that_ interesting; it doesn't really matter that much whether I overslept on one particular day or not.
-However, logically, all the `sleeps[i]` should be correlated: they all stem from an underlying tendency of me to oversleep, represented by `laziness`.
+If we go back to `time_to_office_expanded_2`, where we defined a vector of `sleeps`, we can see here that all the `sleeps[i]` are completely independent.
+Between each iteration of the for loop, the value of `sleeps[i]` is drawn anew from the Bernoulli distribution.
 
-Making them collectively depend on a single parameter allows us to express this correlation.
-Furthermore, if my manager were to run this model, she could therefore infer a posterior distribution for `laziness`, which would give her a much better case to bring to HR.
+However, logically, all the `sleeps[i]` should be correlated: they all stem from an underlying tendency of me to oversleep, represented by `laziness`.
+Our model needs to be able to use this correlation, or equivalently, 'remember' facts about me from one day to the next.
+Making them collectively depend on a single parameter allows us to express this.
+
+The `laziness` parameter also has a deeper meaning than just the individual `sleeps[i]`: it is a holistic representation of how prone I am to oversleeping, as opposed to just a question of whether I happened to oversleep on a particular day.
 
 !!! warning "Don't use the algorithm above on this model"
 
