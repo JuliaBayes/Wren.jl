@@ -1,4 +1,4 @@
-module WrenCoreSimulateChainTests
+module WrenCoreFlexiChainsExtTests
 
 @info "testing simulate.jl"
 
