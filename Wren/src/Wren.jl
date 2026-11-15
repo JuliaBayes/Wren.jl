@@ -3,6 +3,7 @@ module Wren
 using WrenCore
 
 # Samplers
+include("samplers/progress.jl")
 include("samplers/prior.jl")
 include("samplers/nuts.jl")
 export prior, nuts
@@ -114,8 +115,8 @@ export @vn, @vnt, VarNamedTuple, VarName, parameters
 using DensityInterface: logdensityof
 export logdensityof
 
-using StatsAPI: loglikelihood, predict
-export loglikelihood, predict
+using StatsAPI: loglikelihood
+export loglikelihood
 
 using DifferentiationInterface: AutoForwardDiff, AutoReverseDiff, AutoMooncake, AutoEnzyme
 export AutoForwardDiff, AutoReverseDiff, AutoMooncake, AutoEnzyme

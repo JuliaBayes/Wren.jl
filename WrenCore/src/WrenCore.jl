@@ -162,8 +162,8 @@ export @vn, @vnt, VarNamedTuple, VarName, parameters
 using DensityInterface: logdensityof
 export logdensityof
 
-using StatsAPI: loglikelihood, predict
-export loglikelihood, predict
+using StatsAPI: loglikelihood
+export loglikelihood
 
 using DifferentiationInterface: AutoForwardDiff, AutoReverseDiff, AutoMooncake, AutoEnzyme
 export AutoForwardDiff, AutoReverseDiff, AutoMooncake, AutoEnzyme
