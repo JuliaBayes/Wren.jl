@@ -279,7 +279,7 @@ Following the nomenclature established by Stan, we call these "generated quantit
 For example, consider logistic regression where parameters are often on the log-odds scale.
 Reporting log-odds is nasty, so we instead transform them to odds ratios:
 
-```@example model
+```julia
 @wren function logistic_regression(y)
     beta ~ Normal()
     for i in eachindex(y)
