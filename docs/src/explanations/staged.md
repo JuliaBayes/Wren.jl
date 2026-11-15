@@ -9,6 +9,8 @@ flowchart TD
     B --> C[Evaluation function]
 ```
 
+(Note that this intermediate representation, or IR, has nothing to do with the IR that Julia uses in its own compilation pipeline; this is entirely within Wren.)
+
 The model definition is what you write:
 
 ```@example staged
@@ -49,7 +51,7 @@ function __mymodel_evaluate__(y, params, accs, ...)
 end
 ```
 
-!!! details "The actual IR"
+!!! details "The actual evaluation function"
 
     Again, although it's not really useful for the average user, you can view this with
 

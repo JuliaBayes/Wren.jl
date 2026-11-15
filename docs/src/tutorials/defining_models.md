@@ -87,15 +87,104 @@ Please see the [submodels](@ref submodels) page for more information.
 
 ## Parameters vs observations
 
-`@observe`: unconditionally turn this into an observation. Currently no way to 'undo'
+Random quantities can be either parameters or observations.
+Parameters are the quantities that we want to infer, while observations are the quantities that we have observed in the real world.
 
-Conditioning
+**By default, *all* `x ~ dist` statements are treated as parameters.**
+
+```@example defining
+@wren function some_parameters(scalar, vector, nt)
+    scalar ~ Normal()
+    for i in eachindex(vector)
+        vector[i] ~ Normal()
+    end
+    nt.a ~ Normal()
+    return nothing
+end
+
+simulate(some_parameters(0.0, zeros(3), (; a=0.0)))
+```
+
+Notice here how all of `scalar`, `vector[i]`, and `nt.a` appear as 'parameters' in the `ModelResult`.
+It doesn't matter that they were passed in as arguments.
+
+There are two ways to turn a random quantity into an observation:
+
+1. Marking the tilde with `@observe`:
+
+```@example defining
+@wren function observations(y)
+    x ~ Normal()
+    @observe y ~ Normal(x)
+end
+
+simulate(observations(1.0))
+```
+
+2. Conditioning the model on a value.
+   First, you need to instantiate the unconditioned model; then, you can condition it using the `|` operator, passing in a `NamedTuple` of observations.
+
+   Conditioning on `y` actually does two things: firstly, it marks the corresponding random quantity as an observation, and secondly, it sets the value of that random quantity to the value you passed in.
+   Notice that `@info y` works here and uses the value of `y` that the model was conditioned on.
+
+```@example defining
+@wren function observations()
+    @info y
+    x ~ Normal()
+    y ~ Normal(x)
+end
+
+conditioned_model = observations() | (; y = 1.0)
+```
+
+In general, conditioning is more flexible as you can 'recover' the original model by calling `decondition`:
+
+```@example defining
+original_model = decondition(conditioned_model)
+simulate(original_model)
+```
+
+However, if you don't need this functionality, `@observe` can be more explicit.
+`@observe` can also be used if you want to calculate the log-likelihood of some quantity that is calculated inside the model body, rather than being passed in as an argument.
 
 ## Special nodes
 
-Only need to make a quick note of it here, actual explanation can be deferred to another page.
+The above should be enough to get you started with defining models in Wren.
+However, there are also some special nodes that you can use in your model body.
 
-- `@iid` and `@batch`
+### `@iid` and `@batch`
+
+In the common case where you have an array of parameters that share the same distribution, you can use these macros, which have the same semantics as a naive for-loop but can have optimised performance.
+
+`@iid` is used for _independent and identically distributed_ random quantities, i.e., each element of the array is drawn independently from the same distribution.
+You can either pass in an existing array, or if you want to create a new array, you can specify how many elements there are with the `size` keyword argument.
+
+```@example defining
+@wren function with_iid(existing_array, n)
+    @iid new_array ~ Normal() size=n
+    @iid existing_array ~ Normal()
+end
+```
+
+`@batch` is intended to be applied to for-loops, and attempts to vectorise the loop body where safe.
+The following has exactly the same semantics as the version without `@batch`, but may be faster (depending on various factors).
+
+```@example defining
+@wren function with_batch(x, y))
+    @batch for i in eachindex(x)
+        x[i] ~ Normal()
+        @observe y[i] ~ Normal(x[i])
+    end
+end
+```
+
+It's worth pointing out here that `@batch` is not 'magical': it works only with a restricted set of syntax and is not guaranteed to be faster than a naive for-loop.
+It is often worth [benchmarking your model](@ref benchmarking) if you want to optimise performance.
+
+### Generated quantities
+
+Often 
+
 - `@gq`
 - `@addloglikelihood`
 
