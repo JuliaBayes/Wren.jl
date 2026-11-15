@@ -78,7 +78,7 @@ function accumulate_assume!!(
     right,
     logjac,
     template,
-    @nospecialize(sitename::Val)
+    @nospecialize(sitename::Val),
 )
     return acc
 end
@@ -88,7 +88,7 @@ function accumulate_observe!!(
     vn,
     right,
     template,
-    @nospecialize(sitename::Val)
+    @nospecialize(sitename::Val),
 )
     return acc
 end
