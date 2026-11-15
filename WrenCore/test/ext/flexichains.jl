@@ -192,4 +192,4 @@ end
     end
 end
 
-end # module WrenCoreSimulateChainTests
+end # module WrenCoreFlexiChainsExtTests
