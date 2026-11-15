@@ -70,6 +70,30 @@ end
         end
     end
 
+    @testset "parameters on a chain" begin
+        @testset "complete chain" begin
+            params = parameters(model, chn)
+            @test Array(map(vnt -> vnt[@vn(x)], params)) == Array(chn[@vn(x)])
+            @test Array(map(vnt -> vnt[@vn(m)], params)) == Array(chn[@vn(m)])
+            @test Array(map(vnt -> vnt[@vn(p)], params)) == Array(chn[@vn(p)])
+        end
+
+        @testset "missing variables are drawn from the prior" begin
+            params = parameters(f(zeros(2)), chn; rng=StableRNG(468))
+            @test Array(map(vnt -> vnt[@vn(x)], params)) == Array(chn[@vn(x)])
+            ys = map(vnt -> vnt[@vn(y)], params)
+            @test isapprox(mean(ys), 2.0; atol=0.1)
+            pdns = simulate(f(zeros(2)), chn; rng=StableRNG(468))
+            @test Array(ys) == Array(pdns[@vn(y)])
+        end
+
+        @testset "rng is respected" begin
+            draw_ys(rng) = Array(map(vnt -> vnt[@vn(y)], parameters(f(zeros(2)), chn; rng)))
+            @test draw_ys(Xoshiro(468)) == draw_ys(Xoshiro(468))
+            @test draw_ys(Xoshiro(468)) != draw_ys(Xoshiro(469))
+        end
+    end
+
     @testset "chain values are actually used" begin
         pdns = simulate(f(zeros(2)), chn; rng=StableRNG(468))
         # Sanity check.

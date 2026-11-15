@@ -156,4 +156,26 @@ function WrenCore.return_value(model::WrenCore.Model, chain::VNChain)
     return map(vnt -> WrenCore.return_value(model, vnt), FlexiChains.parameters_at(chain))
 end
 
+"""
+    parameters(model::WrenCore.Model, chain::FlexiChains.VNChain) -> DimMatrix
+
+Return the parameters of `model` at each iteration of `chain`.
+If a variable required by `model` is not stored in `chain`, that variable will be drawn
+from the prior distribution.
+
+This function differs from `simulate` in that it returns a `DimMatrix` - not a `VNChain` -
+containing _only_ parameters. This makes it more efficient than `simulate`, which also
+computes the log-density terms.
+"""
+function VarNames.parameters(
+    model::WrenCore.Model,
+    chain::VNChain;
+    rng::AbstractRNG=default_rng(),
+)
+    fallback = WrenCore.FromPrior(rng)
+    return map(FlexiChains.parameters_at(chain)) do vnt
+        parameters(model, WrenCore.FromValues(vnt, fallback))
+    end
+end
+
 end # module WrenCoreFlexiChainsExt
