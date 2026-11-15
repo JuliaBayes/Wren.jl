@@ -431,15 +431,15 @@ parameter_keys(chain) = Set(FlexiChains.parameters(chain))
         )
     end
 
-    @testset "predict holds generated quantities" begin
-        pdns = predict(StableRNG(468), model, chn)
-        @test issubset(Set([@vn(x2), @vn(xp1), @vn(a.z)]), parameter_keys(pdns))
-        @test pdns[@vn(x2)] == chn[@vn(x)] .^ 2
+    @testset "simulate on a chain holds generated quantities" begin
+        simulated = simulate(model, chn; rng=StableRNG(468))
+        @test issubset(Set([@vn(x2), @vn(xp1), @vn(a.z)]), parameter_keys(simulated))
+        @test simulated[@vn(x2)] == chn[@vn(x)] .^ 2
 
-        pdns_only = predict(StableRNG(468), model, chn; gqs=SomeGQs((:x2,)))
-        @test @vn(x2) in parameter_keys(pdns_only)
-        @test !(@vn(xp1) in parameter_keys(pdns_only))
-        @test !(@vn(a.z) in parameter_keys(pdns_only))
+        simulated_x2_only = simulate(model, chn; rng=StableRNG(468), gqs=SomeGQs((:x2,)))
+        @test @vn(x2) in parameter_keys(simulated_x2_only)
+        @test !(@vn(xp1) in parameter_keys(simulated_x2_only))
+        @test !(@vn(a.z) in parameter_keys(simulated_x2_only))
     end
 
     @testset "parameters take precedence over generated quantities" begin
