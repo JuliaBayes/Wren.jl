@@ -134,11 +134,13 @@ This means that, for example, we don't want to parse `a => b` into something, be
 Once we eliminate those, we are actually left with very few operators that aren't weird Unicode stuff that is impossible to type.
 
 In principle, we could use any kind of function call to denote these.
-For example, we could say that `sample(a, b)` is what is now `a ~ b`, and `iid(sample(a, b); size=N)` is what is now `@iid size=N a ~ b`.
+For example, we could say that `sample(a, b)` is what is now `a ~ b`, and `iid(sample(a, b); size=N)` is what is now `@iid a ~ b size=N`.
 However, this is a bit too understated: it looks just like a normal function call, and it's not obvious to the user that these have special semantics.
+On top of that, it actually stops the user from using any function named `sample` or `iid` in their model.
 
 Macros are the best compromise between all of these.
 We aren't restricted to a fixed set of possibilities (as is the case with operators), but also to most Julia programmers it should be intuitive that macros have special effects!
+It does preclude the use of macros with the same name, but that is quite unlikely to be a problem as there are much fewer macros than functions in Julia.
 
 ## Programmatic generation
 
