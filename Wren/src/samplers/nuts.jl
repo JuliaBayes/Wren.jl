@@ -51,12 +51,13 @@ close_phases!(::DynamicHMC.NoProgressReport) = nothing
         adtype::DI.AbstractADType=DI.AutoEnzyme(; mode=Enzyme.Reverse),
         progress::Bool=true,
         reduce_copies::Bool=true,
+        gqs::GeneratedQuantitySpec=AllGQs(),
         dynamichmc_kwargs...
     ) -> FlexiChains.VNChain
 
 No U-Turn Sampler (NUTS) for a Wren model. All `dynamichmc_kwargs` are passed to
 [`DynamicHMC.mcmc_with_warmup`](@extref), allowing you to customise the warmup and sampling
-behaviour.
+behaviour. The returned chain holds the generated quantities selected by `gqs`.
 
 `reduce_copies` is passed to [`VecModel`](@ref): when sampling with Enzyme, it skips copies
 of model arguments that turn out not to be needed (see [`reduce_copies`](@ref)).
@@ -68,6 +69,7 @@ function nuts(
     adtype::DI.AbstractADType=DI.AutoEnzyme(; mode=Reverse),
     progress::Bool=true,
     reduce_copies::Bool=true,
+    gqs::GeneratedQuantitySpec=AllGQs(),
     dynamichmc_kwargs...,
 )
     return nuts(
@@ -78,6 +80,7 @@ function nuts(
         adtype,
         progress,
         reduce_copies,
+        gqs,
         dynamichmc_kwargs...,
     )
 end
@@ -89,6 +92,7 @@ function nuts(
     adtype::DI.AbstractADType=DI.AutoEnzyme(; mode=Reverse),
     progress::Bool=true,
     reduce_copies::Bool=true,
+    gqs::GeneratedQuantitySpec=AllGQs(),
     dynamichmc_kwargs...,
 )
     # AD preparation
@@ -108,7 +112,14 @@ function nuts(
     label = "Sampling $(model.name)"
     outputs = with_progress(progress, label, nchains) do run
         tasks = @sync [
-            Threads.@spawn _nuts_chain(vm_single, niters, run, j; dynamichmc_kwargs...) for j in 1:nchains
+            Threads.@spawn _nuts_chain(
+                vm_single,
+                niters,
+                run,
+                j;
+                gqs,
+                dynamichmc_kwargs...,
+            ) for j in 1:nchains
         ]
         fetch.(tasks)
     end
@@ -132,6 +143,7 @@ function _nuts_chain(
     niters::Integer,
     run,
     j::Integer;
+    gqs::GeneratedQuantitySpec,
     dynamichmc_kwargs...,
 )
     vm = WrenCore._copy_for_thread(vm_single)
@@ -144,7 +156,7 @@ function _nuts_chain(
         dynamichmc_kwargs...,
     )
     close_phases!(reporter)
-    return _nuts_results_and_stats(results, vm)
+    return _nuts_results_and_stats(results, vm, gqs)
 end
 
 function _nuts_stats(tree_stat, step_size)
@@ -158,10 +170,14 @@ function _nuts_stats(tree_stat, step_size)
         log_density=tree_stat.π,
     )
 end
-function _nuts_results_and_stats(results::NamedTuple, vecmodel::WrenCore.VecModel)
+function _nuts_results_and_stats(
+    results::NamedTuple,
+    vecmodel::WrenCore.VecModel,
+    gqs::GeneratedQuantitySpec,
+)
     ϵ = results.ϵ
     model_results =
-        [WrenCore.simulate(vecmodel, col) for col in eachcol(results.posterior_matrix)]
+        [WrenCore.simulate(vecmodel, col; gqs) for col in eachcol(results.posterior_matrix)]
     stats = [_nuts_stats(ts, ϵ) for ts in results.tree_statistics]
     return model_results, stats
 end

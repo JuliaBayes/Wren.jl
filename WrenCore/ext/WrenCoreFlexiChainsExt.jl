@@ -40,8 +40,11 @@ function WrenCore.to_flexichain(
     dicts = Matrix{OrderedDict{ParameterOrExtra{<:VarName},Any}}(undef, niters, nchains)
     structures = Matrix{VarNamedTuple}(undef, niters, nchains)
     for (i, (result, stat)) in enumerate(zip(results, stats))
-        # Parameters
-        params = VarNames.densify!!(parameters(result))
+        # Parameters and generated quantities. If a generated quantity has the same name as
+        # a parameter, the parameter takes precedence.
+        params = VarNames.densify!!(
+            merge(WrenCore.generated_quantities(result), parameters(result)),
+        )
 
         d = OrderedDict{ParameterOrExtra{<:VarName},Any}(
             Parameter(vn) => val for (vn, val) in pairs(params)
@@ -75,13 +78,15 @@ end
         model::WrenCore.Model,
         chain::FlexiChains.VNChain;
         rng::Random.AbstractRNG=Random.default_rng(),
+        gqs::GeneratedQuantitySpec=AllGQs(),
     ) -> VNChain
 
 Simulate from `model` at every iteration in `chain`. Variables that `chain` does not hold
 are drawn from the prior using `rng`.
 
-The returned `FlexiChain` will contain all the simulated variables, as well as the variables
-already present in the input `chain`, which implies that:
+The returned `FlexiChain` will contain all the simulated variables, the generated quantities
+selected by `gqs`, as well as the variables already present in the input `chain`, which
+implies that:
 
 - variables that are in the `chain` are fixed to their respective values;
 - variables that arent in the `chain` are resampled according to the model;
@@ -102,10 +107,11 @@ function WrenCore.simulate(
     model::WrenCore.Model,
     chain::VNChain;
     rng::AbstractRNG=default_rng(),
+    gqs::WrenCore.GeneratedQuantitySpec=WrenCore.AllGQs(),
 )
     fallback = WrenCore.FromPrior(rng)
     results = map(FlexiChains.parameters_at(chain)) do vnt
-        WrenCore.simulate(model, WrenCore.FromValues(vnt, fallback))
+        WrenCore.simulate(model, WrenCore.FromValues(vnt, fallback); gqs)
     end
     simulated_chain = WrenCore.to_flexichain(
         results;
@@ -113,6 +119,54 @@ function WrenCore.simulate(
         chain_indices=FlexiChains.chain_indices(chain),
     )
     return merge(FlexiChains.subset_extras(chain), simulated_chain)
+end
+
+"""
+    generated_quantities(
+        model::WrenCore.Model,
+        chain::FlexiChains.VNChain,
+        gqs::GeneratedQuantitySpec=AllGQs(),
+    ) -> FlexiChains.VNChain
+
+Re-evaluate `model` at each iteration of `chain` and return a chain holding only the
+generated quantities (`@gq` statements) selected by `gqs`, with the same iteration and chain
+indices as `chain`. Every parameter that `model` requires must be in `chain`.
+
+Generated quantities that are not selected are not evaluated, unless a selected one
+depends on them.
+"""
+function WrenCore.generated_quantities(
+    model::WrenCore.Model,
+    chain::VNChain,
+    gqs::WrenCore.GeneratedQuantitySpec=WrenCore.AllGQs(),
+)
+    gq_vnts = map(FlexiChains.parameters_at(chain)) do vnt
+        _, accs = WrenCore.evaluate(
+            model,
+            WrenCore.FromValues(vnt),
+            WrenCore.OriginalSpace(),
+            WrenCore.AccumulatorTuple(WrenCore.GeneratedQuantityAccumulator(gqs)),
+            WrenCore.EvalContext{false}(),
+        )
+        VarNames.densify!!(WrenCore.generated_quantities(accs))
+    end
+    niters, nchains = size(gq_vnts)
+    dicts = Matrix{OrderedDict{ParameterOrExtra{<:VarName},Any}}(undef, niters, nchains)
+    structures = Matrix{VarNamedTuple}(undef, niters, nchains)
+    for (i, gq_vnt) in enumerate(gq_vnts)
+        dicts[i] = OrderedDict{ParameterOrExtra{<:VarName},Any}(
+            Parameter(vn) => val for (vn, val) in pairs(gq_vnt)
+        )
+        structures[i] = VarNames.skeleton(gq_vnt)
+    end
+    return FlexiChain{VarName}(
+        niters,
+        nchains,
+        dicts;
+        structures=structures,
+        iter_indices=FlexiChains.iter_indices(chain),
+        chain_indices=FlexiChains.chain_indices(chain),
+    )
 end
 
 """

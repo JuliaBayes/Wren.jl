@@ -372,6 +372,40 @@ which guarantees correctness, but might not be as efficient as the vectorised fo
 
       - Batches will increase allocations and will almost certainly cause slowdowns on small loops.
 
+## [Generated quantities](@id generated-quantities)
+
+After sampling from a model, we often want to transform these samples into other values we're interested in.
+Following the nomenclature established by Stan, we call these "generated quantities" (GQs).
+
+For example, consider logistic regression where parameters are often on the log-odds scale.
+Reporting log-odds is nasty, so we instead transform them to odds ratios:
+
+```@example model
+@wren function logistic_regression(y)
+    beta ~ Normal()
+    for i in eachindex(y)
+        @observe y[i] ~ BernoulliLogit(beta)
+    end
+    @gq odds_ratio = exp(beta)
+end
+
+y = [0, 1, 0, 0, 0, 1]
+model = logistic_regression(y)
+simulate(model)
+```
+
+You can write any expression on the right-hand of `@gq`, including `begin` or `let` blocks.
+However, naming generated quantities is more restrictive: a name must be a single symbol, so names like `@gq x[1]` or `@gq x.a` are not allowed.
+
+!!! note "Generated quantities are not copied"
+    After initialising a generated quantity `@gq my_array`, mutating `my_array` will change its values. To create a snapshot of `my_array` at the time it is initialised, you need to copy explicity `@gq snapshot = deepcopy(my_array)`.
+
+By default, all GQs are calculated and returned.
+You can, however, omit the statements marked with `@gq` - for example because they're expensive and not needed at this time - by passing `gqs=NoGQs()` to `simulate`, `prior` or `nuts`. If you want to keep specific GQs, use `SomeGQs(:x)` instead.
+
+!!! note "No side effects... again"
+    When the definition of a generated quantity `x` involves side effects, such as calling `push!` or drawing a random number, and `x` is omitted via `gqs`, the side effects in its definition will not happen!
+
 ## [Manual log-likelihood addition](@id addloglike)
 
 !!! danger "We do NOT recommend this"

@@ -121,6 +121,25 @@ struct AddLogLikelihood{E} <: AbstractWrenExpr
 end
 
 """
+    GeneratedQuantity
+
+Represents `@gq name = expr`, or `@gq name` (short for `@gq name = name`).
+`name` must be a single Symbol.
+
+`always_evaluated` and `gqs_triggering_evaluation` are set by dataflow analysis.
+If an `expr` is `always_evaluated`, we know its `name` appears in a later statement
+(other than a different GQ that is not `always_evaluated`), and `expr` needs to be
+evaluated on every model evaluation. Otherwise `expr` is evaluated only when the quantity
+or one of the generated quantities in `gqs_triggering_evaluation` is requested.
+"""
+struct GeneratedQuantity{E} <: AbstractWrenExpr
+    name::Symbol
+    expr::E
+    always_evaluated::Bool
+    gqs_triggering_evaluation::Vector{Symbol}
+end
+
+"""
     ReturnStatement
 
 Wrapper around `Expr(:return, ...)` to allow for dispatch.
@@ -249,7 +268,43 @@ function _iid_args(expr::Expr, macro_name=nothing, name=nothing)
     return size_expr, inner, name
 end
 
+function _lower_gq(expr::Expr, mod::Module)
+    args = _macro_args(expr)
+    length(args) == 1 || error("@gq: expected `@gq name = expr` or `@gq name`")
+    arg = only(args)
+    name, value_expr = if Meta.isexpr(arg, :(=), 2)
+        arg.args[1], arg.args[2]
+    else
+        arg, arg
+    end
+    name isa Symbol || error(
+        "@gq: the name must be a single symbol, got `$name`; " *
+        "indexed or field names such as `x[1]` or `x.a` are not supported",
+    )
+    lowered = lower_to_wren(value_expr, mod)
+    _contains_probabilistic_stmt(lowered) && error(
+        "@gq: the expression for `$name` must not contain probabilistic statements " *
+        "(`~`, `@sample`, `@observe`, `@iid`, `@batch`, `@addloglikelihood`) or `return`",
+    )
+    return GeneratedQuantity(name, lowered, false, Symbol[])
+end
+
+function _contains_gq(x)
+    return _is_macrocall(x, Symbol("@gq")) ||
+           x isa Expr && x.head !== :quote && any(_contains_gq, x.args)
+end
+
+_contains_probabilistic_stmt(::Any) = false
+_contains_probabilistic_stmt(::AbstractWrenExpr) = true
+_contains_probabilistic_stmt(::OtherStatement) = false
+_contains_probabilistic_stmt(expr::WrenExpr) = any(_contains_probabilistic_stmt, expr.args)
+
 function lower_to_wren(expr::Expr, mod::Module, statement_position::Bool=false)
+    if _is_macrocall(expr, Symbol("@gq"))
+        statement_position || error("@gq must be used as a statement")
+        return _lower_gq(expr, mod)
+    end
+
     if expr.head == :macrocall && expr.args[1] in (Symbol("@sample"), Symbol("@observe"))
         macro_name = expr.args[1]
         statement_position || error("$macro_name must be used as a statement")
@@ -346,6 +401,9 @@ function lower_to_wren(expr::Expr, mod::Module, statement_position::Bool=false)
     end
 
     if expr.head in (:quote, :function, :(->), :macro, :module, :baremodule)
+        expr.head in (:function, :(->)) &&
+            _contains_gq(expr) &&
+            error("@gq must be used at the top level of the model body")
         return OtherStatement(expr)
     end
 
@@ -418,6 +476,10 @@ function _wren_expr_to_display_expr(stmt::AddLogLikelihood)
     end
     push!(args, _wren_expr_to_display_expr(stmt.expr))
     return Expr(:macrocall, args...)
+end
+function _wren_expr_to_display_expr(stmt::GeneratedQuantity)
+    assignment = Expr(:(=), stmt.name, _wren_expr_to_display_expr(stmt.expr))
+    return Expr(:macrocall, Symbol("@gq"), nothing, assignment)
 end
 function _wren_expr_to_display_expr(stmt::ReturnStatement)
     value = stmt.expr === nothing ? nothing : _wren_expr_to_display_expr(stmt.expr)
