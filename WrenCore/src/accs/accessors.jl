@@ -6,6 +6,14 @@ Return the accumulated latent parameter values.
 VarNames.parameters(accs::AccumulatorTuple) = getacc(accs, Val(PARAMS_ACCNAME)).values
 
 """
+    generated_quantities(accs::AccumulatorTuple)::VarNamedTuple
+
+Return the values recorded by `@gq` statements.
+"""
+function generated_quantities end
+generated_quantities(accs::AccumulatorTuple) = getacc(accs, Val(GQ_ACCNAME)).values
+
+"""
 Return the values collected by a [`VectorisedParamsAccumulator`](@ref): a `VarNamedTuple`
 with one `TransformedValue{<:AbstractVector}` per variable. This is used to work out the
 layout of a [`VecModel`](@ref).

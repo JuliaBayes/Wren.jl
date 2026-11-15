@@ -42,7 +42,12 @@ WrenCore.accumulate_observe!!(acc::SiteNames, args...) = record_site(acc, last(a
             named_sites(),
             FromValues(values),
             OriginalSpace(),
-            AccumulatorTuple(WrenCore.default_accumulators()..., SiteNames(())),
+            AccumulatorTuple(
+                ParamsAccumulator(),
+                LogPriorAccumulator(),
+                LogLikelihoodAccumulator(),
+                SiteNames(()),
+            ),
             EvalContext{false}(),
         )
         @test parameters(accs) == values
@@ -57,7 +62,7 @@ WrenCore.accumulate_observe!!(acc::SiteNames, args...) = record_site(acc, last(a
             :trailing_likelihood,
         )
         vm = VecModel(named_sites(), nothing; latent_source=FromValues(values))
-        x = vectorise_latents(FromValues(values), vm)
+        x = vector_parameters(vm, values)
         @test lp(vm, x) ≈ logjoint(accs)
     end
 
@@ -447,6 +452,14 @@ WrenCore.accumulate_observe!!(acc::SiteNames, args...) = record_site(acc, last(a
             model = fallthrough_value()
             retval = return_value(model, FromPrior())
             @test retval == 2
+
+            @wren function fallthrough_observe(y)
+                x ~ Normal()
+                @observe y ~ Normal(x)
+            end
+            model = fallthrough_observe(1.5)
+            result = simulate(model, FromPrior())
+            @test return_value(result) == 1.5
         end
     end
 

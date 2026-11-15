@@ -40,8 +40,11 @@ function WrenCore.to_flexichain(
     dicts = Matrix{OrderedDict{ParameterOrExtra{<:VarName},Any}}(undef, niters, nchains)
     structures = Matrix{VarNamedTuple}(undef, niters, nchains)
     for (i, (result, stat)) in enumerate(zip(results, stats))
-        # Parameters
-        params = VarNames.densify!!(parameters(result))
+        # Parameters and generated quantities. If a generated quantity has the same name as
+        # a parameter, the parameter takes precedence.
+        params = VarNames.densify!!(
+            merge(WrenCore.generated_quantities(result), parameters(result)),
+        )
 
         d = OrderedDict{ParameterOrExtra{<:VarName},Any}(
             Parameter(vn) => val for (vn, val) in pairs(params)
@@ -71,16 +74,19 @@ function WrenCore.to_flexichain(
 end
 
 """
-    predict(
-        [rng::Random.AbstractRNG=Random.default_rng(),]
+    simulate(
         model::WrenCore.Model,
-        chain::FlexiChains.VNChain,
-    ) -> FlexiChains.VNChain
+        chain::FlexiChains.VNChain;
+        rng::Random.AbstractRNG=Random.default_rng(),
+        gqs::GeneratedQuantitySpec=AllGQs(),
+    ) -> VNChain
 
-Draw predictions from `model` for all iterations in `chain`.
+Simulate from `model` at every iteration in `chain`. Variables that `chain` does not hold
+are drawn from the prior using `rng`.
 
-The returned `FlexiChain` by default will contain all the predicted variables, as well as
-the variables already present in the input `chain`, which implies that:
+The returned `FlexiChain` will contain all the simulated variables, the generated quantities
+selected by `gqs`, as well as the variables already present in the input `chain`, which
+implies that:
 
 - variables that are in the `chain` are fixed to their respective values;
 - variables that arent in the `chain` are resampled according to the model;
@@ -91,36 +97,83 @@ variable (more about subsetting chains
 [here](https://juliabayes.org/FlexiChains.jl/stable/api#Subsetting-chains)).
 
 The returned chain will also contain log-probabilities corresponding to the re-evaluation of
-the model. In particular, the log probability for the newly predicted variables are now
+the model. In particular, the log probability for the newly simulated variables are now
 considered as prior terms. However, note that the log-prior of the returned chain will also
 contain the log-prior terms of the parameters already present in the input `chain`. Thus, if
-you want to obtain the log-probability of the predicted variables only, you can subtract the
+you want to obtain the log-probability of the simulated variables only, you can subtract the
 two log-prior terms.
 """
-function StatsAPI.predict(rng::AbstractRNG, model::WrenCore.Model, chain::VNChain)
+function WrenCore.simulate(
+    model::WrenCore.Model,
+    chain::VNChain;
+    rng::AbstractRNG=default_rng(),
+    gqs::WrenCore.GeneratedQuantitySpec=WrenCore.AllGQs(),
+)
     fallback = WrenCore.FromPrior(rng)
     results = map(FlexiChains.parameters_at(chain)) do vnt
-        WrenCore.simulate(model, WrenCore.FromValues(vnt, fallback))
+        WrenCore.simulate(model, WrenCore.FromValues(vnt, fallback); gqs)
     end
-    preds = WrenCore.to_flexichain(
+    simulated_chain = WrenCore.to_flexichain(
         results;
         iter_indices=FlexiChains.iter_indices(chain),
         chain_indices=FlexiChains.chain_indices(chain),
     )
-    return merge(FlexiChains.subset_extras(chain), preds)
+    return merge(FlexiChains.subset_extras(chain), simulated_chain)
 end
 
-function StatsAPI.predict(model::WrenCore.Model, chain::VNChain)
-    return StatsAPI.predict(default_rng(), model, chain)
+"""
+    generated_quantities(
+        model::WrenCore.Model,
+        chain::FlexiChains.VNChain,
+        gqs::GeneratedQuantitySpec=AllGQs(),
+    ) -> FlexiChains.VNChain
+
+Re-evaluate `model` at each iteration of `chain` and return a chain holding only the
+generated quantities (`@gq` statements) selected by `gqs`, with the same iteration and chain
+indices as `chain`. Every parameter that `model` requires must be in `chain`.
+
+Generated quantities that are not selected are not evaluated, unless a selected one
+depends on them.
+"""
+function WrenCore.generated_quantities(
+    model::WrenCore.Model,
+    chain::VNChain,
+    gqs::WrenCore.GeneratedQuantitySpec=WrenCore.AllGQs(),
+)
+    gq_vnts = map(FlexiChains.parameters_at(chain)) do vnt
+        _, accs = WrenCore.evaluate(
+            model,
+            WrenCore.FromValues(vnt),
+            WrenCore.OriginalSpace(),
+            WrenCore.AccumulatorTuple(WrenCore.GeneratedQuantityAccumulator(gqs)),
+            WrenCore.EvalContext{false}(),
+        )
+        VarNames.densify!!(WrenCore.generated_quantities(accs))
+    end
+    niters, nchains = size(gq_vnts)
+    dicts = Matrix{OrderedDict{ParameterOrExtra{<:VarName},Any}}(undef, niters, nchains)
+    structures = Matrix{VarNamedTuple}(undef, niters, nchains)
+    for (i, gq_vnt) in enumerate(gq_vnts)
+        dicts[i] = OrderedDict{ParameterOrExtra{<:VarName},Any}(
+            Parameter(vn) => val for (vn, val) in pairs(gq_vnt)
+        )
+        structures[i] = VarNames.skeleton(gq_vnt)
+    end
+    return FlexiChain{VarName}(
+        niters,
+        nchains,
+        dicts;
+        structures=structures,
+        iter_indices=FlexiChains.iter_indices(chain),
+        chain_indices=FlexiChains.chain_indices(chain),
+    )
 end
 
 """
     logprior(model::WrenCore.Model, chain::FlexiChains.VNChain) -> DimMatrix
 
 Return the log-prior of `model` at each iteration of `chain`.
-
-Unlike [`predict`](@ref StatsAPI.predict), this errors on a variable that `model` requires
-and `chain` does not hold, rather than sampling it.
+All variables required by `model` must be stored in `chain`.
 """
 function WrenCore.logprior(model::WrenCore.Model, chain::VNChain)
     return map(vnt -> WrenCore.logprior(model, vnt), FlexiChains.parameters_at(chain))
@@ -130,9 +183,7 @@ end
     loglikelihood(model::WrenCore.Model, chain::FlexiChains.VNChain) -> DimMatrix
 
 Return the log-likelihood of `model` at each iteration of `chain`.
-
-Unlike [`predict`](@ref StatsAPI.predict), this errors on a variable that `model` requires
-and `chain` does not hold, rather than sampling it.
+All variables required by `model` must be stored in `chain`.
 """
 function StatsAPI.loglikelihood(model::WrenCore.Model, chain::VNChain)
     return map(vnt -> StatsAPI.loglikelihood(model, vnt), FlexiChains.parameters_at(chain))
@@ -143,9 +194,7 @@ end
 
 Return the log-joint (log-prior plus log-likelihood) of `model` at each iteration of
 `chain`.
-
-Unlike [`predict`](@ref StatsAPI.predict), this errors on a variable that `model` requires
-and `chain` does not hold, rather than sampling it.
+All variables required by `model` must be stored in `chain`.
 """
 function WrenCore.logjoint(model::WrenCore.Model, chain::VNChain)
     return map(vnt -> WrenCore.logjoint(model, vnt), FlexiChains.parameters_at(chain))
@@ -155,12 +204,46 @@ end
     return_value(model::WrenCore.Model, chain::FlexiChains.VNChain) -> DimMatrix
 
 Return the return value of `model` at each iteration of `chain`.
-
-Unlike [`predict`](@ref StatsAPI.predict), this errors on a variable that `model` requires
-and `chain` does not hold, rather than sampling it.
+All variables required by `model` must be stored in `chain`.
 """
 function WrenCore.return_value(model::WrenCore.Model, chain::VNChain)
     return map(vnt -> WrenCore.return_value(model, vnt), FlexiChains.parameters_at(chain))
+end
+
+"""
+    parameters(model::WrenCore.Model, chain::FlexiChains.VNChain) -> VNChain
+
+Return the parameters of `model` at each iteration of `chain`.
+If a variable required by `model` is not stored in `chain`, that variable will be drawn
+from the prior distribution.
+
+This function differs from `simulate` in that it contains _only_ parameters.
+This makes it more efficient than `simulate`, which also computes the log-density terms.
+"""
+function VarNames.parameters(
+    model::WrenCore.Model,
+    chain::VNChain;
+    rng::AbstractRNG=default_rng(),
+)
+    fallback = WrenCore.FromPrior(rng)
+    param_matrix = map(FlexiChains.parameters_at(chain)) do vnt
+        parameters(model, WrenCore.FromValues(vnt, fallback))
+    end
+    # `WrenCore.to_flexichain` only has a method for `Matrix{ModelResult}`
+    # but we want to avoid calculating the log-density terms here -> workaround
+    dense_params = map(VarNames.densify!!, param_matrix)
+    dicts = map(dense_params) do params
+        OrderedDict{ParameterOrExtra{<:VarName},Any}(
+            Parameter(vn) => val for (vn, val) in pairs(params)
+        )
+    end
+    return FlexiChain{VarName}(
+        size(param_matrix)...,
+        dicts;
+        structures=map(VarNames.skeleton, dense_params),
+        iter_indices=FlexiChains.iter_indices(chain),
+        chain_indices=FlexiChains.chain_indices(chain),
+    )
 end
 
 end # module WrenCoreFlexiChainsExt

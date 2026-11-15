@@ -112,12 +112,12 @@ For example, you will only be able to sample from the prior via `parameters` if 
 parameters(prior_model)
 ```
 
-Generating posterior predictions via `predict` and visualising them with [FlexiChains.jl](https://juliabayes.org/FlexiChains.jl/stable/) also requires the `~` syntax:
+Generating posterior predictions via `simulate` and visualising them with [FlexiChains.jl](https://juliabayes.org/FlexiChains.jl/stable/) also requires the `~` syntax:
 
 ```@example custom-distributions
 using FlexiChains
 using CairoMakie
 
-pp_chain = predict(prior_model, chain)
+pp_chain = simulate(prior_model, chain)
 FlexiChains.Makie.pushforward_hist(pp_chain, @vn(y); observed=y)
 ```

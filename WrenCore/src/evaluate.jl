@@ -40,15 +40,16 @@ end
 """
     ModelResult
 
-A struct containing the parameters, return value, log-prior, and log-likelihood of a model
-evaluation.
+A struct containing the parameters, generated quantities, return value, log-prior, and
+log-likelihood of a model evaluation.
 
-You can access these fields with [`parameters`](@ref), [`return_value`](@ref),
-[`logprior`](@ref), and [`loglikelihood`](@ref). The log-joint can be obtained with
-[`logjoint`](@ref).
+You can access these fields with [`parameters`](@ref), [`generated_quantities`](@ref),
+[`return_value`](@ref), [`logprior`](@ref), and [`loglikelihood`](@ref). The log-joint can
+be obtained with [`logjoint`](@ref).
 """
-struct ModelResult{V<:VarNamedTuple,R,LP<:Number,LL<:Number}
+struct ModelResult{V<:VarNamedTuple,G<:VarNamedTuple,R,LP<:Number,LL<:Number}
     parameters::V
+    generated_quantities::G
     return_value::R
     logprior::LP
     loglikelihood::LL
@@ -63,6 +64,15 @@ function Base.show(io::IO, ::MIME"text/plain", result::ModelResult)
         print(io, "VarNamedTuple()")
     else
         vnt_pretty_print(io, result.parameters, "│  ", 0)
+    end
+    println(io)
+    print(io, "├─ ")
+    printstyled(io, "generated_quantities"; color=:cyan)
+    print(io, " => ")
+    if isempty(result.generated_quantities)
+        print(io, "VarNamedTuple()")
+    else
+        vnt_pretty_print(io, result.generated_quantities, "│  ", 0)
     end
     println(io)
     fields = (
@@ -81,8 +91,8 @@ function Base.show(io::IO, ::MIME"text/plain", result::ModelResult)
 end
 
 """
-    simulate(model::Model)
-    simulate(model::Model, latents)
+    simulate(model::Model; gqs::GeneratedQuantitySpec=AllGQs())
+    simulate(model::Model, latents; gqs::GeneratedQuantitySpec=AllGQs())
 
 Draw a sample from `model`, using the given latent source. If one is not provided,
 draws from the prior distribution.
@@ -90,16 +100,21 @@ draws from the prior distribution.
 `latents` is converted to a latent source with [`to_latent_source`](@ref), so it can also
 be an `AbstractRNG` (to draw from the prior) or a `VarNamedTuple` of values.
 
-Returns the params, return value, log-prior, and log-likelihood of the model packaged in a
-[`ModelResult`](@ref).
+Returns the params, generated quantities selected by `gqs`, return value, log-prior, and
+log-likelihood of the model packaged in a [`ModelResult`](@ref).
 """
-function simulate(model::Model, latents::AbstractLatentSource)
+function simulate(
+    model::Model,
+    latents::AbstractLatentSource;
+    gqs::GeneratedQuantitySpec=AllGQs(),
+)
     retval, accs = evaluate(
         model,
         latents,
         OriginalSpace(),
         AccumulatorTuple(
             ParamsAccumulator(),
+            GeneratedQuantityAccumulator(gqs),
             LogPriorAccumulator(),
             LogLikelihoodAccumulator(),
         ),
@@ -107,21 +122,34 @@ function simulate(model::Model, latents::AbstractLatentSource)
     )
     return ModelResult(
         VarNames.parameters(accs),
+        generated_quantities(accs),
         retval,
         logprior(accs),
         loglikelihood(accs),
     )
 end
-simulate(model::Model, latents) = simulate(model, to_latent_source(latents))
-simulate(model::Model) = simulate(model, FromPrior())
+function simulate(model::Model, latents; gqs::GeneratedQuantitySpec=AllGQs())
+    return simulate(model, to_latent_source(latents); gqs)
+end
+simulate(model::Model; gqs::GeneratedQuantitySpec=AllGQs()) =
+    simulate(model, FromPrior(); gqs)
 
 """
-    simulate(vecmodel::VecModel, params::AbstractVector)::ModelResult
+    simulate(
+        vecmodel::VecModel,
+        params::AbstractVector;
+        gqs::GeneratedQuantitySpec=AllGQs(),
+    )::ModelResult
 
 Evaluate the model of `vecmodel` at the parameter vector `params`, which is in the parameter
 space of `vecmodel`. The log-prior and log-likelihood in the result are in original space.
+The result holds the generated quantities selected by `gqs`.
 """
-function simulate(vecmodel::VecModel, params::AbstractVector)
+function simulate(
+    vecmodel::VecModel,
+    params::AbstractVector;
+    gqs::GeneratedQuantitySpec=AllGQs(),
+)
     _check_vecmodel_dimension(params, vecmodel)
     retval, accs = evaluate(
         vecmodel.model,
@@ -129,6 +157,7 @@ function simulate(vecmodel::VecModel, params::AbstractVector)
         vecmodel.parameter_space,
         AccumulatorTuple(
             ParamsAccumulator(),
+            GeneratedQuantityAccumulator(gqs),
             LogPriorAccumulator(),
             LogLikelihoodAccumulator(),
         ),
@@ -136,6 +165,7 @@ function simulate(vecmodel::VecModel, params::AbstractVector)
     )
     return ModelResult(
         VarNames.parameters(accs),
+        generated_quantities(accs),
         retval,
         logprior(accs),
         loglikelihood(accs),
@@ -210,6 +240,53 @@ function VarNames.parameters(vecmodel::VecModel, params::AbstractVector)
         EvalContext{false}(),
     )
     return VarNames.parameters(accs)
+end
+
+############################################################################################
+# generated_quantities
+############################################################################################
+
+"""
+    generated_quantities(result::ModelResult)::VarNamedTuple
+
+Get the generated quantities (values recorded by `@gq` statements) from a
+[`ModelResult`](@ref).
+"""
+generated_quantities(result::ModelResult) = result.generated_quantities
+
+"""
+    generated_quantities(model::Model, gqs::GeneratedQuantitySpec=AllGQs())
+    generated_quantities(model::Model, latents, gqs::GeneratedQuantitySpec=AllGQs())
+
+Obtain the generated quantities selected by `gqs`, calculated with a given set of latent
+values. If no latent values are provided, they are drawn from the prior distribution.
+
+`latents` is converted to a latent source with [`to_latent_source`](@ref), so it can also
+be an `AbstractRNG` (to draw from the prior) or a `VarNamedTuple` of values.
+
+This is equivalent to `generated_quantities(simulate(model, latents; gqs))`, but is more
+efficient than [`simulate`](@ref) because it does not compute the log-density terms or store
+the parameters.
+"""
+function generated_quantities(
+    model::Model,
+    latents::AbstractLatentSource,
+    gqs::GeneratedQuantitySpec=AllGQs(),
+)
+    _, accs = evaluate(
+        model,
+        latents,
+        OriginalSpace(),
+        AccumulatorTuple(GeneratedQuantityAccumulator(gqs)),
+        EvalContext{false}(),
+    )
+    return generated_quantities(accs)
+end
+function generated_quantities(model::Model, latents, gqs::GeneratedQuantitySpec=AllGQs())
+    return generated_quantities(model, to_latent_source(latents), gqs)
+end
+function generated_quantities(model::Model, gqs::GeneratedQuantitySpec=AllGQs())
+    return generated_quantities(model, FromPrior(), gqs)
 end
 
 ############################################################################################

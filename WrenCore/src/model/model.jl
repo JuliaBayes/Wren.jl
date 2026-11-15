@@ -391,6 +391,33 @@ macro addloglikelihood(args...)
     error("@addloglikelihood must be used inside @wren")
 end
 
+"""
+    @gq name = expr
+    @gq name
+
+Record the value of `expr` as the generated quantity `name` in a `@wren` model.
+`@gq name` is short for `@gq name = name`. `name` must be a single symbol.
+
+`@gq` must be a statement of the model body. It is not supported inside `@batch` or
+inside functions defined in the model; we discourage using it inside `@submodel`.
+
+If `name` is used later in the model body, `expr` is also assigned to `name` and runs on
+every evaluation of the model. If `name` is used only by later generated quantities, it
+is assigned only when one of those generated quantities is requested. Otherwise `name` is
+not defined in the model body.
+
+!!! warning
+    If `name` is not used later in the model body and the generated quantity is not
+    requested, `expr` is not run at all.
+    Note that this means side effects in `expr` do not happen!
+
+    Relatedly, if `expr` assigns to a variable defined elsewhere in the model body,
+    that assignment happens only when `name` is requested.
+"""
+macro gq(args...)
+    error("@gq must be used inside a @wren model body")
+end
+
 function _wren(expr::Expr, mod::Module; internal_to_ir::Bool=false)
     # The short form `f(x) = body` has the same signature and body as the long form.
     if expr.head == :(=) && Meta.isexpr(expr.args[1], (:call, :where))
