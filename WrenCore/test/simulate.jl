@@ -73,24 +73,38 @@ end
     @testset "parameters on a chain" begin
         @testset "complete chain" begin
             params = parameters(model, chn)
-            @test Array(map(vnt -> vnt[@vn(x)], params)) == Array(chn[@vn(x)])
-            @test Array(map(vnt -> vnt[@vn(m)], params)) == Array(chn[@vn(m)])
-            @test Array(map(vnt -> vnt[@vn(p)], params)) == Array(chn[@vn(p)])
+            @test params isa VNChain
+            @test params[@vn(x)] == chn[@vn(x)]
+            @test params[@vn(m)] == chn[@vn(m)]
+            @test params[@vn(p)] == chn[@vn(p)]
+        end
+
+        @testset "only parameters are returned" begin
+            params = parameters(f(zeros(2)), chn)
+            expected_keys = Set(Parameter.([@vn(m), @vn(p), @vn(x), @vn(y)]))
+            @test Set(keys(params)) == expected_keys
         end
 
         @testset "missing variables are drawn from the prior" begin
             params = parameters(f(zeros(2)), chn; rng=StableRNG(468))
-            @test Array(map(vnt -> vnt[@vn(x)], params)) == Array(chn[@vn(x)])
-            ys = map(vnt -> vnt[@vn(y)], params)
-            @test isapprox(mean(ys), 2.0; atol=0.1)
+            @test params[@vn(x)] == chn[@vn(x)]
+            @test isapprox(mean(params[@vn(y)]), 2.0; atol=0.1)
             pdns = simulate(f(zeros(2)), chn; rng=StableRNG(468))
-            @test Array(ys) == Array(pdns[@vn(y)])
+            @test params[@vn(y)] == pdns[@vn(y)]
         end
 
         @testset "rng is respected" begin
-            draw_ys(rng) = Array(map(vnt -> vnt[@vn(y)], parameters(f(zeros(2)), chn; rng)))
-            @test draw_ys(Xoshiro(468)) == draw_ys(Xoshiro(468))
-            @test draw_ys(Xoshiro(468)) != draw_ys(Xoshiro(469))
+            params1 = parameters(f(zeros(2)), chn; rng=Xoshiro(468))
+            params2 = parameters(f(zeros(2)), chn; rng=Xoshiro(468))
+            @test FlexiChains.has_same_data(params1, params2)
+            params3 = parameters(f(zeros(2)), chn; rng=Xoshiro(469))
+            @test !FlexiChains.has_same_data(params1, params3)
+        end
+
+        @testset "indices are preserved" begin
+            params = parameters(f(zeros(2)), chn[iter=501:1000])
+            @test FlexiChains.iter_indices(params) == 501:1000
+            @test FlexiChains.chain_indices(params) == FlexiChains.chain_indices(chn)
         end
     end
 

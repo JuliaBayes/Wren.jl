@@ -75,7 +75,7 @@ end
         model::WrenCore.Model,
         chain::FlexiChains.VNChain;
         rng::Random.AbstractRNG=Random.default_rng(),
-    ) -> FlexiChains.VNChain
+    ) -> VNChain
 
 Simulate from `model` at every iteration in `chain`. Variables that `chain` does not hold
 are drawn from the prior using `rng`.
@@ -157,15 +157,14 @@ function WrenCore.return_value(model::WrenCore.Model, chain::VNChain)
 end
 
 """
-    parameters(model::WrenCore.Model, chain::FlexiChains.VNChain) -> DimMatrix
+    parameters(model::WrenCore.Model, chain::FlexiChains.VNChain) -> VNChain
 
 Return the parameters of `model` at each iteration of `chain`.
 If a variable required by `model` is not stored in `chain`, that variable will be drawn
 from the prior distribution.
 
-This function differs from `simulate` in that it returns a `DimMatrix` - not a `VNChain` -
-containing _only_ parameters. This makes it more efficient than `simulate`, which also
-computes the log-density terms.
+This function differs from `simulate` in that it contains _only_ parameters.
+This makes it more efficient than `simulate`, which also computes the log-density terms.
 """
 function VarNames.parameters(
     model::WrenCore.Model,
@@ -173,9 +172,24 @@ function VarNames.parameters(
     rng::AbstractRNG=default_rng(),
 )
     fallback = WrenCore.FromPrior(rng)
-    return map(FlexiChains.parameters_at(chain)) do vnt
+    param_matrix = map(FlexiChains.parameters_at(chain)) do vnt
         parameters(model, WrenCore.FromValues(vnt, fallback))
     end
+    # `WrenCore.to_flexichain` only has a method for `Matrix{ModelResult}`
+    # but we want to avoid calculating the log-density terms here -> workaround
+    dense_params = map(VarNames.densify!!, param_matrix)
+    dicts = map(dense_params) do params
+        OrderedDict{ParameterOrExtra{<:VarName},Any}(
+            Parameter(vn) => val for (vn, val) in pairs(params)
+        )
+    end
+    return FlexiChain{VarName}(
+        size(param_matrix)...,
+        dicts;
+        structures=map(VarNames.skeleton, dense_params),
+        iter_indices=FlexiChains.iter_indices(chain),
+        chain_indices=FlexiChains.chain_indices(chain),
+    )
 end
 
 end # module WrenCoreFlexiChainsExt
