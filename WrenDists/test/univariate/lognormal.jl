@@ -7,6 +7,7 @@ using ReverseDiff
 using Mooncake
 using Enzyme
 using Plaice
+using Random: Xoshiro
 using Test
 using FillArrays: Fill
 
@@ -17,6 +18,9 @@ if RUN_REACTANT
     Pkg.add("Reactant")
     using Reactant
 end
+
+sample_lognormal(s, rng) = rand(rng, WrenDists.BatchedLogNormal(zero(s), s))
+sum_lognormal(s, rng=Xoshiro(8675309)) = sum(sample_lognormal(s, rng))
 
 test_dist(
     "LogNormal",
@@ -40,8 +44,33 @@ test_dist(
                 logdensityof(WrenDists.BatchedLogNormal(x[1:3], x[4:6]), [1.5, 1.5, 1.5])
             ADTestCase(f, [0.1, 0.5, 1.0, 0.3, 0.7, 1.2], (), ())
         end,
+        ADTestCase(sum_lognormal, fill(0.7, 8), (), ()),
     ),
 )
+
+@testset "BatchedLogNormal sampling: $T" for T in (Float32, Float64, BigFloat)
+    sigma = fill(T(0.7), 8)
+    noise = randn(Xoshiro(8675309), T, size(sigma))
+    expected = exp.(noise .* sigma)
+    @test sample_lognormal(sigma, Xoshiro(8675309)) == expected
+    @test ForwardDiff.gradient(sum_lognormal, sigma) ≈ expected .* noise
+    @test ReverseDiff.gradient(sum_lognormal, sigma) ≈ expected .* noise
+end
+
+@testset "BatchedLogNormal compiled sampling" begin
+    @static if RUN_REACTANT
+        sample_and_gradient(s, rng) = (
+            sample_lognormal(s, copy(rng)),
+            first(Enzyme.gradient(Reverse, sum_lognormal, s, Const(copy(rng)))),
+        )
+        sigma = Reactant.to_rarray(fill(0.7f0, 8))
+        rng = Reactant.ReactantRNG(Reactant.to_rarray(UInt64[8675309, 0]))
+        compiled = Reactant.@compile sample_and_gradient(sigma, rng)
+        sample, gradient = compiled(sigma, rng)
+        x = Array(sample)
+        @test Array(gradient) ≈ x .* log.(x) ./ 0.7f0
+    end
+end
 
 @test logdensityof(WrenDists.BatchedLogNormal(Float64[], Fill(-1.0, 0)), Float64[]) == 0.0
 
