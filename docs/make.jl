@@ -4,6 +4,7 @@ ENV["DATADEPS_ALWAYS_ACCEPT"] = "true"
 using Wren
 using WrenCore
 using WrenDists
+import Pathfinder
 using Documenter
 using DocumenterCodeBlocks
 using DocumenterInterLinks
@@ -30,6 +31,7 @@ makedocs(;
         Wren,
         WrenCore,
         WrenDists,
+        Base.get_extension(Wren, :WrenPathfinderExt),
         Base.get_extension(WrenCore, :WrenCoreFlexiChainsExt),
         Base.get_extension(WrenCore, :WrenCorePosteriorDBExt),
     ],
@@ -46,6 +48,7 @@ makedocs(;
         "How-tos" => [
             "howtos/benchmarking.md"
             "howtos/optimization.md"
+            "howtos/pathfinder.md"
             "howtos/posteriordb.md"
             "howtos/custom-distributions.md"
         ],
