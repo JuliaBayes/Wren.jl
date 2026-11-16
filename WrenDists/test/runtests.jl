@@ -8,6 +8,7 @@ using Test
     include("univariate/normal.jl")
     include("univariate/laplace.jl")
     include("univariate/cauchy.jl")
+    include("univariate/logistic.jl")
     include("univariate/tdist.jl")
     include("univariate/flat.jl")
 

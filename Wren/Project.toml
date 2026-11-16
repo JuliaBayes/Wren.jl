@@ -21,12 +21,16 @@ WrenCore = "008b59e7-bbda-4991-901b-b08f5cfc584d"
 WrenDists = "2ad4af40-d7c9-42b2-92b0-e09d37d1e75a"
 
 [weakdeps]
+Accessors = "7d9f7c33-5ae7-4f3b-8dc6-eff91059b697"
 Optimization = "7f7a1694-90dd-40f0-9382-eb1efda571ba"
+Pathfinder = "b1d3bc72-d0e7-4279-b92f-7fa5d6d2d454"
 
 [extensions]
 WrenOptimizationExt = "Optimization"
+WrenPathfinderExt = ["Accessors", "Pathfinder"]
 
 [compat]
+Accessors = "0.1"
 DensityInterface = "0.4"
 DifferentiationInterface = "0.7"
 DynamicHMC = "3"
@@ -36,6 +40,7 @@ FlexiChains = "0.7"
 LinearAlgebra = "1"
 MCMCProgress = "0.1"
 Optimization = "5"
+Pathfinder = "0.10.3"
 Random = "1"
 Reexport = "1"
 StatsAPI = "1"

@@ -44,7 +44,6 @@ using WrenCore:
     logprior,
     # Vectorisation
     VecModel,
-    logdensity,
     vector_parameters,
     lp,
     lp_and_grad,
@@ -89,7 +88,6 @@ export WrenCore,
     logprior,
     # Vectorisation
     VecModel,
-    logdensity,
     vector_parameters,
     lp,
     lp_and_grad,
