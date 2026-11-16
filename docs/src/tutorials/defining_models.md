@@ -181,25 +181,21 @@ end
 It's worth pointing out here that `@batch` is not 'magical': it works only with a restricted set of syntax and is not guaranteed to be faster than a naive for-loop.
 It is often worth [benchmarking your model](@ref benchmarking) if you want to optimise performance.
 
-### `@gq`
+### `@track`
 
 Inside a model body, you may have other quantities of interest that you want to extract, even if they are not parameters.
-You can mark these quantities with the `@gq` macro.
-
-!!! warning "Subject to rename"
-
-    It is likely that this macro will be renamed in the very near future.
+You can mark these quantities with the `@track` macro.
 
 By default, `simulate` will return these quantities:
 
 ```@example defining
-@wren function with_gq()
+@wren function with_track()
     x ~ Normal()
-    @gq x_sq = x^2
+    @track x_sq = x^2
     y ~ Normal(x)
 end
 
-model = with_gq() | (; y=1.0)
+model = with_track() | (; y=1.0)
 simulate(model)
 ```
 
