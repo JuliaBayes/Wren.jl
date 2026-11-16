@@ -226,13 +226,17 @@ to overload `_needs_copy`, as the generated function only has access to the meth
 `_needs_copy` that were present at the compilation world age.
 """
 @inline _maybe_dealias(::EvalContext{true}, ::Val{S}, ::Val{name}, v::V) where {S,name,V} =
-    name in S && _needs_copy(V) ? _dealias(v) : v
+    (name in S && _needs_copy(V)) ? _dealias(v) : v
 @inline _maybe_dealias(::EvalContext{false}, ::Val, ::Val, v) = v
+
+# Reactant's branch dataflow ignores gensyms. Accumulators must remain visible to @trace.
+_evaluation_fn_args() =
+    ntuple(_ -> Symbol("wren_local_", replace(string(gensym()), '#' => '_')), 7)
 
 function evaluation_fn_expr(
     argnames::Tuple{Vararg{Symbol}},
     stmts::Vector{<:Union{AbstractWrenExpr,LineNumberNode}};
-    fn_args=ntuple(_ -> gensym(), 7),
+    fn_args=_evaluation_fn_args(),
 )
     body = Expr(:block)
     latent_source,
@@ -270,10 +274,15 @@ function evaluation_fn_expr(
 end
 
 function make_evaluation_fn(argnames, stmts, mod::Module)
+    return make_evaluation_fn(evaluation_fn_expr(argnames, stmts), mod)
+end
+
+function make_evaluation_fn(expr::Expr, mod::Module)
+    # Expand macros before RGF converts their closures to opaque closures.
     return RuntimeGeneratedFunctions.RuntimeGeneratedFunction(
         mod,
         mod,
-        evaluation_fn_expr(argnames, stmts),
+        macroexpand(mod, expr),
     )
 end
 

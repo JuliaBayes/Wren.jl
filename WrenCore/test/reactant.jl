@@ -19,6 +19,10 @@ end
 @wren function reactant_submodel(inner)
     x ~ inner
 end
+@wren function aliased_argument(pair)
+    pair[1][1] += 1
+    return pair[2][1]
+end
 
 function transform_columns(X)
     return mapslices(X; dims=1) do x
@@ -46,6 +50,8 @@ end
     initial = FromValues(VarNamedTuple(x=1.0))
     y = [0.2, 0.4]
     branches = VecModel(branch_model(y), adtype; latent_source=initial)
+    native_branches =
+        VecModel(branch_model(y), AutoEnzyme(; mode=Reverse); latent_source=initial)
     for x in (-0.5, 0.5)
         mu = x > 0 ? shift(x) : 2x - 1
         expected = logdensityof(Normal(), x) + logdensityof(Normal(mu, 2.0), last(y))
@@ -57,6 +63,9 @@ end
         value, gradient = lp_and_grad(branches, [x])
         @test value ≈ expected
         @test gradient ≈ [expected_gradient]
+        native_value, native_gradient = lp_and_grad(native_branches, [x])
+        @test native_value ≈ expected
+        @test native_gradient ≈ [expected_gradient]
     end
     nested_branches = VecModel(
         reactant_submodel(branch_model(y)),
@@ -67,6 +76,19 @@ end
     expected, expected_gradient = lp_and_grad(branches, [0.5])
     @test value ≈ expected
     @test gradient ≈ expected_gradient
+
+    converted = Reactant.to_rarray(branch_model(y))
+    joint(model, x) = Reactant.@allowscalar logjoint(simulate(model, VarNamedTuple(x=x[1])))
+    input = Reactant.to_rarray([0.5])
+    compiled_joint = Reactant.@compile joint(converted, input)
+    for x in (-0.5, 0.5)
+        @test Float64(compiled_joint(converted, Reactant.to_rarray([x]))) ≈
+              lp(branches, [x])
+    end
+    shared = [0.0]
+    alias_model = Reactant.to_rarray(aliased_argument((shared, shared)))
+    @test Float64(return_value(simulate(alias_model))) == 1.0
+    @test shared == [0.0]
 
     bounded = VecModel(
         bounded_model(3),
@@ -105,6 +127,16 @@ end
     )
     for _ in 1:2
         @test vcat(lp_and_grad(mutating, [log(0.5)])...) ≈ expected_mutation
+    end
+
+    conditioned_mutating = VecModel(
+        condition(mutating_model([2.0], 3), (; buffer=[2.0])),
+        adtype;
+        lp_function=loglikelihood,
+        latent_source=FromValues(VarNamedTuple(rate=1.5)),
+    )
+    for _ in 1:2
+        @test vcat(lp_and_grad(conditioned_mutating, [log(0.5)])...) ≈ expected_mutation
     end
 
     early = VecModel(control_model(0.2, true), adtype; latent_source=initial)

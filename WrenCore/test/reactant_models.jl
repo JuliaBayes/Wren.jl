@@ -1,6 +1,7 @@
 module ReactantModelFixtures
 
 using WrenCore, WrenDists
+using Reactant: @trace
 
 export branch_model, bounded_model, control_model, mutating_model, array_branch, shift
 
@@ -8,13 +9,13 @@ const offset = 0.3
 shift(x) = x + offset
 @wren function branch_model(y)
     x ~ Normal()
-    mu = if x > 0
+    @trace mu = if x > 0
         shift(x)
     else
         2x - 1
     end
-    for i in eachindex(y)
-        if x > 0
+    @trace for i in eachindex(y)
+        @trace if x > 0
             @observe y[i] ~ Normal(mu)
         end
     end
@@ -33,8 +34,8 @@ end
     if flag
         return x
     end
-    if x > 0
-        if x > 1
+    @trace if x > 0
+        @trace if x > 1
             @observe y ~ Normal(x)
         end
     end
@@ -48,7 +49,7 @@ end
 
 @wren function array_branch(y)
     beta ~ iid(Normal(), 2)
-    if beta[1] > 0
+    @trace if beta[1] > 0
         @observe y ~ Normal(sum(beta))
     else
         @observe y ~ Normal(2beta[1] - beta[2])
