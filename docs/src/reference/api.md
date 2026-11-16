@@ -10,4 +10,6 @@ WrenCore.simulate(::WrenCore.Model, ::Wren.VNChain)
 logjoint
 loglikelihood
 logprior
+Pathfinder.pathfinder(::Model)
+Pathfinder.multipathfinder(::Model, ::Integer)
 ```

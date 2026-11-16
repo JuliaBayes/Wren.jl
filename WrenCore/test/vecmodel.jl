@@ -167,19 +167,19 @@ end
     model = poisson_rate(3)
     initial = FromValues(VarNamedTuple(rate=1.5))
     x = [log(1.5)]
-    posterior = logdensity(model, DI.AutoForwardDiff(); latent_source=initial)
+    posterior = VecModel(model, DI.AutoForwardDiff(); latent_source=initial)
     value, gradient = LDP.logdensity_and_gradient(posterior, x)
     @test value ≈ 5log(1.5) - 3.0 - log(6.0)
     @test gradient ≈ [5 - 2 * 1.5]
-    @test LDP.logdensity(logdensity(model; latent_source=initial), x) ≈ value
+    @test LDP.logdensity(VecModel(model, nothing; latent_source=initial), x) ≈ value
 
     map_density =
-        logdensity(model, DI.AutoForwardDiff(); latent_source=initial, lp_function=logjoint)
+        VecModel(model, DI.AutoForwardDiff(); latent_source=initial, lp_function=logjoint)
     value, gradient = LDP.logdensity_and_gradient(map_density, x)
     @test value ≈ 4log(1.5) - 3.0 - log(6.0)
     @test gradient ≈ [4 - 2 * 1.5]
 
-    likelihood = logdensity(
+    likelihood = VecModel(
         model,
         DI.AutoForwardDiff();
         latent_source=initial,

@@ -335,20 +335,6 @@ function VecModel(
     return VecModel(model, adtype, lp_function, parameter_space, vecinfo, sample)
 end
 
-"""
-    logdensity(model::Model, adtype=nothing; kwargs...) -> VecModel
-
-Construct a vectorised log-density object implementing the LogDensityProblems.jl interface.
-The default is the unnormalised posterior in unconstrained coordinates, including the
-change-of-variables Jacobian, as for [`VecModel`](@ref). Use `lp_function=logjoint` for
-an original-space MAP objective or `lp_function=loglikelihood` for an MLE objective.
-
-All other keywords are passed to [`VecModel`](@ref), including `latent_source` for
-initialisation. Supply an AD backend to prepare gradients. Evaluate the result with
-`LogDensityProblems.logdensity`, `LogDensityProblems.logdensity_and_gradient`, or [`lp`](@ref).
-"""
-logdensity(model::Model, adtype=nothing; kwargs...) = VecModel(model, adtype; kwargs...)
-
 function Base.show(io::IO, ::MIME"text/plain", vm::VecModel)
     printstyled(io, "VecModel ", vm.model.name; bold=true)
     println(io)

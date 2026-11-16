@@ -6,5 +6,6 @@ using Wren
     include("sampling.jl")
     include("optimization.jl")
     include("generated_quantities.jl")
+    include("pathfinder.jl")
     include("posteriordb.jl")
 end
