@@ -1,5 +1,3 @@
-# Wren.jl
-
 Wren is a library for probabilistic programming in Julia.
 
 ## Installation
@@ -7,29 +5,39 @@ Wren is a library for probabilistic programming in Julia.
 As Wren is not yet registered in the Julia package registry, you can install it directly from GitHub using:
 
 ```julia
-import Pkg;
+import Pkg
 Pkg.add(url="https://github.com/JuliaBayes/Wren.jl")
 ```
 
-## Overview
+## Quick start
 
-Wren models are defined using a `@wren` macro, similar to other Julia PPLs:
+```@example index
+using Wren, Wren.Dists
 
-```@example intro
-using Wren, Distributions
-
-# Define a model
-@wren function f()
-    x ~ Normal()
+y = [28, 8, -3, 7, -1, 1, 18, 12]
+sigma = [15, 10, 16, 11, 9, 11, 10, 18]
+J = 8
+@wren function eight_schools(y, sigma, J)
+    mu ~ Normal(0, 5)
+    tau ~ HalfCauchy(0, 5)
+    theta ~ MvNormalScale(fill(mu, J), tau * I)
+    @batch for i in 1:J
+        @observe y[i] ~ Normal(theta[i], sigma[i])
+    end
+    return (mu=mu, tau=tau)
 end
+model = eight_schools(y, sigma, J)
 ```
 
-```@example intro
-# Instantiate a model
-model = f()
+### Draw from the prior
+
+```@example index
+simulate(model)
 ```
 
-```@example intro
-# Sample from the prior
-parameters(model)
+### MCMC sampling
+
+```@example index
+import Enzyme
+nuts(model, 1000, 4)
 ```

@@ -16,6 +16,7 @@ using PosteriorDB
 links = InterLinks(
     "DynamicHMC" => "https://www.tamaspapp.eu/DynamicHMC.jl/dev/",
     "FlexiChains" => "https://juliabayes.org/FlexiChains.jl/stable/",
+    "Pathfinder" => "https://mlcolab.github.io/Pathfinder.jl/stable/",
     "Plaice" => "https://juliabayes.org/Plaice.jl/stable/",
     "VarNames" => "https://juliabayes.org/VarNames.jl/stable/",
 )
@@ -40,7 +41,7 @@ makedocs(;
         "Tutorials" => [
             "tutorials/beginner.md",
             "tutorials/defining_models.md",
-            "tutorials/models.md",
+            "tutorials/using_models.md",
             "tutorials/distributions.md",
             "tutorials/submodels.md",
             "tutorials/mcmc.md",

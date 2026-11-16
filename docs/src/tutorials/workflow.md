@@ -49,7 +49,7 @@ end
 
 ## Prior predictions
 
-We can now instatiate the Wren model and use it with `parameters(model)` to draw from the prior (see [Working with models](@ref models)):
+We can now instatiate the Wren model and use it with `parameters(model)` to draw from the prior (see [Working with `Models`](@ref using-models)):
 
 ```@example workflow
 model = bill_model(penguins.bill_length_mm, penguins.species_idx, penguins.body_mass_g)
