@@ -15,6 +15,8 @@ An accumulator type `T <: AbstractAccumulator` must implement the following meth
 - `accumulate_assume!!(acc::T, val, tval, vn, dist, logjac, template, ::Val{sitename})`
 - `reset(acc::T)`
 - `Base.copy(acc::T)`
+- `combine_from_scope(parent::T, child::T, vn, template)`, if the accumulator is to be
+  used in models that contain submodels
 
 In these functions:
 - `val` is the new value of the random variable supplied by a latent source (always in
@@ -33,10 +35,6 @@ In these functions:
 - `sitename` is a compile-time `Val{::Symbol}` identifying the sampling site in the model
   source code. It defaults to the left-hand side and can be overridden with `name=:site`.
   Site names need not be unique; use `vn` to distinguish parameters that share a name.
-
-To be able to work with multi-threading, it should also implement:
-- `split(acc::T)`
-- `combine(acc::T, acc2::T)`
 
 See the documentation for each of these functions for more details.
 """
@@ -102,10 +100,8 @@ accumulate_addloglikelihood!!(
 Return a new accumulator like `acc`, but with its contents reset to the state that they
 should be at the beginning of model evaluation.
 
-Note that this may in general have very similar behaviour to [`split`](@ref), and may share
-the same implementation, but the difference is that `split` may in principle happen at any
-stage during model evaluation, whereas `reset` is only called at the beginning of model
-evaluation.
+This is also used to create the accumulators for a submodel, which are then merged back
+into the parent model's accumulators using [`combine_from_scope`](@ref).
 """
 function reset end
 
@@ -117,32 +113,6 @@ behave conceptually like a `deepcopy`).
 """ Base.copy
 
 """
-    split(acc::AbstractAccumulator)
-
-Return a new accumulator like `acc` suitable for use in a forked thread.
-
-The returned value should be such that `combine(acc, split(acc))` is equal to `acc`. This is
-used in the context of multi-threading where different threads may accumulate independently
-and the results are then combined.
-
-Note that this may in general have very similar behaviour to [`reset`](@ref), but is
-semantically different. See [`reset`](@ref) for more details.
-
-See also: [`combine`](@ref)
-"""
-function split end
-
-"""
-    combine(acc::AbstractAccumulator, acc2::AbstractAccumulator)
-
-Combine two accumulators which have the same type (but may, in general, have different type
-parameters). Returns a new accumulator of the same type.
-
-See also: [`split`](@ref)
-"""
-function combine end
-
-"""
     scope(acc::AbstractAccumulator, vn::VarName)
 
 Narrow `acc` for evaluation inside a submodel scoped by `vn`. The default is a no-op.
@@ -150,11 +120,15 @@ Narrow `acc` for evaluation inside a submodel scoped by `vn`. The default is a n
 scope(acc::AbstractAccumulator, ::VarName) = acc
 
 """
-    combine_with_namespace(parent, child, vn, template)
+    combine_from_scope(parent, child, vn, template)
 
 Embed the contents of `child` beneath `vn`, then combine it with `parent`.
+
+This is the counterpart of [`scope`](@ref): `scope` narrows the accumulators before a
+submodel is evaluated, and `combine_from_scope` merges the submodel's results back into the
+parent model's accumulators.
 """
-function combine_with_namespace end
+function combine_from_scope end
 
 """
     AccumulatorTuple{N,T<:NamedTuple}
@@ -280,7 +254,7 @@ end
 end
 
 # TODO(penelopeysm): Does this need to be a generated function?
-function combine_with_namespace(
+function combine_from_scope(
     parent::AccumulatorTuple,
     child::AccumulatorTuple,
     vn::VarName,
@@ -289,7 +263,7 @@ function combine_with_namespace(
     keys(parent) == keys(child) ||
         throw(ArgumentError("Cannot combine AccumulatorTuples with different accumulators"))
     combined = map(values(parent.nt), values(child.nt)) do parent_acc, child_acc
-        combine_with_namespace(parent_acc, child_acc, vn, template)
+        combine_from_scope(parent_acc, child_acc, vn, template)
     end
     return AccumulatorTuple(combined)
 end

@@ -272,7 +272,7 @@ function scope(source::FromVector, vn::VarName)
     # elide it: we need to retain an empty VNT under the key `@vn(a)` so that the getindex
     # call `vi.sitename_to_rat[vn]` doesn't throw an error. This creates an invariant that
     # must be upheld during *construction* of `sitename_to_rat`. Specifically, see
-    # `combine(::SitenameCountAccumulator, ...)` for where this is fulfilled.
+    # `_combine(::SitenameCountAccumulator, ...)` for where this is fulfilled.
     #
     # It would be 'simpler' to just check if `haskey(vi.sitename_to_rat, vn)` and return an
     # empty VNT if not. However, this is not type stable. Because scope(::FromVector, ...)
