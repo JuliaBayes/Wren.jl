@@ -261,7 +261,7 @@ end
 
         scoped = @inferred WrenCore.scope(
             GeneratedQuantityAccumulator(SomeGQs((:a,))),
-            @vn(a.b[1]),
+            @vn(a.b[1])
         )
         @test scoped isa GeneratedQuantityAccumulator{AllGQs}
         scoped =
@@ -393,14 +393,14 @@ parameter_keys(chain) = Set(FlexiChains.parameters(chain))
     chn = prior_chain(StableRNG(468), gq_model_without_gqs(), 10, 2)
 
     gqs_all = generated_quantities(model, chn)
-    gqs_only = generated_quantities(model, chn, SomeGQs((:x2, :a)))
+    gqs_only = generated_quantities(model, chn; gqs=SomeGQs((:x2, :a)))
 
     @testset "keys" begin
         @test parameter_keys(gqs_all) == Set([@vn(x2), @vn(xp1), @vn(a.z)])
         @test parameter_keys(gqs_only) == Set([@vn(x2), @vn(a.z)])
-        @test parameter_keys(generated_quantities(model, chn, AllGQs())) ==
+        @test parameter_keys(generated_quantities(model, chn; gqs=AllGQs())) ==
               parameter_keys(gqs_all)
-        @test isempty(parameter_keys(generated_quantities(model, chn, NoGQs())))
+        @test isempty(parameter_keys(generated_quantities(model, chn; gqs=NoGQs())))
     end
 
     @testset "forms agree on shared keys" begin
@@ -423,12 +423,15 @@ parameter_keys(chain) = Set(FlexiChains.parameters(chain))
         @test FlexiChains.nchains(gqs) == 2
     end
 
-    @testset "missing parameter errors" begin
+    @testset "missing parameters are drawn from the prior with rng" begin
         chn_without_a = prior_chain(StableRNG(468), gq_model_without_submodel(), 10, 2)
-        @test_throws "No latent value provided for variable z0" generated_quantities(
-            model,
-            chn_without_a,
-        )
+        gqs_a = generated_quantities(model, chn_without_a; rng=StableRNG(1))
+        gqs_b = generated_quantities(model, chn_without_a; rng=StableRNG(1))
+        gqs_c = generated_quantities(model, chn_without_a; rng=StableRNG(2))
+        @test parameter_keys(gqs_a) == Set([@vn(x2), @vn(xp1), @vn(a.z)])
+        @test gqs_a[@vn(x2)] == chn_without_a[@vn(x)] .^ 2
+        @test gqs_a[@vn(a.z)] == gqs_b[@vn(a.z)]
+        @test gqs_a[@vn(a.z)] != gqs_c[@vn(a.z)]
     end
 
     @testset "simulate on a chain holds generated quantities" begin
