@@ -160,7 +160,7 @@ function emit_model_expr(
                 )
             end
             $assign_child_params
-            $accs = $(combine_with_namespace)(
+            $accs = $(combine_from_scope)(
                 $accs,
                 $child_accs,
                 $vn,
