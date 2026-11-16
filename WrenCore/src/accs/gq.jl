@@ -126,17 +126,13 @@ function _zero(acc::GeneratedQuantityAccumulator)
     return GeneratedQuantityAccumulator(acc.spec, empty(acc.values))
 end
 reset(acc::GeneratedQuantityAccumulator) = _zero(acc)
-split(acc::GeneratedQuantityAccumulator) = _zero(acc)
-function combine(acc1::GeneratedQuantityAccumulator, acc2::GeneratedQuantityAccumulator)
-    return GeneratedQuantityAccumulator(acc1.spec, merge(acc1.values, acc2.values))
-end
 
 function scope(acc::GeneratedQuantityAccumulator, ::VarName{sym}) where {sym}
     submodel_spec = _gq_requested(acc, Val{sym}()) ? AllGQs() : NoGQs()
     return GeneratedQuantityAccumulator(submodel_spec, acc.values)
 end
 
-function combine_with_namespace(
+function combine_from_scope(
     parent::GeneratedQuantityAccumulator,
     child::GeneratedQuantityAccumulator,
     vn::VarName,
