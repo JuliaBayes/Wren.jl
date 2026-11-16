@@ -38,7 +38,7 @@ struct DiscardSubmodelParams <: CollectOrDiscardSubmodelParams end
         latent_source::AbstractLatentSource,
         parameter_space::AbstractParameterSpace,
         accs::AccumulatorTuple,
-        conditioned::VarNamedTuple,
+        conditioned::NamedTuple,
         vn::VarName,
         collect_params::CollectOrDiscardSubmodelParams,
         ctx::EvalContext,
@@ -56,7 +56,7 @@ function evaluate_submodel(
     latent_source::AbstractLatentSource,
     parameter_space::AbstractParameterSpace,
     accs::AccumulatorTuple,
-    conditioned::VarNamedTuple,
+    conditioned::NamedTuple,
     # TODO(penelopeysm): allow for no-prefix?
     # https://github.com/JuliaBayes/Wren.jl/issues/4
     vn::VarName,
@@ -71,7 +71,7 @@ end
 function _scope_submodel(rhs, latent_source, parameter_space, accs, conditioned, vn)
     child_source = scope(latent_source, vn)
     child_space = scope(parameter_space, vn)
-    child_accs = scope(map(split, accs), vn)
+    child_accs = scope(map(reset, accs), vn)
     child_conditioned = merge(rhs.conditioned, scope(conditioned, vn))
     return child_source, child_space, child_accs, child_conditioned
 end
@@ -81,7 +81,7 @@ end
     latent_source::AbstractLatentSource,
     parameter_space::AbstractParameterSpace,
     accs::AccumulatorTuple{<:Any,<:NamedTuple{names}},
-    conditioned::VarNamedTuple,
+    conditioned::NamedTuple,
     ::CollectSubmodelParams,
     ctx::EvalContext,
 ) where {names}
@@ -104,7 +104,7 @@ end
         # parent, to avoid the merge
         #
         # TODO(penelopeysm): maybe we don't need to delete it here, but instead change
-        # `combine_with_namespace` to just ignore unmatched accumulators?
+        # `combine_from_scope` to just ignore unmatched accumulators?
         push!(expr.args, :(child_accs = deleteacc!!(child_accs, Val(PARAMS_ACCNAME))))
     end
     push!(expr.args, :(return (retval, child_params, child_accs)))
@@ -129,13 +129,14 @@ end
 # in e.g. `x[1] ~ submodel`, if we don't need the params, don't needlessly set them back
 # into `x` as that can trigger type instabilities.
 set_lhs!!(obj, optic, ::UncollectedParams) = obj
+set_namespace_lhs!!(obj, observed, optic, ::UncollectedParams) = obj
 
 function _evaluate_scoped_submodel(
     rhs,
     latent_source::AbstractLatentSource,
     parameter_space::AbstractParameterSpace,
     accs::AccumulatorTuple,
-    conditioned::VarNamedTuple,
+    conditioned::NamedTuple,
     ::DiscardSubmodelParams,
     ctx::EvalContext,
 )
@@ -145,5 +146,24 @@ function _evaluate_scoped_submodel(
 end
 
 # The parent's conditioned values for the submodel at `vn`, keyed relative to `vn`.
-scope(conditioned::VarNamedTuple, vn::VarName) =
-    haskey(conditioned, vn) ? conditioned[vn] : VarNamedTuple()
+function scope(conditioned::NamedTuple, vn::VarName)
+    if haskey(conditioned, VarNames.getsym(vn))
+        return _scope_conditioned(
+            getproperty(conditioned, VarNames.getsym(vn)),
+            VarNames.getoptic(vn),
+        )
+    else
+        return NamedTuple()
+    end
+end
+
+_scope_conditioned(values, ::VarNames.Iden) = values
+function _scope_conditioned(values::NamedTuple, optic::VarNames.Property{sym}) where {sym}
+    if haskey(values, sym)
+        return _scope_conditioned(getproperty(values, sym), optic.child)
+    else
+        return NamedTuple()
+    end
+end
+_scope_conditioned(values, optic::Union{VarNames.Property,VarNames.Index}) =
+    _scope_conditioned(VarNames.ohead(optic)(values), VarNames.otail(optic))

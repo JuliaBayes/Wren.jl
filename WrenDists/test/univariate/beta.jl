@@ -17,6 +17,15 @@ if RUN_REACTANT
     using Reactant
 end
 
+for T in (Float32, Float64),
+    d in (WrenDists.Beta(T(2), T(3)), WrenDists.BatchedBeta([T(2)], [T(3)]))
+
+    x = T(0.25)
+    bijector = Plaice.to_unconstrained_vec(d)
+    z, ladj = Plaice.with_logabsdet_jacobian(bijector, Plaice.from_vec(d)([x]))
+    @test (only(z), ladj) === (log(x) - log1p(-x), -log(x) - log1p(-x))
+end
+
 test_dist(
     "Beta",
     WrenDists.Beta(2.0, 3.0),

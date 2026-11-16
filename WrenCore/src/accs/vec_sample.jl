@@ -3,7 +3,7 @@ const VEC_SAMPLE_ACCNAME = :VecSample
 """
     VecSampleAccumulator
 
-An accumulator that holds a full `AbstractVector`, the eventual result of `rand(ldf)` or
+An accumulator that holds a full `AbstractVector`, the eventual result of `vector_parameters(vecmodel)` or
 similar. This is filled in chunk-by-chunk during model evaluation.
 """
 struct VecSampleAccumulator{T<:AbstractVector,R<:VecInfo} <: AbstractAccumulator
@@ -53,10 +53,8 @@ function scope(acc::VecSampleAccumulator, vn::VarName)
 end
 
 reset(acc::VecSampleAccumulator) = acc
-split(acc::VecSampleAccumulator) = acc
 Base.copy(acc::VecSampleAccumulator) = VecSampleAccumulator(copy(acc.vals), acc.vecinfo)
-combine(acc1::VecSampleAccumulator, ::VecSampleAccumulator) = acc1
-function combine_with_namespace(
+function combine_from_scope(
     parent::VecSampleAccumulator,
     ::VecSampleAccumulator, # child
     ::VarName,

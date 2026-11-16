@@ -60,8 +60,8 @@ fcategorical(ps) = Categorical(ps)
                     x[i] ~ Normal(a)
                 end
             end
-            model1 = conditioned1(zeros(3)) | VarNamedTuple(x=ones(3))
-            model2 = conditioned2(zeros(3)) | VarNamedTuple(x=ones(3))
+            model1 = conditioned1(zeros(3)) | (; x=ones(3))
+            model2 = conditioned2(zeros(3)) | (; x=ones(3))
             test_model_equivalence(model1, model2, adtype)
         end
 
@@ -255,10 +255,10 @@ fcategorical(ps) = Categorical(ps)
             ps = reshape(ps, 2, 2, 1)
             # Without batching it should be fine
             model = fail_nobatch_slice([1, 2], ps)
-            @test rand(model) isa Any
+            @test parameters(model) isa Any
             # With batching this should throw
             model = fail_batch_slice([1, 2], ps)
-            @test_throws "cannot safely unindex" rand(model)
+            @test_throws "cannot safely unindex" parameters(model)
         end
     end
 end

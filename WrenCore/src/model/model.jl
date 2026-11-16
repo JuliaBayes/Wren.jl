@@ -10,7 +10,7 @@ A Wren model.
 
 $(TYPEDFIELDS)
 """
-struct Model{A<:NamedTuple,C<:VarNamedTuple,F,CA<:Val}
+struct Model{A<:NamedTuple,C<:NamedTuple,F,CA<:Val}
     "Name of the function declared with @wren"
     name::Symbol
     "Positional and keyword arguments passed to the model."
@@ -39,7 +39,7 @@ struct Model{A<:NamedTuple,C<:VarNamedTuple,F,CA<:Val}
         stmts::Vector{<:Union{AbstractWrenExpr,LineNumberNode}},
         mod::Module;
         enzyme_copy_argnames::Val=Val{sort(keys(args))}(),
-        conditioned::VarNamedTuple=VarNamedTuple(),
+        conditioned::NamedTuple=NamedTuple(),
         _unsafe_reuse_evaluation_fn=nothing,
     )
         # Copy arguments upon model construction.
@@ -79,11 +79,17 @@ for why this matters.
 """
 function _dealias(v::SubArray{T}) where {T}
     v = collect(v)  # Avoid copying the entire parent array.
-    return isbitstype(T) ? v : deepcopy(v)
+    return _can_shallow_copy_elements(T) ? v : deepcopy(v)
 end
 function _dealias(v::AbstractArray{T}) where {T}
-    return isbitstype(T) ? copy(v) : deepcopy(v)
+    return _can_shallow_copy_elements(T) ? copy(v) : deepcopy(v)
 end
+# For example, @NamedTuple{x::Union{Missing,Float64}} has an inline union field and
+# is not a bits type. It has no GC-managed references, so deepcopy is unnecessary.
+# Enzyme's reverse deepcopy rule does not support a Const input with a duplicated result.
+_can_shallow_copy_elements(::Type{T}) where {T} =
+    isbitstype(T) ||
+    (isconcretetype(T) && !ismutabletype(T) && Base.datatype_pointerfree(T))
 _dealias(v::T) where {T} = isbitstype(T) ? v : deepcopy(v)
 # Models contain `Module`s, which can't be deepcopied. It is currently my belief that models
 # should be immutable (or at least pretend to be), and thus we should not need to deepcopy
@@ -115,7 +121,7 @@ Get the set of argument names that are marked for copying. NOTE: This is for int
 only. Be careful interpreting the results of this function! For example, even if
 `_copied_args(model)` returns a nonempty set, this does not mean that the model's arguments
 are actually copied. Outside of Enzyme contexts (i.e., in normal evaluation like
-`rand(model)`, the copies are always disabled. This includes AD with non-Enzyme backends.
+`parameters(model)`, the copies are always disabled. This includes AD with non-Enzyme backends.
 And with Enzyme, it's very possible that [`reduce_copies`](@ref) will prune this set of
 arguments down.
 """
@@ -140,6 +146,30 @@ function _with_copied_args(model::Model, copy_argnames)
         _unsafe_reuse_evaluation_fn=model.evaluation_fn,
     )
 end
+
+"""
+    _copy_for_thread(model::Model)
+
+Return the same model with its own copies of the arguments and conditioned values, so that
+evaluations on different threads cannot write into each other's data. Outside Enzyme,
+evaluation does not copy arguments (see `_maybe_dealias`). Models passed as arguments are
+copied too. This reuses the evaluation function, so no new code is generated.
+"""
+function _copy_for_thread(model::Model)
+    return Model(
+        model.name,
+        map(_copy_model_arg, model.args),
+        model.stmts,
+        model.mod;
+        conditioned=deepcopy(model.conditioned),
+        enzyme_copy_argnames=model.enzyme_copy_argnames,
+        # Safe as the model is not changed in any way.
+        _unsafe_reuse_evaluation_fn=model.evaluation_fn,
+    )
+end
+# The constructor copies all other arguments with `_dealias`.
+_copy_model_arg(v) = v
+_copy_model_arg(model::Model) = _copy_for_thread(model)
 
 """
     EvalContext{Enzyme}
@@ -183,21 +213,26 @@ function make_evaluation_fn(
 )
     body = Expr(:block)
     @gensym model_args enzyme_copy_argnames ctx
+    @gensym accs conditioned latent_source parameter_space retval
     for k in argnames
+        # Conditioning an argument replaces it, so the model sees one value for `k`.
         push!(
             body.args,
             :(
-                $(k) = $(WrenCore._maybe_dealias)(
-                    $ctx,
-                    $enzyme_copy_argnames,
-                    Val($(QuoteNode(k))),
-                    $model_args.$k,
-                )
+                $(k) = if $(haskey)($conditioned, $(QuoteNode(k)))
+                    $(getproperty)($conditioned, $(QuoteNode(k)))
+                else
+                    $(WrenCore._maybe_dealias)(
+                        $ctx,
+                        $enzyme_copy_argnames,
+                        Val($(QuoteNode(k))),
+                        $model_args.$k,
+                    )
+                end
             ),
         )
     end
 
-    @gensym accs conditioned latent_source parameter_space retval
     model_body =
         emit_statements(stmts, accs, conditioned, latent_source, parameter_space, ctx)
     push!(body.args, :($retval = $model_body))
@@ -278,7 +313,7 @@ function Base.show(io::IO, ::MIME"text/plain", model::Model)
     prefix = get(io, :tree_prefix, "")
     max_exprs = get(io, :max_wren_exprs, 20)
     entries = (
-        "arguments" => model.args,
+        "arguments" => Base.structdiff(model.args, model.conditioned),
         "conditioned" => model.conditioned,
         "expressions" => model.stmts,
     )
@@ -291,20 +326,12 @@ function Base.show(io::IO, ::MIME"text/plain", model::Model)
         if label == "expressions"
             println(io)
             _show_wren_exprs(io, value, child_prefix * "  "; max_exprs)
-        elseif label == "arguments"
+        elseif label == "arguments" || label == "conditioned"
             if isempty(value)
                 printstyled(io, " (none)"; color=:white)
             else
                 println(io)
                 _show_namedtuple_tree(io, value, child_prefix)
-            end
-        elseif label == "conditioned" && value isa VarNamedTuple
-            if isempty(value)
-                printstyled(io, " (none)"; color=:white)
-            else
-                compact_io = IOContext(io, :compact => true, :limit => true)
-                println(io)
-                vnt_pretty_print(compact_io, value, child_prefix, 0; show_header=false)
             end
         end
         last || println(io)
@@ -344,7 +371,11 @@ macro wren(args...)
     _wren(expr, __module__; internal_to_ir)
 end
 
-macro observe(expr)
+macro sample(args...)
+    error("@sample must be used inside @wren")
+end
+
+macro observe(args...)
     error("@observe must be used inside @wren")
 end
 
@@ -358,6 +389,33 @@ end
 
 macro addloglikelihood(args...)
     error("@addloglikelihood must be used inside @wren")
+end
+
+"""
+    @gq name = expr
+    @gq name
+
+Record the value of `expr` as the generated quantity `name` in a `@wren` model.
+`@gq name` is short for `@gq name = name`. `name` must be a single symbol.
+
+`@gq` must be a statement of the model body. It is not supported inside `@batch` or
+inside functions defined in the model; we discourage using it inside `@submodel`.
+
+If `name` is used later in the model body, `expr` is also assigned to `name` and runs on
+every evaluation of the model. If `name` is used only by later generated quantities, it
+is assigned only when one of those generated quantities is requested. Otherwise `name` is
+not defined in the model body.
+
+!!! warning
+    If `name` is not used later in the model body and the generated quantity is not
+    requested, `expr` is not run at all.
+    Note that this means side effects in `expr` do not happen!
+
+    Relatedly, if `expr` assigns to a variable defined elsewhere in the model body,
+    that assignment happens only when `name` is requested.
+"""
+macro gq(args...)
+    error("@gq must be used inside a @wren model body")
 end
 
 function _wren(expr::Expr, mod::Module; internal_to_ir::Bool=false)

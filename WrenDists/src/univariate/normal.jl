@@ -27,7 +27,7 @@ end
 
 # Apply `μ` and `σ` after drawing noise so automatic differentiation can follow them.
 @inline function Base.rand(rng::AbstractRNG, d::Normal)
-    return xval(d, randn(rng, noisetype(d)))
+    return xval(d, randn(rng, rngtype(d)))
 end
 
 # --- Batched Normal distributions ---
@@ -45,7 +45,7 @@ end
 # One `randn` call for the whole array is faster than drawing element by element.
 function Base.rand(rng::AbstractRNG, d::IID{<:Normal})
     dist = _dist(d)
-    return xval.(Ref(dist), randn(rng, noisetype(dist), _dims(d)))
+    return xval.(Ref(dist), randn(rng, rngtype(dist), _dims(d)))
 end
 
 using FillArrays: AbstractFill, getindex_value
