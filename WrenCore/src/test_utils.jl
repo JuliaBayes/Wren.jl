@@ -21,7 +21,7 @@ function test_model_equivalence(
     adtype::Union{AbstractADType,Nothing}=nothing,
 )
     # Shouldn't matter which model we use to generate params, since they are equivalent
-    params = rand(model1)
+    params = parameters(model1)
 
     lpr1, llk1 = get_lp_components(model1, params)
     lpr2, llk2 = get_lp_components(model2, params)
@@ -32,7 +32,7 @@ function test_model_equivalence(
     vm1 = VecModel(model1, adtype)
     vm2 = VecModel(model2, adtype)
     @test vm1.dimension == vm2.dimension
-    vparams = vectorise_latents(FromValues(params), vm1)
+    vparams = vector_parameters(vm1, params)
     if adtype === nothing
         lp1 = lp(vm1, vparams)
         lp2 = lp(vm2, vparams)

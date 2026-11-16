@@ -51,11 +51,16 @@ end
 function DensityInterface.logdensityof(d::BatchedBinomialLogit, x)
     n, η = d.n, d.logitp
     return if within_compile()
-        sum(@. logbinom(n, x) + x * η - n * log1pexp(η))
+        valid = @. isinteger(x) & (x >= zero(x)) & (x <= n)
+        k = @. ifelse(valid, x, zero(x))
+        η = @. ifelse(valid, η, zero(η))
+        logp = @. logbinom(n, k) + k * η - n * log1pexp(η)
+        sum(@. ifelse(valid, logp, oftype(logp, -Inf)))
     else
         T = float(promote_type(eltype(x), eltype(n), eltype(η)))
         s = zero(T)
         for i in eachindex(x, n, η)
+            isinteger(x[i]) && 0 <= x[i] <= n[i] || return convert(T, -Inf)
             ni, ki, ηi = convert(T, n[i]), convert(T, x[i]), convert(T, η[i])
             s += binomiallogit_logmass(ni, ki, ηi)
         end
