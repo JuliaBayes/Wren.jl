@@ -160,9 +160,8 @@ end
     ) -> FlexiChains.VNChain
 
 Re-evaluate `model` at each iteration of `chain` and return a chain holding only the
-generated quantities requested with `gqs`.
-If a variable required by `model` is not stored in `chain`, that variable will be drawn
-from the prior distribution.
+generated quantities requested with `gqs`. If a variable required by `model` is not stored
+in `chain`, that variable will be drawn from the prior distribution.
 """
 function WrenCore.generated_quantities(
     model::WrenCore.Model,
@@ -182,55 +181,68 @@ function WrenCore.generated_quantities(
 end
 
 """
-    logprior(model::WrenCore.Model, chain::FlexiChains.VNChain) -> DimMatrix
+    logprior(
+        model::WrenCore.Model,
+        chain::FlexiChains.VNChain
+    ) -> DimensionalData.DimMatrix
 
-Return the log-prior of `model` at each iteration of `chain`.
-All variables required by `model` must be stored in `chain`.
+Return the log-prior of `model` at each iteration of `chain`. All variables required by
+`model` must be stored in `chain`.
 """
 function WrenCore.logprior(model::WrenCore.Model, chain::VNChain)
     return map(vnt -> WrenCore.logprior(model, vnt), FlexiChains.parameters_at(chain))
 end
 
 """
-    loglikelihood(model::WrenCore.Model, chain::FlexiChains.VNChain) -> DimMatrix
+    loglikelihood(
+        model::WrenCore.Model,
+        chain::FlexiChains.VNChain
+    ) -> DimensionalData.DimMatrix
 
-Return the log-likelihood of `model` at each iteration of `chain`.
-All variables required by `model` must be stored in `chain`.
+Return the log-likelihood of `model` at each iteration of `chain`. All variables required by
+`model` must be stored in `chain`.
 """
 function StatsAPI.loglikelihood(model::WrenCore.Model, chain::VNChain)
     return map(vnt -> StatsAPI.loglikelihood(model, vnt), FlexiChains.parameters_at(chain))
 end
 
 """
-    logjoint(model::WrenCore.Model, chain::FlexiChains.VNChain) -> DimMatrix
+    logjoint(
+        model::WrenCore.Model,
+        chain::FlexiChains.VNChain
+    ) -> DimensionalData.DimMatrix
 
 Return the log-joint (log-prior plus log-likelihood) of `model` at each iteration of
-`chain`.
-All variables required by `model` must be stored in `chain`.
+`chain`. All variables required by `model` must be stored in `chain`.
 """
 function WrenCore.logjoint(model::WrenCore.Model, chain::VNChain)
     return map(vnt -> WrenCore.logjoint(model, vnt), FlexiChains.parameters_at(chain))
 end
 
 """
-    return_value(model::WrenCore.Model, chain::FlexiChains.VNChain) -> DimMatrix
+    return_value(
+        model::WrenCore.Model,
+        chain::FlexiChains.VNChain
+    ) -> DimensionalData.DimMatrix
 
-Return the return value of `model` at each iteration of `chain`.
-All variables required by `model` must be stored in `chain`.
+Return the return value of `model` at each iteration of `chain`. All variables required by
+`model` must be stored in `chain`.
 """
 function WrenCore.return_value(model::WrenCore.Model, chain::VNChain)
     return map(vnt -> WrenCore.return_value(model, vnt), FlexiChains.parameters_at(chain))
 end
 
 """
-    parameters(model::WrenCore.Model, chain::FlexiChains.VNChain) -> FlexiChains.VNChain
+    parameters(
+        model::WrenCore.Model,
+        chain::FlexiChains.VNChain
+    ) -> FlexiChains.VNChain
 
-Return the parameters of `model` at each iteration of `chain`.
-If a variable required by `model` is not stored in `chain`, that variable will be drawn
-from the prior distribution.
+Return the parameters of `model` at each iteration of `chain`. If a variable required by
+`model` is not stored in `chain`, that variable will be drawn from the prior distribution.
 
-This function differs from `simulate` in that it contains _only_ parameters.
-This makes it more efficient than `simulate`, which also computes the log-density terms.
+This function differs from [`simulate`](@ref) in that it contains _only_ parameters. That
+makes it more efficient than `simulate`, which also computes the log-density terms.
 """
 function VarNames.parameters(
     model::WrenCore.Model,
