@@ -46,10 +46,12 @@ end
         isfinite(x) && @test only(gradient) ≈ -2 * (x / hypot(1, x)) / hypot(1, x)
     end
     nu_score(p) = logdensityof(WrenDists.TDist(only(p)), 1e10)
+    nu_tie_score(p) = logdensityof(WrenDists.TDist(only(p)), 1.0)
     for (_, adtype) in Base.get_extension(WrenDists, :WrenDistsTestUtils).TESTED_ADTYPES
         for x in (1.0, floatmax(Float64))
             @test only(DI.gradient(f, adtype, [x])) ≈ -2 * (x / hypot(1, x)) / hypot(1, x)
         end
+        @test only(DI.gradient(nu_tie_score, adtype, [1.0])) ≈ log(2) / 2
         @test only(DI.gradient(nu_score, adtype, [1e-300])) ≈ 1e300
     end
     if RUN_REACTANT

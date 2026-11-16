@@ -52,13 +52,13 @@ end
 # Keep the cold fallback out of native reductions' hot loops.
 @noinline tdist_logkernel_tail(z, ν) = 2 * log(hypot(sqrt(ν), z)) - log(ν)
 
-# The AD types used here follow Base.max's second-argument tie rule: at a == s,
-# lo selects a and hi selects s, giving complementary derivative contributions.
-# Keep opposite maxima: minmax can select one variable twice and double the tie derivative.
+@inline tdist_lower_scale(a, s) = min(a, s)
+
+# Keep the lower/upper scale derivatives complementary at ties on each AD backend.
 @inline function tdist_logkernel(z, ν)
     s = sqrt(ν)
     a = abs(z)
-    lo, hi = -max(-s, -a), max(a, s)
+    lo, hi = tdist_lower_scale(a, s), max(a, s)
     return log1p(abs2(lo / hi)) + 2 * (log(hi) - log(s))
 end
 
