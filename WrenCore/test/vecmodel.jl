@@ -15,6 +15,7 @@ using Random
 using StableRNGs
 using Test
 using WrenCore
+import WrenDists
 
 const TESTED_ADTYPES = (
     "ForwardDiff" => DI.AutoForwardDiff(),
@@ -57,6 +58,7 @@ end
             Normal(),
             Beta(2, 2),
             MvNormal(zeros(3), I),
+            iid(WrenDists.Dirichlet([1.0, 2.0, 3.0]), (2, 2)),
             LKJCholesky(3, 0.5),
         )
             @wren function f(d)
