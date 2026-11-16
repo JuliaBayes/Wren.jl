@@ -10,7 +10,7 @@ multiple forms of `VNTAccumulator` within the same set of accumulators. In theor
 `VNTAccumulator` with the same function `f` should use the same accumulator name. This is
 not enforced.
 
-`KeepEmptySubmodels` controls what [`combine_with_namespace`](@ref) does with a submodel
+`KeepEmptySubmodels` controls what [`combine_from_scope`](@ref) does with a submodel
 that accumulated nothing (i.e., a key `@vn(a) => VarNamedTuple()` in the parent
 accumulator). When `false` (the default), the empty VNT is dropped from the parent, meaning
 that `@vn(a)` will not even be a key in the parent. When `true` the empty VNT is retained.
@@ -90,13 +90,13 @@ accumulate_observe!!(
     vn,
     right,
     template,
-    @nospecialize(sitename::Val)
+    @nospecialize(sitename::Val),
 ) = acc
 
 _zero(acc::VNTAccumulator) = update_values(acc, empty(acc.values))
 reset(acc::VNTAccumulator) = _zero(acc)
-split(acc::VNTAccumulator) = _zero(acc)
-function combine(
+# Merge the values of two VNTAccumulators. Used by `combine_from_scope`.
+function _combine(
     acc1::VNTAccumulator{AccName},
     acc2::VNTAccumulator{AccName},
 ) where {AccName}
@@ -105,7 +105,7 @@ function combine(
     end
     return update_values(acc1, merge(acc1.values, acc2.values))
 end
-function combine_with_namespace(
+function combine_from_scope(
     acc1::VNTAccumulator{AccName,KE},
     acc2::VNTAccumulator{AccName,KE},
     vn::VarName,
@@ -116,5 +116,5 @@ function combine_with_namespace(
     end
     nested_values =
         VarNames.templated_setindex!!(VarNamedTuple(), acc2.values, vn, template)
-    return combine(acc1, update_values(acc2, nested_values))
+    return _combine(acc1, update_values(acc2, nested_values))
 end

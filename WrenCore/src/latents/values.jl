@@ -5,8 +5,8 @@
     ) <: AbstractLatentSource
 
 Take latent values from the given `VarNamedTuple`. If the `VarNamedTuple` does not contain a
-value for a variable, then the `fallback` source is used, or an error thrown if `fallback`
-is `nothing`.
+value for a variable, then the `fallback` source is used. The default fallback, `Void()`,
+throws an error.
 """
 struct FromValues{P<:VarNamedTuple,S<:AbstractLatentSource} <: AbstractLatentSource
     values::P

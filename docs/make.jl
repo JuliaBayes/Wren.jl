@@ -1,20 +1,22 @@
 # Accept PalmerPenguins download
 ENV["DATADEPS_ALWAYS_ACCEPT"] = "true"
 
-using Pkg: Pkg
-
 using Wren
 using WrenCore
 using WrenDists
+import Pathfinder
 using Documenter
 using DocumenterCodeBlocks
 using DocumenterInterLinks
 using DocumenterMermaid
 
+# To get docstrings from extensions, we need to load their triggers.
+using PosteriorDB
+
 links = InterLinks(
     "DynamicHMC" => "https://www.tamaspapp.eu/DynamicHMC.jl/dev/",
     "FlexiChains" => "https://juliabayes.org/FlexiChains.jl/stable/",
-    "Plaice" => "https://juliabayes.org/Plaice.jl/dev/",
+    "Plaice" => "https://juliabayes.org/Plaice.jl/stable/",
     "VarNames" => "https://juliabayes.org/VarNames.jl/stable/",
 )
 
@@ -29,7 +31,9 @@ makedocs(;
         Wren,
         WrenCore,
         WrenDists,
+        Base.get_extension(Wren, :WrenPathfinderExt),
         Base.get_extension(WrenCore, :WrenCoreFlexiChainsExt),
+        Base.get_extension(WrenCore, :WrenCorePosteriorDBExt),
     ],
     pages=[
         "index.md",
@@ -44,6 +48,7 @@ makedocs(;
         "How-tos" => [
             "howtos/benchmarking.md"
             "howtos/optimization.md"
+            "howtos/pathfinder.md"
             "howtos/posteriordb.md"
             "howtos/custom-distributions.md"
         ],

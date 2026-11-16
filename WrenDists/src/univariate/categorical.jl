@@ -67,12 +67,14 @@ function DensityInterface.logdensityof(d::BatchedCategorical, x)
         K = size(P, 1)
         T = eltype(P)
         H = T.(1:K) .== reshape(x, 1, :)
-        sum(log.(P) .* H)
+        sum(log.(sum(P .* H; dims=1)))
     else
         T = float(eltype(P))
         s = zero(T)
         for i in eachindex(x)
-            s += log(convert(T, P[x[i], i]))
+            k = x[i]
+            isinteger(k) && 1 <= k <= size(P, 1) || return convert(T, -Inf)
+            s += log(convert(T, P[Int(k), i]))
         end
         s
     end

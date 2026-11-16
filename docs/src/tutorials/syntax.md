@@ -8,6 +8,19 @@ It mixes regular Julia code with two probabilistic primitives:
 
 Function arguments have no special meaning in Wren: they're just quantities that are passed into the model.
 
+You can assign a site name with `@sample x ~ Normal() name=:prior` or `@observe y ~ Normal(x) name=:obs`.
+Site names must be literal Symbols.
+This does not change parameter names, which still follow the left-hand side.
+Site names identify sites for latent sources and accumulators.
+With `@iid`, put the options after the distribution: `@sample @iid x ~ Normal() size=2 name=:prior`.
+
+Site names need not be unique: distinct statements may share a name, and a site in a loop
+uses the same name on every iteration. Each occurrence contributes separately to the density,
+but custom accumulators keyed only by site name may group these contributions.
+Use distinct names when those accumulators should distinguish the statements.
+For sampling sites encountered more than once during preparation, vectorised models use
+parameter names for lookup instead of caching a single parameter under the shared site name.
+
 ## `sample` with distributions
 
 **All** `x ~ y` statements are lowered into `sample` statements.
@@ -26,16 +39,15 @@ model = f()
 
 This model has a single latent variable, `x`, drawn from `Normal()`.
 
-Wren uses a concept of *accumulators* to represent outputs from a model.
-We'll use a few of Wren's functions to extract information from these; we won't explain them here, but please do see [Models](@ref models) for more usage details.
+Wren uses a `ModelResult` type to represent all the information that can be obtained by evaluating a model.
+We'll use a few of Wren's functions to extract information from these.
 
 ```@example model
-accs = rand_with_logp(model)
-logprior(accs), loglikelihood(accs), parameters(accs)
+result = simulate(model)
+logprior(result), loglikelihood(result), parameters(result)
 ```
 
-Here we can see that a value was sampled for `x`, and that the log-prior (and not
-log-likelihood) was updated.
+Here we can see that a value was sampled for `x`, and that the log-prior (and not log-likelihood) was updated.
 
 ## Arrays and structs
 
@@ -66,7 +78,7 @@ end
 my_y = zeros(3)
 yarg_model = yarg(my_y)
 
-rand(Xoshiro(468), yarg_model)
+parameters(yarg_model, Xoshiro(468))
 ```
 
 And this is permitted because `y` is defined in the model body:
@@ -81,7 +93,7 @@ And this is permitted because `y` is defined in the model body:
 end
 ydef_model = ydef()
 
-rand(Xoshiro(468), ydef_model)
+parameters(ydef_model, Xoshiro(468))
 ```
 
 It should be noted that the two models above are actually semantically equivalent: in both models, all `y[i]` are latent variables, regardless of whether `y` is an argument or defined in the model body.
@@ -129,7 +141,7 @@ model.args.y
 Evaluating the model will now mutate `y`:
 
 ```@example model
-rand(model);
+parameters(model);
 model.args.y
 ```
 
@@ -167,8 +179,8 @@ For example, we can condition on the entire `y` array in one go:
 ```@example model
 yarg_model_cond = yarg_model | (; y=[1.0, 2.0, 3.0])
 
-accs = rand_with_logp(Xoshiro(468), yarg_model_cond)
-logprior(accs), loglikelihood(accs), parameters(accs)
+res = simulate(yarg_model_cond, Xoshiro(468))
+logprior(res), loglikelihood(res), parameters(res)
 ```
 
 Now the only latent variable is `x`, and the `y` array is observed.
@@ -182,8 +194,8 @@ Here `y = zeros(3)` is only a template: as when sampling, the value of each `y[i
 ```@example model
 ydef_model_cond = ydef_model | (; y=[1.0, 2.0, 3.0])
 
-accs = rand_with_logp(Xoshiro(468), ydef_model_cond)
-logprior(accs), loglikelihood(accs), parameters(accs)
+res = simulate(ydef_model_cond, Xoshiro(468))
+logprior(res), loglikelihood(res), parameters(res)
 ```
 
 Only whole variables can be conditioned. Partial array or field conditioning is not supported.
@@ -215,7 +227,7 @@ end
 In this model, even though `y` is defined in the model, the subsequent statement `y ~ Normal()` will treat `y` as a latent variable, and will sample a new value for it, which will certainly not be equal to `x + 1`:
 
 ```@example model
-rand_with_logp(y_not_obs())
+simulate(y_not_obs())
 ```
 
 To force `y` to be observed, Wren provides a macro `@observe`:
@@ -227,13 +239,13 @@ To force `y` to be observed, Wren provides a macro `@observe`:
     @observe y ~ Normal()
 end
 
-accs = rand_with_logp(y_obs())
+res = simulate(y_obs())
 ```
 
 We can check that these values are consistent:
 
 ```@example model
-loglikelihood(accs) ≈ logdensityof(Normal(), parameters(accs)[@vn(x)] + 1)
+loglikelihood(res) ≈ logdensityof(Normal(), parameters(res)[@vn(x)] + 1)
 ```
 
 You can in principle use this to enforce that model arguments are observed:
@@ -246,7 +258,7 @@ You can in principle use this to enforce that model arguments are observed:
     end
 end
 
-rand(yarg_obs([1.0, 2.0, 3.0]))
+parameters(yarg_obs([1.0, 2.0, 3.0]))
 ```
 
 However, note that once a statement has been marked with `@observe`, you cannot 'uncondition' it without modifying the model's stored AST itself.
@@ -262,8 +274,8 @@ Array-valued data are often modelled as independent draws from a single distribu
 end
 
 y = [1.0, 2.0, 3.0]
-accs = rand_with_logp(iid_obs(y))
-loglikelihood(accs) ≈ sum(logdensityof.(Normal(parameters(accs)[@vn(mu)]), y))
+res = simulate(iid_obs(y))
+loglikelihood(res) ≈ sum(logdensityof.(Normal(parameters(res)[@vn(mu)]), y))
 ```
 
 When specifying priors for independent groups `@iid mu ~ dist`, there is typically no way for `@iid` to derive `size(mu)` because `mu` is not yet defined. You can instead specify `size` via an argument:
@@ -360,6 +372,42 @@ which guarantees correctness, but might not be as efficient as the vectorised fo
 
       - Batches will increase allocations and will almost certainly cause slowdowns on small loops.
 
+## [Generated quantities](@id generated-quantities)
+
+After sampling from a model, we often want to transform these samples into other values we're interested in.
+Following the nomenclature established by Stan, we call these "generated quantities" (GQs).
+
+For example, consider logistic regression where parameters are often on the log-odds scale.
+Reporting log-odds is nasty, so we instead transform them to odds ratios:
+
+```@example model
+@wren function logistic_regression(y)
+    beta ~ Normal()
+    for i in eachindex(y)
+        @observe y[i] ~ BernoulliLogit(beta)
+    end
+    @gq odds_ratio = exp(beta)
+end
+
+y = [0, 1, 0, 0, 0, 1]
+model = logistic_regression(y)
+simulate(model)
+```
+
+You can write any expression on the right-hand of `@gq`, including `begin` or `let` blocks.
+However, naming generated quantities is more restrictive: a name must be a single symbol, so names like `@gq x[1]` or `@gq x.a` are not allowed.
+
+!!! note "Generated quantities are not copied"
+
+    After initialising a generated quantity `@gq my_array`, mutating `my_array` will change its values. To create a snapshot of `my_array` at the time it is initialised, you need to copy explicity `@gq snapshot = deepcopy(my_array)`.
+
+By default, all GQs are calculated and returned.
+You can, however, omit the statements marked with `@gq` - for example because they're expensive and not needed at this time - by passing `gqs=NoGQs()` to `simulate`, `prior` or `nuts`. If you want to keep specific GQs, use `SomeGQs(:x)` instead.
+
+!!! note "No side effects... again"
+
+    When the definition of a generated quantity `x` involves side effects, such as calling `push!` or drawing a random number, and `x` is omitted via `gqs`, the side effects in its definition will not happen!
+
 ## [Manual log-likelihood addition](@id addloglike)
 
 !!! danger "We do NOT recommend this"
@@ -374,7 +422,7 @@ Wren provides a macro, `@addloglikelihood [name=:name] expr`, which allows you t
     @addloglikelihood name=:xsq x^2
 end
 
-rand_with_logp(manual_likelihood())
+simulate(manual_likelihood())
 ```
 
 The `name` argument is optional and Wren currently does not use it, but hopefully will be wired up to pointwise logdensity calculations in the future.

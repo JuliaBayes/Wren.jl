@@ -40,7 +40,7 @@ using Random: Xoshiro
         @testset "assumed x" begin
             model = fassume(x)
             @test model.args.x !== x # Should be dealiased.
-            rand(model) # Run the model
+            parameters(model) # Run the model
             # Contents should not have been modified, because the model writes
             # into a copy of x.
             @test x == xcopy
@@ -49,7 +49,7 @@ using Random: Xoshiro
         @testset "observed x" begin
             model = fobserve(x)
             @test model.args.x !== x
-            rand(model)
+            parameters(model)
             @test x == xcopy
         end
 
@@ -57,7 +57,7 @@ using Random: Xoshiro
             model = fassume(x) | (; x=x)
             @test model.args.x !== x # Should be dealiased.
             @test model.conditioned.x === x # Should be the same.
-            rand(model) # Run the model
+            parameters(model) # Run the model
             # Contents should not have been modified, because conditioned values are
             # read-only.
             @test x == xcopy
@@ -75,9 +75,9 @@ using Random: Xoshiro
         model = fmutates(X)
 
         @test model.args.x[1] == 0.0
-        rand(model)
+        parameters(model)
         @test model.args.x[1] == 1.0
-        rand(model)
+        parameters(model)
         @test model.args.x[1] == 2.0
         @test X[1] == 0.0 # Original array should not have been modified
     end
@@ -101,7 +101,7 @@ using Random: Xoshiro
             vm = VecModel(model, adtype)
 
             x_orig = vm.model.args.x[1]
-            params = rand(vm)
+            params = vector_parameters(vm)
             @test vm.model.args.x[1] > x_orig
 
             x_orig = vm.model.args.x[1]
@@ -139,7 +139,7 @@ using Random: Xoshiro
         # Test that without `reduce_copies`, the copy is performed.
         vm = VecModel(model, WrenCore.DEFAULT_AD; reduce_copies=false)
         @test WrenCore._copied_args(vm.model) == (:y,)
-        params = rand(vm)
+        params = vector_parameters(vm)
         bm = @b lp_and_grad($vm, $params)
         @test bm.bytes >= sizeof(Y)
 
@@ -178,7 +178,7 @@ using Random: Xoshiro
         # Gradients are only right under Enzyme if the copies are actually made.
         vm_enzyme = VecModel(model, AutoEnzyme(; mode=Reverse); reduce_copies=false)
         vm_fd = VecModel(model, AutoForwardDiff())
-        params = rand(vm_enzyme)
+        params = vector_parameters(vm_enzyme)
         @test lp_and_grad(vm_enzyme, params)[2] ≈ lp_and_grad(vm_fd, params)[2]
     end
 
@@ -229,13 +229,7 @@ end
         data = [shared, shared]
         data = as_view ? view(data, :) : data
         model = nested ? mutate_nested(data) : mutate_shared(data)
-        result, _ = evaluate(
-            model,
-            FromPrior(Xoshiro(468)),
-            OriginalSpace(),
-            WrenCore.default_accumulators(),
-            EvalContext{false}(),
-        )
+        result = return_value(model, FromPrior(Xoshiro(468)))
         @test result == 1.0
         @test (nested ? shared.value[1] : shared.value) == 0.0
     end

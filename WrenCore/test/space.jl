@@ -27,7 +27,13 @@ using Distributions
             space in (UnconstrainedSpace(), OriginalSpace())
 
             source = FromValues(VarNamedTuple(; x=tval))
-            _, accs = evaluate(model, source, space, WrenCore.default_accumulators(), ctx)
+            accs = AccumulatorTuple(
+                LogPriorAccumulator(),
+                LogJacobianAccumulator(),
+                LogLikelihoodAccumulator(),
+                ParamsAccumulator(),
+            )
+            _, accs = evaluate(model, source, space, accs, ctx)
             @test parameters(accs)[@vn(x)] ≈ x
             @test logprior(accs) ≈ -x
             if space isa UnconstrainedSpace
@@ -49,35 +55,22 @@ using Distributions
             a ~ sub
         end
         model = outer(inner())
-        accs = WrenCore.default_accumulators()
 
         partial = VarNamedTuple(; a=VarNamedTuple(; x=0.5))
         source = FromValues(partial, FromPrior())
-        _, new_accs = evaluate(model, source, OriginalSpace(), accs, ctx)
-        pars = parameters(new_accs)
+        result = simulate(model, source)
+        pars = parameters(result)
         @test pars[@vn(a.x)] == 0.5
-        @test logprior(new_accs) ≈ logpdf(Normal(), 0.5) + logpdf(Normal(), pars[@vn(a.y)])
+        @test logprior(result) ≈ logpdf(Normal(), 0.5) + logpdf(Normal(), pars[@vn(a.y)])
 
         # No params at all under `a`: the submodel is evaluated with the fallback only.
         source = FromValues(VarNamedTuple(; b=1.0), FromPrior())
-        _, new_accs = evaluate(model, source, OriginalSpace(), accs, ctx)
-        @test haskey(parameters(new_accs), @vn(a.x))
-        @test haskey(parameters(new_accs), @vn(a.y))
+        result = simulate(model, source)
+        @test haskey(parameters(result), @vn(a.x))
+        @test haskey(parameters(result), @vn(a.y))
 
-        @test_throws "No latent value provided for variable y" evaluate(
-            model,
-            FromValues(partial),
-            OriginalSpace(),
-            accs,
-            ctx,
-        )
-        @test_throws ArgumentError evaluate(
-            model,
-            FromValues(VarNamedTuple(; a=0.5)),
-            OriginalSpace(),
-            accs,
-            ctx,
-        )
+        @test_throws "No latent value provided for variable y" simulate(model, partial)
+        @test_throws ArgumentError simulate(model, VarNamedTuple(; a=0.5))
     end
 end
 
