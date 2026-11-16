@@ -62,13 +62,12 @@ fit.params
 
 ## Direct log-density access
 
-For direct control, [`logdensity`](@ref) constructs the same [`VecModel`](@ref) using the
-LogDensityProblems.jl interface:
+For direct control, construct a [`VecModel`](@ref) and use the LogDensityProblems.jl interface:
 
 ```@example optimization
 import LogDensityProblems as LDP
 
-density = logdensity(model, AutoEnzyme(; mode=Reverse); latent_source=initial)
+density = VecModel(model, AutoEnzyme(; mode=Reverse); latent_source=initial)
 x = vector_parameters(density, initial)
 LDP.logdensity(density, x)
 LDP.logdensity_and_gradient(density, x)
@@ -76,5 +75,5 @@ LDP.logdensity_and_gradient(density, x)
 
 The default is the unnormalised posterior density in unconstrained coordinates, including
 the Jacobian used by samplers. For a custom optimisation problem, pass `lp_function=logjoint`
-for the original-space MAP objective or `lp_function=loglikelihood` for MLE. Omit the AD
-backend when only density values are needed. This interface does not require Optimization.jl.
+for the original-space MAP objective or `lp_function=loglikelihood` for MLE. Pass `nothing`
+as the AD backend when only density values are needed. This interface does not require Optimization.jl.
