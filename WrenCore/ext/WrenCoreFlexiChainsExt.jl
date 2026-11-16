@@ -109,7 +109,7 @@ end
         chain::FlexiChains.VNChain;
         rng::Random.AbstractRNG=Random.default_rng(),
         gqs::GeneratedQuantitySpec=AllGQs(),
-    ) -> VNChain
+    ) -> FlexiChains.VNChain
 
 Simulate from `model` at every iteration in `chain`. Variables that `chain` does not hold
 are drawn from the prior using `rng`.
@@ -157,7 +157,7 @@ end
         chain::FlexiChains.VNChain;
         rng::Random.AbstractRNG=Random.default_rng(),
         gqs::GeneratedQuantitySpec=AllGQs(),
-    ) -> VNChain
+    ) -> FlexiChains.VNChain
 
 Re-evaluate `model` at each iteration of `chain` and return a chain holding only the
 generated quantities requested with `gqs`.
@@ -223,7 +223,7 @@ function WrenCore.return_value(model::WrenCore.Model, chain::VNChain)
 end
 
 """
-    parameters(model::WrenCore.Model, chain::FlexiChains.VNChain) -> VNChain
+    parameters(model::WrenCore.Model, chain::FlexiChains.VNChain) -> FlexiChains.VNChain
 
 Return the parameters of `model` at each iteration of `chain`.
 If a variable required by `model` is not stored in `chain`, that variable will be drawn
