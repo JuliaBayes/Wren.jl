@@ -33,7 +33,7 @@ struct BatchedExponential{R<:AbstractArray} <: BatchedUnivariate
 end
 Base.size(d::BatchedExponential) = size(d.θ)
 function Base.rand(rng::AbstractRNG, d::BatchedExponential)
-    return .-log.(rand(rng, noisetype(d), size(d))) .* d.θ
+    return .-log.(rand(rng, rngtype(d), size(d))) .* d.θ
 end
 function DensityInterface.logdensityof(d::BatchedExponential, x)
     # Benchmarks @ https://github.com/JuliaBayes/Wren.jl/issues/105
