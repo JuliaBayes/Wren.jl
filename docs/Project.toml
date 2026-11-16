@@ -28,3 +28,4 @@ LogExpFunctions = "0.3, 1"
 
 [sources]
 PalmerPenguins = {url = "https://github.com/penelopeysm/PalmerPenguins.jl", rev = "main"}
+PosteriorDB = {url = "https://github.com/penelopeysm/PosteriorDB.jl", rev = "main"}
