@@ -56,7 +56,8 @@ makedocs(;
             "explanations/batch.md",
             "explanations/compilation.md",
         ],
-        "Reference" => ["reference/syntax.md", "reference/distributions.md", "reference/api.md"],
+        "Reference" =>
+            ["reference/syntax.md", "reference/distributions.md", "reference/api.md"],
     ],
     checkdocs=:exports,
     warnonly=false,

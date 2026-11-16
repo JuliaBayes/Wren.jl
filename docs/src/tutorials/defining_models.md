@@ -110,7 +110,7 @@ It doesn't matter that they were passed in as arguments.
 
 There are two ways to turn a random quantity into an observation:
 
-1. Marking the tilde with `@observe`:
+ 1. Marking the tilde with `@observe`:
 
 ```@example defining
 @wren function observations(y)
@@ -121,11 +121,11 @@ end
 simulate(observations(1.0))
 ```
 
-2. Conditioning the model on a value.
-   First, you need to instantiate the unconditioned model; then, you can condition it using the `|` operator, passing in a `NamedTuple` of observations.
+ 2. Conditioning the model on a value.
+    First, you need to instantiate the unconditioned model; then, you can condition it using the `|` operator, passing in a `NamedTuple` of observations.
 
-   Conditioning on `y` actually does two things: firstly, it marks the corresponding random quantity as an observation, and secondly, it sets the value of that random quantity to the value you passed in.
-   Notice that `@info y` works here and uses the value of `y` that the model was conditioned on.
+    Conditioning on `y` actually does two things: firstly, it marks the corresponding random quantity as an observation, and secondly, it sets the value of that random quantity to the value you passed in.
+    Notice that `@info y` works here and uses the value of `y` that the model was conditioned on.
 
 ```@example defining
 @wren function observations()
@@ -134,7 +134,7 @@ simulate(observations(1.0))
     y ~ Normal(x)
 end
 
-conditioned_model = observations() | (; y = 1.0)
+conditioned_model = observations() | (; y=1.0)
 ```
 
 In general, conditioning is more flexible as you can 'recover' the original model by calling `decondition`:
@@ -199,7 +199,7 @@ By default, `simulate` will return these quantities:
     y ~ Normal(x)
 end
 
-model = with_gq() | (; y = 1.0)
+model = with_gq() | (; y=1.0)
 simulate(model)
 ```
 
@@ -246,16 +246,16 @@ end
 The easiest way around this is to pass the variable into the model as an argument:
 
 ```@example defining
-res = nothing
+res = Any[]
 for d in [Normal()]
 
     @wren function passes_local_in(d)
         x ~ d # OK since d is an argument.
     end
 
-    res = simulate(passes_local_in(d))
+    push!(res, simulate(passes_local_in(d)))
 end
-res
+only(res)
 ```
 
 Closing over global variables is fine (although in general we recommend avoiding global variables; it's cleaner to pass things you need into the model as arguments).

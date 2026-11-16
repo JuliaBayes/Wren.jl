@@ -4,7 +4,6 @@
 
     penelopeysm: This page will be rewritten into something that is much more formal, like a grammar.
 
-
 ## Sample/observe
 
 !!! note "No side effects"

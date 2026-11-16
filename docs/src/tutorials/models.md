@@ -14,9 +14,9 @@ TODO penelopeysm: explain when Wren guarantees a copy & mutation semantics
 
 Finally, we note here that when encoutering a tilde, the value of the left-hand side is overwritten with the value that is drawn from the distribution on the right-hand side.
 This is a no-op for observations (because the left-hand side will _already_ have the value that it is observed to be).
-However, for parameters, this means that execution of a Wren model can 
+However, for parameters, this means that execution of a Wren model can
 
-------
+* * *
 
 Once you have defined a model you will likely want to do something with it!
 This page will give you a whirlwind tour of how to work with models.
