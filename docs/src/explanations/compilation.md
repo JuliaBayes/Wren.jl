@@ -1,4 +1,4 @@
-# Staged computation
+# [Compilation model](@id compilation)
 
 One of Wren's features, inspired by [Soss.jl](https://github.com/cscherrer/Soss.jl) and [Tilde.jl](https://github.com/cscherrer/Tilde.jl), is that it uses staged computation to generate the evaluation functions for models.
 That sounds like a scary term, but it essentially means that the evaluation function is generated via a multi-stage pipeline:

@@ -170,7 +170,7 @@ end
 The following has exactly the same semantics as the version without `@batch`, but may be faster (depending on various factors).
 
 ```@example defining
-@wren function with_batch(x, y))
+@wren function with_batch(x, y)
     @batch for i in eachindex(x)
         x[i] ~ Normal()
         @observe y[i] ~ Normal(x[i])
@@ -181,16 +181,84 @@ end
 It's worth pointing out here that `@batch` is not 'magical': it works only with a restricted set of syntax and is not guaranteed to be faster than a naive for-loop.
 It is often worth [benchmarking your model](@ref benchmarking) if you want to optimise performance.
 
-### Generated quantities
+### `@gq`
 
-Often 
+Inside a model body, you may have other quantities of interest that you want to extract, even if they are not parameters.
+You can mark these quantities with the `@gq` macro.
 
-- `@gq`
-- `@addloglikelihood`
+!!! warning "Subject to rename"
 
-## Some technical limitations
+    It is likely that this macro will be renamed in the very near future.
 
-Briefly mention RGF's technical limitations:
+By default, `simulate` will return these quantities:
 
-- can't close over local variables in model body
-- can't define closures in model body that close over outside variables (...? get Claude to check this)
+```@example defining
+@wren function with_gq()
+    x ~ Normal()
+    @gq x_sq = x^2
+    y ~ Normal(x)
+end
+
+model = with_gq() | (; y = 1.0)
+simulate(model)
+```
+
+### `@addloglikelihood`
+
+This manually increments the log-likelihood of the model.
+For example, the following is equivalent to `@observe y ~ Normal(x)` if `y` is 1.0 (albeit rather less clear).
+
+```@example defining
+@wren function with_addloglikelihood()
+    x ~ Normal()
+    @addloglikelihood logdensityof(Normal(x), 1.0)
+end
+
+simulate(with_addloglikelihood())
+```
+
+!!! "warning"
+
+    `@addloglikelihood` should only be used as an escape hatch in cases where none of the above syntax works at all.
+    If you have a reason for using this, please [do let us know](https://github.com/JuliaBayes/Wren.jl/issues) as it may indicate that some other feature is missing from Wren.
+
+## Technical restrictions
+
+Although Wren models can contain almost completely arbitrary Julia code, due to some technical limitations of [RuntimeGeneratedFunctions.jl](@ref compilation), certain constructs are not allowed in Wren models.
+
+The biggest one of these is that Wren models cannot close over local variables, or in other words, your model cannot use local variables defined outside the model body.
+
+For example:
+
+```@repl defining
+for d in [Normal()]
+    # d is a local variable here.
+
+    @wren function closes_over_local()
+        # ... but our model uses it
+        x ~ d
+    end
+
+    simulate(closes_over_local())
+end
+```
+
+The easiest way around this is to pass the variable into the model as an argument:
+
+```@example defining
+res = nothing
+for d in [Normal()]
+
+    @wren function passes_local_in(d)
+        x ~ d # OK since d is an argument.
+    end
+
+    res = simulate(passes_local_in(d))
+end
+res
+```
+
+Closing over global variables is fine (although in general we recommend avoiding global variables; it's cleaner to pass things you need into the model as arguments).
+
+Another rather niche restriction is that Wren models cannot contain macros that create closures.
+The most likely situation where you would run into this is if you are using `Reactant.@trace`; please see the [Working with Reactant](@ref reactant) page for more information.
