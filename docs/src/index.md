@@ -1,3 +1,5 @@
+# Home
+
 Wren is a library for probabilistic programming in Julia.
 
 ## Installation

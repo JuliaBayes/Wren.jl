@@ -10,6 +10,15 @@ However, at the same time, we strongly believe that this will help to push the J
 To this end, we ask you to please [report any issues](https://github.com/JuliaBayes/Wren.jl/issues) you encounter when using Wren with Reactant.
 We can help to minimise issues, file them upstream, and in some cases even fix them.
 
+## Distributions
+
+Before we even begin to talk about models, we should note that Reactant *will* run into many problems with Distributions.jl.
+There are many reasons for this, but the main one is that Reactant's tracing mechanism requires that functions accept subtypes of `Number`, and virtually all functions in Distributions require `Real` arguments.
+
+The creation of [the `Wren.Dists` module](@ref wrendists) was almost completely motivated by this.
+To make Wren models compatible with Reactant, we recommend that you use Wren's built-in distributions as far as possible.
+If there isn't a distribution you need, do feel free to [open an issue or a pull request](https://github.com/JuliaBayes/Wren.jl)!
+
 ## Using Reactant with Wren
 
 Currently, Reactant can only be used with vectorised Wren models, i.e., the `VecModel` struct.
@@ -98,7 +107,7 @@ That is more or less the same thing as having a Reactant-compatible NUTS sampler
 When invoking Reactant outside of Wren you may be aware that you often need to call `Reactant.to_rarray` on input arguments so that they are 'tracked' by the Reactant compiler.
 Wren handles this for you by _unconditionally_ calling `to_rarray` on all input arguments to the model, so you do not need to worry about this.
 
-Technically, this is not the right thing to do: if you have an argument which is constant (i.e., you never want to evaluate the model with a different value of that argument), then we should _not_ call `to_rarray` on it, as that causes extra work for Reactant.
+Semantically, this is not the right thing to do: if you have an argument which is constant (i.e., you never want to evaluate the model with a different value of that argument), then we should _not_ call `to_rarray` on it, as that causes extra work for Reactant.
 Model arguments should in theory always fall into this category, since once the model has been created, the arguments can't be changed without creating a new model!
 
 Unfortunately, at the present moment there are a handful of issues which cause Reactant to grind to a halt when performing matrix multiplications with untraced arrays.
