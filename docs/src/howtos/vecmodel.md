@@ -157,20 +157,21 @@ vm = VecModel(with_mutation(), nothing)
 
 ```@example vecmodel
 for i in 1:2
-    simulate(vm)
+    vector_parameters(vm)
 end
 ```
 
-So far, this looks reasonable: each time we run the model, we get a new value of `x`, and mutate it inside the model.
-However, the effect of this can be quite surprising:
+Each time we run the model, we get a new value of `x`, and mutate it inside the model.
+So far, this looks reasonable.
+However, the following can be quite surprising:
 
 ```@example vecmodel
 p = [2.0, 3.0]
-lp(vm, p)
+LDP.logdensity(vm, p)
 p
 ```
 
-The vector `p` has been mutated in-place, even though we did not explicitly mutate it in our code!
+The vector `p` has been mutated in-place by the `x[1] += 1.0` statement.
 
 !!! note "The results are still correct"
 

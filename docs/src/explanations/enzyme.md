@@ -3,11 +3,9 @@
 The Julia ecosystem has had (infamously) [a number of automatic differentiation packages](https://juliadiff.org/), each with their own tradeoffs.
 Wren adopts a _partly_ opinionated approach to AD.
 All (sensible) AD backends are supported via [DifferentiationInterface.jl](https://juliadiff.org/DifferentiationInterface.jl/DifferentiationInterface), so the user can choose their preferred backend.
-However, at the same time, Wren also tries very hard to make it possible for you to use reverse-mode Enzyme as _the_ backend.
 
-The developer(s) of Wren are not affiliated with any AD backend and this opinion is not rooted in any politics or personal disagreement.
-It is purely based on the fact that reverse Enzyme is the fastest AD backend across a wide range of problems (see, e.g., [the benchmarks on Turing.jl](https://juliabayes.org/ADTests/)).
-Thus, we consider it a disservice to choose any other backend as the default, as that simply leaves performance on the table.
+However, at the same time, Wren also tries very hard to make it possible for you to use reverse-mode Enzyme as _the_ backend.
+This is based on the fact that reverse Enzyme is the fastest AD backend across a wide range of problems (see, e.g., [the benchmarks on Turing.jl](https://juliabayes.org/ADTests/); we hope to have similar comparisons on Wren soon).
 
 At the same time, we recognise that Enzyme can be difficult to use and still has a number of edge cases.
 Wren does its best to make this experience as seamless as possible for users.
