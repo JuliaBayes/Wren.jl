@@ -40,16 +40,16 @@ end
 """
     ModelResult
 
-A struct containing the parameters, generated quantities, return value, log-prior, and
+A struct containing the parameters, tracked quantities, return value, log-prior, and
 log-likelihood of a model evaluation.
 
-You can access these fields with [`parameters`](@ref), [`generated_quantities`](@ref),
+You can access these fields with [`parameters`](@ref), [`tracked_quantities`](@ref),
 [`return_value`](@ref), [`logprior`](@ref), and [`loglikelihood`](@ref). The log-joint can
 be obtained with [`logjoint`](@ref).
 """
 struct ModelResult{V<:VarNamedTuple,G<:VarNamedTuple,R,LP<:Number,LL<:Number}
     parameters::V
-    generated_quantities::G
+    tracked_quantities::G
     return_value::R
     logprior::LP
     loglikelihood::LL
@@ -67,12 +67,12 @@ function Base.show(io::IO, ::MIME"text/plain", result::ModelResult)
     end
     println(io)
     print(io, "├─ ")
-    printstyled(io, "generated_quantities"; color=:cyan)
+    printstyled(io, "tracked_quantities"; color=:cyan)
     print(io, " => ")
-    if isempty(result.generated_quantities)
+    if isempty(result.tracked_quantities)
         print(io, "VarNamedTuple()")
     else
-        vnt_pretty_print(io, result.generated_quantities, "│  ", 0)
+        vnt_pretty_print(io, result.tracked_quantities, "│  ", 0)
     end
     println(io)
     fields = (
@@ -91,8 +91,8 @@ function Base.show(io::IO, ::MIME"text/plain", result::ModelResult)
 end
 
 """
-    simulate(model::Model; gqs::GeneratedQuantitySpec=AllGQs())
-    simulate(model::Model, latents; gqs::GeneratedQuantitySpec=AllGQs())
+    simulate(model::Model; track::TrackedQuantitySpec=AllQuantities())
+    simulate(model::Model, latents; track::TrackedQuantitySpec=AllQuantities())
 
 Draw a sample from `model`, using the given latent source. If one is not provided,
 draws from the prior distribution.
@@ -100,13 +100,13 @@ draws from the prior distribution.
 `latents` is converted to a latent source with [`to_latent_source`](@ref), so it can also
 be an `AbstractRNG` (to draw from the prior) or a `VarNamedTuple` of values.
 
-Returns the params, generated quantities selected by `gqs`, return value, log-prior, and
+Returns the params, tracked quantities selected by `track`, return value, log-prior, and
 log-likelihood of the model packaged in a [`ModelResult`](@ref).
 """
 function simulate(
     model::Model,
     latents::AbstractLatentSource;
-    gqs::GeneratedQuantitySpec=AllGQs(),
+    track::TrackedQuantitySpec=AllQuantities(),
 )
     retval, accs = evaluate(
         model,
@@ -114,7 +114,7 @@ function simulate(
         OriginalSpace(),
         AccumulatorTuple(
             ParamsAccumulator(),
-            GeneratedQuantityAccumulator(gqs),
+            TrackedQuantityAccumulator(track),
             LogPriorAccumulator(),
             LogLikelihoodAccumulator(),
         ),
@@ -122,33 +122,33 @@ function simulate(
     )
     return ModelResult(
         VarNames.parameters(accs),
-        generated_quantities(accs),
+        tracked_quantities(accs),
         retval,
         logprior(accs),
         loglikelihood(accs),
     )
 end
-function simulate(model::Model, latents; gqs::GeneratedQuantitySpec=AllGQs())
-    return simulate(model, to_latent_source(latents); gqs)
+function simulate(model::Model, latents; track::TrackedQuantitySpec=AllQuantities())
+    return simulate(model, to_latent_source(latents); track)
 end
-simulate(model::Model; gqs::GeneratedQuantitySpec=AllGQs()) =
-    simulate(model, FromPrior(); gqs)
+simulate(model::Model; track::TrackedQuantitySpec=AllQuantities()) =
+    simulate(model, FromPrior(); track)
 
 """
     simulate(
         vecmodel::VecModel,
         params::AbstractVector;
-        gqs::GeneratedQuantitySpec=AllGQs(),
+        track::TrackedQuantitySpec=AllQuantities(),
     )::ModelResult
 
 Evaluate the model of `vecmodel` at the parameter vector `params`, which is in the parameter
 space of `vecmodel`. The log-prior and log-likelihood in the result are in original space.
-The result holds the generated quantities selected by `gqs`.
+The result holds the tracked quantities selected by `track`.
 """
 function simulate(
     vecmodel::VecModel,
     params::AbstractVector;
-    gqs::GeneratedQuantitySpec=AllGQs(),
+    track::TrackedQuantitySpec=AllQuantities(),
 )
     _check_vecmodel_dimension(params, vecmodel)
     retval, accs = evaluate(
@@ -157,7 +157,7 @@ function simulate(
         vecmodel.parameter_space,
         AccumulatorTuple(
             ParamsAccumulator(),
-            GeneratedQuantityAccumulator(gqs),
+            TrackedQuantityAccumulator(track),
             LogPriorAccumulator(),
             LogLikelihoodAccumulator(),
         ),
@@ -165,7 +165,7 @@ function simulate(
     )
     return ModelResult(
         VarNames.parameters(accs),
-        generated_quantities(accs),
+        tracked_quantities(accs),
         retval,
         logprior(accs),
         loglikelihood(accs),
@@ -243,50 +243,54 @@ function VarNames.parameters(vecmodel::VecModel, params::AbstractVector)
 end
 
 ############################################################################################
-# generated_quantities
+# tracked_quantities
 ############################################################################################
 
 """
-    generated_quantities(result::ModelResult)::VarNamedTuple
+    tracked_quantities(result::ModelResult)::VarNamedTuple
 
-Get the generated quantities (values recorded by `@gq` statements) from a
+Get the tracked quantities (values recorded by `@track` statements) from a
 [`ModelResult`](@ref).
 """
-generated_quantities(result::ModelResult) = result.generated_quantities
+tracked_quantities(result::ModelResult) = result.tracked_quantities
 
 """
-    generated_quantities(model::Model, gqs::GeneratedQuantitySpec=AllGQs())
-    generated_quantities(model::Model, latents, gqs::GeneratedQuantitySpec=AllGQs())
+    tracked_quantities(model::Model, track::TrackedQuantitySpec=AllQuantities())
+    tracked_quantities(model::Model, latents, track::TrackedQuantitySpec=AllQuantities())
 
-Obtain the generated quantities selected by `gqs`, calculated with a given set of latent
+Obtain the tracked quantities selected by `track`, calculated with a given set of latent
 values. If no latent values are provided, they are drawn from the prior distribution.
 
 `latents` is converted to a latent source with [`to_latent_source`](@ref), so it can also
 be an `AbstractRNG` (to draw from the prior) or a `VarNamedTuple` of values.
 
-This is equivalent to `generated_quantities(simulate(model, latents; gqs))`, but is more
+This is equivalent to `tracked_quantities(simulate(model, latents; track))`, but is more
 efficient than [`simulate`](@ref) because it does not compute the log-density terms or store
 the parameters.
 """
-function generated_quantities(
+function tracked_quantities(
     model::Model,
     latents::AbstractLatentSource,
-    gqs::GeneratedQuantitySpec=AllGQs(),
+    track::TrackedQuantitySpec=AllQuantities(),
 )
     _, accs = evaluate(
         model,
         latents,
         OriginalSpace(),
-        AccumulatorTuple(GeneratedQuantityAccumulator(gqs)),
+        AccumulatorTuple(TrackedQuantityAccumulator(track)),
         EvalContext{false}(),
     )
-    return generated_quantities(accs)
+    return tracked_quantities(accs)
 end
-function generated_quantities(model::Model, latents, gqs::GeneratedQuantitySpec=AllGQs())
-    return generated_quantities(model, to_latent_source(latents), gqs)
+function tracked_quantities(
+    model::Model,
+    latents,
+    track::TrackedQuantitySpec=AllQuantities(),
+)
+    return tracked_quantities(model, to_latent_source(latents), track)
 end
-function generated_quantities(model::Model, gqs::GeneratedQuantitySpec=AllGQs())
-    return generated_quantities(model, FromPrior(), gqs)
+function tracked_quantities(model::Model, track::TrackedQuantitySpec=AllQuantities())
+    return tracked_quantities(model, FromPrior(), track)
 end
 
 ############################################################################################

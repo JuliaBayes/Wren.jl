@@ -1,4 +1,4 @@
-module WrenGeneratedQuantitiesTests
+module WrenTrackedQuantitiesTests
 
 using Wren
 using Wren.Dists
@@ -6,19 +6,19 @@ using FlexiChains
 using Test
 import Enzyme
 
-@wren function gq_model()
+@wren function tq_model()
     x ~ Normal()
-    @gq x2 = x^2
+    @track x2 = x^2
 end
-model = gq_model()
+model = tq_model()
 
-@testset "generated quantities in sampler chains" begin
+@testset "tracked quantities in sampler chains" begin
     @testset "prior" begin
         chain = prior(model, 10; progress=false)
         @test Set(FlexiChains.parameters(chain)) == Set([@vn(x), @vn(x2)])
         @test chain[@vn(x2)] ≈ chain[@vn(x)] .^ 2
 
-        chain = prior(model, 10; progress=false, gqs=NoGQs())
+        chain = prior(model, 10; progress=false, track=NoQuantities())
         @test Set(FlexiChains.parameters(chain)) == Set([@vn(x)])
     end
 
@@ -27,7 +27,7 @@ model = gq_model()
         @test Set(FlexiChains.parameters(chain)) == Set([@vn(x), @vn(x2)])
         @test chain[@vn(x2)] ≈ chain[@vn(x)] .^ 2
 
-        chain = nuts(model, 20; progress=false, gqs=SomeGQs(()))
+        chain = nuts(model, 20; progress=false, track=SomeQuantities(()))
         @test Set(FlexiChains.parameters(chain)) == Set([@vn(x)])
     end
 end

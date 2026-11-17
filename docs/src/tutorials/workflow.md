@@ -49,7 +49,7 @@ end
 
 ## Prior predictions
 
-We can now instantiate the Wren model and use it with `simulate(model)` to draw from the prior (see [Working with models](@ref models)):
+We can now instantiate the Wren model and use it with `simulate(model)` to draw from the prior (see [Working with `Models`](@ref using-models)):
 
 ```@example workflow
 model = bill_model(penguins.bill_length_mm, penguins.species_idx, penguins.body_mass_g)
@@ -160,7 +160,7 @@ xs_z = -3:0.1:3
 
 # Draw 20 posterior samples of the slope of body mass
 for _ in 1:20
-    vnt = parameters(simulate(chain_post))
+    vnt = rand(chain_post; parameters_only=true)
     ys_z = vnt[@vn(beta2)] * xs_z
     ys = reconstruct(bill_zs, ys_z)
     xs = reconstruct(mass_zs, xs_z)
@@ -172,11 +172,11 @@ fig
 
 As we may have expected, more penguin means more bill!
 
-## Generated quantities
+## Tracked quantities
 
 Quite regularly in applied statistical modelling, we're after a quantity that we can't express as a single parameter of our model.
 Rather, it's often some downstream quantity that we compute by combining several parameters with (potentially new / hypothetical) observations.
-These downstream quantities are typically called [generated quantities](@ref generated quantities) (GQs).
+In Wren, we record these downstream quantities with [`@track`](@ref track) and call them tracked quantities (Stan calls them generated quantities).
 
 Continuing with the penguin model from before, let's now assume that there is something special about the conditions on each island.
 These conditions make _all_ the penguins on a given island more similar to each other; that could for example be caused by better food sources near some islands than others, or some islands being more prone to disruptive weather events than others.
@@ -225,11 +225,11 @@ const SCARY_BILL_ZSCALE = (50.0 - mean(bill_length_mm)) / std(bill_length_mm)
         bill_length[i] ~ Normal(mu[i], sigma)
     end
 
-    @gq scary_bill_pct = mean(mu .> SCARY_BILL_ZSCALE)
+    @track scary_bill_pct = mean(mu .> SCARY_BILL_ZSCALE)
 end
 ```
 
-The GQ we're after in this example is the percentage of penguins with a dangerously long bill (there's no domain knowledge in this, we just assume that bills longer than 50 mm are scary).
+The tracked quantity we're after in this example is the percentage of penguins with a dangerously long bill (there's no domain knowledge in this, we just assume that bills longer than 50 mm are scary).
 
 Let's condition our expanded model on the observations again and sample.
 
@@ -242,16 +242,16 @@ model =
         penguins.species_idx,
         penguins.body_mass_g,
     ) | (bill_length=penguins.bill_length_mm,)
-chain_gq = nuts(model, 1000, 4; progress=false)
-summarystats(chain_gq)
+chain_tq = nuts(model, 1000, 4; progress=false)
+summarystats(chain_tq)
 ```
 
 So far so good.
-The results in `chain_gq` show us what we'd expect for the _specific_ islands we collected data from.
+The results in `chain_tq` show us what we'd expect for the _specific_ islands we collected data from.
 But that's not the only thing we could be after when working with hierarchical models. 
 We may also be interested in new islands ("individuals") sampled from the inferred population, which we could draw from `Normal(island_effects.mu, island_effects.sigma)`.
 
-Since we've already estimate the GQ in the observed islands, let's now estimate it for new islands.
+Since we've already estimate the tracked quantity in the observed islands, let's now estimate it for new islands.
 
 We'll first define a new data set with 210 hypothetical new islands.
 The number 210 is arbitrary (apart from the fact that it nicely distributes across the three penguin species). 

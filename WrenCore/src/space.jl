@@ -1,3 +1,6 @@
+# The low-level setup of transformed values is largely adapted from DynamicPPL.jl (MIT
+# license, https://github.com/TuringLang/DynamicPPL.jl).
+
 """
     AbstractTransform
 

@@ -27,7 +27,7 @@ using WrenCore:
     @sample,
     @observe,
     @batch,
-    @gq,
+    @track,
     # Models
     Model,
     condition,
@@ -35,16 +35,15 @@ using WrenCore:
     simulate,
     ModelResult,
     return_value,
-    generated_quantities,
-    GeneratedQuantitySpec,
-    AllGQs,
-    SomeGQs,
-    NoGQs,
+    tracked_quantities,
+    TrackedQuantitySpec,
+    AllQuantities,
+    SomeQuantities,
+    NoQuantities,
     logjoint,
     logprior,
     # Vectorisation
     VecModel,
-    logdensity,
     vector_parameters,
     lp,
     lp_and_grad,
@@ -72,7 +71,7 @@ export WrenCore,
     @sample,
     @observe,
     @batch,
-    @gq,
+    @track,
     # Models
     Model,
     condition,
@@ -80,16 +79,15 @@ export WrenCore,
     simulate,
     ModelResult,
     return_value,
-    generated_quantities,
-    GeneratedQuantitySpec,
-    AllGQs,
-    SomeGQs,
-    NoGQs,
+    tracked_quantities,
+    TrackedQuantitySpec,
+    AllQuantities,
+    SomeQuantities,
+    NoQuantities,
     logjoint,
     logprior,
     # Vectorisation
     VecModel,
-    logdensity,
     vector_parameters,
     lp,
     lp_and_grad,
@@ -118,8 +116,11 @@ export logdensityof
 using StatsAPI: loglikelihood
 export loglikelihood
 
-using DifferentiationInterface: AutoForwardDiff, AutoReverseDiff, AutoMooncake, AutoEnzyme
-export AutoForwardDiff, AutoReverseDiff, AutoMooncake, AutoEnzyme
+using DifferentiationInterface:
+    AutoForwardDiff, AutoReverseDiff, AutoMooncake, AutoMooncakeForward, AutoEnzyme
+export AutoForwardDiff, AutoReverseDiff, AutoMooncake, AutoMooncakeForward, AutoEnzyme
+using ADTypes: AutoReactant
+export AutoReactant
 
 using EnzymeCore: Forward, Reverse
 export Forward, Reverse
