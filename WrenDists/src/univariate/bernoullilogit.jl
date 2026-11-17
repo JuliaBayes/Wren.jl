@@ -18,9 +18,9 @@ Base.eltype(::Type{BernoulliLogit{P}}) where {P} = float(P)
 # `log(logistic(η)) = -log1pexp(-η)` and `log(1 - logistic(η)) = -log1pexp(η)`.
 @inline function bernoullilogit_logmass(η::T, x::Number) where {T<:Number}
     return select(
-        x == one(x),
-        () -> -log1pexp(-η),
-        () -> select(x == zero(x), () -> -log1pexp(η), () -> convert(T, -Inf)),
+        iszero(x) | isone(x),
+        () -> -log1pexp(ifelse(isone(x), -η, η)),
+        () -> convert(T, -Inf),
     )
 end
 
