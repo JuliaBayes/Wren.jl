@@ -21,13 +21,20 @@ links = InterLinks(
     "VarNames" => "https://juliabayes.org/VarNames.jl/stable/",
 )
 
+MAX_HTML_SIZE = 400 * 1024 # 400 KB
+
 makedocs(;
     sitename="Wren.jl",
     # Explicitly pass an empty `inventory_version` to silence warnings when building docs.
     # This has no effect on deployed docs (i.e. on GitHub Pages) since Documenter will
     # automatically detect the inventory version from the git tag. See
     # https://github.com/JuliaDocs/Documenter.jl/pull/2449
-    format=Documenter.HTML(; inventory_version="", assets=["assets/custom.css"]),
+    format=Documenter.HTML(;
+        inventory_version="",
+        assets=["assets/custom.css"],
+        size_threshold=MAX_HTML_SIZE,
+        size_threshold_warning=MAX_HTML_SIZE,
+    ),
     modules=[
         Wren,
         WrenCore,
