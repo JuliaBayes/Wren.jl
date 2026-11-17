@@ -119,13 +119,25 @@ end
         end
         @testset "$name" for (name, adtype) in TESTED_ADTYPES
             vm = VecModel(f(), adtype; latent_source=FromValues(VarNamedTuple(x=0.0f0)))
-            for params in (view([1e40], :), Real[1e40], Real[16_777_217])
+            for params in (
+                Float32[0.75],
+                [1.234567890123],
+                Real[1.234567890123],
+                view([1e40], :),
+                Float32[-0.5],
+            )
                 expected_grad = -float.(params)
-                for (value, grad) in
-                    (lp_and_grad(vm, params), lp_and_grad!(zeros(1), vm, params))
-                    @test value ≈ -only(expected_grad)^2 / 2
-                    @test grad ≈ expected_grad
+                expected_lp = -only(expected_grad)^2 / 2 - log(2π) / 2
+                rtol = 10eps(eltype(expected_grad))
+                buffer = fill!(similar(expected_grad), NaN)
+                inplace = lp_and_grad!(buffer, vm, params)
+                @test last(inplace) === buffer
+                for (value, grad) in (lp_and_grad(vm, params), inplace)
+                    @test value ≈ expected_lp rtol=rtol
+                    @test value ≈ lp(vm, params) rtol=rtol
+                    @test grad ≈ expected_grad rtol=rtol
                 end
+                @test buffer ≈ expected_grad rtol=rtol
             end
         end
     end
