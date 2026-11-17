@@ -19,12 +19,12 @@ end
     end
 end
 
-@testset "simulate / return_value / rand" begin
+@testset "simulate / return_value / parameters" begin
     model = interface_model(1.0)
 
     @testset "simulate" begin
         for result in
-            (simulate(model), simulate(Xoshiro(468), model), simulate(FromPrior(), model))
+            (simulate(model), simulate(model, Xoshiro(468)), simulate(model, FromPrior()))
             x = parameters(result)[@vn(x)]
             @test return_value(result) == x + 1
             @test logprior(result) ≈ logpdf(Normal(), x)
@@ -34,47 +34,38 @@ end
     end
 
     @testset "simulate with given values" begin
-        result = simulate(FromValues(VarNamedTuple(x=0.5)), model)
+        result = simulate(model, FromValues(VarNamedTuple(x=0.5)))
         @test parameters(result)[@vn(x)] == 0.5
         @test return_value(result) == 1.5
     end
 
     @testset "consistency with same rng" begin
-        result = simulate(Xoshiro(468), model)
-        @test rand(Xoshiro(468), model) == parameters(result)
-        @test return_value(Xoshiro(468), model) == return_value(result)
-        @test return_value(FromValues(VarNamedTuple(x=0.5)), model) == 1.5
+        result = simulate(model, Xoshiro(468))
+        @test parameters(model, Xoshiro(468)) == parameters(result)
+        @test return_value(model, Xoshiro(468)) == return_value(result)
+        @test return_value(model, FromValues(VarNamedTuple(x=0.5))) == 1.5
         @test return_value(model) isa Float64
     end
 
-    @testset "Draw round trip" begin
-        result = simulate(Xoshiro(468), model)
-        draw = Draw(result)
-        @test parameters(draw) == parameters(result)
-        @test logprior(draw) == logprior(result)
-        @test loglikelihood(draw) == loglikelihood(result)
-        @test logjoint(draw) == logjoint(result)
-        @test extras(draw).return_value == return_value(result)
-
-        result2 = WrenCore.ModelResult(draw)
+    @testset "parameter round trip" begin
+        result = simulate(model, Xoshiro(468))
+        result2 = simulate(model, parameters(result))
         @test parameters(result2) == parameters(result)
         @test return_value(result2) == return_value(result)
         @test logprior(result2) == logprior(result)
         @test loglikelihood(result2) == loglikelihood(result)
+        @test logjoint(result2) == logjoint(result)
     end
 
     @testset "densify!!" begin
-        result = simulate(Xoshiro(468), densify_model(zeros(2)))
+        result = simulate(densify_model(zeros(2)), Xoshiro(468))
         xs = [parameters(result)[@vn(x[1])], parameters(result)[@vn(x[2])]]
         # Before densifying, `x` is stored as a PartialArray, so it does not compare equal
         # to a VarNamedTuple holding a plain Vector.
         @test parameters(result) != VarNamedTuple(; x=xs)
-        dense = WrenCore.VarNames.densify!!(result)
-        @test haskey(parameters(dense), @vn(x))
-        @test parameters(dense) == VarNamedTuple(; x=xs)
-        @test return_value(dense) == return_value(result)
-        @test logprior(dense) == logprior(result)
-        @test loglikelihood(dense) == loglikelihood(result)
+        dense = WrenCore.VarNames.densify!!(parameters(result))
+        @test haskey(dense, @vn(x))
+        @test dense == VarNamedTuple(; x=xs)
     end
 end
 
