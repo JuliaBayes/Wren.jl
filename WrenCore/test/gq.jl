@@ -261,7 +261,7 @@ end
 
         scoped = @inferred WrenCore.scope(
             GeneratedQuantityAccumulator(SomeGQs((:a,))),
-            @vn(a.b[1])
+            @vn(a.b[1]),
         )
         @test scoped isa GeneratedQuantityAccumulator{AllGQs}
         scoped =

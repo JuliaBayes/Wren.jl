@@ -4,10 +4,10 @@ version = "0.1.0"
 authors = ["Penelope Yong <penelopeysm@gmail.com>"]
 
 [deps]
+ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
 DensityInterface = "b429d917-457f-4dbc-8f4c-0cc954292b1d"
 DifferentiationInterface = "a0c0ee7d-e4b9-4e03-894e-1c5f64a51d63"
 DynamicHMC = "bbc10e6e-7c05-544b-b16e-64fede858acb"
-Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
 EnzymeCore = "f151be2c-9106-41f4-ab19-57ee4f262869"
 FlexiChains = "4a37a8b9-6e57-4b92-8664-298d46e639f7"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
@@ -30,11 +30,11 @@ WrenOptimizationExt = "Optimization"
 WrenPathfinderExt = ["Accessors", "Pathfinder"]
 
 [compat]
+ADTypes = "1.19"
 Accessors = "0.1"
 DensityInterface = "0.4"
 DifferentiationInterface = "0.7"
 DynamicHMC = "3"
-Enzyme = "0.13"
 EnzymeCore = "0.6 - 0.8"
 FlexiChains = "0.7"
 LinearAlgebra = "1"
