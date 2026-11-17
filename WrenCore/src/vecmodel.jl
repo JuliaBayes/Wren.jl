@@ -534,7 +534,7 @@ function lp_and_grad!(grad::AbstractVector, vecmodel::VecModel, params::Abstract
     # caller buffer. Keep the density calculation at the parameter precision.
     prepared_grad =
         eltype(grad) === eltype(prepared_params) ? grad : similar(prepared_params)
-    value, _ = if _use_closure(vecmodel.adtype)
+    result = if _use_closure(vecmodel.adtype)
         DI.value_and_gradient!(
             vecmodel.lp_func,
             prepared_grad,
@@ -560,8 +560,11 @@ function lp_and_grad!(grad::AbstractVector, vecmodel::VecModel, params::Abstract
             DI.Constant(vecmodel.accs),
         )
     end
-    prepared_grad === grad || copyto!(grad, prepared_grad)
-    return value, grad
+    if prepared_grad !== grad
+        copyto!(grad, prepared_grad)
+        return first(result), grad
+    end
+    return result
 end
 function lp_and_grad!(
     ::AbstractVector,
