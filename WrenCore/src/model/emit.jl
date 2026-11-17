@@ -619,7 +619,18 @@ vectorise_batch_stmt(lnn::LineNumberNode, idx, iters, size, ax, cond, ls, ps, ct
 function vectorise_batch_stmt(::IID, idx, iters, size, ax, cond, ls, ps, ctx, scale)
     return error("@iid is not supported inside @batch")
 end
-function vectorise_batch_stmt(::TrackedQuantity, idx, iters, size, ax, cond, ls, ps, ctx)
+function vectorise_batch_stmt(
+    ::TrackedQuantity,
+    idx,
+    iters,
+    size,
+    ax,
+    cond,
+    ls,
+    ps,
+    ctx,
+    scale,
+)
     return error("@track is not supported inside @batch")
 end
 
