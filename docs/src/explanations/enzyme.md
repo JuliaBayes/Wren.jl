@@ -3,11 +3,9 @@
 The Julia ecosystem has had (infamously) [a number of automatic differentiation packages](https://juliadiff.org/), each with their own tradeoffs.
 Wren adopts a _partly_ opinionated approach to AD.
 All (sensible) AD backends are supported via [DifferentiationInterface.jl](https://juliadiff.org/DifferentiationInterface.jl/DifferentiationInterface), so the user can choose their preferred backend.
-However, at the same time, Wren also tries very hard to make it possible for you to use reverse-mode Enzyme as _the_ backend.
 
-The developer(s) of Wren are not affiliated with any AD backend and this opinion is not rooted in any politics or personal disagreement.
-It is purely based on the fact that reverse Enzyme is the fastest AD backend across a wide range of problems (see, e.g., [the benchmarks on Turing.jl](https://juliabayes.org/ADTests/)).
-Thus, we consider it a disservice to choose any other backend as the default, as that simply leaves performance on the table.
+However, at the same time, Wren also tries very hard to make it possible for you to use reverse-mode Enzyme as _the_ backend.
+This is based on the fact that reverse Enzyme is the fastest AD backend across a wide range of problems (see, e.g., [the benchmarks on Turing.jl](https://juliabayes.org/ADTests/); we hope to have similar comparisons on Wren soon).
 
 At the same time, we recognise that Enzyme can be difficult to use and still has a number of edge cases.
 Wren does its best to make this experience as seamless as possible for users.
@@ -169,6 +167,7 @@ m[1:4] = params[1:4]
 ```
 
 Since `m` was declared as `Const`, it doesn't have a 'shadow': in other words, it doesn't have a corresponding array to store its gradients in.
+Thus, even though `d(m)/d(params)` is nonzero, this fact isn't captured anywhere.
 So when we reach the log-likelihood term, Enzyme has no way of 'tracking' the gradient of the log-likelihood with respect to `params`.
 
 This behaviour is intentional in Enzyme, so there isn't an 'upstream fix' available.
@@ -183,10 +182,14 @@ WrenCore._copied_args(model)
 
 ### Eliding copies
 
-Wren does perform some basic dataflow analysis to try to avoid copying things that definitely don't need to be copied, but this is very conservative since Wren only has access to the syntax tree.
-(In fact it's arguable that even this analysis is kind of pointless given the automatic optimisations described below.)
+Wren attempts to save you from this performance cost by eliding copies where possible.
 
-More usefully, though, Wren offers a `reduce_copies` function which essentially tries eliding each argument's copy one by one, and sees if the gradient (evaluated at a few points) is still correct.
+It does so in two ways.
+Firstly, it performs some basic dataflow analysis to try to avoid copying things that definitely don't need to be copied.
+Unfortunately, this is very conservative since Wren only has access to the syntax tree.
+(In fact it's arguable that even this analysis is kind of pointless given the next point; however, it still exists since it's just a strict improvement over not doing it at all.)
+
+Secondly, and more interestingly, Wren has a `reduce_copies` function which essentially tries eliding each argument's copy one by one, and sees if the gradient (evaluated at a few points) is still correct.
 
 ```@example enzyme-copyargs
 new_model = WrenCore.reduce_copies(model, DEFAULT_AD)
@@ -209,14 +212,15 @@ Essentially it requires:
   - `reduce_copies` must be unlucky enough to only hit the latter path during its trial-and-error evaluation.
 
 In general, parameter-dependent control flow already does not work well with vectorisation, so this is pretty unlikely to cause any problems in practice.
-However, it can be disabled with
+However, if desired, the trial-and-error copy elision can be disabled with
 
 ```@example enzyme-copyargs
 vm = VecModel(model, DEFAULT_AD; reduce_copies=false)
 WrenCore._copied_args(vm)
 ```
 
-or even more simply by just copying the argument yourself inside the model, which bypasses Wren's analysis.
+or even more simply by just copying the argument yourself inside the model.
+If you do this, then Wren's automated analysis will most likely elide Wren's own call to `copy`, but your `copy` will be untouched, which yields exactly the desired result.
 
 ## Troubleshooting
 

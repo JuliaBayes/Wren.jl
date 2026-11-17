@@ -38,6 +38,7 @@ include("accs/logp.jl")
 include("accs/vnt.jl")
 include("accs/params.jl")
 include("accs/sitename_tracker.jl")
+include("accs/tq.jl")
 include("accs/accessors.jl")
 
 # Model definition
@@ -45,6 +46,7 @@ include("model/expr.jl")
 using .Expressions:
     AbstractWrenExpr,
     AddLogLikelihood,
+    TrackedQuantity,
     IID,
     Observe,
     OtherStatement,
@@ -85,6 +87,7 @@ export @wren,
     @sample,
     @observe,
     @batch,
+    @track,
     AbstractLatentSource,
     AbstractTransform,
     AbstractParameterSpace,
@@ -95,6 +98,7 @@ export @wren,
     LogLikelihoodAccumulator,
     LogJacobianAccumulator,
     ParamsAccumulator,
+    TrackedQuantityAccumulator,
     AsUnconstrainedVec,
     AsVec,
     ADIncorrectException,
@@ -108,7 +112,6 @@ export @wren,
     AsOriginal,
     TransformedValue,
     VecModel,
-    logdensity,
     DEFAULT_AD,
     VectorisedParamsAccumulator,
     vector_parameters,
@@ -124,6 +127,11 @@ export @wren,
     simulate,
     ModelResult,
     return_value,
+    tracked_quantities,
+    TrackedQuantitySpec,
+    AllQuantities,
+    SomeQuantities,
+    NoQuantities,
     evaluate,
     EvalContext,
     get_latent,
@@ -153,8 +161,8 @@ export @vn, @vnt, VarNamedTuple, VarName, parameters
 using DensityInterface: logdensityof
 export logdensityof
 
-using StatsAPI: loglikelihood, predict
-export loglikelihood, predict
+using StatsAPI: loglikelihood
+export loglikelihood
 
 using DifferentiationInterface: AutoForwardDiff, AutoReverseDiff, AutoMooncake, AutoEnzyme
 export AutoForwardDiff, AutoReverseDiff, AutoMooncake, AutoEnzyme

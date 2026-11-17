@@ -20,7 +20,7 @@ LogNormal() = LogNormal(0.0, 1.0)
 @inline xval(d::LogNormal, z::Number) = exp(muladd(d.σ, z, d.μ))
 
 @inline function DensityInterface.logdensityof(d::LogNormal, x::Number)
-    lx = log(x)
+    lx = log(select(x > zero(x), () -> x, () -> one(x)))
     z = (lx - d.μ) / d.σ
     # Match `σ` to `z` so integer parameters do not reduce `BigFloat` precision.
     σ = oftype(z, d.σ)
@@ -85,9 +85,16 @@ function DensityInterface.logdensityof(d::BatchedLogNormal, x)
     mu, sigma = d.μ, d.σ
     lognorm = length(x) * convert(float(eltype(x)), log2π) / 2
     return if within_compile()
-        sum(@. -(abs2((log(x) - mu) / sigma)) / 2 - log(sigma) - log(x)) - lognorm
+        safe_x = ifelse.(x .> 0, x, one.(x))
+        value =
+            sum(@. -(abs2((log(safe_x) - mu) / sigma)) / 2 - log(sigma) - log(safe_x)) -
+            lognorm
+        ifelse(all(x .> 0), value, oftype(value, -Inf))
     else
-        _lognormal_loop(mu, sigma, x) - lognorm
+        T = float(promote_type(eltype(x), eltype(mu), eltype(sigma)))
+        # Keep unsupported data out of the kernel and its Enzyme rule.
+        value = all(>(0), x) ? _lognormal_loop(mu, sigma, x) : convert(T, -Inf)
+        value - lognorm
     end
 end
 Plaice.scalar_to_scalar_bijector(::BatchedLogNormal) = Plaice.Log(0.0, 1)
