@@ -2,10 +2,10 @@ name: CI
 
 on:
   workflow_dispatch: 
-  push:
-    branches:
-      - main
-  pull_request:
+  # push:
+  #   branches:
+  #     - main
+  # pull_request:
 
 # needed to allow julia-actions/cache to delete old caches that it has created
 permissions:
@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   test:
-    name: ${{ matrix.project }} (${{ matrix.runner.os }})
+    name: ${{ matrix.project }} (${{ matrix.runner.os }}, Julia ${{ matrix.runner.version }})
     runs-on: ${{ matrix.runner.os }}
     env:
       # Sampling multiple chains is multithreaded
@@ -33,12 +33,10 @@ jobs:
           - wren
           - dists
         runner:
-          # Ubuntu
+          # Ubuntu (note workspace support only goes back to 1.12, so 1.10/1.11
+          # might have to wait until it's registered in General, as it's a faff
+          # to call Pkg.develop everywhere.)
           - version: '1'
-            os: ubuntu-latest
-          - version: '1.10'
-            os: ubuntu-latest
-          - version: '1.11'
             os: ubuntu-latest
           - version: '1.12'
             os: ubuntu-latest
