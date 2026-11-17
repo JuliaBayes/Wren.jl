@@ -73,9 +73,9 @@ The main motivation is that the intermediate representation (IR):
   - allows Wren to do some optimisations, for example [elision of submodel parameter collection](@ref submodel-performance);
   - allows for the programmatic generation of Wren models, in that a user can construct an IR and then generate a Wren model from it, instead of having to do some macro gymnastics to create the original model definition.
 
-!!! details "Example: generated quantities"
+!!! details "Example: tracked quantities"
 
-    TODO: Should we use generated quantities to illustrate staging or just leave this page as is?
+    TODO: Should we use tracked quantities to illustrate staging or just leave this page as is?
 
 This of course doesn't come for free.
 Besides the substantial extra complexity of the codebase, it also means that we have to use [RuntimeGeneratedFunctions.jl](https://github.com/SciML/RuntimeGeneratedFunctions.jl) in the second step (IR to evaluation function), which brings with it some limitations.
@@ -118,7 +118,7 @@ These have a very unimaginative one-to-one mapping to the special nodes in Wren:
 | `@iid size=N ...`       | IID               |
 | `@batch for ...`        | Batch             |
 | `@addloglikelihood ...` | AddLogLikelihood  |
-| `@gq ...`               | GeneratedQuantity |
+| `@track ...`               | TrackedQuantity |
 | `return ...`            | ReturnStatement   |
 
 As you can see, most of these are denoted by macros.

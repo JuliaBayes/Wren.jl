@@ -142,9 +142,9 @@ result = simulate(model)
 The [`simulate`](@ref) function returns a bundle of not only the model's return value, but also the corresponding values of the parameters `s` and `d`, as well as the probability of those values occurring.
 (We always track the logarithm of the probability rather than the probability itself: this allows us to accurately represent very small probabilities.)
 
-!!! note "Generated quantities"
+!!! note "Tracked quantities"
 
-    There is an extra field on this struct, called `generated_quantities`; feel free to ignore this for now.
+    There is an extra field on this struct, called `tracked_quantities`; feel free to ignore this for now.
 
 We can see that all the information is consistent with the model that we wrote above.
 In particular, the return value is clearly equal to `30 + d + 10s`.

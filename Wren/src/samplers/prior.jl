@@ -10,20 +10,20 @@ using MCMCProgress: Determinate, advance!, chain_at, close_phase!, open_phase!
         niters::Integer,
         nchains::Integer=1;
         progress::Bool=true,
-        gqs::GeneratedQuantitySpec=AllGQs(),
+        track::TrackedQuantitySpec=AllQuantities(),
     ) -> FlexiChains.VNChain
 
-Sample from the prior distribution of a Wren model. The returned chain holds the generated
-quantities selected by `gqs`.
+Sample from the prior distribution of a Wren model. The returned chain holds the tracked
+quantities selected by `track`.
 """
 function prior(
     model::WrenCore.Model,
     niters::Integer,
     nchains::Integer=1;
     progress::Bool=true,
-    gqs::GeneratedQuantitySpec=AllGQs(),
+    track::TrackedQuantitySpec=AllQuantities(),
 )
-    return prior(Random.default_rng(), model, niters, nchains; progress, gqs)
+    return prior(Random.default_rng(), model, niters, nchains; progress, track)
 end
 function prior(
     rng::Random.AbstractRNG,
@@ -31,7 +31,7 @@ function prior(
     niters::Integer,
     nchains::Integer=1;
     progress::Bool=true,
-    gqs::GeneratedQuantitySpec=AllGQs(),
+    track::TrackedQuantitySpec=AllQuantities(),
 )
     copy!(Random.TaskLocalRNG(), rng)
 
@@ -39,7 +39,7 @@ function prior(
     label = "Sampling $(model.name) from the prior"
     results = with_progress(progress, label, nchains) do run
         tasks = @sync [
-            Threads.@spawn _prior_chain(model, niters, run, j, gqs) for j in 1:nchains
+            Threads.@spawn _prior_chain(model, niters, run, j, track) for j in 1:nchains
         ]
         stack(fetch.(tasks))
     end
@@ -61,7 +61,7 @@ function _prior_chain(
     niters::Integer,
     run,
     j::Integer,
-    gqs::GeneratedQuantitySpec,
+    track::TrackedQuantitySpec,
 )
     chain_model = WrenCore._copy_for_thread(model)
     phase = if run === nothing
@@ -70,7 +70,7 @@ function _prior_chain(
         open_phase!(chain_at(run, j), "Sampling", Determinate(niters))
     end
     chain_results = map(1:niters) do i
-        result = WrenCore.simulate(chain_model, Random.TaskLocalRNG(); gqs)
+        result = WrenCore.simulate(chain_model, Random.TaskLocalRNG(); track)
         phase === nothing || advance!(phase, i)
         result
     end

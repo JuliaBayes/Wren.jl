@@ -40,10 +40,10 @@ function WrenCore.to_flexichain(
     dicts = Matrix{OrderedDict{ParameterOrExtra{<:VarName},Any}}(undef, niters, nchains)
     structures = Matrix{VarNamedTuple}(undef, niters, nchains)
     for (i, (result, stat)) in enumerate(zip(results, stats))
-        # Parameters and generated quantities. If a generated quantity has the same name as
+        # Parameters and tracked quantities. If a tracked quantity has the same name as
         # a parameter, the parameter takes precedence.
         params = VarNames.densify!!(
-            merge(WrenCore.generated_quantities(result), parameters(result)),
+            merge(WrenCore.tracked_quantities(result), parameters(result)),
         )
 
         d = OrderedDict{ParameterOrExtra{<:VarName},Any}(
@@ -108,14 +108,14 @@ end
         model::WrenCore.Model,
         chain::FlexiChains.VNChain;
         rng::Random.AbstractRNG=Random.default_rng(),
-        gqs::GeneratedQuantitySpec=AllGQs(),
+        track::TrackedQuantitySpec=AllQuantities(),
     ) -> FlexiChains.VNChain
 
 Simulate from `model` at every iteration in `chain`. Variables that `chain` does not hold
 are drawn from the prior using `rng`.
 
-The returned `FlexiChain` will contain all the simulated variables, the generated quantities
-selected by `gqs`, as well as the variables already present in the input `chain`, which
+The returned `FlexiChain` will contain all the simulated variables, the tracked quantities
+selected by `track`, as well as the variables already present in the input `chain`, which
 implies that:
 
 - variables that are in the `chain` are fixed to their respective values;
@@ -137,11 +137,11 @@ function WrenCore.simulate(
     model::WrenCore.Model,
     chain::VNChain;
     rng::AbstractRNG=default_rng(),
-    gqs::WrenCore.GeneratedQuantitySpec=WrenCore.AllGQs(),
+    track::WrenCore.TrackedQuantitySpec=WrenCore.AllQuantities(),
 )
     fallback = WrenCore.FromPrior(rng)
     results = map(FlexiChains.parameters_at(chain)) do vnt
-        WrenCore.simulate(model, WrenCore.FromValues(vnt, fallback); gqs)
+        WrenCore.simulate(model, WrenCore.FromValues(vnt, fallback); track)
     end
     simulated_chain = WrenCore.to_flexichain(
         results;
@@ -152,29 +152,29 @@ function WrenCore.simulate(
 end
 
 """
-    generated_quantities(
+    tracked_quantities(
         model::WrenCore.Model,
         chain::FlexiChains.VNChain;
         rng::Random.AbstractRNG=Random.default_rng(),
-        gqs::GeneratedQuantitySpec=AllGQs(),
+        track::TrackedQuantitySpec=AllQuantities(),
     ) -> FlexiChains.VNChain
 
 Re-evaluate `model` at each iteration of `chain` and return a chain holding only the
-generated quantities requested with `gqs`. If a variable required by `model` is not stored
+tracked quantities requested with `track`. If a variable required by `model` is not stored
 in `chain`, that variable will be drawn from the prior distribution.
 """
-function WrenCore.generated_quantities(
+function WrenCore.tracked_quantities(
     model::WrenCore.Model,
     chain::VNChain;
     rng::AbstractRNG=default_rng(),
-    gqs::WrenCore.GeneratedQuantitySpec=WrenCore.AllGQs(),
+    track::WrenCore.TrackedQuantitySpec=WrenCore.AllQuantities(),
 )
     fallback = WrenCore.FromPrior(rng)
-    gq_matrix = map(FlexiChains.parameters_at(chain)) do vnt
-        WrenCore.generated_quantities(model, WrenCore.FromValues(vnt, fallback), gqs)
+    tq_matrix = map(FlexiChains.parameters_at(chain)) do vnt
+        WrenCore.tracked_quantities(model, WrenCore.FromValues(vnt, fallback), track)
     end
     return WrenCore.to_flexichain(
-        gq_matrix;
+        tq_matrix;
         iter_indices=FlexiChains.iter_indices(chain),
         chain_indices=FlexiChains.chain_indices(chain),
     )

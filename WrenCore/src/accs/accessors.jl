@@ -6,12 +6,12 @@ Return the accumulated latent parameter values.
 VarNames.parameters(accs::AccumulatorTuple) = getacc(accs, Val(PARAMS_ACCNAME)).values
 
 """
-    generated_quantities(accs::AccumulatorTuple)::VarNamedTuple
+    tracked_quantities(accs::AccumulatorTuple)::VarNamedTuple
 
-Return the values recorded by `@gq` statements.
+Return the values recorded by `@track` statements.
 """
-function generated_quantities end
-generated_quantities(accs::AccumulatorTuple) = getacc(accs, Val(GQ_ACCNAME)).values
+function tracked_quantities end
+tracked_quantities(accs::AccumulatorTuple) = getacc(accs, Val(TQ_ACCNAME)).values
 
 """
 Return the values collected by a [`VectorisedParamsAccumulator`](@ref): a `VarNamedTuple`

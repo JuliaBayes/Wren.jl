@@ -17,7 +17,7 @@ J = 8
     mu ~ Normal(0, 5)
     tau ~ HalfCauchy(0, 5)
     theta_trans ~ MvNormalScale(zeros(J), I)
-    @gq theta = mu .+ tau .* theta_trans
+    @track theta = mu .+ tau .* theta_trans
     for i in 1:J
         @observe y[i] ~ Normal(theta[i], sigma[i])
     end
@@ -41,7 +41,7 @@ It returns a `ModelResult` object which has several fields.
 To extract these, it is recommended to use the following accessor functions:
 
   - [`parameters`](@ref): returns a [`VarNamedTuple`](@extref) of the parameters drawn from the model;
-  - [`generated_quantities`](@ref): returns a [`VarNamedTuple`](@extref) of the generated quantities that were saved;
+  - [`tracked_quantities`](@ref): returns a [`VarNamedTuple`](@extref) of the tracked quantities that were saved;
   - [`return_value`](@ref): the return value (here a `NamedTuple` with `mu` and `tau`);
   - [`logprior`](@ref), [`loglikelihood`](@ref), and [`logjoint`](@ref): the log-density components.
 
@@ -66,7 +66,7 @@ This will be more performant than `parameters(simulate(model))`, because it avoi
 parameters(model)
 ```
 
-The functions `parameters`, `generated_quantities`, `return_value`, `logprior`, `loglikelihood`, and `logjoint` can therefore be thought of in the following manner:
+The functions `parameters`, `tracked_quantities`, `return_value`, `logprior`, `loglikelihood`, and `logjoint` can therefore be thought of in the following manner:
 
   - if you pass it a result of an evaluation, it will extract the corresponding field;
   - if you haven't yet evaluated the model, it will evaluate it and return the corresponding field.
@@ -88,7 +88,7 @@ simulate(model, Xoshiro(468))
 
     Please note that the RNG is passed as the second argument, not the first.
 
-All the other derived functions (`parameters`, `generated_quantities`, etc.) also behave the same way:
+All the other derived functions (`parameters`, `tracked_quantities`, etc.) also behave the same way:
 
 ```@example using-models
 parameters(model, Xoshiro(468))
