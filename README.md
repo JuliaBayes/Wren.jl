@@ -1,6 +1,6 @@
 # Wren.jl
 
-[![Stable docs](https://img.shields.io/badge/docs-stable-blue.svg)](https://pysm.dev/Wren.jl/) <a href="https://pysm.dev/Wren.jl/"><img src="/docs/src/assets/logo.svg" align="right" alt="Wren.jl logo" style="height: 140px;"></a>
+[![Stable docs](https://img.shields.io/badge/docs-stable-blue.svg)](https://juliabayes.org/Wren.jl/) <a href="https://juliabayes.org/Wren.jl/"><img src="/docs/src/assets/logo.svg" align="right" alt="Wren.jl logo" style="height: 140px;"></a>
 
 Wren is a library for defining and evaluating probabilistic models through staged compilation.
 It is designed with performance on large models in mind, with a `@batch` macro for syntax-level vectorisation, as well as first-class support for Enzyme and Reactant.
