@@ -111,15 +111,15 @@ However, it's still of course a limitation, and the error message isn't super he
 Above we saw two of the 'special expressions' that Wren uses in its IR, namely `Sample` and `Observe`.
 These have a very unimaginative one-to-one mapping to the special nodes in Wren:
 
-| Syntax                  | IR node           |
-|:----------------------- |:----------------- |
-| `a ~ b`                 | Sample            |
-| `@observe a ~ b`        | Observe           |
-| `@iid size=N ...`       | IID               |
-| `@batch for ...`        | Batch             |
-| `@addloglikelihood ...` | AddLogLikelihood  |
-| `@track ...`               | TrackedQuantity |
-| `return ...`            | ReturnStatement   |
+| Syntax                  | IR node          |
+|:----------------------- |:---------------- |
+| `a ~ b`                 | Sample           |
+| `@observe a ~ b`        | Observe          |
+| `@iid size=N ...`       | IID              |
+| `@batch for ...`        | Batch            |
+| `@addloglikelihood ...` | AddLogLikelihood |
+| `@track ...`            | TrackedQuantity  |
+| `return ...`            | ReturnStatement  |
 
 As you can see, most of these are denoted by macros.
 As it turns out, none of these macros actually have a meaning outside of Wren model bodies: they don't actually expand into anything.

@@ -29,7 +29,8 @@ jobs:
       - uses: julia-actions/cache@b7788abd52452d5bc033d69796e110d9906af4ab # 3.2.0
 
       - name: Install docs dependencies
-        shell: julia --color=yes --project=docs {0}
+        working-directory: docs
+        shell: julia --color=yes --project=. {0}
         run: |
           using Pkg
           Pkg.develop(; path=".")
