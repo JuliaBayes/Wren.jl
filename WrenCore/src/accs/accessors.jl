@@ -5,8 +5,20 @@ Return the accumulated latent parameter values.
 """
 VarNames.parameters(accs::AccumulatorTuple) = getacc(accs, Val(PARAMS_ACCNAME)).values
 
-"""Return the vectorised parameter values."""
-vectorised_params(accs::AccumulatorTuple) =
+"""
+    tracked_quantities(accs::AccumulatorTuple)::VarNamedTuple
+
+Return the values recorded by `@track` statements.
+"""
+function tracked_quantities end
+tracked_quantities(accs::AccumulatorTuple) = getacc(accs, Val(TQ_ACCNAME)).values
+
+"""
+Return the values collected by a [`VectorisedParamsAccumulator`](@ref): a `VarNamedTuple`
+with one `TransformedValue{<:AbstractVector}` per variable. This is used to work out the
+layout of a [`VecModel`](@ref).
+"""
+_vectorised_values(accs::AccumulatorTuple) =
     getacc(accs, Val(VECTORISED_PARAMS_ACCNAME)).values
 
 """
@@ -61,7 +73,12 @@ Return the log joint density in transformed coordinates, i.e.
 """
 logjoint_transformed(accs::AccumulatorTuple) = logjoint(accs) - logjac(accs)
 
-function _get_vec_sample(accs::AccumulatorTuple)
+"""
+    vector_parameters(accs::AccumulatorTuple)::AbstractVector
+
+Return the parameter vector filled in by a `VecSampleAccumulator`.
+"""
+function vector_parameters(accs::AccumulatorTuple)
     acc = getacc(accs, Val(VEC_SAMPLE_ACCNAME))
     return acc.vals
 end

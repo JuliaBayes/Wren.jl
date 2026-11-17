@@ -17,7 +17,7 @@ Base.rand(d::WrenDist) = rand(Random.default_rng(), d)
 _logbeta(a, b) = logbeta(a, b)
 EnzymeRules.@easy_rule(
     _logbeta(a, b),
-    @setup(ψ = digamma(a + b)),
+    @setup(ψ=digamma(a + b)),
     (digamma(a) - ψ, digamma(b) - ψ),
 )
 

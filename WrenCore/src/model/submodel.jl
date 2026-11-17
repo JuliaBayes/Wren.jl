@@ -71,7 +71,7 @@ end
 function _scope_submodel(rhs, latent_source, parameter_space, accs, conditioned, vn)
     child_source = scope(latent_source, vn)
     child_space = scope(parameter_space, vn)
-    child_accs = scope(map(split, accs), vn)
+    child_accs = scope(map(reset, accs), vn)
     child_conditioned = merge(rhs.conditioned, scope(conditioned, vn))
     return child_source, child_space, child_accs, child_conditioned
 end
@@ -104,7 +104,7 @@ end
         # parent, to avoid the merge
         #
         # TODO(penelopeysm): maybe we don't need to delete it here, but instead change
-        # `combine_with_namespace` to just ignore unmatched accumulators?
+        # `combine_from_scope` to just ignore unmatched accumulators?
         push!(expr.args, :(child_accs = deleteacc!!(child_accs, Val(PARAMS_ACCNAME))))
     end
     push!(expr.args, :(return (retval, child_params, child_accs)))

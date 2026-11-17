@@ -5,5 +5,7 @@ using Wren
     include("nuts.jl")
     include("sampling.jl")
     include("optimization.jl")
+    include("tracked_quantities.jl")
+    include("pathfinder.jl")
     include("posteriordb.jl")
 end

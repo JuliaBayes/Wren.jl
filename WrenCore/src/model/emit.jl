@@ -160,7 +160,7 @@ function emit_model_expr(
                 )
             end
             $assign_child_params
-            $accs = $(combine_with_namespace)(
+            $accs = $(combine_from_scope)(
                 $accs,
                 $child_accs,
                 $vn,
@@ -600,6 +600,9 @@ vectorise_batch_stmt(lnn::LineNumberNode, idx, iters, size, ax, cond, ls, ps, ct
 function vectorise_batch_stmt(::IID, idx, iters, size, ax, cond, ls, ps, ctx)
     return error("@iid is not supported inside @batch")
 end
+function vectorise_batch_stmt(::TrackedQuantity, idx, iters, size, ax, cond, ls, ps, ctx)
+    return error("@track is not supported inside @batch")
+end
 
 function vectorise_batch_stmt(
     stmt::Sample,
@@ -678,6 +681,60 @@ function emit_model_expr(
     end
 end
 
+# If the TQ is not `always_evaluated`, `expr` is inside an `is_accumulating_tq`
+# branch, which the compiler removes when neither the TQ itself nor any quantity in
+# `tqs_triggering_evaluation` is requested. If `tqs_triggering_evaluation` is empty, the
+# value is assigned to a gensym so that it cannot shadow a variable of the same name.
+function emit_model_expr(
+    stmt::TrackedQuantity,
+    accs,
+    conditioned,
+    latent_source,
+    parameter_space,
+    ctx,
+)
+    # If either `stmt.always_evaluated` is true, or one of the TQs in `stmt.tqs_triggering_evaluation`
+    # is being collected, then we need to _evaluate_ the value of this TQ. This is separate to whether
+    # or not it is collected (in the TQ accumulator), which happens only if `stmt.name` was requested.
+    @gensym tq_value
+    value_expr =
+        emit_model_expr(stmt.expr, accs, conditioned, latent_source, parameter_space, ctx)
+    is_being_accumulated = :($(is_accumulating_tq)($accs, $(Val{stmt.name}())))
+    return if stmt.always_evaluated
+        quote
+            # `let` keeps locals of the expression outside of the model body
+            $(stmt.name) = let
+                $value_expr
+            end
+            if $is_being_accumulated
+                $accs = $(accumulate_tq!!)($accs, $(stmt.name), $(VarName{stmt.name}()))
+            end
+            $(stmt.name)
+        end
+    else
+        value_name = isempty(stmt.tqs_triggering_evaluation) ? tq_value : stmt.name
+        is_needed = foldl(
+            stmt.tqs_triggering_evaluation;
+            init=is_being_accumulated,
+        ) do condition, dependent
+            :($condition || $(is_accumulating_tq)($accs, $(Val{dependent}())))
+        end
+        quote
+            if $is_needed
+                $value_name = let
+                    $value_expr
+                end
+                if $is_being_accumulated
+                    $accs = $(accumulate_tq!!)($accs, $value_name, $(VarName{stmt.name}()))
+                end
+                $value_name
+            else
+                nothing
+            end
+        end
+    end
+end
+
 function emit_model_expr(
     stmt::Observe,
     accs,
@@ -702,6 +759,7 @@ function emit_model_expr(
         $vn = $vn_expr
         $accs =
             $(accumulate_observe!!)($accs, $val, $vn, $rhs, $template, $(Val{stmt.name}()))
+        $val
     end
 end
 

@@ -1,3 +1,6 @@
+# The low-level setup of transformed values is largely adapted from DynamicPPL.jl (MIT
+# license, https://github.com/TuringLang/DynamicPPL.jl).
+
 """
     AbstractTransform
 
@@ -12,7 +15,6 @@ your own (if you do, please get in touch and let us know!)
 - [`AsUnconstrainedVec`](@ref)
 - [`AsVec`](@ref)
 - [`AsOriginal`](@ref)
-- [`FixedTransform`](@ref)
 """
 abstract type AbstractTransform end
 
@@ -39,17 +41,6 @@ struct AsVec <: AbstractTransform end
 Indicates a value that is already in its original space. No transformation is necessary.
 """
 struct AsOriginal <: AbstractTransform end
-
-"""
-    FixedTransform(transform) <: AbstractTransform
-
-Stores a fixed inverse transform that maps an internally stored value to original space.
-"""
-struct FixedTransform{F} <: AbstractTransform
-    transform::F
-end
-Base.:(==)(a::FixedTransform, b::FixedTransform) = a.transform == b.transform
-Base.isequal(a::FixedTransform, b::FixedTransform) = isequal(a.transform, b.transform)
 
 """
     TransformedValue(value, transform::AbstractTransform)
@@ -103,8 +94,6 @@ There are two built-in `AbstractParameterSpace`s:
   this is most suitable for gradient-based inference methods and automatic differentiation.
 
 - [`OriginalSpace`](@ref): all latent variables are represented in their original space.
-
-This can be extended in future to support [`FixedTransform`](@ref)s.
 """
 abstract type AbstractParameterSpace end
 
@@ -180,10 +169,6 @@ function apply_parameter_space(
         raw_value, tval, -inverse_logjac
     elseif target isa AsVec || target isa AsOriginal
         raw_value, TransformedValue(raw_value, AsOriginal()), zero(LogProbType)
-    elseif target isa FixedTransform
-        forward = Plaice.inverse(target.transform)
-        value, logjac = Plaice.with_logabsdet_jacobian(forward, raw_value)
-        raw_value, TransformedValue(value, target), logjac
     else
         error("unknown target transform: $target")
     end
@@ -202,10 +187,6 @@ function apply_parameter_space(
         raw_value, TransformedValue(value, AsUnconstrainedVec()), logjac
     elseif target isa AsVec || target isa AsOriginal
         raw_value, tval, zero(LogProbType)
-    elseif target isa FixedTransform
-        forward = Plaice.inverse(target.transform)
-        value, logjac = Plaice.with_logabsdet_jacobian(forward, raw_value)
-        raw_value, TransformedValue(value, target), logjac
     else
         error("unknown target transform: $target")
     end
@@ -224,40 +205,10 @@ function apply_parameter_space(
         raw_value, TransformedValue(value, AsUnconstrainedVec()), logjac
     elseif target isa AsVec || target isa AsOriginal
         raw_value, tval, zero(LogProbType)
-    elseif target isa FixedTransform
-        forward = Plaice.inverse(target.transform)
-        value, logjac = Plaice.with_logabsdet_jacobian(forward, raw_value)
-        raw_value, TransformedValue(value, target), logjac
     else
         error("unknown target transform: $target")
     end
 end
-function apply_parameter_space(
-    parameter_space::AbstractParameterSpace,
-    tval::TransformedValue{<:Any,<:FixedTransform},
-    vn::VarName,
-    dist,
-)
-    target = target_transform(parameter_space, vn)
-    return if target isa AsUnconstrainedVec
-        raw_value = tval.transform.transform(tval.value)
-        forward = Plaice.inverse(Plaice.from_unconstrained_vec(dist))
-        value, logjac = Plaice.with_logabsdet_jacobian(forward, raw_value)
-        raw_value, TransformedValue(value, AsUnconstrainedVec()), logjac
-    elseif target isa AsVec || target isa AsOriginal
-        raw_value = tval.transform.transform(tval.value)
-        raw_value, TransformedValue(raw_value, AsOriginal()), zero(LogProbType)
-    elseif target isa FixedTransform
-        target == tval.transform ||
-            throw(ArgumentError("latent variable $vn has an incompatible fixed transform"))
-        raw_value, inverse_logjac =
-            Plaice.with_logabsdet_jacobian(tval.transform.transform, tval.value)
-        raw_value, tval, -inverse_logjac
-    else
-        error("unknown target transform: $target")
-    end
-end
-
 """
     scope(parameter_space::AbstractParameterSpace, vn::VarName) -> AbstractParameterSpace
 
