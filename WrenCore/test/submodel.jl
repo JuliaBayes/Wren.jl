@@ -396,30 +396,34 @@ end
         end
 
         @testset "constrained child latent and observation" begin
-            @wren function constrained_inner()
-                x ~ Exponential(2.0)
+            prior_scale = 2.0
+            observed_y = 3.0
+            initial_x = 2.0
+
+            @wren function constrained_inner(scale)
+                x ~ Exponential(scale)
                 y ~ Exponential(x)
             end
             @wren function constrained_outer(sub)
                 a ~ sub
             end
-            model = constrained_outer(constrained_inner() | (; y=3.0))
+            model = constrained_outer(constrained_inner(prior_scale) | (; y=observed_y))
             initial = @vnt begin
-                a.x := 2.0
+                a.x := initial_x
             end
             vm = VecModel(model, AutoForwardDiff(); latent_source=FromValues(initial))
-            u = log(2.0)
+            u = log(initial_x)
 
             result = simulate(vm, [u])
-            @test parameters(result)[@vn(a.x)] ≈ 2.0
-            @test logprior(result) ≈ -log(2.0) - 1.0
-            @test loglikelihood(result) ≈ -u - 1.5
+            @test parameters(result)[@vn(a.x)] ≈ initial_x
+            @test logprior(result) ≈ -log(prior_scale) - initial_x / prior_scale
+            @test loglikelihood(result) ≈ -u - observed_y / initial_x
 
             # Under x = exp(u), the latent Jacobian cancels the likelihood's 1/x.
             # The conditioned y contributes no Jacobian.
             value, gradient = lp_and_grad(vm, [u])
-            @test value ≈ -log(2.0) - exp(u) / 2 - 3exp(-u)
-            @test gradient ≈ [-exp(u) / 2 + 3exp(-u)]
+            @test value ≈ -log(prior_scale) - exp(u) / prior_scale - observed_y * exp(-u)
+            @test gradient ≈ [-exp(u) / prior_scale + observed_y * exp(-u)]
         end
 
         @testset "no fast path sitenames in submodel" begin
