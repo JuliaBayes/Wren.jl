@@ -6,7 +6,7 @@ using WrenCore
 include("samplers/progress.jl")
 include("samplers/prior.jl")
 include("samplers/nuts.jl")
-export prior, nuts
+export prior, nuts, FindFiniteDensity
 
 include("optimization.jl")
 export optimize, MAP, MLE

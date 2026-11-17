@@ -6,6 +6,48 @@ using DynamicHMC: DynamicHMC
 using MCMCProgress:
     MCMCProgress, RunProgress, Determinate, advance!, chain_at, close_phase!, open_phase!
 
+abstract type AbstractInitialization end
+
+"""
+    FindFiniteDensity(source; max_attempts::Integer=1)
+
+Initialise each NUTS chain by drawing from `source` until its unconstrained coordinates and
+log-density are finite, trying at most `max_attempts` candidates per chain. `source` is
+converted with [`WrenCore.to_latent_source`](@ref). A failed search throws before warmup.
+
+The same source supplies [`VecModel`](@ref) preparation values. Preparation draws do not
+count towards `max_attempts`; errors during preparation or model evaluation propagate.
+"""
+struct FindFiniteDensity{S<:WrenCore.AbstractLatentSource} <: AbstractInitialization
+    source::S
+    max_attempts::Int
+
+    function FindFiniteDensity(
+        source::S,
+        max_attempts::Integer,
+    ) where {S<:WrenCore.AbstractLatentSource}
+        max_attempts > 0 || throw(ArgumentError("`max_attempts` must be positive."))
+        return new{S}(source, Int(max_attempts))
+    end
+end
+
+FindFiniteDensity(source; max_attempts::Integer=1) =
+    FindFiniteDensity(WrenCore.to_latent_source(source), max_attempts)
+
+_initial_source(init::FindFiniteDensity) = init.source
+
+function _initial_position(vm::WrenCore.VecModel, init::FindFiniteDensity)
+    for _ in 1:init.max_attempts
+        q = WrenCore.vector_parameters(vm, init.source)
+        all(isfinite, q) && isfinite(WrenCore.lp(vm, q)) && return q
+    end
+    throw(
+        ArgumentError(
+            "No finite-density initial point found after $(init.max_attempts) attempts.",
+        ),
+    )
+end
+
 mutable struct ChainReporter
     const run::RunProgress
     const chain_index::Int
@@ -52,7 +94,7 @@ close_phases!(::DynamicHMC.NoProgressReport) = nothing
         progress::Bool=true,
         reduce_copies::Bool=true,
         track::TrackedQuantitySpec=AllQuantities(),
-        init=nothing,
+        init::Union{Nothing,AbstractInitialization}=nothing,
         initialization=nothing,
         dynamichmc_kwargs...
     ) -> FlexiChains.VNChain
@@ -63,11 +105,17 @@ behaviour. The returned chain holds the tracked quantities selected by `track`.
 
 Each chain starts from an independent prior draw by default.
 
-Use `init=FromValues(VarNamedTuple(; x=1.0))` to supply initial values in model space.
-`init` is converted with [`to_latent_source`](@ref WrenCore.to_latent_source) and supplies a starting point for each
-chain, as well as the values used to prepare the [`VecModel`](@ref).
-DynamicHMC's `initialization=(; κ, ϵ)` can be combined with `init`; a raw unconstrained
-`initialization.q` cannot, since both specify the starting point.
+Use `init=FindFiniteDensity(FromValues(VarNamedTuple(; x=1.0)))` to supply initial values in
+model space. [`FindFiniteDensity`](@ref) checks one candidate per chain by default; increase
+`max_attempts` to retry non-finite starting points or log-densities. For opt-in interval
+initialisation, use `init=FindFiniteDensity(WrenCore.FromUnconstrainedInterval())` and set
+the attempt bound as needed.
+
+DynamicHMC's warmup and step-size options, including `initialization=(; ϵ=0.1)`, remain
+available. Passing raw `initialization.q` or `initialization.κ` is deprecated. For direct
+control of unconstrained positions or metrics, construct a [`VecModel`](@ref) and pass it
+to [`DynamicHMC.mcmc_with_warmup`](@extref). A raw `initialization.q` cannot be combined
+with `init`, since both specify the starting point.
 
 `reduce_copies` is passed to [`VecModel`](@ref): when sampling with Enzyme, it skips copies
 of model arguments that turn out not to be needed (see [`reduce_copies`](@ref)).
@@ -80,7 +128,7 @@ function nuts(
     progress::Bool=true,
     reduce_copies::Bool=true,
     track::TrackedQuantitySpec=AllQuantities(),
-    init=nothing,
+    init::Union{Nothing,AbstractInitialization}=nothing,
     initialization=nothing,
     dynamichmc_kwargs...,
 )
@@ -107,17 +155,25 @@ function nuts(
     progress::Bool=true,
     reduce_copies::Bool=true,
     track::TrackedQuantitySpec=AllQuantities(),
-    init=nothing,
+    init::Union{Nothing,AbstractInitialization}=nothing,
     initialization=nothing,
     dynamichmc_kwargs...,
 )
+    initialization = initialization === nothing ? nothing : (; initialization...)
     init !== nothing &&
         initialization !== nothing &&
         haskey(initialization, :q) &&
         throw(
             ArgumentError("`init` and `initialization.q` both specify the starting point."),
         )
-    source = init === nothing ? WrenCore.FromPrior() : WrenCore.to_latent_source(init)
+    if initialization !== nothing &&
+       (haskey(initialization, :q) || haskey(initialization, :κ))
+        Base.depwarn(
+            "Passing `initialization.q` or `initialization.κ` to `nuts` is deprecated. Use a Wren initialization policy, or construct a VecModel and call DynamicHMC directly for unconstrained positions or metrics.",
+            :nuts,
+        )
+    end
+    source = init === nothing ? WrenCore.FromPrior() : _initial_source(init)
     # AD preparation
     if progress
         t = time()
@@ -136,7 +192,7 @@ function nuts(
         fill(initialization, nchains)
     else
         options = initialization === nothing ? (;) : initialization
-        [(; options..., q=WrenCore.vector_parameters(vm_single, source)) for _ in 1:nchains]
+        [(; options..., q=_initial_position(vm_single, init)) for _ in 1:nchains]
     end
 
     t = time()
