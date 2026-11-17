@@ -294,8 +294,10 @@ or to be precise, since `batched` can't tell upfront that `sum` can take a `dims
 y[1:N] ~ batched(1:N, Val{Normal}(), mapslices(sum, x[1:N, :], dims=2))
 ```
 
-This would have the correct semantics, but unfortunately Wren has zero way of knowing which situation we are in!
+This would have the correct semantics, but unfortunately Wren has zero way of knowing which of the two situations we are in!
 So, in general, Wren will refuse to batch any arguments that are not just indexing expressions.
+In such cases, Wren will just issue an info message saying that it is falling back to `independent`.
+This won't affect correctness, but might be slower due to the lack of vectorisation.
 
 The way to solve this is to lift the function call outside the loop:
 
@@ -313,10 +315,6 @@ Or equivalently, for the Poisson case, Wren also provides `PoissonLog` which all
     y[i] ~ PoissonLog(x[i]) # instead of Poisson(exp(x[i]))
 end
 ```
-
-Wren is capable of detecting these cases at macro time since it depends on the form of the right-hand side.
-In this case, Wren will just issue an info message saying that it is falling back to `independent`.
-This won't affect correctness, but might be slower due to the lack of vectorisation.
 
 ### Runtime errors
 

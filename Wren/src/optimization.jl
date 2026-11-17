@@ -9,7 +9,7 @@ Both objectives use the latent support declared by the model's priors.
 
 Returns `(params, solution)`: named model-space parameters and the native Optimization
 solution, including its convergence status. The solver minimises the negative original-space
-log-density in unconstrained coordinates. Initialisation and AD preparation use [`logdensity`](@ref).
+log-density in unconstrained coordinates. Initialisation and AD preparation use [`VecModel`](@ref).
 Solver keywords are forwarded to `Optimization.solve`.
 """
 function optimize end

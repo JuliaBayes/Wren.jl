@@ -14,7 +14,7 @@ using Wren, Wren.Dists
     x ~ Normal()
 end
 
-rand(inner())
+parameters(inner())
 ```
 
 When we write `x ~ Normal()` in the model above, what happens is that the result of `rand(Normal())` (i.e., a float) is stored in the parameter `x`.
@@ -27,11 +27,11 @@ Now in the next model, we'll write `a ~ inner()`, with a model on the right-hand
 end
 ```
 
-In an exactly analogous fashion to before, the result of `rand(inner())` (i.e., a VarNamedTuple) is stored in the parameter `a`.
-We could equivalently say that all the variables inside `inner` are *prefixed* with `a`, but thinking of it in terms of `rand()` is more precise.
+In an exactly analogous fashion to before, the result of `parameters(inner())` (i.e., a VarNamedTuple) is stored in the parameter `a`.
+We could equivalently say that all the variables inside `inner` are *prefixed* with `a`, but thinking of it in terms of `parameters()` is more precise.
 
 ```@example submodel
-vnt = rand(outer_basic())
+vnt = parameters(outer_basic())
 ```
 
 We can access the inner variable by indexing into this:
@@ -114,7 +114,7 @@ This is intentionally done to avoid name collisions; if you have a strong use ca
 
 ## Accessing latent values
 
-We claimed above that `a ~ inner()` should store the result of `rand(inner())` in the variable `a`.
+We claimed above that `a ~ inner()` should store the result of `parameters(inner())` in the variable `a`.
 In the examples above, we demonstrated this by evaluating the entire parent model end-to-end.
 However, one might also want to access the latent variables of a submodel *inside* the parent model, during its execution.
 
@@ -129,7 +129,7 @@ For example, here we access the latent variable `x` of the inner model and add o
     y ~ Uniform(xp1, xp1 + 0.01)
 end
 
-rand(outer_with_latent())
+parameters(outer_with_latent())
 ```
 
 ## Accessing return values
@@ -164,7 +164,7 @@ end
 As in the previous example, `y` should be very close to `a.x + 1`:
 
 ```@example submodel
-rand(outer_with_retval())
+parameters(outer_with_retval())
 ```
 
 (You can also use this syntax for distributions, but it's much less interesting as the `retval` will also be the same as `rand(dist)`.)
@@ -205,7 +205,7 @@ using Enzyme
 @bmodel outer_with_latent() DEFAULT_AD
 ```
 
-Most of the benchmarks above (`rand(model)`, `logjoint(model, params)`, and `lp` i.e. a vectorised log-density) will not be very different when we use the `retval` version.
+Most of the benchmarks above (`parameters(model)`, `logjoint(model, params)`, and `lp` i.e. a vectorised log-density) will not be very different when we use the `retval` version.
 However, `lp_and_grad` i.e. the gradient of the vectorised log-density) will be *much* faster!
 
 ```@example submodel
