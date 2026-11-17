@@ -530,10 +530,14 @@ into `grad`. Returns a tuple (log_density, grad).
 """
 function lp_and_grad!(grad::AbstractVector, vecmodel::VecModel, params::AbstractVector)
     adprep, prepared_params = _prepare_gradient(vecmodel, params)
-    return if _use_closure(vecmodel.adtype)
+    # Enzyme needs matching parameter and gradient precision, even for a lower-precision
+    # caller buffer. Keep the density calculation at the parameter precision.
+    prepared_grad =
+        eltype(grad) === eltype(prepared_params) ? grad : similar(prepared_params)
+    value, _ = if _use_closure(vecmodel.adtype)
         DI.value_and_gradient!(
             vecmodel.lp_func,
-            grad,
+            prepared_grad,
             adprep,
             vecmodel.adtype,
             prepared_params,
@@ -541,7 +545,7 @@ function lp_and_grad!(grad::AbstractVector, vecmodel::VecModel, params::Abstract
     else
         DI.value_and_gradient!(
             _vecmodel_lp,
-            grad,
+            prepared_grad,
             adprep,
             vecmodel.adtype,
             prepared_params,
@@ -556,6 +560,8 @@ function lp_and_grad!(grad::AbstractVector, vecmodel::VecModel, params::Abstract
             DI.Constant(vecmodel.accs),
         )
     end
+    prepared_grad === grad || copyto!(grad, prepared_grad)
+    return value, grad
 end
 function lp_and_grad!(
     ::AbstractVector,

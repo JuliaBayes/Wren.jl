@@ -139,6 +139,12 @@ end
                 end
                 @test buffer ≈ expected_grad rtol=rtol
             end
+            params = [1.234567890123]
+            buffer = fill(NaN32, 1)
+            value, grad = lp_and_grad!(buffer, vm, params)
+            @test value ≈ lp(vm, params) rtol=10eps(Float64)
+            @test grad === buffer
+            @test buffer == -Float32.(params)
         end
     end
 
