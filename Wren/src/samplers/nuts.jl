@@ -111,11 +111,13 @@ model space. [`FindFiniteDensity`](@ref) checks one candidate per chain by defau
 initialisation, use `init=FindFiniteDensity(WrenCore.FromUnconstrainedInterval())` and set
 the attempt bound as needed.
 
-DynamicHMC's warmup and step-size options, including `initialization=(; ϵ=0.1)`, remain
-available. Passing raw `initialization.q` or `initialization.κ` is deprecated. For direct
-control of unconstrained positions or metrics, construct a [`VecModel`](@ref) and pass it
-to [`DynamicHMC.mcmc_with_warmup`](@extref). A raw `initialization.q` cannot be combined
-with `init`, since both specify the starting point.
+With `init`, Wren owns the position and metric. DynamicHMC warmup and scalar options remain
+available; `initialization` may contain only the scalar real step size `ϵ` (or `nothing`).
+For direct control of unconstrained positions or metrics, construct a [`VecModel`](@ref)
+and pass it to [`DynamicHMC.mcmc_with_warmup`](@extref).
+
+Without `init`, legacy raw `initialization` options remain supported. Passing raw `q` or
+`κ` through this legacy path is deprecated.
 
 `reduce_copies` is passed to [`VecModel`](@ref): when sampling with Enzyme, it skips copies
 of model arguments that turn out not to be needed (see [`reduce_copies`](@ref)).
@@ -160,14 +162,22 @@ function nuts(
     dynamichmc_kwargs...,
 )
     initialization = initialization === nothing ? nothing : (; initialization...)
-    init !== nothing &&
-        initialization !== nothing &&
-        haskey(initialization, :q) &&
-        throw(
-            ArgumentError("`init` and `initialization.q` both specify the starting point."),
+    if init !== nothing && initialization !== nothing
+        issubset(keys(initialization), (:ϵ,)) || throw(
+            ArgumentError(
+                "With `init`, `initialization` may contain only `ϵ`; use VecModel and DynamicHMC for raw positions or metrics.",
+            ),
         )
-    if initialization !== nothing &&
-       (haskey(initialization, :q) || haskey(initialization, :κ))
+        ϵ = get(initialization, :ϵ, nothing)
+        ϵ === nothing ||
+            ϵ isa Real ||
+            throw(
+                ArgumentError(
+                    "With `init`, the initial step size `ϵ` must be a scalar Real or nothing.",
+                ),
+            )
+    elseif initialization !== nothing &&
+           (haskey(initialization, :q) || haskey(initialization, :κ))
         Base.depwarn(
             "Passing `initialization.q` or `initialization.κ` to `nuts` is deprecated. Use a Wren initialization policy, or construct a VecModel and call DynamicHMC directly for unconstrained positions or metrics.",
             :nuts,

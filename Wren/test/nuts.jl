@@ -34,8 +34,9 @@ mutable struct SequenceValues <: WrenCore.AbstractLatentSource
 end
 SequenceValues(values) = SequenceValues(values, 1)
 function WrenCore.get_latent(source::SequenceValues, ::VarName, dist, ::Val)
-    value = source.values[source.next]
+    index = source.next
     source.next += 1
+    value = source.values[index]
     return WrenCore.TransformedValue(value, WrenCore.AsOriginal())
 end
 WrenCore.scope(source::SequenceValues, ::VarName) = source
@@ -66,16 +67,20 @@ WrenCore.scope(source::SequenceValues, ::VarName) = source
         @test FlexiChains.has_same_data(chn1, chn2)
         @test q1 != q2
 
-        chn = @test_deprecated r"initialization.q" nuts(
+        states = Channel{NamedTuple}(1)
+        κ = Wren.DynamicHMC.GaussianKineticEnergy(1, 2.0)
+        @test_deprecated r"initialization.q" nuts(
             Xoshiro(468),
             model,
             3;
             progress=false,
-            initialization=(:q => [10.0], :ϵ => 0.01),
-            warmup_stages=(),
+            initialization=(:q => [10.0], :κ => κ, :ϵ => 0.01),
+            warmup_stages=(RecordInitialization(states),),
             algorithm=Wren.DynamicHMC.NUTS(; max_depth=1),
         )
-        @test all(x -> 9.8 < x < 10.2, chn[@vn(x)])
+        state = take!(states)
+        @test state.q == [10.0]
+        @test state.κ === κ
     end
 
     @testset "rng" begin
@@ -97,37 +102,27 @@ WrenCore.scope(source::SequenceValues, ::VarName) = source
             x ~ LogNormal()
         end
         states = Channel{NamedTuple}(2)
-        κ = Wren.DynamicHMC.GaussianKineticEnergy(1, 2.0)
         kwargs = (;
             progress=false,
-            initialization=(; κ, ϵ=0.01),
+            initialization=(; ϵ=0.01),
             warmup_stages=(RecordInitialization(states),),
             algorithm=Wren.DynamicHMC.NUTS(; max_depth=1),
         )
         initial = FindFiniteDensity(VarNamedTuple(; x=exp(2.0)))
-        @test_deprecated r"initialization.κ" nuts(
-            Xoshiro(468),
-            positive_parameter(),
-            3,
-            2;
-            init=initial,
-            kwargs...,
-        )
+        nuts(Xoshiro(468), positive_parameter(), 3, 2; init=initial, kwargs...)
         s1, s2 = take!(states), take!(states)
         @test s1.q ≈ s2.q ≈ [2.0]
-        @test s1.κ == s2.κ == κ
         @test s1.ϵ == s2.ϵ == 0.01
         chn = nuts(Xoshiro(468), positive_parameter(), 3; init=initial, progress=false)
         @test all(>(0), chn[@vn(x)])
 
-        seeded_kwargs = (; kwargs..., initialization=(; ϵ=0.01))
         nuts(
             Xoshiro(468),
             positive_parameter(),
             3,
             2;
             init=FindFiniteDensity(FromPrior(Xoshiro(123))),
-            seeded_kwargs...,
+            kwargs...,
         )
         q1, q2 = take!(states).q, take!(states).q
         nuts(
@@ -136,18 +131,22 @@ WrenCore.scope(source::SequenceValues, ::VarName) = source
             3,
             2;
             init=FindFiniteDensity(FromPrior(Xoshiro(123))),
-            seeded_kwargs...,
+            kwargs...,
         )
         @test q1 != q2
         @test sort([q1, q2]) == sort([take!(states).q, take!(states).q])
 
-        @test_throws ArgumentError nuts(
-            positive_parameter(),
-            3;
-            init=initial,
-            initialization=(; q=[0.0]),
-            progress=false,
-        )
+        source = SequenceValues(Float64[])
+        for initialization in ((; q=[0.0]), (; κ=ones(1, 1)), (; unknown=1), (; ϵ=[0.01]))
+            @test_throws ArgumentError nuts(
+                positive_parameter(),
+                3;
+                init=FindFiniteDensity(source),
+                initialization,
+                progress=false,
+            )
+        end
+        @test source.next == 1
     end
 
     @testset "finite-density search" begin
