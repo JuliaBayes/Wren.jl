@@ -20,6 +20,14 @@ function Wren.DynamicHMC.warmup(_, recorder::RecordStarts, state)
     return nothing, state
 end
 
+struct RecordInitialization
+    states::Channel{NamedTuple}
+end
+function Wren.DynamicHMC.warmup(_, recorder::RecordInitialization, state)
+    put!(recorder.states, (; q=copy(state.Q.q), state.κ, state.ϵ))
+    return nothing, state
+end
+
 @testset "nuts.jl" begin
     @testset "interface" begin
         chain = nuts(model, 1000, 4; progress=false)
@@ -70,6 +78,56 @@ end
         chn1 = nuts(s, model, 100, 3; progress=false)
         chn2 = nuts(s, model, 100, 3; progress=false)
         @test !FlexiChains.has_same_data(chn1, chn2)
+    end
+
+    @testset "model-space initialization" begin
+        @wren function positive_parameter()
+            x ~ LogNormal()
+        end
+        states = Channel{NamedTuple}(2)
+        κ = Wren.DynamicHMC.GaussianKineticEnergy(1, 2.0)
+        kwargs = (;
+            progress=false,
+            initialization=(; κ, ϵ=0.01),
+            warmup_stages=(RecordInitialization(states),),
+            algorithm=Wren.DynamicHMC.NUTS(; max_depth=1),
+        )
+        initial = VarNamedTuple(; x=exp(2.0))
+        nuts(Xoshiro(468), positive_parameter(), 3, 2; init=initial, kwargs...)
+        s1, s2 = take!(states), take!(states)
+        @test s1.q ≈ s2.q ≈ [2.0]
+        @test s1.κ == s2.κ == κ
+        @test s1.ϵ == s2.ϵ == 0.01
+        chn = nuts(Xoshiro(468), positive_parameter(), 3; init=initial, progress=false)
+        @test all(>(0), chn[@vn(x)])
+
+        nuts(
+            Xoshiro(468),
+            positive_parameter(),
+            3,
+            2;
+            init=FromPrior(Xoshiro(123)),
+            kwargs...,
+        )
+        q1, q2 = take!(states).q, take!(states).q
+        nuts(
+            Xoshiro(468),
+            positive_parameter(),
+            3,
+            2;
+            init=FromPrior(Xoshiro(123)),
+            kwargs...,
+        )
+        @test q1 != q2
+        @test sort([q1, q2]) == sort([take!(states).q, take!(states).q])
+
+        @test_throws ArgumentError nuts(
+            positive_parameter(),
+            3;
+            init=initial,
+            initialization=(; q=[0.0]),
+            progress=false,
+        )
     end
 end
 

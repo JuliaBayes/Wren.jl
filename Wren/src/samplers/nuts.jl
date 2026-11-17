@@ -52,6 +52,8 @@ close_phases!(::DynamicHMC.NoProgressReport) = nothing
         progress::Bool=true,
         reduce_copies::Bool=true,
         track::TrackedQuantitySpec=AllQuantities(),
+        init=nothing,
+        initialization=nothing,
         dynamichmc_kwargs...
     ) -> FlexiChains.VNChain
 
@@ -59,8 +61,13 @@ No U-Turn Sampler (NUTS) for a Wren model. All `dynamichmc_kwargs` are passed to
 [`DynamicHMC.mcmc_with_warmup`](@extref), allowing you to customise the warmup and sampling
 behaviour. The returned chain holds the tracked quantities selected by `track`.
 
-Each chain starts from an independent prior draw unless `initialization` is supplied in
-`dynamichmc_kwargs`.
+Each chain starts from an independent prior draw by default.
+
+Use `init=FromValues(VarNamedTuple(; x=1.0))` to supply initial values in model space.
+`init` is converted with [`to_latent_source`](@ref) and supplies a starting point for each
+chain, as well as the values used to prepare the [`VecModel`](@ref).
+DynamicHMC's `initialization=(; κ, ϵ)` can be combined with `init`; a raw unconstrained
+`initialization.q` cannot, since both specify the starting point.
 
 `reduce_copies` is passed to [`VecModel`](@ref): when sampling with Enzyme, it skips copies
 of model arguments that turn out not to be needed (see [`reduce_copies`](@ref)).
@@ -73,6 +80,8 @@ function nuts(
     progress::Bool=true,
     reduce_copies::Bool=true,
     track::TrackedQuantitySpec=AllQuantities(),
+    init=nothing,
+    initialization=nothing,
     dynamichmc_kwargs...,
 )
     return nuts(
@@ -84,6 +93,8 @@ function nuts(
         progress,
         reduce_copies,
         track,
+        init,
+        initialization,
         dynamichmc_kwargs...,
     )
 end
@@ -96,20 +107,37 @@ function nuts(
     progress::Bool=true,
     reduce_copies::Bool=true,
     track::TrackedQuantitySpec=AllQuantities(),
+    init=nothing,
+    initialization=nothing,
     dynamichmc_kwargs...,
 )
+    init !== nothing &&
+        initialization !== nothing &&
+        haskey(initialization, :q) &&
+        throw(
+            ArgumentError("`init` and `initialization.q` both specify the starting point."),
+        )
+    source = init === nothing ? WrenCore.FromPrior() : WrenCore.to_latent_source(init)
     # AD preparation
     if progress
         t = time()
         print("Doing AD preparation... ")
     end
-    vm_single = WrenCore.VecModel(model, adtype; reduce_copies)
+    vm_single = WrenCore.VecModel(model, adtype; reduce_copies, latent_source=source)
     if progress
         println("done in $(round(time() - t, digits=2)) seconds.")
         t = time()
     end
 
     Random.seed!(Random.TaskLocalRNG(), rand(rng, UInt64))
+
+    # Sources can contain mutable RNGs, so draw initial points before spawning tasks.
+    chain_initializations = if init === nothing
+        fill(initialization, nchains)
+    else
+        options = initialization === nothing ? (;) : initialization
+        [(; options..., q=WrenCore.vector_parameters(vm_single, source)) for _ in 1:nchains]
+    end
 
     t = time()
     label = "Sampling $(model.name)"
@@ -121,6 +149,7 @@ function nuts(
                 run,
                 j;
                 track,
+                initialization=chain_initializations[j],
                 dynamichmc_kwargs...,
             ) for j in 1:nchains
         ]
