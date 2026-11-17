@@ -33,7 +33,6 @@ jobs:
         shell: julia --color=yes --project=. {0}
         run: |
           using Pkg
-          Pkg.develop(; path=".")
           Pkg.instantiate()
 
       - name: Build and deploy docs
