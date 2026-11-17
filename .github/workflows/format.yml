@@ -1,11 +1,10 @@
 name: Format
 
 on:
-  # TODO(penelopeysm): Re-enable once the repo is public.
-  # push:
-  #   branches:
-  #     - main
-  # pull_request:
+  push:
+    branches:
+      - main
+  pull_request:
 
 jobs:
   format:
@@ -18,5 +17,5 @@ jobs:
 
       - name: Check formatting
         run: |
-          julia -e 'using Pkg; Pkg.Registry.add("General"); Pkg.Registry.update(); Pkg.Apps.add(name="JuliaFormatter", version=v"2.10.1")'
+          julia -e 'using Pkg; Pkg.Registry.add("General"); Pkg.Registry.update(); Pkg.Apps.add(name="JuliaFormatter", version=v"2.14.12")'
           ${HOME}/.julia/bin/jlfmt --check --verbose .

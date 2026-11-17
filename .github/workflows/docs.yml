@@ -1,12 +1,11 @@
 name: Documentation
 
 on:
-  # TODO(penelopeysm): Re-enable once the repo is public.
-  # push:
-  #   branches:
-  #     - main
-  #   tags: '*'
-  # pull_request:
+  push:
+    branches:
+      - main
+    tags: '*'
+  pull_request:
 
 concurrency:
   # Skip intermediate builds: always.
@@ -30,10 +29,10 @@ jobs:
       - uses: julia-actions/cache@b7788abd52452d5bc033d69796e110d9906af4ab # 3.2.0
 
       - name: Install docs dependencies
-        shell: julia --color=yes --project=docs {0}
+        working-directory: docs
+        shell: julia --color=yes --project=. {0}
         run: |
           using Pkg
-          Pkg.develop(; path=".")
           Pkg.instantiate()
 
       - name: Build and deploy docs

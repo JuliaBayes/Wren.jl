@@ -2,7 +2,6 @@
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 Chairmarks = "0ca39b1e-fe0b-4e98-acfc-b1656634c4de"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
-Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 DocumenterCodeBlocks = "b6400b83-267f-4b55-9fd8-bffc853bdfd8"
 DocumenterInterLinks = "d12716ef-a0f6-4df4-a9f1-a5a34e75c656"
@@ -11,11 +10,23 @@ Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
 FlexiChains = "4a37a8b9-6e57-4b92-8664-298d46e639f7"
 LiveServer = "16fef848-5104-11e9-1b77-fb7a48bbb589"
 LogDensityProblems = "6fdf6af0-433a-55f7-b3ed-c6c6e0b8df7c"
+LogExpFunctions = "2ab3a3ac-af41-5b50-aa03-7779005ae688"
+Optimization = "7f7a1694-90dd-40f0-9382-eb1efda571ba"
+OptimizationOptimJL = "36348300-93cb-4f02-beb5-3c3902f8871e"
 PalmerPenguins = "8b842266-38fa-440a-9b57-31493939ab85"
+Pathfinder = "b1d3bc72-d0e7-4279-b92f-7fa5d6d2d454"
 PosteriorDB = "1c4bc282-d2f5-44f9-b6d1-8c4424a23ad4"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+Reactant = "3c362404-f566-11ee-1572-e11a4b42c853"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 Wren = "bcabdda7-19af-429b-97ac-a6b557ca0f6c"
 WrenCore = "008b59e7-bbda-4991-901b-b08f5cfc584d"
 WrenDists = "2ad4af40-d7c9-42b2-92b0-e09d37d1e75a"
+
+[sources]
+PalmerPenguins = {rev = "main", url = "https://github.com/penelopeysm/PalmerPenguins.jl"}
+PosteriorDB = {rev = "main", url = "https://github.com/penelopeysm/PosteriorDB.jl"}
+
+[compat]
+LogExpFunctions = "0.3, 1"

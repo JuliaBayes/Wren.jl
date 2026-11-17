@@ -17,6 +17,22 @@ if RUN_REACTANT
     using Reactant
 end
 
+@testset "BatchedCategorical labels" begin
+    P = [0.25 0.75; 0.75 0.25]
+    d = WrenDists.BatchedCategorical(P)
+    @test logdensityof(d, [1.0, 2.0]) == logdensityof(d, [1, 2])
+    for x in (0.0, 3.0, 1.5)
+        @test logdensityof(d, [x, 2.0]) == -Inf
+    end
+    if RUN_REACTANT
+        dr = WrenDists.BatchedCategorical(Reactant.to_rarray(P))
+        compiled = Reactant.@compile logdensityof(dr, Reactant.to_rarray([1.0, 2.0]))
+        for x in ([1.0, 2.0], [1.5, 2.0], [3.0, 2.0])
+            @test Float64(compiled(dr, Reactant.to_rarray(x))) == logdensityof(d, x)
+        end
+    end
+end
+
 test_dist(
     "Categorical",
     WrenDists.Categorical([0.2, 0.3, 0.5]),

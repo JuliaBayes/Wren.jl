@@ -16,6 +16,9 @@ end
 
 WrenDists.wrappedconditions(::Type{<:TracedRNumber}) = true
 
+# Reactant's min/max tie rules coincide. Opposite maxima split their derivatives instead.
+Reactant.@reactant_overlay WrenDists.tdist_lower_scale(a, s) = -max(-s, -a)
+
 function WrenDists.gammap_series_fixed(a::T, x::T) where {T<:TracedRNumber}
     term = one(T)
     total = one(T)

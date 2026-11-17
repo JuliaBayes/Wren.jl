@@ -20,7 +20,7 @@ LogNormal() = LogNormal(0.0, 1.0)
 @inline xval(d::LogNormal, z::Number) = exp(muladd(d.σ, z, d.μ))
 
 @inline function DensityInterface.logdensityof(d::LogNormal, x::Number)
-    lx = log(x)
+    lx = log(select(x > zero(x), () -> x, () -> one(x)))
     z = (lx - d.μ) / d.σ
     # Match `σ` to `z` so integer parameters do not reduce `BigFloat` precision.
     σ = oftype(z, d.σ)
@@ -32,9 +32,11 @@ LogNormal() = LogNormal(0.0, 1.0)
 end
 
 # Apply `μ` and `σ` after drawing noise so automatic differentiation can follow them.
-@inline Base.rand(rng::AbstractRNG, d::LogNormal) = xval(d, randn(rng, noisetype(d)))
+@inline Base.rand(rng::AbstractRNG, d::LogNormal) = xval(d, randn(rng, rngtype(d)))
 
 # --- Batched LogNormal ---
+
+using FillArrays: AbstractFill, getindex_value
 
 struct BatchedLogNormal{M<:AbstractArray,S<:AbstractArray} <: BatchedUnivariate
     μ::M
@@ -56,9 +58,25 @@ function _lognormal_loop(mu, sigma, x)
     s
 end
 
+# A shared scale needs only one logarithm for the whole batch.
+function _lognormal_loop(mu, sigma::AbstractFill, x)
+    T = float(promote_type(eltype(x), eltype(mu), eltype(sigma)))
+    s = zero(T)
+    indices = eachindex(x, mu, sigma)
+    isempty(indices) && return s
+    log_sigma = log(getindex_value(sigma))
+    for i in indices
+        lx = log(x[i])
+        z = (lx - mu[i]) / sigma[i]
+        s -= abs2(z) / 2 + log_sigma + lx
+    end
+    s
+end
+
+# The rule returns dense tangents. Differentiate the loop for Fill.
 EnzymeRules.@easy_rule(
-    _lognormal_loop(mu, sigma, x),
-    @setup(z = (log.(x) .- mu) ./ sigma),
+    _lognormal_loop(mu::StridedArray, sigma::StridedArray, x::StridedArray),
+    @setup(z=(log.(x) .- mu) ./ sigma),
     (z ./ sigma, (abs2.(z) .- 1) ./ sigma, -(z ./ (x .* sigma) .+ inv.(x))),
 )
 
@@ -67,9 +85,16 @@ function DensityInterface.logdensityof(d::BatchedLogNormal, x)
     mu, sigma = d.μ, d.σ
     lognorm = length(x) * convert(float(eltype(x)), log2π) / 2
     return if within_compile()
-        sum(@. -(abs2((log(x) - mu) / sigma)) / 2 - log(sigma) - log(x)) - lognorm
+        safe_x = ifelse.(x .> 0, x, one.(x))
+        value =
+            sum(@. -(abs2((log(safe_x) - mu) / sigma)) / 2 - log(sigma) - log(safe_x)) -
+            lognorm
+        ifelse(all(x .> 0), value, oftype(value, -Inf))
     else
-        _lognormal_loop(mu, sigma, x) - lognorm
+        T = float(promote_type(eltype(x), eltype(mu), eltype(sigma)))
+        # Keep unsupported data out of the kernel and its Enzyme rule.
+        value = all(>(0), x) ? _lognormal_loop(mu, sigma, x) : convert(T, -Inf)
+        value - lognorm
     end
 end
 Plaice.scalar_to_scalar_bijector(::BatchedLogNormal) = Plaice.Log(0.0, 1)

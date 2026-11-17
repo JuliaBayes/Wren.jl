@@ -22,27 +22,32 @@ distributions)
 struct MvNormalScale{V<:AbstractVector{<:Number},F<:MvNormalScaleFactor} <: MultivariateDist
     μ::V
     L::F
+    function MvNormalScale{V,F}(μ, L) where {V,F}
+        check_scale_size(length(μ), L)
+        return new{V,F}(μ, L)
+    end
+end
+MvNormalScale(μ::V, L::F) where {V,F} = MvNormalScale{V,F}(μ, L)
+
+check_scale_size(n, ::UniformScaling) = nothing
+function check_scale_size(n, L::Diagonal)
+    length(L.diag) == n || throw(
+        DimensionMismatch(
+            "scale factor must have $n diagonal entries, got $(length(L.diag))",
+        ),
+    )
+    return nothing
+end
+function check_scale_size(n, L::AbstractMatrix)
+    size(L) == (n, n) ||
+        throw(DimensionMismatch("scale factor must have size ($n, $n), got $(size(L))"))
+    return nothing
 end
 
 Base.size(d::MvNormalScale) = (length(d.μ),)
 
 const DiagMvNormalScale = MvNormalScale{<:AbstractVector{<:Number},<:Diagonal}
 const IsoMvNormalScale = MvNormalScale{<:AbstractVector{<:Number},<:UniformScaling}
-
-@inline function shapesmatch(d::MvNormalScale, x::AbstractVector)
-    n = length(d.μ)
-    return (length(x) == n) & (n >= 1) & (size(d.L, 1) == n) & (size(d.L, 2) == n)
-end
-
-@inline function shapesmatch(d::DiagMvNormalScale, x::AbstractVector)
-    n = length(d.μ)
-    return (length(x) == n) & (n >= 1) & (length(d.L.diag) == n)
-end
-
-@inline function shapesmatch(d::IsoMvNormalScale, x::AbstractVector)
-    n = length(d.μ)
-    return (length(x) == n) & (n >= 1)
-end
 
 function logdetfactor(d::MvNormalScale, ::Type{T}) where {T}
     R = float(T)
@@ -84,12 +89,9 @@ unwhiten(d::MvNormalScale, z::AbstractVector{<:Number}) = d.μ .+ LowerTriangula
 unwhiten(d::DiagMvNormalScale, z::AbstractVector{<:Number}) = d.μ .+ d.L.diag .* z
 unwhiten(d::IsoMvNormalScale, z::AbstractVector{<:Number}) = d.μ .+ d.L.λ .* z
 
-@inline function _densitytype(d::MvNormalScale, x::AbstractVector)
-    return float(promote_type(eltype(d.μ), eltype(d.L), eltype(x)))
-end
-
 function DensityInterface.logdensityof(d::MvNormalScale, x::AbstractVector{<:Number})
-    shapesmatch(d, x) || return convert(_densitytype(d, x), NaN)
+    size(x) == size(d) ||
+        throw(DimensionMismatch("expected size $(size(d)), got $(size(x))"))
     q = sum(abs2, whiten(d, x))
     R = float(typeof(q))
     n = length(d.μ)
@@ -98,7 +100,7 @@ end
 
 # Draw plain noise `z`, then return `μ + Lz`.
 function Base.rand(rng::AbstractRNG, d::MvNormalScale)
-    return unwhiten(d, randn(rng, noisetype(d), length(d.μ)))
+    return unwhiten(d, randn(rng, rngtype(d), length(d.μ)))
 end
 
 # --- Batched MvNormalScale ---

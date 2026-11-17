@@ -113,6 +113,7 @@ _ladj(b, x) = Plaice.logabsdet_jacobian(b, x)
 _ladj(::Plaice.TypedIdentity, x) = zero(x)
 _ladj(::Plaice.Exp, y) = y
 _ladj(b::Plaice.Log, x) = -log(b.sign * (x - b.bound))
+_ladj(b::Plaice.Truncate, y) = last(@inline Plaice.with_logabsdet_jacobian(b, y))
 _apply(b, x) = b(x)
 
 const IdentityLike = Union{Plaice.TypedIdentity,AbstractArray{Plaice.TypedIdentity}}
@@ -160,16 +161,22 @@ end
 Plaice.from_vec(d::Independent) = Plaice.Reshape(size(d))
 Plaice.to_vec(d::Independent) = Plaice.Vec(size(d))
 
-# TODO(penelopeysm): this doesn't look correct, except for univariates.
 Base.length(d::Independent) = prod(size(d))
 Plaice.vec_length(d::Independent) = length(d)
 Plaice.unconstrained_vec_length(d::Independent) = length(d)
+Plaice.unconstrained_vec_length(d::IIDMultivariate) =
+    Plaice.unconstrained_vec_length(_dist(d)) * prod(_dims(d))
 
-# Entry `i` of the vectorised sample is entry `i` of `vec(x)`, and every transform here is
-# elementwise, so the constrained and unconstrained optics coincide.
+# Scalar transforms preserve the coordinate optics.
 _index_optics(d) = [VarNames.Index(Tuple(I), (;)) for I in vec(CartesianIndices(size(d)))]
 Plaice.optic_vec(d::Independent) = _index_optics(d)
 Plaice.unconstrained_optic_vec(d::Independent) = _index_optics(d)
+function Plaice.unconstrained_optic_vec(d::IIDMultivariate)
+    return vec([
+        foldl(Plaice.append_index, Tuple(I); init=optic) for
+        optic in Plaice.unconstrained_optic_vec(_dist(d)), I in CartesianIndices(_dims(d))
+    ])
+end
 
 function Plaice.from_unconstrained_vec(d::IIDUnivariate)
     return ElementwiseInvLink(
@@ -181,22 +188,21 @@ function Plaice.to_unconstrained_vec(d::IIDUnivariate)
     return ElementwiseLink(Plaice.scalar_to_scalar_bijector(_dist(d)), _dims(d))
 end
 
-function _check_identity_link(d::IIDMultivariate)
-    Plaice.from_unconstrained_vec(_dist(d)) isa Plaice.TypedIdentity || throw(
+Plaice.from_unconstrained_vec(d::IIDMultivariate) =
+    Plaice.inverse(Plaice.to_unconstrained_vec(d))
+function Plaice.to_unconstrained_vec(d::IIDMultivariate)
+    bijector = Plaice.to_unconstrained_vec(_dist(d))
+    bijector isa Plaice.TypedIdentity && return Plaice.Vec(size(d))
+    iszero(prod(_dims(d))) && throw(
         ArgumentError(
-            "iid over a multivariate measure is only supported when the measure is " *
-            "already unconstrained; got $(_dist(d)).",
+            "empty constrained multivariate iid transforms are not supported by Plaice",
         ),
     )
-    return nothing
-end
-function Plaice.from_unconstrained_vec(d::IIDMultivariate)
-    _check_identity_link(d)
-    return Plaice.Reshape(size(d))
-end
-function Plaice.to_unconstrained_vec(d::IIDMultivariate)
-    _check_identity_link(d)
-    return Plaice.Vec(size(d))
+    return Plaice.ProductVecTransform(
+        Plaice.Elementwise(bijector, _dims(d)),
+        nothing,
+        size(_dist(d)),
+    )
 end
 
 function Plaice.from_unconstrained_vec(d::IndependentArray)

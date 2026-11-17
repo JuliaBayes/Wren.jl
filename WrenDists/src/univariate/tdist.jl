@@ -25,7 +25,7 @@ struct TDist{N<:Number,M<:Number,S<:Number} <: UnconstrainedUnivariateDist
 end
 
 TDist(ν::Number, μ::Number) = TDist(ν, μ, one(μ))
-TDist(ν::Number) = TDist(ν, 0.0, 1.0)
+TDist(ν::Number) = TDist(ν, zero(ν), one(ν))
 
 @inline function _valuetype(d::TDist, x::Number)
     return float(promote_type(typeof(d.ν), typeof(d.μ), typeof(d.σ), typeof(x)))
@@ -39,6 +39,29 @@ end
 @inline zval(d::TDist, x::Number) = (x - d.μ) / d.σ
 @inline xval(d::TDist, z::Number) = muladd(d.σ, z, d.μ)
 
+# Both forms equal log(1 + z²/ν) mathematically. `TDist finite tails` covers both paths.
+@inline function tdist_logkernel(z::AbstractFloat, ν::AbstractFloat)
+    if abs(z) <= sqrt(floatmax(typeof(z)))
+        q = abs2(z)
+        # Leave a rounding margin before division can overflow.
+        q <= (floatmax(typeof(z)) / 2) * ν && return log(one(q) + q / ν)
+    end
+    return tdist_logkernel_tail(z, ν)
+end
+
+# Keep the cold fallback out of native reductions' hot loops.
+@noinline tdist_logkernel_tail(z, ν) = 2 * log(hypot(sqrt(ν), z)) - log(ν)
+
+@inline tdist_lower_scale(a, s) = min(a, s)
+
+# Keep the lower/upper scale derivatives complementary at ties on each AD backend.
+@inline function tdist_logkernel(z, ν)
+    s = sqrt(ν)
+    a = abs(z)
+    lo, hi = tdist_lower_scale(a, s), max(a, s)
+    return log1p(abs2(lo / hi)) + 2 * (log(hi) - log(s))
+end
+
 @inline function DensityInterface.logdensityof(d::TDist, x::Number)
     T = _valuetype(d, x)
     ν = convert(T, d.ν)
@@ -48,7 +71,7 @@ end
     lg_num = select(half > zero(T), () -> loggamma(half), () -> convert(T, NaN))
     lg_den = select(ν / 2 > zero(T), () -> loggamma(ν / 2), () -> convert(T, NaN))
     lognorm = lg_num - lg_den - (log(ν) + convert(T, logπ)) / 2
-    return lognorm - log(σ) - half * log(one(T) + z^2 / ν)
+    return lognorm - log(σ) - half * tdist_logkernel(z, ν)
 end
 
 #=
@@ -57,8 +80,8 @@ end
   applied afterwards so automatic differentiation can follow them.
 =#
 @inline function Base.rand(rng::AbstractRNG, d::TDist)
-    F = noisetype(d)
-    ν = convert(F, d.ν)
+    F = rngtype(d)
+    ν = convert(noisetype(d), d.ν)
     z = randn(rng, F)
     u = rand(rng, F)
     logv = gammalogquantile(ν / 2, u)
@@ -78,7 +101,7 @@ end
 Base.size(d::BatchedTDist) = size(d.μ)
 
 function Base.rand(rng::AbstractRNG, d::BatchedTDist)
-    F = noisetype(d)
+    F = rngtype(d)
     N = length(d.μ)
     z = randn(rng, F, N)
     u = rand(rng, F, N)
@@ -114,9 +137,8 @@ function DensityInterface.logdensityof(d::BatchedTDist{<:AbstractFill}, x)
     T = float(promote_type(eltype(x), eltype(ν), eltype(μ), eltype(σ)))
     ν1 = convert(T, getindex_value(ν))
     half = (ν1 + one(T)) / 2
-    one_T = one(T)
     z = @. (x - μ) / σ
-    return -sum(log, σ) - half * sum(t -> log(one_T + t^2 / ν1), z) + _tlognorm_sum(ν)
+    return -sum(log, σ) - half * sum(t -> tdist_logkernel(t, ν1), z) + _tlognorm_sum(ν)
 end
 
 # Benchmarks @ bench/batch/gpu/tdist_variable_nu.jl — loop is fastest.
@@ -130,7 +152,7 @@ function DensityInterface.logdensityof(d::BatchedTDist{<:AbstractArray}, x)
         νi = convert(T, ν[i])
         half = (νi + one_T) / 2
         z = (convert(T, x[i]) - convert(T, μ[i])) / convert(T, σ[i])
-        s -= log(convert(T, σ[i])) + half * log(one_T + z^2 / νi)
+        s -= log(convert(T, σ[i])) + half * tdist_logkernel(z, νi)
     end
     return s + _tlognorm_sum(ν)
 end
@@ -146,8 +168,8 @@ end
 Base.size(d::IIDTDist) = d.size
 
 function Base.rand(rng::AbstractRNG, d::IIDTDist)
-    F = noisetype(d)
-    ν = convert(F, d.ν)
+    F = rngtype(d)
+    ν = convert(noisetype(d), d.ν)
     z = randn(rng, F, d.size)
     u = rand(rng, F, d.size)
     logv = gammalogquantile.(ν / 2, u)
@@ -163,6 +185,5 @@ function DensityInterface.logdensityof(d::IIDTDist, x)
     half = (ν + one(T)) / 2
     N = length(x)
     lognorm = N * (loggamma(half) - loggamma(ν / 2) - (log(ν) + T(logπ)) / 2)
-    one_T = one(T)
-    return -N * log(σ) - half * sum(t -> log(one_T + ((t - μ) / σ)^2 / ν), x) + lognorm
+    return -N * log(σ) - half * sum(t -> tdist_logkernel((t - μ) / σ, ν), x) + lognorm
 end
