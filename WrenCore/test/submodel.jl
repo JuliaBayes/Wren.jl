@@ -395,6 +395,33 @@ end
             @test last(lp_and_grad(vmodel, r)) isa AbstractVector{<:Real}
         end
 
+        @testset "constrained child latent and observation" begin
+            @wren function constrained_inner()
+                x ~ Exponential(2.0)
+                y ~ Exponential(x)
+            end
+            @wren function constrained_outer(sub)
+                a ~ sub
+            end
+            model = constrained_outer(constrained_inner() | (; y=3.0))
+            initial = @vnt begin
+                a.x := 2.0
+            end
+            vm = VecModel(model, AutoForwardDiff(); latent_source=FromValues(initial))
+            u = log(2.0)
+
+            result = simulate(vm, [u])
+            @test parameters(result)[@vn(a.x)] ≈ 2.0
+            @test logprior(result) ≈ -log(2.0) - 1.0
+            @test loglikelihood(result) ≈ -u - 1.5
+
+            # Under x = exp(u), the latent Jacobian cancels the likelihood's 1/x.
+            # The conditioned y contributes no Jacobian.
+            value, gradient = lp_and_grad(vm, [u])
+            @test value ≈ -log(2.0) - exp(u) / 2 - 3exp(-u)
+            @test gradient ≈ [-exp(u) / 2 + 3exp(-u)]
+        end
+
         @testset "no fast path sitenames in submodel" begin
             @wren function innerv2(N)
                 # No unique sitenames in this model
