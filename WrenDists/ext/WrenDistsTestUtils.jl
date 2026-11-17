@@ -2,6 +2,7 @@ module WrenDistsTestUtils
 
 using WrenDists: WrenDists, logdensityof, ADTestCase
 import DifferentiationInterface as DI
+import DifferentiationInterfaceTest as DIT
 using Distributions: logpdf
 using EnzymeCore: EnzymeCore
 using Plaice: Plaice
@@ -30,12 +31,28 @@ end
 function test_ad(t::ADTestCase)
     ref_prep = DI.prepare_gradient(t.f, REF_ADTYPE, t.x, t.contexts...)
     g_ref = DI.gradient(t.f, ref_prep, REF_ADTYPE, t.x, t.contexts...)
-    @testset "$adtype_name" for (adtype_name, adtype) in TESTED_ADTYPES
-        adtype == REF_ADTYPE || adtype_name in t.skipped_adtypes && continue
-        prep = DI.prepare_gradient(t.f, adtype, t.x, t.contexts...)
-        g = DI.gradient(t.f, prep, adtype, t.x, t.contexts...)
-        @test isapprox(g, g_ref; rtol=1e-6, atol=1e-6)
-    end
+    scenarios = [
+        DIT.Scenario{:gradient,place}(
+            t.f,
+            t.x,
+            t.contexts...;
+            res1=g_ref,
+            # Distribution contexts need not implement zero.
+            prep_args=(; x=t.x, contexts=t.contexts),
+        ) for place in (:in, :out)
+    ]
+    backends = [
+        adtype for (adtype_name, adtype) in TESTED_ADTYPES if
+        adtype == REF_ADTYPE || !(adtype_name in t.skipped_adtypes)
+    ]
+    DIT.test_differentiation(
+        backends,
+        scenarios;
+        rtol=1e-6,
+        atol=1e-6,
+        # Array-bearing distributions need not compare equal after deepcopy.
+        scenario_intact=false,
+    )
 end
 
 function WrenDists.test_dist(
