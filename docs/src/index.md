@@ -8,7 +8,9 @@ As Wren is not yet registered in the Julia package registry, you can install it 
 
 ```julia
 import Pkg
-Pkg.add(url="https://github.com/JuliaBayes/Wren.jl")
+for subdir in ["WrenDists", "WrenCore", "Wren"]
+    Pkg.add(url="https://github.com/JuliaBayes/Wren.jl", subdir=subdir)
+end
 ```
 
 ## Quick start
