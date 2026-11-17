@@ -119,6 +119,8 @@ export loglikelihood
 using DifferentiationInterface:
     AutoForwardDiff, AutoReverseDiff, AutoMooncake, AutoMooncakeForward, AutoEnzyme
 export AutoForwardDiff, AutoReverseDiff, AutoMooncake, AutoMooncakeForward, AutoEnzyme
+using ADTypes: AutoReactant
+export AutoReactant
 
 using EnzymeCore: Forward, Reverse
 export Forward, Reverse

@@ -152,7 +152,7 @@ However, if you don't need this functionality, `@observe` can be more explicit.
 The above should be enough to get you started with defining models in Wren.
 However, there are also some special nodes that you can use in your model body.
 
-### `@iid` and `@batch`
+### [`@iid` and `@batch`](@id batched)
 
 In the common case where you have an array of parameters that share the same distribution, you can use these macros, which have the same semantics as a naive for-loop but can have optimised performance.
 
@@ -203,7 +203,7 @@ model = with_gq() | (; y=1.0)
 simulate(model)
 ```
 
-### `@addloglikelihood`
+### [`@addloglikelihood`](@id addloglike)
 
 This manually increments the log-likelihood of the model.
 For example, the following is equivalent to `@observe y ~ Normal(x)` if `y` is 1.0 (albeit rather less clear).

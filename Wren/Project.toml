@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Penelope Yong <penelopeysm@gmail.com>"]
 
 [deps]
+ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
 DensityInterface = "b429d917-457f-4dbc-8f4c-0cc954292b1d"
 DifferentiationInterface = "a0c0ee7d-e4b9-4e03-894e-1c5f64a51d63"
 DynamicHMC = "bbc10e6e-7c05-544b-b16e-64fede858acb"
@@ -29,6 +30,7 @@ WrenOptimizationExt = "Optimization"
 WrenPathfinderExt = ["Accessors", "Pathfinder"]
 
 [compat]
+ADTypes = "1.19"
 Accessors = "0.1"
 DensityInterface = "0.4"
 DifferentiationInterface = "0.7"
