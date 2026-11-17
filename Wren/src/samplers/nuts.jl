@@ -64,7 +64,7 @@ behaviour. The returned chain holds the tracked quantities selected by `track`.
 Each chain starts from an independent prior draw by default.
 
 Use `init=FromValues(VarNamedTuple(; x=1.0))` to supply initial values in model space.
-`init` is converted with [`to_latent_source`](@ref) and supplies a starting point for each
+`init` is converted with [`to_latent_source`](@ref WrenCore.to_latent_source) and supplies a starting point for each
 chain, as well as the values used to prepare the [`VecModel`](@ref).
 DynamicHMC's `initialization=(; κ, ϵ)` can be combined with `init`; a raw unconstrained
 `initialization.q` cannot, since both specify the starting point.
