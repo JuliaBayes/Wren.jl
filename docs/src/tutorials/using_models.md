@@ -156,7 +156,7 @@ Notice here that `@vn(...)` describes what we want to access (sort of a 'path' i
     Usually, you will obtain `VarNamedTuple`s from Wren's or FlexiChain's functions, so you will not need to think too much about how to construct them, unless you are writing custom inference algorithms.
     For this reason, although we would like to have more docs on this in the future, for now we defer a detailed discussion of `VarNamedTuple` to the [VarNames.jl docs](https://juliabayes.org/VarNames.jl).
 
-## When does Wren copy arguments?
+## [When does Wren copy arguments?](@id copying-arguments)
 
 At this point, since we have been evaluating models a few times, it is an apposite time to discuss when Wren makes copies of the model arguments.
 
@@ -167,9 +167,9 @@ Notice how, for example, `x[1]` is different on each iteration of the following 
 
 ```@example using-models
 @wren function model_with_mutable_arg(x)
-    @info ("before", x[i])
+    @info ("before", x[1])
     x[1] ~ Normal(0, 1)
-    @info ("after", x[i])
+    @info ("after", x[1])
 end
 
 model = model_with_mutable_arg([0.0])

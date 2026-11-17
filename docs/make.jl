@@ -4,14 +4,14 @@ ENV["DATADEPS_ALWAYS_ACCEPT"] = "true"
 using Wren
 using WrenCore
 using WrenDists
-import Pathfinder
 using Documenter
 using DocumenterCodeBlocks
 using DocumenterInterLinks
 using DocumenterMermaid
 
 # To get docstrings from extensions, we need to load their triggers.
-using PosteriorDB
+import Pathfinder
+import PosteriorDB
 
 links = InterLinks(
     "DynamicHMC" => "https://www.tamaspapp.eu/DynamicHMC.jl/dev/",
@@ -33,7 +33,7 @@ makedocs(;
         inventory_version="",
         assets=["assets/custom.css"],
         size_threshold=MAX_HTML_SIZE,
-        size_threshold_warning=MAX_HTML_SIZE,
+        size_threshold_warn=MAX_HTML_SIZE,
     ),
     modules=[
         Wren,

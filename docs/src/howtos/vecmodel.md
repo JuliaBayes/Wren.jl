@@ -137,6 +137,52 @@ If this is not desired, you can specify a different parameter space, or a differ
 
     If you have a use for higher-order derivatives like Hessians, please open an issue!
 
+## Mutation semantics
+
+Note that, for performance reasons, Wren retains the right to mutate the input vector passed into `simulate`, `logdensity`, and other functions.
+This is subject to the same considerations as outlined in [Working with `Model`s](@ref copying-arguments).
+
+It's probably worth illustrating this with a simple example.
+The easiest way to trigger this behaviour is if your model explicitly mutates arrays (e.g. writing `x[1] += 1` if `x` is a parameter).
+
+```@example vecmodel
+@wren function with_mutation()
+    x ~ MvNormalScale(zeros(2), I)
+    x[1] += 1.0
+    @info x
+end
+
+vm = VecModel(with_mutation(), nothing)
+```
+
+```@example vecmodel
+for i in 1:2
+    simulate(vm)
+end
+```
+
+So far, this looks reasonable: each time we run the model, we get a new value of `x`, and mutate it inside the model.
+However, the effect of this can be quite surprising:
+
+```@example vecmodel
+p = [2.0, 3.0]
+lp(vm, p)
+p
+```
+
+The vector `p` has been mutated in-place, even though we did not explicitly mutate it in our code!
+
+!!! note "The results are still correct"
+
+    There isn't a *correctness* issue here at all: the log-density is always calculated with respect to the values that are passed in.
+    The slightly surprising thing is that the values that are passed in are themselves mutated.
+
+The reason for this is because `lp` is a model _evaluation_, and as discussed in [Working with `Model`s](@ref copying-arguments), Wren makes no promises to copy anything during model evaluation.
+
+However, it is still always guaranteed that at model construction time the arguments to the model will be copied.
+This holds true for `VecModel`s as well (if only because to make a `VecModel` you must first make a `Model`).
+The parameter vector `p` above does *not* fall into this category: it does not exist at model construction time.
+
 ## Restrictions
 
 Vectorisation places certain restrictions on the structure of the model.
