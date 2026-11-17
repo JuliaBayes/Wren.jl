@@ -118,7 +118,7 @@ end
     end
 end
 
-if RUN_REACTANT
+@static if RUN_REACTANT
     @testset "BatchedBernoulliLogit compiled tails" begin
         f(η, x) = logdensityof(WrenDists.BatchedBernoulliLogit(η), x)
         grad(η, x) = Enzyme.gradient(Enzyme.Reverse, f, η, Enzyme.Const(x))[1]
