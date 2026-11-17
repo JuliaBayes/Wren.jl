@@ -23,7 +23,8 @@ J = 8
     end
     return (mu=mu, tau=tau)
 end
-model = eight_schools(y, sigma, J)
+
+model = eight_schools_centred(y, sigma, J)
 ```
 
 ## The `simulate` family
@@ -157,89 +158,48 @@ Notice here that `@vn(...)` describes what we want to access (sort of a 'path' i
 
 ## When does Wren copy arguments?
 
-...
+At this point, since we have been evaluating models a few times, it is an apposite time to discuss when Wren makes copies of the model arguments.
 
-Finally, we note here that when encoutering a tilde, the value of the left-hand side is overwritten with the value that is drawn from the distribution on the right-hand side.
-This is a no-op for observations (because the left-hand side will _already_ have the value that it is observed to be).
-However, for parameters, this means that execution of a Wren model can
+In general, for performance reasons, Wren tries to avoid copying its arguments as far as possible.
+This means that if you pass a mutable object to Wren, it may be modified in-place during evaluation of a model.
 
-## [Vectorisation](@id vectorisation)
+Notice how, for example, `x[1]` is different on each iteration of the following loop:
 
-Wren models can be converted into a vectorised form, i.e., one where the parameters are supplied as a vector rather than a `VarNamedTuple`.
-This is done with the `VecModel` constructor, which takes a model and an `AbstractADType` object:
+```@example using-models
+@wren function model_with_mutable_arg(x)
+    @info ("before", x[i])
+    x[1] ~ Normal(0, 1)
+    @info ("after", x[i])
+end
 
-```julia
-using Enzyme
+model = model_with_mutable_arg([0.0])
 
-vecmodel = VecModel(model, AutoEnzyme(; mode=Reverse))
+for i in 1:2
+    simulate(model)
+end
 ```
 
-If you are only interested in vectorisation and not AD, you can pass `nothing` as the second argument:
+What happens here is that when a sampling statement is encountered, the resulting value is stored back into `x[1]`.
+So the second time the model is evaluated, `x[1]` will have taken on the value that it was assigned in the first evaluation.
 
-```julia
-noad_vecmodel = VecModel(model, nothing)
+However, to try to minimise potential footguns, Wren will make a copy of arguments *at model construction time*.
+The reason why this is permissible is because you will only construct the model once (as opposed to evaluation, which happens many times in performance-sensitive code).
+
+In the following example, we do the same as above, but we give the argument a name so that we can check whether it has been modified:
+
+```@example using-models
+x_original = [0.0]
+
+model = model_with_mutable_arg(x_original)
+
+for i in 1:2
+    simulate(model)
+end
 ```
 
-This is mostly useful when you want to hand off a Wren model to a different library which expects a vector interface.
-In particular, `VecModel`s obey the [LogDensityProblems.jl interface](https://github.com/tpapp/LogDensityProblems.jl), and thus can be used with a wide range of other Julia packages that expect this.
+The behaviour so far is unsurprisingly exactly the same as above, in that `x[1]` is modified in-place during model evaluation.
+However, if we check the original array passed into the model, we can see that it has not been modified, as Wren made a copy of it for the model:
 
-You can draw a vectorised sample from a `VecModel` with [`vector_parameters`](@ref):
-
-```julia
-v = vector_parameters(vecmodel)
+```@example using-models
+x_original
 ```
-
-or you can convert existing parameters into a vectorised form with [`vector_parameters`](@ref):
-
-```julia
-ps = parameters(model)               # This is a VarNamedTuple in original model space.
-v = vector_parameters(vecmodel, ps)  # Convert it to vectorised (and unconstrained) form.
-```
-
-Then you can calculate the log-density of these vectorised parameters, and their gradient:
-
-```julia
-import LogDensityProblems as LDP
-
-LDP.logdensity(vecmodel, v)               # Works without an adtype.
-LDP.logdensity_and_gradient(vecmodel, v)  # Requires an adtype.
-```
-
-!!! note
-
-    If you have a use for higher-order derivatives like Hessians, please open an issue!
-
-Wren in fact exports shorter functions for these, namely [`lp`](@ref) and [`lp_and_grad`](@ref), which are directly equivalent to the above.
-Additionally, Wren provides an in-place gradient [`lp_and_grad!`](@ref) function, which may be useful for squeezing every last bit of performance out.
-Note that LogDensityProblems.jl does not provide a corresponding interface function for `lp_and_grad!` (but if you have a good usecase for it, please consider [adding a comment on this issue](https://github.com/tpapp/LogDensityProblems.jl/issues/115)!).
-
-By default, `VecModel`s are always run in [`UnconstrainedSpace()`](@ref): that is, all parameters are transformed into a form where they can take any value in ℝ^n.
-The log-density calculation will then include the log-Jacobian term corresponding to this transformation.
-If this is not desired, you can specify a different parameter space, or a different log-density calculation function as a keyword argument to the [`VecModel`](@ref) constructor: please see its docstring for more info.
-
-!!! warning "Vectorisation restrictions"
-
-    Vectorisation places certain restrictions on the structure of the model.
-    In particular, it is not valid for a model to have a varying dimension.
-    This can be caused either by parameters which have varying sizes, or models which simply have a varying number of parameters:
-
-    ```julia
-    x ~ Poisson(3.0)
-    y ~ MvNormal(zeros(x), I)  # dimension of `y` is not constant
-    
-    if x > 4
-        z ~ Normal()  # existence of `z` is not constant
-    end
-    ```
-
-    The set of variable names must also be constant across all model evaluations.
-    Thus, even though the following model has a constant number of parameters, it is still not valid for vectorisation:
-
-    ```julia
-    x ~ Normal()
-    if x > 0
-        y ~ Normal()
-    else
-        z ~ Normal()
-    end
-    ```

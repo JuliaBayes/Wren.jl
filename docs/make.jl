@@ -48,6 +48,7 @@ makedocs(;
             "tutorials/workflow.md",
         ],
         "How-tos" => [
+            "howtos/vecmodel.md"
             "howtos/benchmarking.md"
             "howtos/optimization.md"
             "howtos/pathfinder.md"

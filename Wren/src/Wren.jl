@@ -116,8 +116,9 @@ export logdensityof
 using StatsAPI: loglikelihood
 export loglikelihood
 
-using DifferentiationInterface: AutoForwardDiff, AutoReverseDiff, AutoMooncake, AutoEnzyme
-export AutoForwardDiff, AutoReverseDiff, AutoMooncake, AutoEnzyme
+using DifferentiationInterface:
+    AutoForwardDiff, AutoReverseDiff, AutoMooncake, AutoMooncakeForward, AutoEnzyme
+export AutoForwardDiff, AutoReverseDiff, AutoMooncake, AutoMooncakeForward, AutoEnzyme
 
 using EnzymeCore: Forward, Reverse
 export Forward, Reverse

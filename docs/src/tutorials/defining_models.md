@@ -1,4 +1,4 @@
-# [Defining models](@id defining)
+# [Defining models](@id defining-models)
 
 On this page, we show how to define a probabilistic model with basic Wren syntax.
 

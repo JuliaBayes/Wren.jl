@@ -17,6 +17,7 @@ using Wren, Wren.Dists
 y = [28, 8, -3, 7, -1, 1, 18, 12]
 sigma = [15, 10, 16, 11, 9, 11, 10, 18]
 J = 8
+
 @wren function eight_schools(y, sigma, J)
     mu ~ Normal(0, 5)
     tau ~ HalfCauchy(0, 5)
@@ -26,6 +27,7 @@ J = 8
     end
     return (mu=mu, tau=tau)
 end
+
 model = eight_schools(y, sigma, J)
 ```
 
