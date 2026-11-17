@@ -194,15 +194,15 @@ end
 ```
 
 !!! note "Intro to hierarchical models"
-  In this hierarchical model, we define a global average bill length across all islands $\mu$ and the heterogeneity between islands $\tau$.
-  To illustrate this, let's assume a scenario where $\tau$ is rather small - this would correspond to a world where conditions between islands aren't that different after all.
-  It might be helpful to also consider the most extreme setting where $\tau = 0$: here, all islands would have identical conditions, and the hierarchical structure would disappear entirely.
-  This scenario is called "complete pooling".
-  On the contrary, if we assume $\tau$ to be really, really large, this would correspond to a scenario where islands are _so different_ that we might as well estimate each of their means individually.
-  This is called "no pooling".
+    In this hierarchical model, we define a global average bill length across all islands $\mu$ and the heterogeneity between islands $\tau$.
+    To illustrate this, let's assume a scenario where $\tau$ is rather small - this would correspond to a world where conditions between islands aren't that different after all.
+    It might be helpful to also consider the most extreme setting where $\tau = 0$: here, all islands would have identical conditions, and the hierarchical structure would disappear entirely.
+    This scenario is called "complete pooling".
+    On the contrary, if we assume $\tau$ to be really, really large, this would correspond to a scenario where islands are _so different_ that we might as well estimate each of their means individually.
+    This is called "no pooling".
 
-  In short, learning $\tau$ from the data ("partial pooling") infers _just how much_ information we should share between islands. 
-  This comes with many nice benefits like avoiding overfitting!
+    In short, learning $\tau$ from the data ("partial pooling") infers _just how much_ information we should share between islands. 
+    This comes with many nice benefits like avoiding overfitting!
 
 Assume we're mostly interested in the contrast between species 1 and 2.
 We could then consider dropping species 3 before fitting the model, but we still have reason to keep species 3 as it'll contribute to estimating `beta2` and `beta3` better.
