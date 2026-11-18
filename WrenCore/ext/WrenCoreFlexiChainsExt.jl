@@ -133,7 +133,7 @@ contain the log-prior terms of the parameters already present in the input `chai
 you want to obtain the log-probability of the simulated variables only, you can subtract the
 two log-prior terms.
 
-See also: [`TrackedQuantitySpec`](@ref)
+See also: [`TrackedQuantitySpec`](@ref WrenCore.TrackedQuantitySpec)
 """
 function WrenCore.simulate(
     model::WrenCore.Model,
@@ -165,7 +165,7 @@ Re-evaluate `model` at each iteration of `chain` and return a chain holding only
 tracked quantities requested with `track`. If a variable required by `model` is not stored
 in `chain`, that variable will be drawn from the prior distribution.
 
-See also: [`TrackedQuantitySpec`](@ref)
+See also: [`TrackedQuantitySpec`](@ref WrenCore.TrackedQuantitySpec)
 """
 function WrenCore.tracked_quantities(
     model::WrenCore.Model,
