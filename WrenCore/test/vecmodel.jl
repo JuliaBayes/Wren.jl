@@ -117,35 +117,31 @@ end
         @wren function f()
             x ~ Normal(0.0f0, 1.0f0)
         end
-        @testset "$name" for (name, adtype) in TESTED_ADTYPES
-            vm = VecModel(f(), adtype; latent_source=FromValues(VarNamedTuple(x=0.0f0)))
-            for params in (
-                Float32[0.75],
-                [1.234567890123],
-                Real[1.234567890123],
-                view([1e40], :),
-                Float32[-0.5],
-            )
-                expected_grad = -float.(params)
-                expected_lp = -only(expected_grad)^2 / 2 - log(2π) / 2
-                rtol = 10eps(eltype(expected_grad))
-                buffer = fill!(similar(expected_grad), NaN)
-                inplace = lp_and_grad!(buffer, vm, params)
-                @test last(inplace) === buffer
-                for (value, grad) in (lp_and_grad(vm, params), inplace)
-                    @test value ≈ expected_lp rtol=rtol
-                    @test value ≈ lp(vm, params) rtol=rtol
-                    @test grad ≈ expected_grad rtol=rtol
-                end
-                @test buffer ≈ expected_grad rtol=rtol
-            end
-            params = [1.234567890123]
-            buffer = fill(NaN32, 1)
-            value, grad = lp_and_grad!(buffer, vm, params)
-            @test value ≈ lp(vm, params) rtol=10eps(Float64)
+        vm32 = VecModel(
+            f(),
+            DI.AutoForwardDiff();
+            latent_source=FromValues(VarNamedTuple(x=0.0f0)),
+        )
+        params = [1e40]
+        @test_throws ArgumentError lp_and_grad(vm32, params)
+        @test_throws ArgumentError lp_and_grad!(similar(params), vm32, params)
+
+        adtype = DI.AutoEnzyme(; mode=Enzyme.Reverse)
+        vm64 = VecModel(f(), adtype; latent_source=FromValues(VarNamedTuple(x=0)))
+        value, grad = lp_and_grad(vm64, params)
+        @test value ≈ -abs2(only(params)) / 2
+        @test grad == -params
+
+        params = [0.25]
+        for buffer in (zeros(Float32, 1), view(zeros(1, 2), :, 1))
+            value, grad = lp_and_grad!(buffer, vm64, Float32.(params))
+            @test value ≈ lp(vm64, params)
             @test grad === buffer
-            @test buffer == -Float32.(params)
+            @test grad == -params
         end
+        buffer = zeros(1)
+        lp_and_grad!(buffer, vm64, params)
+        @test (@allocated lp_and_grad!(buffer, vm64, params)) == 0
     end
 
     @testset "construction without ad" begin
