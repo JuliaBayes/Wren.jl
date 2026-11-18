@@ -64,6 +64,8 @@ Each chain starts from an independent prior draw unless `initialization` is supp
 
 `reduce_copies` is passed to [`VecModel`](@ref): when sampling with Enzyme, it skips copies
 of model arguments that turn out not to be needed (see [`reduce_copies`](@ref)).
+
+See also: [`TrackedQuantitySpec`](@ref)
 """
 function nuts(
     model::WrenCore.Model,

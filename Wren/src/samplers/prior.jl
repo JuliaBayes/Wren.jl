@@ -15,6 +15,8 @@ using MCMCProgress: Determinate, advance!, chain_at, close_phase!, open_phase!
 
 Sample from the prior distribution of a Wren model. The returned chain holds the tracked
 quantities selected by `track`.
+
+See also: [`TrackedQuantitySpec`](@ref)
 """
 function prior(
     model::WrenCore.Model,
