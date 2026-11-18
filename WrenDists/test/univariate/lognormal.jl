@@ -29,7 +29,7 @@ end
     f(p, x) = logdensityof(WrenDists.BatchedLogNormal(p, p), x)
     @test first(Enzyme.gradient(Enzyme.Reverse, f, Float32[1], Enzyme.Const(points[2]))) ==
           [0]
-    if RUN_REACTANT
+    @static if RUN_REACTANT
         WrenDists.test_dist_reactant(d, Float32[0, -1])
         WrenDists.test_dist_reactant(batch, points)
         p, x = Reactant.to_rarray.((Float32[1], points[2]))
