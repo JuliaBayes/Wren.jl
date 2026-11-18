@@ -160,7 +160,7 @@ xs_z = -3:0.1:3
 
 # Draw 20 posterior samples of the slope of body mass
 for _ in 1:20
-    vnt = rand(chain_post; parameters_only=true)
+    vnt = parameters(rand(chain_post))
     ys_z = vnt[@vn(beta2)] * xs_z
     ys = reconstruct(bill_zs, ys_z)
     xs = reconstruct(mass_zs, xs_z)
@@ -176,7 +176,7 @@ As we may have expected, more penguin means more bill!
 
 Quite regularly in applied statistical modelling, we're after a quantity that we can't express as a single parameter of our model.
 Rather, it's often some downstream quantity that we compute by combining several parameters with (potentially new / hypothetical) observations.
-In Wren, we record these downstream quantities with [`@track`](@ref track) and call them tracked quantities (Stan calls them generated quantities).
+You can tell Wren that you want to track these downstream quantities with [`@track`](@ref track).
 
 Continuing with the penguin model from before, let's now assume that there is something special about the conditions on each island.
 These conditions make _all_ the penguins on a given island more similar to each other; that could for example be caused by better food sources near some islands than others, or some islands being more prone to disruptive weather events than others.
@@ -193,7 +193,8 @@ Since this model component is quite common and thus reusable, it's a good candid
 end
 ```
 
-!!! note "Intro to hierarchical models"
+!!! info "Intro to hierarchical models"
+
     In this hierarchical model, we define a global average bill length across all islands $\mu$ and the heterogeneity between islands $\tau$.
     To illustrate this, let's assume a scenario where $\tau$ is rather small - this would correspond to a world where conditions between islands aren't that different after all.
     It might be helpful to also consider the most extreme setting where $\tau = 0$: here, all islands would have identical conditions, and the hierarchical structure would disappear entirely.
@@ -204,78 +205,81 @@ end
     In short, learning $\tau$ from the data ("partial pooling") infers _just how much_ information we should share between islands. 
     This comes with many nice benefits like avoiding overfitting!
 
-Assume we're mostly interested in the contrast between species 1 and 2.
-We could then consider dropping species 3 before fitting the model, but we still have reason to keep species 3 as it'll contribute to estimating `beta2` and `beta3` better.
+The tracked quantity we're after in this example is the percentage of Adelie penguins with a dangerously long bill (there's no domain knowledge in this, we just assume that bills longer than 42 mm are scary).
 
 ```@example workflow
 bill_length_mm = reconstruct(bill_zs, penguins.bill_length_mm)
 const SCARY_BILL_ZSCALE = (50.0 - mean(bill_length_mm)) / std(bill_length_mm)
 
-@wren function bill_model_hierarchical(bill_length, island, species, body_mass)
-    n_species = maximum(species)
+@wren function bill_model_hierarchical(bill_length, island, body_mass)
     n_islands = maximum(island)
 
-    @iid beta1 ~ Normal(0, 1) size=n_species
+    beta1 = (isl ~ hierarchical(n_islands))
     beta2 ~ Normal(0, 1)
-    beta3 = (island_effects ~ hierarchical(n_islands))
     sigma ~ Exponential(1)
 
-    mu = beta1[species] .+ beta2 .* body_mass .+ beta3[island]
+    mu = beta1[island] .+ beta2 .* body_mass
     @batch for i in eachindex(bill_length)
         bill_length[i] ~ Normal(mu[i], sigma)
     end
 
-    @track scary_bill_pct = mean(mu .> SCARY_BILL_ZSCALE)
+    @track scary_bill = mean(bill_length .> SCARY_BILL_ZSCALE)
 end
 ```
 
-The tracked quantity we're after in this example is the percentage of penguins with a dangerously long bill (there's no domain knowledge in this, we just assume that bills longer than 50 mm are scary).
+You might rightfully wonder why we're only considering Adelie penguins this time.
+The reason for this is that the Adelies are the only species occuring on all three islands; for both Gentoos and Chinstraps, we only have data from one island, respectively.
+In short, we're simply not set up to estimate how island conditions influence the bill lengths of these two species!
 
-Let's condition our expanded model on the observations again and sample.
+Having recovered from that disappointment, let's now condition our expanded model on the observations again and sample.
 
 ```@example workflow
-transform!(penguins, :island => denserank => :island_idx)
+# Adelies are the only species found on all three islands
+adelies = subset(penguins, :species => ByRow(==("Adelie")))
+transform!(adelies, :island => denserank => :island_idx)
+
 model =
     bill_model_hierarchical(
-        penguins.bill_length_mm,
-        penguins.island_idx,
-        penguins.species_idx,
-        penguins.body_mass_g,
-    ) | (bill_length=penguins.bill_length_mm,)
+        adelies.bill_length_mm,
+        adelies.island_idx,
+        adelies.body_mass_g,
+    ) | (bill_length=adelies.bill_length_mm,)
 chain_tq = nuts(model, 1000, 4; progress=false)
 summarystats(chain_tq)
 ```
 
-So far so good.
-The results in `chain_tq` show us what we'd expect for the _specific_ islands we collected data from.
-But that's not the only thing we could be after when working with hierarchical models. 
-We may also be interested in new islands ("individuals") sampled from the inferred population, which we could draw from `Normal(island_effects.mu, island_effects.sigma)`.
+So far so good, but the result for `scary_bill` in `chain_tq` only tell us what we'd expect for the _specific_ islands we collected data from.
+Sometimes, however, that's not what we're after in a hierarchical model.
 
-Since we've already estimate the tracked quantity in the observed islands, let's now estimate it for new islands.
+What if we want to quantify the effect in general, in the hypothetical "population" of islands that gave rise to our observed sample?
+To transfer our inferences to this population, we need to sample from the inferred population of islands `Normal(isl.mu, isl.sigma)`.
 
-We'll first define a new data set with 210 hypothetical new islands.
-The number 210 is arbitrary (apart from the fact that it nicely distributes across the three penguin species). 
-We just need a sufficiently large sample size represent the population distribution.
+But how would we do this in our model? 
+After all, the number of islands is part of our model -- our `z` parameter has as many entries as we have islands!
+
+Before figuring out how to escape the structure of our initial model, we first define a new data set with 300 hypothetical new islands (the number 300 is arbitrary here, it should just be large enough to represent the hypothetical "population" of islands).
 
 ```@example workflow
-n_new = 210
+n_new = 300
 island_new = 1:n_new
-# Equally many of each species
-species_new = repeat([1, 2, 3], div(n_new, 3))
-# Average over the observed body weights
-body_mass_g_new = rand(penguins.body_mass_g, n_new)
+# Resample the observed body weights
+body_mass_g_new = rand(adelies.body_mass_g, n_new)
 ```
 
-Now you may wonder how we can tell our model to ignore the individual `island_effect.z` parameters in the model.
-The key here is that `simulate` will use the parameters stored in the `chain` _if_ it can find them, and otherwise fall back to sampling from the prior.
+Now you may wonder how we can tell our model to ignore the individual `isl.z` parameters in the model.
+The key here is that `simulate` will use the parameters from the `chain` _if_ they are stored there, and otherwise fall back to sampling from the prior.
 
 That's exactly what we want here! 
 
-By sampling `island_effect.z` from the prior, we get draws from `Normal(island_effects.mu, island_effects.sigma)`:
+By sampling `isl.z` from the prior, we get draws from `Normal(isl.mu, isl.sigma)`.
+So all we need to do is drop `isl.z` from the chain:
 
 ```@example workflow
-chain_sub = chain[filter(!=(@vn(island_effects.z)), FlexiChains.parameters(chain))]
-model_new = bill_model_hierarchical(zeros(n_new), island_new, species_new, body_mass_g_new)
+chain_sub = chain[filter(!=(@vn(isl.z)), FlexiChains.parameters(chain))]
+model_new = bill_model_hierarchical(zeros(n_new), island_new, body_mass_g_new)
 chain_new = simulate(model_new, chain_sub)
-summarystats(chain_new)
+mean(chain_new[@vn(scary_bill)]), std(chain_new[@vn(scary_bill)])
 ```
+
+As you can see, our estimate for the hypothetical population is quite similar to that of the specific islands that we estimated our first model with.
+The reason for this is simply because there isn't a lot of heterogeneity between these islands (see the estimate for `isl.tau` in `chain_tq`), and even if there was, our estimate would only be weakly informed by the data given we only recorded data for three islands.
