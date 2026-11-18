@@ -1,4 +1,4 @@
-# Bayesian workflow
+# [Bayesian workflow](@id workflow)
 
 In the worked example below, we demonstrate how Wren and the JuliaBayes ecosystem enable the [Bayesian Workflow](https://avehtari.github.io/Bayesian-Workflow/).
 
@@ -182,7 +182,7 @@ Continuing with the penguin model from before, let's now assume that there is so
 These conditions make _all_ the penguins on a given island more similar to each other; that could for example be caused by better food sources near some islands than others, or some islands being more prone to disruptive weather events than others.
 
 We can express these correlated observations in Bayesian modelling with a hierarchical model.
-Since this model component is quite common and thus reusable, it's a good candidate to be written as a [submodel](@ref):
+Since this model component is quite common and thus reusable, it's a good candidate to be written as a [submodel](@ref submodels):
 
 ```@example workflow
 @wren function hierarchical(size)
@@ -205,11 +205,11 @@ end
     In short, learning $\tau$ from the data ("partial pooling") infers _just how much_ information we should share between islands. 
     This comes with many nice benefits like avoiding overfitting!
 
-The tracked quantity we're after in this example is the percentage of Adelie penguins with a dangerously long bill (there's no domain knowledge in this, we just assume that bills longer than 42 mm are scary).
+The tracked quantity we're after in this example is the proportion of Adelie penguins with a dangerously long bill (there's no domain knowledge in this, we just assume that bills longer than 42 mm are scary).
 
 ```@example workflow
-bill_length_mm = reconstruct(bill_zs, penguins.bill_length_mm)
-const SCARY_BILL_ZSCALE = (50.0 - mean(bill_length_mm)) / std(bill_length_mm)
+import StatsBase
+const SCARY_BILL_ZSCALE = only(StatsBase.transform(bill_zs, [42.0]))
 
 @wren function bill_model_hierarchical(bill_length, island, body_mass)
     n_islands = maximum(island)
@@ -223,12 +223,15 @@ const SCARY_BILL_ZSCALE = (50.0 - mean(bill_length_mm)) / std(bill_length_mm)
         bill_length[i] ~ Normal(mu[i], sigma)
     end
 
-    @track scary_bill = mean(bill_length .> SCARY_BILL_ZSCALE)
+    @track scary_bill = let
+        pred_bill = rand.(Normal.(mu, sigma))
+        mean(pred_bill .> SCARY_BILL_ZSCALE)
+    end
 end
 ```
 
 You might rightfully wonder why we're only considering Adelie penguins this time.
-The reason for this is that the Adelies are the only species occuring on all three islands; for both Gentoos and Chinstraps, we only have data from one island, respectively.
+The reason for this is that the Adelies are the only species occurring on all three islands; for both Gentoos and Chinstraps, we only have data from one island, respectively.
 In short, we're simply not set up to estimate how island conditions influence the bill lengths of these two species!
 
 Having recovered from that disappointment, let's now condition our expanded model on the observations again and sample.
@@ -248,11 +251,11 @@ chain_tq = nuts(model, 1000, 4; progress=false)
 summarystats(chain_tq)
 ```
 
-So far so good, but the result for `scary_bill` in `chain_tq` only tell us what we'd expect for the _specific_ islands we collected data from.
+So far so good, but the result for `scary_bill` in `chain_tq` only tells us what we'd expect for the _specific_ islands we collected data from.
 Sometimes, however, that's not what we're after in a hierarchical model.
 
 What if we want to quantify the effect in general, in the hypothetical "population" of islands that gave rise to our observed sample?
-To transfer our inferences to this population, we need to sample from the inferred population of islands `Normal(isl.mu, isl.sigma)`.
+To transfer our inferences to this population, we need to sample from the inferred population of islands `Normal(isl.mu, isl.tau)`.
 
 But how would we do this in our model? 
 After all, the number of islands is part of our model -- our `z` parameter has as many entries as we have islands!
@@ -262,7 +265,7 @@ Before figuring out how to escape the structure of our initial model, we first d
 ```@example workflow
 n_new = 300
 island_new = 1:n_new
-# Resample the observed body weights
+# Resample the observed body mass
 body_mass_g_new = rand(adelies.body_mass_g, n_new)
 ```
 
@@ -271,11 +274,11 @@ The key here is that `simulate` will use the parameters from the `chain` _if_ th
 
 That's exactly what we want here! 
 
-By sampling `isl.z` from the prior, we get draws from `Normal(isl.mu, isl.sigma)`.
+By sampling `isl.z` from the prior, we get draws from `Normal(isl.mu, isl.tau)`.
 So all we need to do is drop `isl.z` from the chain:
 
 ```@example workflow
-chain_sub = chain[filter(!=(@vn(isl.z)), FlexiChains.parameters(chain))]
+chain_sub = chain_tq[filter(!=(@vn(isl.z)), FlexiChains.parameters(chain_tq))]
 model_new = bill_model_hierarchical(zeros(n_new), island_new, body_mass_g_new)
 chain_new = simulate(model_new, chain_sub)
 mean(chain_new[@vn(scary_bill)]), std(chain_new[@vn(scary_bill)])
