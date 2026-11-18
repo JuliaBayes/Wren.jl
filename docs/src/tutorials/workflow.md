@@ -202,7 +202,7 @@ end
     On the contrary, if we assume $\tau$ to be really, really large, this would correspond to a scenario where islands are _so different_ that we might as well estimate each of their means individually.
     This is called "no pooling".
 
-    In short, learning $\tau$ from the data ("partial pooling") infers _just how much_ information we should share between islands. 
+    In short, learning $\tau$ from the data ("partial pooling") infers _just how much_ information we should share between islands.
     This comes with many nice benefits like avoiding overfitting!
 
 The tracked quantity we're after in this example is the proportion of Adelie penguins with a dangerously long bill (there's no domain knowledge in this, we just assume that bills longer than 42 mm are scary).
@@ -257,7 +257,7 @@ Sometimes, however, that's not what we're after in a hierarchical model.
 What if we want to quantify the effect in general, in the hypothetical "population" of islands that gave rise to our observed sample?
 To transfer our inferences to this population, we need to sample from the inferred population of islands `Normal(isl.mu, isl.tau)`.
 
-But how would we do this in our model? 
+But how would we do this in our model?
 After all, the number of islands is part of our model -- our `z` parameter has as many entries as we have islands!
 
 Before figuring out how to escape the structure of our initial model, we first define a new data set with 300 hypothetical new islands (the number 300 is arbitrary here, it should just be large enough to represent the hypothetical "population" of islands).
@@ -272,7 +272,7 @@ body_mass_g_new = rand(adelies.body_mass_g, n_new)
 Now you may wonder how we can tell our model to ignore the individual `isl.z` parameters in the model.
 The key here is that `simulate` will use the parameters from the `chain` _if_ they are stored there, and otherwise fall back to sampling from the prior.
 
-That's exactly what we want here! 
+That's exactly what we want here!
 
 By sampling `isl.z` from the prior, we get draws from `Normal(isl.mu, isl.tau)`.
 So all we need to do is drop `isl.z` from the chain:
