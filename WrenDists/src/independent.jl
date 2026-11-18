@@ -171,9 +171,20 @@ Plaice.unconstrained_vec_length(d::IIDMultivariate) =
 _index_optics(d) = [VarNames.Index(Tuple(I), (;)) for I in vec(CartesianIndices(size(d)))]
 Plaice.optic_vec(d::Independent) = _index_optics(d)
 Plaice.unconstrained_optic_vec(d::Independent) = _index_optics(d)
+
+_append_iid_indices(::Nothing, indices::Tuple) = nothing
+function _append_iid_indices(optic::VarNames.AbstractOptic, indices::Tuple)
+    isempty(indices) && return optic
+    last = VarNames.olast(optic)
+    if last isa VarNames.Index
+        return VarNames.Index((last.ix..., indices...), last.kw) ∘ VarNames.oinit(optic)
+    end
+    return VarNames.Index(indices, (;)) ∘ optic
+end
+
 function Plaice.unconstrained_optic_vec(d::IIDMultivariate)
     return vec([
-        foldl(Plaice.append_index, Tuple(I); init=optic) for
+        _append_iid_indices(optic, Tuple(I)) for
         optic in Plaice.unconstrained_optic_vec(_dist(d)), I in CartesianIndices(_dims(d))
     ])
 end
