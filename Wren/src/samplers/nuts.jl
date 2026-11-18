@@ -59,6 +59,9 @@ No U-Turn Sampler (NUTS) for a Wren model. All `dynamichmc_kwargs` are passed to
 [`DynamicHMC.mcmc_with_warmup`](@extref), allowing you to customise the warmup and sampling
 behaviour. The returned chain holds the tracked quantities selected by `track`.
 
+Each chain starts from an independent prior draw unless `initialization` is supplied in
+`dynamichmc_kwargs`.
+
 `reduce_copies` is passed to [`VecModel`](@ref): when sampling with Enzyme, it skips copies
 of model arguments that turn out not to be needed (see [`reduce_copies`](@ref)).
 """
@@ -144,15 +147,21 @@ function _nuts_chain(
     run,
     j::Integer;
     track::TrackedQuantitySpec,
+    initialization=nothing,
     dynamichmc_kwargs...,
 )
     vm = WrenCore._copy_for_thread(vm_single)
+    rng = Random.TaskLocalRNG()
+    if initialization === nothing
+        initialization = (; q=WrenCore.vector_parameters(vm, WrenCore.FromPrior(rng)))
+    end
     reporter = run === nothing ? DynamicHMC.NoProgressReport() : ChainReporter(run, j)
     results = DynamicHMC.mcmc_with_warmup(
-        Random.TaskLocalRNG(),
+        rng,
         vm,
         niters;
         reporter,
+        initialization,
         dynamichmc_kwargs...,
     )
     close_phases!(reporter)
