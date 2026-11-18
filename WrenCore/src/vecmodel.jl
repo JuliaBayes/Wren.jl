@@ -335,20 +335,6 @@ function VecModel(
     return VecModel(model, adtype, lp_function, parameter_space, vecinfo, sample)
 end
 
-"""
-    logdensity(model::Model, adtype=nothing; kwargs...) -> VecModel
-
-Construct a vectorised log-density object implementing the LogDensityProblems.jl interface.
-The default is the unnormalised posterior in unconstrained coordinates, including the
-change-of-variables Jacobian, as for [`VecModel`](@ref). Use `lp_function=logjoint` for
-an original-space MAP objective or `lp_function=loglikelihood` for an MLE objective.
-
-All other keywords are passed to [`VecModel`](@ref), including `latent_source` for
-initialisation. Supply an AD backend to prepare gradients. Evaluate the result with
-`LogDensityProblems.logdensity`, `LogDensityProblems.logdensity_and_gradient`, or [`lp`](@ref).
-"""
-logdensity(model::Model, adtype=nothing; kwargs...) = VecModel(model, adtype; kwargs...)
-
 function Base.show(io::IO, ::MIME"text/plain", vm::VecModel)
     printstyled(io, "VecModel ", vm.model.name; bold=true)
     println(io)
@@ -439,7 +425,7 @@ function _prepare_vecmodel_info(
 )
     accs = AccumulatorTuple(VectorisedParamsAccumulator(), SitenameCountAccumulator())
     _, accs = evaluate(model, source, parameter_space, accs, EvalContext{false}())
-    vecvals = vectorised_params(accs)
+    vecvals = _vectorised_values(accs)
     sca = getacc(accs, Val{SITENAMECOUNT_ACCNAME}())
 
     # TODO(penelopeysm): This might be slower than necessary due to boxing of the
@@ -609,22 +595,19 @@ function LogDensityProblems.logdensity_and_gradient(
 end
 
 """
-    Base.rand([rng::AbstractRNG,] vecmodel::VecModel) -> AbstractVector
+    vector_parameters(vecmodel::VecModel)::AbstractVector
+    vector_parameters(vecmodel::VecModel, latents)::AbstractVector
 
-Draw a parameter vector compatible with `vecmodel`.
-"""
-function Base.rand(rng::AbstractRNG, vecmodel::VecModel)
-    return vectorise_latents(FromPrior(rng), vecmodel)
-end
-Base.rand(vecmodel::VecModel) = rand(default_rng(), vecmodel)
+Obtain the model's parameters from `latents` and return them as a vector compatible with
+`vecmodel`. If no latent values are provided, they are drawn from the prior distribution.
 
-"""
-    WrenCore.vectorise_latents(latent_source::AbstractLatentSource, vecmodel::VecModel)
+The vector is in the parameter space of `vecmodel` (usually unconstrained), not in original
+space; `parameters(vecmodel, v)` converts it back.
 
-Draw model parameters from `latent_source` and return them as a vector compatible with
-`vecmodel`.
+`latents` is converted to a latent source with [`to_latent_source`](@ref), so it can also
+be an `AbstractRNG` (to draw from the prior) or a `VarNamedTuple` of values.
 """
-function vectorise_latents(latent_source::AbstractLatentSource, vecmodel::VecModel)
+function vector_parameters(vecmodel::VecModel, latent_source::AbstractLatentSource)
     params = similar(vecmodel.sample)
     accs = AccumulatorTuple(VecSampleAccumulator(params, vecmodel.vecinfo))
     _, accs = evaluate(
@@ -634,5 +617,9 @@ function vectorise_latents(latent_source::AbstractLatentSource, vecmodel::VecMod
         accs,
         EvalContext{false}(),
     )
-    return _get_vec_sample(accs)
+    return vector_parameters(accs)
 end
+function vector_parameters(vecmodel::VecModel, latents)
+    return vector_parameters(vecmodel, to_latent_source(latents))
+end
+vector_parameters(vecmodel::VecModel) = vector_parameters(vecmodel, FromPrior())

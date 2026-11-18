@@ -27,7 +27,7 @@ using DifferentiationInterface
         vm_enz = VecModel(model, WrenCore.DEFAULT_AD; reduce_copies=reduce_copies)
 
         for i in 1:5
-            params = rand(vm_enz)
+            params = vector_parameters(vm_enz)
             lp_enz, grad_enz = lp_and_grad(vm_enz, params)
             lp_fd, grad_fd = lp_and_grad(vm_fd, params)
 
@@ -56,7 +56,7 @@ using DifferentiationInterface
         # keep.
         model_nocopy = WrenCore._with_copied_args(model, ())
         vm_nocopy = VecModel(model_nocopy, WrenCore.DEFAULT_AD)
-        params = rand(vm_nocopy)
+        params = vector_parameters(vm_nocopy)
 
         _, grad_nocopy = lp_and_grad(vm_nocopy, params)
         _, grad_fd = lp_and_grad(vm_fd, params)

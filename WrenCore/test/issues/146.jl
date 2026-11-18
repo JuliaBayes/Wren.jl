@@ -33,11 +33,27 @@ using Test
         @test WrenCore._copy_for_thread(outer).args.sub.args.x !== outer.args.sub.args.x
     end
 
+    @testset "deepcopy" begin
+        copied = deepcopy(vm)
+        @test copied.model.args.x !== vm.model.args.x
+        # The model and the log-density function must still share the copied arguments.
+        @test copied.lp_func.model_args.x === copied.model.args.x
+        @test copied.model.evaluation_fn === vm.model.evaluation_fn
+        p = randn(Xoshiro(1), n)
+        @test lp(copied, p) == lp(vm, p)
+
+        outer = wraps_arg(writes_arg(zeros(n), zeros(n)))
+        @test deepcopy(outer).args.sub.args.x !== outer.args.sub.args.x
+        conditioned_model = vm.model | (; x=zeros(n))
+        @test conditioned(deepcopy(conditioned_model)).x !==
+              conditioned(conditioned_model).x
+    end
+
     @testset "conditioned values are independent" begin
-        model = vm.model | VarNamedTuple(x=zeros(n))
+        model = vm.model | (; x=zeros(n))
         expected = logjoint(model, VarNamedTuple())
         copied = WrenCore._copy_for_thread(model)
-        conditioned(copied)[@vn(x)][1] = 1.0
+        conditioned(copied).x[1] = 1.0
         @test logjoint(model, VarNamedTuple()) == expected
         @test logjoint(copied, VarNamedTuple()) ≈ expected - 5000.5
     end
@@ -57,7 +73,7 @@ using Test
         draws = fetch.([
             Threads.@spawn begin
                 copied = WrenCore._copy_for_thread(model)
-                [Draw(FromPrior(Xoshiro(100t + i)), copied) for i in 1:50]
+                [simulate(copied, FromPrior(Xoshiro(100t + i))) for i in 1:50]
             end for t in 1:4
         ])
         @test all(d -> logjoint(d) ≈ logjoint(model, parameters(d)), reduce(vcat, draws))
