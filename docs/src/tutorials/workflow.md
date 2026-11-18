@@ -267,6 +267,7 @@ n_new = 300
 island_new = 1:n_new
 # Resample the observed body mass
 body_mass_g_new = rand(adelies.body_mass_g, n_new)
+nothing # hide
 ```
 
 Now you may wonder how we can tell our model to ignore the individual `isl.z` parameters in the model.
