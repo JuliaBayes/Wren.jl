@@ -78,6 +78,7 @@ include("test_utils.jl")
 
 # Overloaded in extensions
 function to_flexichain end
+function _to_flexichain end
 function posteriordb_model end
 function available_posteriordb_models end
 

@@ -25,7 +25,13 @@ Currently, Reactant can only be used with vectorised Wren models, i.e., the `Vec
 Because this struct obeys the LogDensityProblems.jl interface, this does still allow for compatibility with a wide range of packages that expect this interface!
 In particular, you can use Reactant with Wren's [`nuts`](@ref) sampler (which uses DynamicHMC under the hood).
 
-To enable Reactant, you have to pass `AutoReactant{<:AutoEnzyme}` as the second argument to `VecModel` (i.e., as the `AbstractADType` argument).
+For [`independent_mh`](@ref), [`rwm`](@ref), [`ram`](@ref), [`am`](@ref), and
+[`dram`](@ref), pass `adtype=AutoReactant()` to compile density evaluation.
+These samplers use a fixed continuous latent layout with Reactant and run transitions on the host.
+Independent MH draws on the host and scores the likelihood on the device.
+Its latent coordinates must share one floating-point type.
+
+To use Reactant directly with `VecModel`, pass `AutoReactant()` as its second argument.
 Let's define our eight-schools model yet again, but this time with Reactant enabled:
 
 ```@example reactant

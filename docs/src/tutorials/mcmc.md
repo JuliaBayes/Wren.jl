@@ -1,7 +1,5 @@
 # MCMC sampling
 
-Wren currently provides two very simple samplers.
-
 Results are stored as `FlexiChain{VarName}`; please see the [FlexiChains documentation](https://juliabayes.org/FlexiChains.jl) for more information.
 
 ```@example mcmc
@@ -33,6 +31,31 @@ Wren.prior
 ```@example mcmc
 using Wren
 prior(model, 1000, 4; progress=false)
+```
+
+## Independent Metropolis–Hastings
+
+```@docs
+Wren.independent_mh
+```
+
+```@example mcmc
+independent_mh(model, 1000, 4; progress=false)
+```
+
+## Random-walk Metropolis
+
+The proposal covariance stays fixed after warmup. Each chain retains `niters` draws.
+
+```@docs
+Wren.rwm
+Wren.ram
+Wren.am
+Wren.dram
+```
+
+```@example mcmc
+ram(model, 1000, 4; warmup=1000, progress=false)
 ```
 
 ## [NUTS](@id nuts)
