@@ -6,6 +6,7 @@ using FlexiChains
 using Test
 using Random
 import Enzyme
+import ForwardDiff
 
 @wren function f()
     x ~ Normal()
@@ -56,6 +57,13 @@ end
             algorithm=Wren.DynamicHMC.NUTS(; max_depth=1),
         )
         @test all(x -> 9.8 < x < 10.2, chn[@vn(x)])
+    end
+
+    @testset "Float32 prior" begin
+        @wren f32() = x ~ Normal(0.0f0, 1.0f0)
+        chain = nuts(Xoshiro(4), f32(), 50; adtype=AutoForwardDiff(), progress=false)
+        @test FlexiChains.niters(chain) == 50
+        @test all(isfinite, chain[@vn(x)])
     end
 
     @testset "rng" begin

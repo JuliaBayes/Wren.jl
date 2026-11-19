@@ -103,7 +103,8 @@ function nuts(
         t = time()
         print("Doing AD preparation... ")
     end
-    vm_single = WrenCore.VecModel(model, adtype; reduce_copies)
+    # DynamicHMC draws Float64 momentum even for Float32 starting positions.
+    vm_single = WrenCore.VecModel(model, adtype; reduce_copies, _min_precision=Float64)
     if progress
         println("done in $(round(time() - t, digits=2)) seconds.")
         t = time()

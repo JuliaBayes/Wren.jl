@@ -36,8 +36,14 @@ function WrenCore.VecModel(
     # Reactant doesn't use `WrenCore.reduce_copies`, but we still need this kwarg
     # to avoid a MethodError
     reduce_copies::Bool=true,
+    _min_precision::Type=Union{},
 )
-    vecinfo, sample = WrenCore._prepare_vecmodel_info(model, latent_source, parameter_space)
+    vecinfo, sample = WrenCore._prepare_vecmodel_info(
+        model,
+        latent_source,
+        parameter_space,
+        _min_precision,
+    )
 
     accs = WrenCore.AccumulatorTuple(
         WrenCore.LogPriorAccumulator(),
@@ -96,7 +102,10 @@ function WrenCore.lp(vecmodel::ReactantWrenModel, params::AbstractVector)
     return _to_host(vecmodel.adprep.primal(Reactant.to_rarray(params)))
 end
 function WrenCore.lp_and_grad(vecmodel::ReactantWrenModel, params::AbstractVector)
-    value, grad = vecmodel.adprep.value_and_gradient(Reactant.to_rarray(params))
+    T = eltype(vecmodel.sample)
+    WrenCore._check_gradient_precision(T, params)
+    prepared_params = eltype(params) === T ? params : T.(params)
+    value, grad = vecmodel.adprep.value_and_gradient(Reactant.to_rarray(prepared_params))
     return _to_host(value), Array(grad)
 end
 function WrenCore.lp_and_grad!(

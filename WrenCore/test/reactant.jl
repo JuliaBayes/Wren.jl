@@ -26,6 +26,10 @@ end
     @test logdensity isa Float64
     @test grad isa Vector{Float64}
 
+    params32 = [0.25f0]
+    @test lp_and_grad(vecmodel, Reactant.to_rarray(params32)) ==
+          lp_and_grad(vecmodel, Float64.(params32))
+
     nested = VecModel(reactant_submodel(reactant_model(1.0)), adtype; reduce_copies=true)
     nested_logdensity, nested_grad = lp_and_grad(nested, params)
     @test nested_logdensity ≈ logdensity

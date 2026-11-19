@@ -301,6 +301,7 @@ function reduce_copies(
     latent_source::AbstractLatentSource=FromPrior(),
     parameter_space::AbstractParameterSpace=UnconstrainedSpace(),
     verbose::Bool=true,
+    _min_precision::Type=Union{},
 ) where {A,C,F,S}
     atol, rtol = promote(atol, rtol)
     function lp_and_collected_grad(vecmodel, params)
@@ -315,6 +316,7 @@ function reduce_copies(
         latent_source,
         lp_function,
         parameter_space,
+        _min_precision,
         # `reduce_copies` must be false here, otherwise infinite recursion!
         reduce_copies=false,
     )

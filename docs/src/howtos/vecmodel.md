@@ -76,6 +76,9 @@ noad_vecmodel = VecModel(model, nothing)
 This is mostly useful when you want to hand off a Wren model to a different library which expects a vector interface.
 In particular, `VecModel`s obey the [LogDensityProblems.jl interface](https://github.com/tpapp/LogDensityProblems.jl), and thus can be used with a wide range of other Julia packages that expect this.
 
+Choose the gradient precision when you construct the `VecModel`. If an external solver uses
+Float64 coordinates, supply Float64 initial values with `latent_source=FromValues(...)`.
+
 Probably the first thing to do is to draw a vectorised sample from a `VecModel` with [`vector_parameters`](@ref).
 This draws from the prior of the underlying model:
 

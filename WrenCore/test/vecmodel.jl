@@ -139,6 +139,7 @@ end
             @test grad === buffer
             @test grad == -params
         end
+        @test_throws DimensionMismatch lp_and_grad!(zeros(Float32, 2), vm64, params)
         buffer = zeros(1)
         lp_and_grad!(buffer, vm64, params)
         @test (@allocated lp_and_grad!(buffer, vm64, params)) == 0

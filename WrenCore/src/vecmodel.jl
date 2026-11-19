@@ -321,6 +321,7 @@ function VecModel(
     lp_function=logjoint_transformed,
     parameter_space::AbstractParameterSpace=UnconstrainedSpace(),
     reduce_copies::Bool=true,
+    _min_precision::Type=Union{},
 )
     model = if reduce_copies
         WrenCore.reduce_copies(
@@ -330,11 +331,13 @@ function VecModel(
             latent_source,
             parameter_space,
             verbose=false,
+            _min_precision,
         )
     else
         model
     end
-    vecinfo, sample = _prepare_vecmodel_info(model, latent_source, parameter_space)
+    vecinfo, sample =
+        _prepare_vecmodel_info(model, latent_source, parameter_space, _min_precision)
     return VecModel(model, adtype, lp_function, parameter_space, vecinfo, sample)
 end
 
@@ -425,6 +428,7 @@ function _prepare_vecmodel_info(
     model::Model,
     source::AbstractLatentSource,
     parameter_space::AbstractParameterSpace,
+    min_precision::Type=Union{},
 )
     accs = AccumulatorTuple(VectorisedParamsAccumulator(), SitenameCountAccumulator())
     _, accs = evaluate(model, source, parameter_space, accs, EvalContext{false}())
@@ -450,7 +454,8 @@ function _prepare_vecmodel_info(
     end
     vecinfo = VecInfo(sca, varname_to_rat)
 
-    return vecinfo, params
+    T = promote_type(eltype(params), min_precision)
+    return vecinfo, T === eltype(params) ? params : T.(params)
 end
 
 """
@@ -465,18 +470,23 @@ Calculate the log-density of `vecmodel` at `params`.
 """
 lp(vecmodel::VecModel, params::AbstractVector) = vecmodel.lp_func(params)
 
-function _gradient_params(sample::AbstractVector, params::AbstractVector)
-    S, T = eltype(sample), eltype(params)
+function _check_gradient_precision(S::Type, params::AbstractVector)
+    T = eltype(params)
     if T !== S
         T =
             isconcretetype(T) ? float(T) :
             mapreduce(x -> float(typeof(x)), promote_type, params; init=S)
         promote_type(S, T) === S || throw(
             ArgumentError(
-                "VecModel was prepared for $S. Use `FromValues` with $T initial values.",
+                "VecModel was prepared for $S but its gradient inputs require $T.",
             ),
         )
     end
+    return nothing
+end
+
+function _gradient_params(sample::AbstractVector, params::AbstractVector)
+    _check_gradient_precision(eltype(sample), params)
     return convert(typeof(sample), params)
 end
 
@@ -489,7 +499,7 @@ constructing the `VecModel`. For wider inputs, construct it with initial values 
 desired precision using [`FromValues`](@ref).
 
 !!! warning
-    `params` is not copied, and the model may receive views into it. A model that writes
+    The model may receive views into `params`. A model that writes
     into a latent variable (e.g. `x ~ MvNormal(...); x[1] += 1`) is therefore not
     supported: it may change `params` and give inconsistent results.
 """
@@ -531,16 +541,20 @@ Calculate the log-density and its gradient with respect to `params`, writing the
 into `grad`. Returns a tuple (log_density, grad). See [`lp_and_grad`](@ref) for precision.
 
 !!! warning
-    `params` is not copied, and the model may receive views into it. A model that writes
+    The model may receive views into `params`. A model that writes
     into a latent variable (e.g. `x ~ MvNormal(...); x[1] += 1`) is therefore not
     supported: it may change `params` and give inconsistent results.
 """
 function lp_and_grad!(grad::AbstractVector, vecmodel::VecModel, params::AbstractVector)
     prepared_params = _gradient_params(vecmodel.sample, params)
     # Enzyme requires matching parameter and gradient array types.
-    prepared_grad =
-        vecmodel.adtype isa DI.AutoEnzyme && !(grad isa typeof(prepared_params)) ?
-        similar(prepared_params) : grad
+    prepared_grad = grad
+    if vecmodel.adtype isa DI.AutoEnzyme && !(grad isa typeof(prepared_params))
+        length(grad) == length(prepared_params) || throw(
+            DimensionMismatch("Gradient buffer must match the parameter vector length."),
+        )
+        prepared_grad = similar(prepared_params)
+    end
     result = if _use_closure(vecmodel.adtype)
         DI.value_and_gradient!(
             vecmodel.lp_func,
