@@ -6,7 +6,7 @@ using LinearAlgebra: Diagonal
 
 Gaussian random-walk Metropolis for fixed, continuous latents. The proposal standard
 deviation `step_size` defaults to `2.38 / sqrt(d)` in unconstrained space.
-Use `adtype=AutoReactant()` to evaluate the log density on the Reactant device.
+Use `adtype=AutoReactant()` to run the sampler on the device.
 """
 rwm(args...; kwargs...) = _random_walk(Val(:rwm), args...; kwargs...)
 

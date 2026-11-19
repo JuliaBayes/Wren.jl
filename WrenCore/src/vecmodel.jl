@@ -462,8 +462,6 @@ Calculate the log-density of `vecmodel` at `params`.
 """
 lp(vecmodel::VecModel, params::AbstractVector) = vecmodel.lp_func(params)
 
-function _compile_log_density end
-
 """
     lp_and_grad(vecmodel::VecModel, params::AbstractVector)
 

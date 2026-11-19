@@ -22,6 +22,40 @@ end
 _mh_phase(run, j, label, n) =
     run === nothing ? nothing : open_phase!(chain_at(run, j), label, Determinate(n))
 
+function _device_mh_phase(backend, step, state, history, n, run, j, label)
+    phase = _mh_phase(run, j, label, n)
+    if phase === nothing
+        args = (step, state, history, n)
+        return backend._device_compile(backend._device_scan, args...)(args...)
+    end
+    try
+        batch_size = max(32, cld(n, 100))
+        args = (
+            step,
+            state,
+            history,
+            backend._device_scalar(min(n, batch_size)),
+            backend._device_scalar(0),
+        )
+        scan = backend._device_compile(backend._device_scan, args...)
+        for offset in 0:batch_size:(n-1)
+            count = min(batch_size, n - offset)
+            state, history = scan(
+                step,
+                state,
+                history,
+                backend._device_scalar(count),
+                backend._device_scalar(offset),
+            )
+            backend._device_wait(state)
+            advance!(phase, offset + count)
+        end
+        return state, history
+    finally
+        close_phase!(phase)
+    end
+end
+
 function _run_mh_chains(f, rng, model, nchains, progress)
     seeds = rand(rng, UInt64, nchains)
     outputs = with_progress(progress, "Sampling $(model.name)", nchains) do run
@@ -86,23 +120,14 @@ function _walk_chain(algorithm, rng, model, niters, run, j, options)
     (; warmup, step_size, track, max_init_attempts, adtype) = options
     source = _ContinuousPrior(WrenCore.FromPrior(rng))
     vm = WrenCore.VecModel(WrenCore._copy_for_thread(model), nothing; latent_source=source)
-    log_density =
-        adtype === nothing ? Base.Fix1(WrenCore.lp, vm) :
-        WrenCore._compile_log_density(vm, adtype)
+    if adtype !== nothing
+        backend = Base.get_extension(WrenCore, :WrenCoreReactantExt)
+        return _device_walk_chain(backend, algorithm, source, vm, niters, run, j, options)
+    end
+    log_density = Base.Fix1(WrenCore.lp, vm)
     x, density = _random_walk_start(vm, source, max_init_attempts, log_density)
-    T = eltype(x)
-    d = length(x)
-    scale = T(2.38) / sqrt(T(d))
-    step = step_size === nothing ? scale : T(step_size)
-    variance = abs2(step)
-    0 < variance < Inf || throw(ArgumentError("step_size is out of range for $T"))
-    if algorithm isa _RAM && !(0 < T(algorithm.target_acceptance) < 1)
-        throw(ArgumentError("target_acceptance rounds to an endpoint in $T"))
-    end
-    if algorithm isa _DRAM && !(0 < T(algorithm.second_scale) < 1)
-        throw(ArgumentError("second_scale rounds to an endpoint in $T"))
-    end
-    factor = _random_walk_factor(algorithm, step, d)
+    step, scale, variance = _walk_scales(algorithm, x, step_size)
+    factor = _random_walk_factor(algorithm, step, length(x))
     adaptation = warmup == 0 ? nothing : _walk_adaptation(algorithm, x, scale, variance)
     proposal = similar(x)
     noise = (; first=similar(x), retry=algorithm isa _DRAM ? similar(x) : nothing)
@@ -154,6 +179,21 @@ function _walk_chain(algorithm, rng, model, niters, run, j, options)
         end
     end
     return results, stats
+end
+
+function _walk_scales(algorithm, x, step_size)
+    T = eltype(x)
+    scale = T(2.38) / sqrt(T(length(x)))
+    step = step_size === nothing ? scale : T(step_size)
+    variance = abs2(step)
+    0 < variance < Inf || throw(ArgumentError("step_size is out of range for $T"))
+    if algorithm isa _RAM && !(0 < T(algorithm.target_acceptance) < 1)
+        throw(ArgumentError("target_acceptance rounds to an endpoint in $T"))
+    end
+    if algorithm isa _DRAM && !(0 < T(algorithm.second_scale) < 1)
+        throw(ArgumentError("second_scale rounds to an endpoint in $T"))
+    end
+    return step, scale, variance
 end
 
 _random_walk_factor(algorithm, step, d) = Cholesky(Matrix(Diagonal(fill(step, d))), 'L', 0)

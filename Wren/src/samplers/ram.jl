@@ -35,3 +35,27 @@ function _adapt_walk!(ram::_RAM, factor, x, noise, log_alpha, i, last)
     end
     return factor
 end
+
+_device_walk_adaptation(backend, ::_RAM, x, scale, variance) = Val(:ram)
+
+function _device_adapt_walk(
+    backend,
+    ram::_RAM,
+    factor,
+    ::Val{:ram},
+    x,
+    noise,
+    log_alpha,
+    i,
+    n,
+)
+    T = eltype(noise)
+    gain = min(one(T), length(x) * T(i)^(-T(2) / T(3)))
+    change = gain * (T(exp(log_alpha)) - T(ram.target_acceptance))
+    noise_norm = sqrt(sum(abs2, noise))
+    direction = noise ./ ifelse(iszero(noise_norm), one(T), noise_norm)
+    # The square root of I + change * u*u' is I + coefficient * u*u'.
+    coefficient = change / (sqrt(1 + change) + 1)
+    factor += (coefficient .* (factor * direction)) * transpose(direction)
+    return factor, Val(:ram)
+end

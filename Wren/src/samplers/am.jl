@@ -35,3 +35,42 @@ function _adapt_walk!(moments::_AMCovariance, factor, x, noise, log_alpha, i, la
     end
     return factor
 end
+
+function _device_walk_adaptation(backend, ::Val{:am}, x, scale, variance)
+    T, d = eltype(x), length(x)
+    mean = backend._device_array(x)
+    scatter = backend._device_array(zeros(T, d, d))
+    ridge = max(T(1e-6), eps(T)) * variance
+    ridge_matrix = backend._device_array(Matrix(Diagonal(fill(ridge, d))))
+    return (; mean, scatter, scale_squared=abs2(scale), ridge_matrix)
+end
+
+function _device_adapt_walk(
+    backend,
+    algorithm,
+    factor,
+    moments::NamedTuple,
+    x,
+    noise,
+    log_alpha,
+    i,
+    n,
+)
+    (; mean, scatter, scale_squared, ridge_matrix) = moments
+    T = eltype(x)
+    delta = x - mean
+    mean += delta ./ T(i + 1)
+    scatter += (T(i) / T(i + 1)) .* (delta * transpose(delta))
+    refresh = (i >= 25) & ((i % 25 == 0) | (i == n))
+    factor = backend._device_if(
+        (factor, scatter, ridge_matrix, i) ->
+            backend._device_cholesky((scale_squared / T(i)) .* scatter + ridge_matrix),
+        (factor, scatter, ridge_matrix, i) -> factor,
+        refresh,
+        factor,
+        scatter,
+        ridge_matrix,
+        i,
+    )
+    return factor, (; mean, scatter, scale_squared, ridge_matrix)
+end

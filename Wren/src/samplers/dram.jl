@@ -21,18 +21,62 @@ end
 _walk_adaptation(::_DRAM, x, scale, variance) =
     _walk_adaptation(Val(:am), x, scale, variance)
 
+_device_walk_adaptation(backend, ::_DRAM, x, scale, variance) =
+    _device_walk_adaptation(backend, Val(:am), x, scale, variance)
+
 function _delayed_log_acceptance(current, first, second, log_alpha1, noise)
-    # The reverse first-stage move would always accept if first >= second.
-    first < second || return -Inf
     # The second Gaussian proposal is symmetric. Only the first Gaussian and
     # first-stage rejection probabilities enter the correction.
     log_proposal_ratio = dot(noise.first, noise.retry) - dot(noise.retry, noise.retry) / 2
-    log_reverse_reject = log(-expm1(first - second))
+    log_reverse_reject = log(-expm1(min(0, first - second)))
     log_forward_reject = log(-expm1(log_alpha1))
     log_ratio =
         (second - current) + log_proposal_ratio + log_reverse_reject - log_forward_reject
-    return min(0, log_ratio)
+    return ifelse(first < second, min(0, log_ratio), oftype(log_ratio, -Inf))
 end
 
 _random_walk_stats(::_DRAM, log_density, stage) =
     (; accepted=stage != 0, log_density, accepted_stage=stage)
+
+function _device_walk_move(backend, algorithm::_DRAM, log_density, rng, x, density, factor)
+    noise = Random.randn(rng, eltype(x), length(x))
+    proposal = _device_walk_proposal(x, factor, noise)
+    proposed_density = _device_walk_score(log_density, proposal)
+    log_alpha = min(0, proposed_density - density)
+    accepted = log(Random.rand(rng)) < log_alpha
+    retry = Base.Fix1(_device_dram_retry, eltype(x)(algorithm.second_scale))
+    current = (; x, density, factor)
+    first = (; proposal, density=proposed_density, noise, log_alpha)
+    selected, selected_density, stage, invalid = backend._device_if(
+        _device_dram_first,
+        retry,
+        accepted,
+        rng,
+        log_density,
+        current,
+        first,
+    )
+    invalid = invalid | !(proposed_density < Inf)
+    return selected, selected_density, stage, noise, log_alpha, invalid
+end
+
+function _device_dram_first(rng, log_density, current, first)
+    valid = first.density < Inf
+    return first.proposal, first.density, ifelse(valid, 1, 0), !valid
+end
+
+function _device_dram_retry(scale, rng, log_density, current, first)
+    (; x, density, factor) = current
+    retry = scale .* Random.randn(rng, eltype(x), length(x))
+    second = _device_walk_proposal(x, factor, retry)
+    second_density = _device_walk_score(log_density, second)
+    log_alpha2 = _delayed_log_acceptance(
+        density,
+        first.density,
+        second_density,
+        first.log_alpha,
+        (; first=first.noise, retry),
+    )
+    accepted = log(Random.rand(rng)) < log_alpha2
+    return second, second_density, ifelse(accepted, 2, 0), !(second_density < Inf)
+end

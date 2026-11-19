@@ -1,7 +1,7 @@
 using Random: Random
 using StatsAPI: loglikelihood
 using MCMCProgress: advance!, close_phase!
-using VarNames: VarNamedTuple, parameters
+using VarNames: VarNames, VarNamedTuple, parameters
 
 """
     independent_mh([rng], model, niters, nchains=1;
@@ -11,7 +11,7 @@ using VarNames: VarNamedTuple, parameters
 Sample from the posterior by independent Metropolis–Hastings with prior proposals.
 Each chain starts from the first prior draw with finite log likelihood, within
 `max_init_attempts` draws. The chain records `loglikelihood` and `accepted`.
-Use `adtype=AutoReactant()` to score fixed, continuous latents on the Reactant device.
+Use `adtype=AutoReactant()` with traceable priors and fixed latent names and shapes.
 """
 independent_mh(model::WrenCore.Model, niters::Integer, nchains::Integer=1; kwargs...) =
     independent_mh(Random.default_rng(), model, niters, nchains; kwargs...)
@@ -43,12 +43,20 @@ function independent_mh(
     return WrenCore._to_flexichain(results, stats)
 end
 
-function _independent_mh_chain(rng, model, niters, run, j, track, max_init_attempts, adtype)
+function _independent_mh_chain(
+    rng,
+    model,
+    niters,
+    run,
+    j,
+    track,
+    max_init_attempts,
+    ::Nothing,
+)
     chain_model = WrenCore._copy_for_thread(model)
     source = WrenCore.FromPrior(rng)
-    scorer = _prepare_prior_scorer(chain_model, source, adtype)
     current, _ = _mh_start(max_init_attempts, "log likelihood") do _
-        draw = _independent_mh_draw(source, chain_model, track, scorer)
+        draw = _independent_mh_draw(source, chain_model, track)
         return draw, draw.loglikelihood
     end
     params = _recorded_parameters(current.accs)
@@ -57,7 +65,7 @@ function _independent_mh_chain(rng, model, niters, run, j, track, max_init_attem
     phase = _mh_phase(run, j, "Sampling", niters)
     try
         for i in 1:niters
-            proposal = _independent_mh_draw(source, chain_model, track, scorer)
+            proposal = _independent_mh_draw(source, chain_model, track)
             # The proposal density is the prior, so only the likelihood ratio remains.
             accepted = log(rand(rng)) < proposal.loglikelihood - current.loglikelihood
             if accepted
@@ -76,63 +84,77 @@ end
 
 _recorded_parameters(accs) = merge(WrenCore.tracked_quantities(accs), parameters(accs))
 
-function _independent_mh_draw(source, model, track, scorer)
-    return_value, accs = WrenCore.evaluate(
+function _independent_mh_record(source, model, track, scores...)
+    return WrenCore.evaluate(
         model,
         source,
         WrenCore.OriginalSpace(),
         WrenCore.AccumulatorTuple(
             WrenCore.ParamsAccumulator(),
             WrenCore.TrackedQuantityAccumulator(track),
-            _prior_scoring_accumulator(scorer),
+            scores...,
         ),
         WrenCore.EvalContext{false}(),
     )
-    ll = _prior_loglikelihood(scorer, accs)
+end
+
+function _independent_mh_draw(source, model, track)
+    return_value, accs =
+        _independent_mh_record(source, model, track, WrenCore.LogLikelihoodAccumulator())
+    ll = loglikelihood(accs)
     ll < Inf || throw(DomainError(ll, "Expected finite log likelihood or -Inf"))
     return (; accs, return_value, loglikelihood=ll)
 end
 
-struct _PriorScorer{F,A}
-    score::F
-    accumulator::A
+function _independent_mh_chain(
+    rng,
+    model,
+    niters,
+    run,
+    j,
+    track,
+    max_init_attempts,
+    ::AutoReactant,
+)
+    chain_model = WrenCore._copy_for_thread(model)
+    layout = parameters(WrenCore._copy_for_thread(model), WrenCore.FromPrior(copy(rng)))
+    entries = Tuple(pairs(layout))
+    names, sample = map(first, entries), map(last, entries)
+    backend = Base.get_extension(WrenCore, :WrenCoreReactantExt)
+    step, state, history = backend._prepare_device_independent_mh(
+        chain_model,
+        rng,
+        names,
+        sample,
+        niters,
+        max_init_attempts,
+    )
+    state, history =
+        _device_mh_phase(backend, step, state, history, niters, run, j, "Sampling")
+    values, loglikelihoods, accepted = backend._finish_device_independent_mh(state, history)
+    results = Vector{VarNamedTuple}(undef, niters)
+    stats = Vector{NamedTuple{(:accepted, :return_value, :loglikelihood)}}(undef, niters)
+    skeleton = VarNames.skeleton(layout)
+    params, return_value = VarNamedTuple(), nothing
+    for i in 1:niters
+        if i == 1 || accepted[i]
+            source = WrenCore.FromValues(_prior_values_at(skeleton, names, values, i))
+            return_value, accs = _independent_mh_record(source, chain_model, track)
+            params = _recorded_parameters(accs)
+        end
+        results[i] = params
+        stats[i] = (; accepted=accepted[i], return_value, loglikelihood=loglikelihoods[i])
+    end
+    return results, stats
 end
 
-_prepare_prior_scorer(model, source, ::Nothing) = nothing
-
-function _prepare_prior_scorer(model, source, adtype::AutoReactant)
-    # Probe the layout without consuming the chain's first proposal.
-    layout_source = _ContinuousPrior(WrenCore.FromPrior(copy(source.rng)))
-    vm = WrenCore.VecModel(
-        WrenCore._copy_for_thread(model),
-        nothing;
-        latent_source=layout_source,
-        parameter_space=WrenCore.OriginalSpace(),
-    )
-    (!isempty(vm.sample) && eltype(vm.sample) <: AbstractFloat) ||
-        throw(ArgumentError("Reactant prior proposals require floating-point latents"))
-    score = WrenCore._compile_log_density(
-        vm,
-        adtype;
-        lp_function=loglikelihood,
-        accs=WrenCore.AccumulatorTuple(WrenCore.LogLikelihoodAccumulator()),
-    )
-    accumulator = WrenCore.VecSampleAccumulator(similar(vm.sample), vm.vecinfo, Val(true))
-    return _PriorScorer(score, accumulator)
-end
-
-_prior_scoring_accumulator(::Nothing) = WrenCore.LogLikelihoodAccumulator()
-_prior_loglikelihood(::Nothing, accs) = loglikelihood(accs)
-
-function _prior_scoring_accumulator(scorer::_PriorScorer)
-    fill!(scorer.accumulator.vals, NaN)
-    return scorer.accumulator
-end
-
-function _prior_loglikelihood(scorer::_PriorScorer, accs)
-    params = WrenCore.vector_parameters(accs)
-    all(isfinite, params) || throw(
-        ArgumentError("Reactant prior proposals require a fixed, finite latent layout"),
-    )
-    return scorer.score(params)
+function _prior_values_at(skeleton, names, values, i)
+    result = VarNamedTuple()
+    for (name, history) in zip(names, values)
+        value =
+            ndims(history) == 1 ? history[i] : copy(selectdim(history, ndims(history), i))
+        template = get(skeleton.data, VarNames.getsym(name), VarNames.NoTemplate())
+        result = VarNames.templated_setindex!!(result, value, name, template)
+    end
+    return result
 end

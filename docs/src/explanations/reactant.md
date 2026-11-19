@@ -21,15 +21,12 @@ If there isn't a distribution you need, do feel free to [open an issue or a pull
 
 ## Using Reactant with Wren
 
-Currently, Reactant can only be used with vectorised Wren models, i.e., the `VecModel` struct.
-Because this struct obeys the LogDensityProblems.jl interface, this does still allow for compatibility with a wide range of packages that expect this interface!
-In particular, you can use Reactant with Wren's [`nuts`](@ref) sampler (which uses DynamicHMC under the hood).
-
 For [`independent_mh`](@ref), [`rwm`](@ref), [`ram`](@ref), [`am`](@ref), and
-[`dram`](@ref), pass `adtype=AutoReactant()` to compile density evaluation.
-These samplers use a fixed continuous latent layout with Reactant and run transitions on the host.
-Independent MH draws on the host and scores the likelihood on the device.
-Its latent coordinates must share one floating-point type.
+[`dram`](@ref), pass `adtype=AutoReactant()` to run transitions and warmup on the device.
+The samplers require fixed latent names and shapes. Wren transfers retained draws to the host to construct the chain.
+
+Wren's [`nuts`](@ref) sampler uses Reactant to evaluate the log density and its gradient
+through `VecModel`. This type also implements the LogDensityProblems.jl interface.
 
 To use Reactant directly with `VecModel`, pass `AutoReactant()` as its second argument.
 Let's define our eight-schools model yet again, but this time with Reactant enabled:
@@ -97,13 +94,12 @@ Eight-schools firmly falls into the small-model category:
 @bmodel model DEFAULT_AD # No Reactant
 ```
 
-This means that in Wren's current state, Reactant is likely to be most useful for *large* models, such as those with large datasets / likelihood terms, where the fixed cost of transferring the data is small in comparison to the cost of evaluating the model.
+This means that Reactant evaluation through `VecModel` is likely to be most useful for *large* models, such as those with large datasets or likelihood terms.
 
 It should be emphasised that this is not a fundamental limitation of Reactant.
 Instead, it is a choice that is made in Wren in order to abstract away these details of host/device transfer from the user.
 We would *very much like to change this in the future*, and allow `VecModel` to use device arrays as inputs and outputs.
-The difficulty with this is that everything else that the `VecModel` slots into, such as a HMC or NUTS sampler, needs to be converted into a form that is also compatible with Reactant.
-At present, to the best of our knowledge, we don't really have that available to us.
+Running HMC or NUTS on the device would also require a compatible transition kernel.
 
 (Conceptually, what we would like to have is something like [the 'iterative NUTS' procedure developed for NumPyro](https://github.com/pyro-ppl/numpyro/wiki/Iterative-NUTS).
 That is more or less the same thing as having a Reactant-compatible NUTS sampler, but for JAX instead of Reactant.)
