@@ -1,10 +1,25 @@
 using LinearAlgebra: Symmetric, cholesky, diagind, mul!
 
 """
-    am([rng], model, niters, nchains=1; warmup=1000, kwargs...) -> VNChain
+    am(
+        [rng::Random.AbstractRNG=default_rng()],
+        model::WrenCore.Model,
+        niters::Integer,
+        nchains::Integer=1;
+        step_size::Union{Nothing,Real}=nothing,
+        warmup::Integer=1000,
+        progress::Bool=true,
+        track::TrackedQuantitySpec=AllQuantities(),
+        max_init_attempts::Integer=1000,
+        adtype::Union{Nothing,AutoReactant}=nothing,
+    ) -> FlexiChains.VNChain
 
-Adaptive Metropolis ([Haario et al.](https://doi.org/10.2307/3318737)). Tune the proposal
-using the empirical covariance of all warmup states. Other options match [`rwm`](@ref).
+Adaptive Metropolis for fixed, continuous latents ([Haario et al.](https://doi.org/10.2307/3318737)).
+
+- `step_size` sets the initial proposal standard deviation in unconstrained space.
+  The default is `2.38 / sqrt(d)` in `d` dimensions.
+- `max_init_attempts` caps the prior draws used to find a finite starting log density.
+- `adtype=AutoReactant()` runs transitions on the device.
 """
 am(args...; warmup::Integer=1000, kwargs...) =
     _random_walk(Val(:am), args...; warmup, kwargs...)

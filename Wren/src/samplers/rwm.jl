@@ -1,10 +1,23 @@
 """
-    rwm([rng], model, niters, nchains=1; step_size=nothing, warmup=0,
-        progress=true, track=AllQuantities(), max_init_attempts=1000, adtype=nothing) -> VNChain
+    rwm(
+        [rng::Random.AbstractRNG=default_rng()],
+        model::WrenCore.Model,
+        niters::Integer,
+        nchains::Integer=1;
+        step_size::Union{Nothing,Real}=nothing,
+        warmup::Integer=0,
+        progress::Bool=true,
+        track::TrackedQuantitySpec=AllQuantities(),
+        max_init_attempts::Integer=1000,
+        adtype::Union{Nothing,AutoReactant}=nothing,
+    ) -> FlexiChains.VNChain
 
-Gaussian random-walk Metropolis for fixed, continuous latents. The proposal standard
-deviation `step_size` defaults to `2.38 / sqrt(d)` in unconstrained space.
-Use `adtype=AutoReactant()` to run the sampler on the device.
+Gaussian random-walk Metropolis for fixed, continuous latents.
+
+- `step_size` sets the proposal standard deviation in unconstrained space.
+  The default is `2.38 / sqrt(d)` in `d` dimensions.
+- `max_init_attempts` caps the prior draws used to find a finite starting log density.
+- `adtype=AutoReactant()` runs transitions on the device.
 """
 rwm(args...; kwargs...) = _random_walk(Val(:rwm), args...; kwargs...)
 

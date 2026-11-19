@@ -2,14 +2,23 @@ using StatsAPI: loglikelihood
 using VarNames: VarNames, VarNamedTuple, parameters
 
 """
-    independent_mh([rng], model, niters, nchains=1;
-                   progress=true, track=AllQuantities(), max_init_attempts=1000,
-                   adtype=nothing) -> VNChain
+    independent_mh(
+        [rng::Random.AbstractRNG=default_rng()],
+        model::WrenCore.Model,
+        niters::Integer,
+        nchains::Integer=1;
+        progress::Bool=true,
+        track::TrackedQuantitySpec=AllQuantities(),
+        max_init_attempts::Integer=1000,
+        adtype::Union{Nothing,AutoReactant}=nothing,
+    ) -> FlexiChains.VNChain
 
-Sample from the posterior by independent Metropolis–Hastings with prior proposals.
-Each chain starts from the first prior draw with finite log likelihood, within
-`max_init_attempts` draws. The chain records `loglikelihood` and `accepted`.
-Use `adtype=AutoReactant()` with traceable priors and fixed latent names and shapes.
+Independent Metropolis–Hastings with prior proposals.
+
+- `max_init_attempts` caps the prior draws used to find a finite starting log likelihood.
+- The chain records `loglikelihood` and `accepted`.
+- `adtype=AutoReactant()` runs transitions on the device with traceable priors and fixed
+  latent names and shapes.
 """
 independent_mh(model::WrenCore.Model, niters::Integer, nchains::Integer=1; kwargs...) =
     independent_mh(Random.default_rng(), model, niters, nchains; kwargs...)

@@ -5,12 +5,27 @@ struct _RAM{T<:Real}
 end
 
 """
-    ram([rng], model, niters, nchains=1; warmup=1000, target_acceptance=0.234,
-        kwargs...) -> VNChain
+    ram(
+        [rng::Random.AbstractRNG=default_rng()],
+        model::WrenCore.Model,
+        niters::Integer,
+        nchains::Integer=1;
+        step_size::Union{Nothing,Real}=nothing,
+        warmup::Integer=1000,
+        target_acceptance::Real=0.234,
+        progress::Bool=true,
+        track::TrackedQuantitySpec=AllQuantities(),
+        max_init_attempts::Integer=1000,
+        adtype::Union{Nothing,AutoReactant}=nothing,
+    ) -> FlexiChains.VNChain
 
-Robust Adaptive Metropolis ([Vihola](https://arxiv.org/abs/1011.4381)). Adapt the proposal
-covariance during warmup to target an acceptance rate of `target_acceptance`.
-Other options match [`rwm`](@ref).
+Robust Adaptive Metropolis for fixed, continuous latents ([Vihola](https://arxiv.org/abs/1011.4381)).
+
+- `target_acceptance` sets the warmup acceptance target.
+- `step_size` sets the initial proposal standard deviation in unconstrained space.
+  The default is `2.38 / sqrt(d)` in `d` dimensions.
+- `max_init_attempts` caps the prior draws used to find a finite starting log density.
+- `adtype=AutoReactant()` runs transitions on the device.
 """
 function ram(args...; warmup::Integer=1000, target_acceptance::Real=0.234, kwargs...)
     0 < target_acceptance < 1 || throw(ArgumentError("target_acceptance must be in (0, 1)"))

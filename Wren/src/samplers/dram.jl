@@ -5,13 +5,29 @@ struct _DRAM{T<:Real}
 end
 
 """
-    dram([rng], model, niters, nchains=1; warmup=1000, second_scale=0.5,
-         kwargs...) -> VNChain
+    dram(
+        [rng::Random.AbstractRNG=default_rng()],
+        model::WrenCore.Model,
+        niters::Integer,
+        nchains::Integer=1;
+        step_size::Union{Nothing,Real}=nothing,
+        warmup::Integer=1000,
+        second_scale::Real=0.5,
+        progress::Bool=true,
+        track::TrackedQuantitySpec=AllQuantities(),
+        max_init_attempts::Integer=1000,
+        adtype::Union{Nothing,AutoReactant}=nothing,
+    ) -> FlexiChains.VNChain
 
-Delayed Rejection Adaptive Metropolis ([Haario et al.](https://doi.org/10.1007/s11222-006-9438-0)).
-After rejection, try a second Gaussian proposal with step size multiplied by `second_scale`.
-The chain records the accepted stage as `accepted_stage` (0 for rejection).
-Adaptation follows [`am`](@ref). Other options match [`rwm`](@ref).
+Delayed Rejection Adaptive Metropolis for fixed, continuous latents
+([Haario et al.](https://doi.org/10.1007/s11222-006-9438-0)).
+
+- `second_scale` scales the second proposal's standard deviation.
+- `accepted_stage` records the accepted stage, with 0 for rejection.
+- `step_size` sets the initial proposal standard deviation in unconstrained space.
+  The default is `2.38 / sqrt(d)` in `d` dimensions.
+- `max_init_attempts` caps the prior draws used to find a finite starting log density.
+- `adtype=AutoReactant()` runs transitions on the device.
 """
 function dram(args...; warmup::Integer=1000, second_scale::Real=0.5, kwargs...)
     0 < second_scale < 1 || throw(ArgumentError("second_scale must be in (0, 1)"))
