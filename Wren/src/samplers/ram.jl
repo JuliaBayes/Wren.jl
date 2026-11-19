@@ -1,4 +1,4 @@
-using LinearAlgebra: lmul!, lowrankdowndate!, lowrankupdate!, norm
+using LinearAlgebra: lowrankdowndate!, lowrankupdate!, norm
 
 struct _RAM{T<:Real}
     target_acceptance::T
@@ -19,10 +19,14 @@ end
 
 _walk_adaptation(ram::_RAM, x, scale, variance) = ram
 
-function _adapt_walk!(ram::_RAM, factor, x, noise, log_alpha, i, last)
+function _ram_change(ram, noise, log_alpha, i)
     T = eltype(noise)
-    gain = min(one(T), length(x) * T(i)^(-T(2) / T(3)))
-    change = gain * (T(exp(log_alpha)) - T(ram.target_acceptance))
+    gain = min(one(T), length(noise) * T(i)^(-T(2) / T(3)))
+    return gain * (T(exp(log_alpha)) - T(ram.target_acceptance))
+end
+
+function _adapt_walk!(ram::_RAM, factor, x, noise, log_alpha, i, last)
+    change = _ram_change(ram, noise, log_alpha, i)
     noise_norm = norm(noise)
     if !iszero(change) && !iszero(noise_norm)
         noise .*= sqrt(abs(change)) / noise_norm
@@ -36,26 +40,15 @@ function _adapt_walk!(ram::_RAM, factor, x, noise, log_alpha, i, last)
     return factor
 end
 
-_device_walk_adaptation(backend, ::_RAM, x, scale, variance) = Val(:ram)
+_device_walk_adaptation(backend, ram::_RAM, x, scale, variance) = ram
 
-function _device_adapt_walk(
-    backend,
-    ram::_RAM,
-    factor,
-    ::Val{:ram},
-    x,
-    noise,
-    log_alpha,
-    i,
-    n,
-)
-    T = eltype(noise)
-    gain = min(one(T), length(x) * T(i)^(-T(2) / T(3)))
-    change = gain * (T(exp(log_alpha)) - T(ram.target_acceptance))
+function _device_adapt_walk(backend, ram::_RAM, factor, x, move, i, last)
+    (; noise, log_alpha) = move
+    change = _ram_change(ram, noise, log_alpha, i)
     noise_norm = sqrt(sum(abs2, noise))
-    direction = noise ./ ifelse(iszero(noise_norm), one(T), noise_norm)
+    direction = noise ./ ifelse(iszero(noise_norm), one(noise_norm), noise_norm)
     # The square root of I + change * u*u' is I + coefficient * u*u'.
     coefficient = change / (sqrt(1 + change) + 1)
     factor += (coefficient .* (factor * direction)) * transpose(direction)
-    return factor, Val(:ram)
+    return factor, ram
 end

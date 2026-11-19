@@ -1,5 +1,3 @@
-using LinearAlgebra: Diagonal
-
 """
     rwm([rng], model, niters, nchains=1; step_size=nothing, warmup=0,
         progress=true, track=AllQuantities(), max_init_attempts=1000, adtype=nothing) -> VNChain

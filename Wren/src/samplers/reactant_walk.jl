@@ -1,7 +1,7 @@
-function _device_walk_chain(backend, algorithm, source, vm, niters, run, j, options)
+function _walk_chain(backend::Module, algorithm, source, vm, niters, run, j, options)
     (; warmup, step_size, track, max_init_attempts) = options
     log_density = backend._device_log_density(vm)
-    x, density, initial, density_type =
+    (x, density, initial), host_density =
         _device_walk_start(backend, vm, source, max_init_attempts, log_density)
     step, scale, variance = _walk_scales(algorithm, vm.sample, step_size)
     factor = backend._device_array(_device_walk_factor(algorithm, step, vm.dimension))
@@ -13,7 +13,7 @@ function _device_walk_chain(backend, algorithm, source, vm, niters, run, j, opti
         state = (; rng, x, density, factor, adaptation, invalid)
         step_warmup =
             (state, i) ->
-                _device_walk_warmup(backend, algorithm, log_density, state, i, warmup)
+                _device_walk_step(backend, algorithm, log_density, state, i, warmup)
         state, _ =
             _device_mh_phase(backend, step_warmup, state, nothing, warmup, run, j, "Warmup")
         (; rng, x, density, factor, invalid) = state
@@ -23,12 +23,13 @@ function _device_walk_chain(backend, algorithm, source, vm, niters, run, j, opti
         backend._device_array,
         (
             zeros(eltype(vm.sample), vm.dimension, niters),
-            zeros(density_type, niters),
+            zeros(typeof(host_density), niters),
             zeros(Int, niters),
         ),
     )
-    state = (; rng, x, density, factor, invalid)
-    step_sample = (state, _) -> _device_walk_sample(backend, algorithm, log_density, state)
+    state = (; rng, x, density, factor, adaptation=nothing, invalid)
+    step_sample =
+        (state, i) -> _device_walk_step(backend, algorithm, log_density, state, i, 0)
     final, history =
         _device_mh_phase(backend, step_sample, state, history, niters, run, j, "Sampling")
     backend._to_host(final.invalid) && throw(
@@ -50,21 +51,16 @@ function _device_walk_chain(backend, algorithm, source, vm, niters, run, j, opti
 end
 
 function _device_walk_start(backend, vm, source, max_init_attempts, log_density)
-    vm.dimension > 0 ||
-        throw(ArgumentError("Random-walk samplers require latent variables"))
     score = backend._device_compile(log_density, backend._device_array(vm.sample))
-    state, _ = _mh_start(max_init_attempts, "log density") do i
-        x = i == 1 ? vm.sample : WrenCore.vector_parameters(vm, source)
+    return _random_walk_start(vm, source, max_init_attempts) do x
         all(isfinite, x) || return nothing, -Inf
         device_x = backend._device_array(x)
         density = score(device_x)
         host_density = backend._to_host(density)
         host_density < Inf ||
             throw(DomainError(host_density, "Expected finite log density or -Inf"))
-        return (device_x, backend._device_scalar(density), x, typeof(host_density)),
-        host_density
+        return (device_x, backend._device_scalar(density), x), host_density
     end
-    return state
 end
 
 _device_walk_factor(algorithm, step, d) = Matrix(Diagonal(fill(step, d)))
@@ -85,51 +81,46 @@ function _device_walk_move(backend, algorithm, log_density, rng, x, density, fac
     log_alpha = min(0, proposed_density - density)
     accepted = log(Random.rand(rng)) < log_alpha
     invalid = !(proposed_density < Inf)
+    if algorithm isa _DRAM
+        current = (; x, density, factor)
+        first = (; proposal, density=proposed_density, noise, log_alpha)
+        proposal, proposed_density, stage, bad_retry = _device_dram_move(
+            backend,
+            algorithm,
+            log_density,
+            rng,
+            current,
+            first,
+            accepted,
+        )
+        return proposal, proposed_density, stage, noise, log_alpha, invalid | bad_retry
+    end
     return proposal, proposed_density, ifelse(accepted, 1, 0), noise, log_alpha, invalid
 end
 
-function _device_walk_warmup(backend, algorithm, log_density, state, i, warmup)
+function _device_walk_step(backend, algorithm, log_density, state, i, warmup)
     (; rng, x, density, factor, adaptation, invalid) = state
     proposal, proposed_density, stage, noise, log_alpha, bad_density =
         _device_walk_move(backend, algorithm, log_density, rng, x, density, factor)
     x = ifelse.(stage != 0, proposal, x)
     density = ifelse(stage != 0, proposed_density, density)
-    factor, adaptation = _device_adapt_walk(
-        backend,
-        algorithm,
-        factor,
-        adaptation,
-        x,
-        noise,
-        log_alpha,
-        i,
-        warmup,
-    )
-    invalid = invalid | bad_density | !all(isfinite, factor)
-    return (; rng, x, density, factor, adaptation, invalid), nothing
-end
-
-function _device_walk_sample(backend, algorithm, log_density, state)
-    (; rng, x, density, factor, invalid) = state
-    proposal, proposed_density, stage, _, _, bad_density =
-        _device_walk_move(backend, algorithm, log_density, rng, x, density, factor)
-    x = ifelse.(stage != 0, proposal, x)
-    density = ifelse(stage != 0, proposed_density, density)
-    return (; rng, x, density, factor, invalid=invalid | bad_density), (x, density, stage)
+    invalid = invalid | bad_density
+    if warmup > 0
+        factor, adaptation = _device_adapt_walk(
+            backend,
+            adaptation,
+            factor,
+            x,
+            (; noise, log_alpha),
+            i,
+            i == warmup,
+        )
+        invalid = invalid | !all(isfinite, factor)
+    end
+    sample = warmup > 0 ? nothing : (x, density, stage)
+    return (; rng, x, density, factor, adaptation, invalid), sample
 end
 
 _device_walk_adaptation(backend, algorithm, x, scale, variance) = nothing
 
-function _device_adapt_walk(
-    backend,
-    algorithm,
-    factor,
-    ::Nothing,
-    x,
-    noise,
-    log_alpha,
-    i,
-    n,
-)
-    return factor, nothing
-end
+_device_adapt_walk(backend, ::Nothing, factor, x, move, i, last) = factor, nothing

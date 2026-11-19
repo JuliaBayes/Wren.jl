@@ -33,21 +33,13 @@ using Wren
 prior(model, 1000, 4; progress=false)
 ```
 
-## Independent Metropolis–Hastings
+## Metropolis–Hastings
+
+Independent MH proposes from the prior. The random-walk samplers use Gaussian proposals in
+unconstrained space. RAM, AM, and DRAM tune the proposal covariance during warmup.
 
 ```@docs
 Wren.independent_mh
-```
-
-```@example mcmc
-independent_mh(model, 1000, 4; progress=false)
-```
-
-## Random-walk Metropolis
-
-The proposal covariance stays fixed after warmup. Each chain retains `niters` draws.
-
-```@docs
 Wren.rwm
 Wren.ram
 Wren.am
@@ -55,7 +47,8 @@ Wren.dram
 ```
 
 ```@example mcmc
-ram(model, 1000, 4; warmup=1000, progress=false)
+independent_mh(model, 1000, 4; progress=false)
+ram(model, 1000, 4; progress=false)
 ```
 
 ## [NUTS](@id nuts)

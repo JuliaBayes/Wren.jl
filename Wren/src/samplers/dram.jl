@@ -38,16 +38,9 @@ end
 _random_walk_stats(::_DRAM, log_density, stage) =
     (; accepted=stage != 0, log_density, accepted_stage=stage)
 
-function _device_walk_move(backend, algorithm::_DRAM, log_density, rng, x, density, factor)
-    noise = Random.randn(rng, eltype(x), length(x))
-    proposal = _device_walk_proposal(x, factor, noise)
-    proposed_density = _device_walk_score(log_density, proposal)
-    log_alpha = min(0, proposed_density - density)
-    accepted = log(Random.rand(rng)) < log_alpha
-    retry = Base.Fix1(_device_dram_retry, eltype(x)(algorithm.second_scale))
-    current = (; x, density, factor)
-    first = (; proposal, density=proposed_density, noise, log_alpha)
-    selected, selected_density, stage, invalid = backend._device_if(
+function _device_dram_move(backend, algorithm, log_density, rng, current, first, accepted)
+    retry = Base.Fix1(_device_dram_retry, eltype(current.x)(algorithm.second_scale))
+    return backend._device_if(
         _device_dram_first,
         retry,
         accepted,
@@ -56,8 +49,6 @@ function _device_walk_move(backend, algorithm::_DRAM, log_density, rng, x, densi
         current,
         first,
     )
-    invalid = invalid | !(proposed_density < Inf)
-    return selected, selected_density, stage, noise, log_alpha, invalid
 end
 
 function _device_dram_first(rng, log_density, current, first)

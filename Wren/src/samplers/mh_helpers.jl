@@ -19,40 +19,36 @@ function _mh_start(draw, max_init_attempts, quantity)
     throw(ArgumentError("No finite $quantity after $max_init_attempts prior draws"))
 end
 
-_mh_phase(run, j, label, n) =
-    run === nothing ? nothing : open_phase!(chain_at(run, j), label, Determinate(n))
+function _mh_phase(f, run, j, label, n, args...)
+    run === nothing && return f(nothing, args...)
+    phase = open_phase!(chain_at(run, j), label, Determinate(n))
+    try
+        return f(phase, args...)
+    finally
+        close_phase!(phase)
+    end
+end
 
 function _device_mh_phase(backend, step, state, history, n, run, j, label)
-    phase = _mh_phase(run, j, label, n)
-    if phase === nothing
-        args = (step, state, history, n)
-        return backend._device_compile(backend._device_scan, args...)(args...)
-    end
-    try
-        batch_size = max(32, cld(n, 100))
-        args = (
+    scalar = backend._device_scalar
+    return _mh_phase(run, j, label, n, state, history) do phase, state, history
+        batch_size = phase === nothing ? n : min(n, max(32, cld(n, 100)))
+        scan = backend._device_compile(
+            backend._device_scan,
             step,
             state,
             history,
-            backend._device_scalar(min(n, batch_size)),
-            backend._device_scalar(0),
+            scalar(batch_size),
+            scalar(0),
         )
-        scan = backend._device_compile(backend._device_scan, args...)
         for offset in 0:batch_size:(n-1)
             count = min(batch_size, n - offset)
-            state, history = scan(
-                step,
-                state,
-                history,
-                backend._device_scalar(count),
-                backend._device_scalar(offset),
-            )
+            state, history = scan(step, state, history, scalar(count), scalar(offset))
+            phase === nothing && continue
             backend._device_wait(state)
             advance!(phase, offset + count)
         end
         return state, history
-    finally
-        close_phase!(phase)
     end
 end
 
@@ -65,11 +61,13 @@ function _run_mh_chains(f, rng, model, nchains, progress)
     return stack(first.(outputs)), stack(last.(outputs))
 end
 
-function _check_mh_backend(adtype)
-    if adtype !== nothing && Base.get_extension(WrenCore, :WrenCoreReactantExt) === nothing
+_mh_backend(::Nothing) = nothing
+
+function _mh_backend(::AutoReactant)
+    backend = Base.get_extension(WrenCore, :WrenCoreReactantExt)
+    backend === nothing &&
         throw(ArgumentError("Load Reactant and Enzyme before using AutoReactant"))
-    end
-    return nothing
+    return backend
 end
 
 function _random_walk(algorithm, model::WrenCore.Model, args...; kwargs...)
@@ -94,10 +92,18 @@ function _random_walk(
     if step_size !== nothing && !(0 < step_size < Inf)
         throw(ArgumentError("step_size must be finite and positive"))
     end
-    _check_mh_backend(adtype)
-    options = (; warmup, step_size, track, max_init_attempts, adtype)
+    backend = _mh_backend(adtype)
+    options = (; warmup, step_size, track, max_init_attempts)
     results, stats = _run_mh_chains(rng, model, nchains, progress) do chain_rng, run, j
-        _walk_chain(algorithm, chain_rng, model, niters, run, j, options)
+        source = _ContinuousPrior(WrenCore.FromPrior(chain_rng))
+        vm = WrenCore.VecModel(
+            WrenCore._copy_for_thread(model),
+            nothing;
+            latent_source=source,
+        )
+        vm.dimension > 0 ||
+            throw(ArgumentError("Random-walk samplers require latent variables"))
+        _walk_chain(backend, algorithm, source, vm, niters, run, j, options)
     end
     return WrenCore.to_flexichain(results, stats)
 end
@@ -116,16 +122,14 @@ function WrenCore.get_latent(source::_ContinuousPrior, vn::VarName, dist, site::
     return WrenCore.get_latent(source.source, vn, dist, site)
 end
 
-function _walk_chain(algorithm, rng, model, niters, run, j, options)
-    (; warmup, step_size, track, max_init_attempts, adtype) = options
-    source = _ContinuousPrior(WrenCore.FromPrior(rng))
-    vm = WrenCore.VecModel(WrenCore._copy_for_thread(model), nothing; latent_source=source)
-    if adtype !== nothing
-        backend = Base.get_extension(WrenCore, :WrenCoreReactantExt)
-        return _device_walk_chain(backend, algorithm, source, vm, niters, run, j, options)
-    end
+function _walk_chain(::Nothing, algorithm, source, vm, niters, run, j, options)
+    (; warmup, step_size, track, max_init_attempts) = options
+    rng = source.source.rng
     log_density = Base.Fix1(WrenCore.lp, vm)
-    x, density = _random_walk_start(vm, source, max_init_attempts, log_density)
+    x, density = _random_walk_start(vm, source, max_init_attempts) do candidate
+        return candidate, _random_walk_density(log_density, candidate)
+    end
+    x = copy(x)
     step, scale, variance = _walk_scales(algorithm, x, step_size)
     factor = _random_walk_factor(algorithm, step, length(x))
     adaptation = warmup == 0 ? nothing : _walk_adaptation(algorithm, x, scale, variance)
@@ -133,11 +137,13 @@ function _walk_chain(algorithm, rng, model, niters, run, j, options)
     noise = (; first=similar(x), retry=algorithm isa _DRAM ? similar(x) : nothing)
     results = Vector{WrenCore.ModelResult}(undef, niters)
     stats = Vector{NamedTuple}(undef, niters)
+
     result = nothing
 
     for (label, n, adapting) in (("Warmup", warmup, true), ("Sampling", niters, false))
         n == 0 && continue
-        phase = _mh_phase(run, j, label, n)
+        phase =
+            run === nothing ? nothing : open_phase!(chain_at(run, j), label, Determinate(n))
         try
             for i in 1:n
                 next_density, stage, log_alpha = _walk_step!(
@@ -201,14 +207,11 @@ _random_walk_factor(algorithm, step, d) = Cholesky(Matrix(Diagonal(fill(step, d)
 _proposal_factor(factor::Diagonal) = factor
 _proposal_factor(factor::Cholesky) = factor.L
 
-function _random_walk_start(vm, source, max_init_attempts, log_density)
-    vm.dimension > 0 ||
-        throw(ArgumentError("Random-walk samplers require latent variables"))
-    x, density = _mh_start(max_init_attempts, "log density") do i
+function _random_walk_start(score, vm, source, max_init_attempts)
+    return _mh_start(max_init_attempts, "log density") do i
         candidate = i == 1 ? vm.sample : WrenCore.vector_parameters(vm, source)
-        return candidate, _random_walk_density(log_density, candidate)
+        return score(candidate)
     end
-    return copy(x), density
 end
 
 function _random_walk_density(log_density, x)

@@ -47,7 +47,8 @@ function _device_prior_step(draw, state, _)
     (values, loglikelihood, accepted)
 end
 
-function _prepare_device_independent_mh(
+function _device_independent_mh(
+    sample_chain,
     model,
     rng,
     names,
@@ -77,10 +78,7 @@ function _prepare_device_independent_mh(
         _device_array(zeros(typeof(ll), niters)),
         _device_array(zeros(Bool, niters)),
     )
-    return step, state, history
-end
-
-function _finish_device_independent_mh(state, history)
+    state, history = sample_chain(step, state, history)
     invalid_score = Reactant.to_number(state.invalid_score)
     invalid_score < Inf ||
         throw(DomainError(invalid_score, "Expected finite log likelihood or -Inf"))

@@ -16,10 +16,12 @@ struct _AMCovariance{T}
     ridge::T
 end
 
+_am_ridge(T, variance) = max(T(1e-6), eps(T)) * variance
+_am_refresh(i, last) = (i >= 25) & ((i % 25 == 0) | last)
+
 function _walk_adaptation(::Val{:am}, x, scale, variance)
     T, d = eltype(x), length(x)
-    ridge = max(T(1e-6), eps(T)) * variance
-    return _AMCovariance(copy(x), zeros(T, d, d), abs2(scale), ridge)
+    return _AMCovariance(copy(x), zeros(T, d, d), abs2(scale), _am_ridge(T, variance))
 end
 
 function _adapt_walk!(moments::_AMCovariance, factor, x, noise, log_alpha, i, last)
@@ -28,7 +30,7 @@ function _adapt_walk!(moments::_AMCovariance, factor, x, noise, log_alpha, i, la
     delta = x - moments.mean
     moments.mean .+= delta ./ T(i + 1)
     mul!(moments.scatter, delta, transpose(delta), T(i) / T(i + 1), one(T))
-    if i >= 25 && (i % 25 == 0 || last)
+    if _am_refresh(i, last)
         covariance = (moments.scale_squared / T(i)) .* moments.scatter
         covariance[diagind(covariance)] .+= moments.ridge
         return cholesky(Symmetric(covariance, :L))
@@ -40,33 +42,25 @@ function _device_walk_adaptation(backend, ::Val{:am}, x, scale, variance)
     T, d = eltype(x), length(x)
     mean = backend._device_array(x)
     scatter = backend._device_array(zeros(T, d, d))
-    ridge = max(T(1e-6), eps(T)) * variance
+    ridge = _am_ridge(T, variance)
     ridge_matrix = backend._device_array(Matrix(Diagonal(fill(ridge, d))))
     return (; mean, scatter, scale_squared=abs2(scale), ridge_matrix)
 end
 
-function _device_adapt_walk(
-    backend,
-    algorithm,
-    factor,
-    moments::NamedTuple,
-    x,
-    noise,
-    log_alpha,
-    i,
-    n,
-)
+function _device_adapt_walk(backend, moments::NamedTuple, factor, x, move, i, last)
     (; mean, scatter, scale_squared, ridge_matrix) = moments
     T = eltype(x)
     delta = x - mean
     mean += delta ./ T(i + 1)
     scatter += (T(i) / T(i + 1)) .* (delta * transpose(delta))
-    refresh = (i >= 25) & ((i % 25 == 0) | (i == n))
+    refactor =
+        (factor, scatter, ridge, i) ->
+            backend._device_cholesky((scale_squared / T(i)) .* scatter + ridge)
+    keep = (factor, scatter, ridge, i) -> factor
     factor = backend._device_if(
-        (factor, scatter, ridge_matrix, i) ->
-            backend._device_cholesky((scale_squared / T(i)) .* scatter + ridge_matrix),
-        (factor, scatter, ridge_matrix, i) -> factor,
-        refresh,
+        refactor,
+        keep,
+        _am_refresh(i, last),
         factor,
         scatter,
         ridge_matrix,
