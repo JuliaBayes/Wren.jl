@@ -112,14 +112,14 @@ There are two ways to turn a random quantity into an observation:
 
  1. Marking the tilde with `@observe`:
 
-```@example defining
-@wren function observations(y)
-    x ~ Normal()
-    @observe y ~ Normal(x)
-end
+    ```@example defining
+    @wren function observations(y)
+        x ~ Normal()
+        @observe y ~ Normal(x)
+    end
 
-simulate(observations(1.0))
-```
+    simulate(observations(1.0))
+    ```
 
  2. Conditioning the model on a value.
     First, you need to instantiate the unconditioned model; then, you can condition it using the `|` operator, passing in a `NamedTuple` of observations.
@@ -127,15 +127,15 @@ simulate(observations(1.0))
     Conditioning on `y` actually does two things: firstly, it marks the corresponding random quantity as an observation, and secondly, it sets the value of that random quantity to the value you passed in.
     Notice that `@info y` works here and uses the value of `y` that the model was conditioned on.
 
-```@example defining
-@wren function observations()
-    @info y
-    x ~ Normal()
-    y ~ Normal(x)
-end
+    ```@example defining
+    @wren function observations()
+        @info y
+        x ~ Normal()
+        y ~ Normal(x)
+    end
 
-conditioned_model = observations() | (; y=1.0)
-```
+    conditioned_model = observations() | (; y=1.0)
+    ```
 
 In general, conditioning is more flexible as you can 'recover' the original model by calling `decondition`:
 
