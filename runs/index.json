@@ -1,5 +1,12 @@
 [
   {
+    "commit_date": "2026-11-20T02:21:11Z",
+    "file": "20261120T023359Z-b96987b.json",
+    "git_sha": "b96987b98be8e6a4ca55846a66edd8f83ca02563",
+    "label": "Set up GHA for the comparative benchmarks website (#312)",
+    "timestamp": "2026-11-20T02:33:59.915Z"
+  },
+  {
     "commit_date": "2026-11-02T00:21:56Z",
     "file": "20261102T010630Z-56b53bc.json",
     "git_sha": "56b53bc91868d9ba95d85f941d3a380fe5741cf4",
