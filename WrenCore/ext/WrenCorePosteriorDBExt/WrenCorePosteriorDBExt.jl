@@ -11,6 +11,18 @@ include("models/gp_regr.jl")
 include("models/kidscore_interaction.jl")
 include("models/mh.jl")
 include("models/rate1.jl")
+include("models/radon_county_intercept_all.jl")
+include("models/radon_county_intercept_mn.jl")
+include("models/radon_hierarchical_intercept_noncentered_all.jl")
+include("models/radon_hierarchical_intercept_noncentered_mn.jl")
+include("models/radon_partially_pooled_noncentered_all.jl")
+include("models/radon_partially_pooled_noncentered_mn.jl")
+include("models/radon_variable_intercept_noncentered_all.jl")
+include("models/radon_variable_intercept_noncentered_mn.jl")
+include("models/radon_variable_intercept_slope_noncentered_all.jl")
+include("models/radon_variable_intercept_slope_noncentered_mn.jl")
+include("models/radon_variable_slope_noncentered_all.jl")
+include("models/radon_variable_slope_noncentered_mn.jl")
 include("models/sblri_blr.jl")
 
 # Maps PosteriorDB posterior names to the modules defining the models. Each module must
@@ -25,6 +37,18 @@ const MODELS = Dict(
     "kidiq-kidscore_interaction" => KidscoreInteraction,
     "Mh_data-Mh_model" => Mh,
     "Rate_1_data-Rate_1_model" => Rate1,
+    "radon_all-radon_county_intercept" => RadonCountyInterceptAll,
+    "radon_all-radon_hierarchical_intercept_noncentered" => RadonHierarchicalInterceptNoncenteredAll,
+    "radon_all-radon_partially_pooled_noncentered" => RadonPartiallyPooledNoncenteredAll,
+    "radon_all-radon_variable_intercept_noncentered" => RadonVariableInterceptNoncenteredAll,
+    "radon_all-radon_variable_intercept_slope_noncentered" => RadonVariableInterceptSlopeNoncenteredAll,
+    "radon_all-radon_variable_slope_noncentered" => RadonVariableSlopeNoncenteredAll,
+    "radon_mn-radon_county_intercept" => RadonCountyInterceptMn,
+    "radon_mn-radon_hierarchical_intercept_noncentered" => RadonHierarchicalInterceptNoncenteredMn,
+    "radon_mn-radon_partially_pooled_noncentered" => RadonPartiallyPooledNoncenteredMn,
+    "radon_mn-radon_variable_intercept_noncentered" => RadonVariableInterceptNoncenteredMn,
+    "radon_mn-radon_variable_intercept_slope_noncentered" => RadonVariableInterceptSlopeNoncenteredMn,
+    "radon_mn-radon_variable_slope_noncentered" => RadonVariableSlopeNoncenteredMn,
     "sblri-blr" => SblriBLR,
 )
 const MODEL_NAMES = sort!(collect(keys(MODELS)))
