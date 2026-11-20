@@ -1,0 +1,93 @@
+[
+  {
+    "commit_date": "2026-11-02T00:21:56Z",
+    "file": "20261102T010630Z-56b53bc.json",
+    "git_sha": "56b53bc91868d9ba95d85f941d3a380fe5741cf4",
+    "label": "Restrict conditioning to whole variables (#260)",
+    "timestamp": "2026-11-02T01:06:30.814Z"
+  },
+  {
+    "commit_date": "2026-10-31T21:42:30Z",
+    "file": "20261101T004908Z-c60643b.json",
+    "git_sha": "c60643b797bd325dbbae3850e2fa98d7d5b9c670",
+    "label": "Use released FlexiChains (#263)",
+    "timestamp": "2026-11-01T00:49:08.789Z"
+  },
+  {
+    "commit_date": "2026-10-23T22:11:55Z",
+    "file": "20261023T230443Z-b5f098a.json",
+    "git_sha": "b5f098a5295581b7d545da452dca2365ecd80a89",
+    "label": "Add InverseGamma distribution to WrenDists (#234)",
+    "timestamp": "2026-10-23T23:04:43.603Z"
+  },
+  {
+    "commit_date": "2026-10-15T22:05:54Z",
+    "file": "20261015T220953Z-2db1f98.json",
+    "git_sha": "2db1f98533fb692a131374d85c4de5991984c6be",
+    "label": "Don't set `UncollectedParams` back into containers (#135)",
+    "timestamp": "2026-10-15T22:09:53.420Z"
+  },
+  {
+    "commit_date": "2026-10-15T00:08:29Z",
+    "file": "20261015T001200Z-64c3bac.json",
+    "git_sha": "64c3bac76ca10202c27b7ca6eff39f81526fa85d",
+    "label": "Fix latent source for empty submodels (#210)",
+    "timestamp": "2026-10-15T00:12:00.059Z"
+  },
+  {
+    "commit_date": "2026-10-14T22:43:01Z",
+    "file": "20261014T224658Z-d528e32.json",
+    "git_sha": "d528e32488ceaf05976b069971ccdbde66ec4363",
+    "label": "Fix indices in generic batch fallback (#209)",
+    "timestamp": "2026-10-14T22:46:58.065Z"
+  },
+  {
+    "commit_date": "2026-10-12T23:31:41Z",
+    "file": "20261012T234402Z-fb99b88.json",
+    "git_sha": "fb99b888cde376b96e85225ea7d4c125f8ea37e1",
+    "label": "Move PosteriorDB models to WrenCore ext and tweak definitions (#186)",
+    "timestamp": "2026-10-12T23:44:02.151Z"
+  },
+  {
+    "commit_date": "2026-10-12T18:54:52Z",
+    "file": "20261012T190730Z-a752237.json",
+    "git_sha": "a75223732587006216886877bc3874275c978d3b",
+    "label": "Vibe code more improvements to benchmark website (#185)",
+    "timestamp": "2026-10-12T19:07:30.394Z"
+  },
+  {
+    "commit_date": "2026-10-12T00:42:53Z",
+    "file": "20261012T005048Z-cff5a17.json",
+    "git_sha": "cff5a17937d0e4f0f3d99dd6c090bd09445227b4",
+    "label": "Stop using addloglikelihood in glmm_poisson",
+    "timestamp": "2026-10-12T00:50:48.124Z"
+  },
+  {
+    "commit_date": "2026-10-11T23:59:29Z",
+    "file": "20261012T003224Z-6d4f623.json",
+    "git_sha": "6d4f6233ecf25d70924b0104df2618e630b07a51",
+    "label": "Add CI workflow for benchmarking",
+    "timestamp": "2026-10-12T00:32:24.354Z"
+  },
+  {
+    "commit_date": "2026-10-05T23:41:21Z",
+    "file": "20261005T234443Z-14760b4.json",
+    "git_sha": "14760b43e809299ff3abd4b4ba8b02c2b14e6015",
+    "label": "And back on.",
+    "timestamp": "2026-10-05T23:44:43.566Z"
+  },
+  {
+    "commit_date": "2026-10-05T23:37:14Z",
+    "file": "20261005T234032Z-422793e.json",
+    "git_sha": "422793e255764e67989fda513292fe5104ecd0ee",
+    "label": "Turn off reduce_copies for benchmarking purposes.",
+    "timestamp": "2026-10-05T23:40:32.802Z"
+  },
+  {
+    "commit_date": "2026-10-05T23:21:53Z",
+    "file": "20261005T232511Z-b4ae92d.json",
+    "git_sha": "b4ae92d956592b8486006e2684f969d19836433c",
+    "label": "Pin BLAS threads.",
+    "timestamp": "2026-10-05T23:25:11.249Z"
+  }
+]
