@@ -6,14 +6,33 @@ using DynamicHMC: DynamicHMC
 using MCMCProgress:
     MCMCProgress, RunProgress, Determinate, advance!, chain_at, close_phase!, open_phase!
 
+"""
+    AbstractInitialization
+
+An abstract type for ways to initialise MCMC samplers.
+
+Currently, only [`FindFiniteDensity`](@ref) is provided.
+"""
 abstract type AbstractInitialization end
 
 """
     FindFiniteDensity(source; max_attempts::Integer=1)
 
-Initialise each NUTS chain by drawing from `source` until its unconstrained coordinates and
-log-density are finite, trying at most `max_attempts` candidates per chain. `source` is
-converted with [`WrenCore.to_latent_source`](@ref). A failed search throws before warmup.
+Initialise a chain by drawing from `source` until its unconstrained coordinates and
+log-density are finite, trying at most `max_attempts` candidates per chain.
+
+`source` can either be a [`WrenCore.AbstractLatentSource`](@ref), or something that can
+be converted to it. In particular:
+
+- `source::Random.AbstractRNG` is shorthand for `FromPrior(source)`, i.e., draw from the
+  prior with the given RNG.
+- `source::VarNamedTuple` is shorthand for `FromValues(source)`, i.e., use the given values
+  *(in model space)* as the initial point.
+
+To use Stan-style initialisation from a uniform interval, use
+[`source=FromUnconstrainedInterval([rng, ]lower, upper)`](@ref FromUnconstrainedInterval).
+
+If initialisation fails after `max_attempts`, an error is thrown.
 
 The same source supplies [`VecModel`](@ref) preparation values. Preparation draws do not
 count towards `max_attempts`; errors during preparation or model evaluation propagate.
