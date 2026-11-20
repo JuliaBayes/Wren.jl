@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Usage: ./runtests [core|wren|dists|all] [julia args...]
+# Usage: ./runtests [core|wren|dists|ensemble|all] [julia args...]
+# Optional adapters run separately from all. Use WREN_TEST_BACKEND=gpu for Reactant GPU tests.
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
 TARGET="${1:-all}"
@@ -17,10 +18,17 @@ run_wrendists() {
     julia "$@" --project="$SCRIPT_DIR/WrenDists" -e "using Pkg; Pkg.test()"
 }
 
+run_ensemble() {
+    julia "$@" --project="$SCRIPT_DIR/Wren/test/optional/ensemblemcmc" -e '
+        using Pkg; Pkg.instantiate()
+        include(joinpath(dirname(Base.active_project()), "runtests.jl"))'
+}
+
 case "$TARGET" in
     core) run_wrencore "$@" ;;
     wren) run_wren "$@" ;;
     dists) run_wrendists "$@" ;;
+    ensemble) run_ensemble "$@" ;;
     all) run_wrencore "$@" && run_wren "$@" && run_wrendists "$@" ;;
-    *) echo "Usage: $0 [core|wren|dists|all] [julia args...]" >&2; exit 1 ;;
+    *) echo "Usage: $0 [core|wren|dists|ensemble|all] [julia args...]" >&2; exit 1 ;;
 esac
