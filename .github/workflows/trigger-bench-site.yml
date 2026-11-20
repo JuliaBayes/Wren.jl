@@ -1,0 +1,21 @@
+name: Trigger benchmark website
+
+# A push to this branch only runs the workflow files on this branch, so this starts the
+# 'Benchmark website' workflow on `main`, which rebuilds the website with the new runs.
+
+on:
+  push:
+    branches:
+      - benchmark-results
+
+permissions:
+  actions: write
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Start the website workflow on main
+        run: gh workflow run bench-site.yml --repo "$GITHUB_REPOSITORY" --ref main
+        env:
+          GH_TOKEN: ${{ github.token }}
