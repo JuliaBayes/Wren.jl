@@ -2,30 +2,82 @@ module WrenCorePosteriorDBExt
 
 using WrenCore: WrenCore
 
+include("models/logaddexp.jl")
 include("models/ark.jl")
+include("models/accel_splines.jl")
+include("models/arma11.jl")
+include("models/diamonds.jl")
+include("models/dugongs.jl")
 include("models/eight_schools_centered.jl")
 include("models/glm_binomial.jl")
 include("models/glm_poisson.jl")
 include("models/glmm_poisson.jl")
 include("models/gp_regr.jl")
+include("models/garch11.jl")
+include("models/gp_pois_regr.jl")
 include("models/kidscore_interaction.jl")
+include("models/low_dim_gauss_mix_collapse.jl")
+include("models/low_dim_gauss_mix.jl")
+include("models/losscurve_sislob.jl")
 include("models/mh.jl")
+include("models/normal_mixture.jl")
+include("models/normal_mixture_k.jl")
 include("models/rate1.jl")
 include("models/sblri_blr.jl")
+include("models/sblrc_blr.jl")
+include("models/seeds.jl")
+include("models/seeds_centered.jl")
+include("models/seeds_stanified.jl")
+include("models/sesame_one_pred.jl")
+include("models/surgical_model.jl")
+include("models/soil_incubation.jl")
+include("models/covid_imperial.jl")
+include("models/presidential_gp.jl")
+include("models/prophet.jl")
+include("models/mcycle_gp.jl")
+include("models/uk_drivers.jl")
+include("models/logistic_rhs.jl")
 
-# Maps PosteriorDB posterior names to the modules defining the models. Each module must
-# define `wren_model`.
+# Maps PosteriorDB posterior names to containers with a `wren_model` property.
 const MODELS = Dict(
     "arK-arK" => ArK,
+    "mcycle_splines-accel_splines" => AccelSplines,
+    "arma-arma11" => ARMA11,
+    "diamonds-diamonds" => Diamonds,
+    "dugongs_data-dugongs_model" => Dugongs,
     "eight_schools-eight_schools_centered" => EightSchoolsCentered,
     "GLM_Binomial_data-GLM_Binomial_model" => GLMBinomial,
     "GLM_Poisson_Data-GLM_Poisson_model" => GLMPoisson,
     "GLMM_Poisson_data-GLMM_Poisson_model" => GLMMPoisson,
     "gp_pois_regr-gp_regr" => GPRegr,
+    "garch-garch11" => Garch11,
+    "gp_pois_regr-gp_pois_regr" => GPPoissonRegression,
     "kidiq-kidscore_interaction" => KidscoreInteraction,
+    "low_dim_gauss_mix_collapse-low_dim_gauss_mix_collapse" => LowDimGaussMixCollapse,
+    "low_dim_gauss_mix-low_dim_gauss_mix" => LowDimGaussMix,
+    "loss_curves-losscurve_sislob" => LossCurveSislob,
     "Mh_data-Mh_model" => Mh,
+    "normal_2-normal_mixture" => NormalMixture,
+    "normal_5-normal_mixture_k" => NormalMixtureK,
     "Rate_1_data-Rate_1_model" => Rate1,
     "sblri-blr" => SblriBLR,
+    "sblrc-blr" => SblrcBLR,
+    "seeds_data-seeds_model" => Seeds,
+    "seeds_data-seeds_centered_model" => SeedsCentered,
+    "seeds_data-seeds_stanified_model" => SeedsStanified,
+    "sesame_data-sesame_one_pred_a" => SesameOnePred,
+    "surgical_data-surgical_model" => SurgicalModel,
+    "soil_carbon-soil_incubation" => SoilIncubation,
+    "ecdc0401-covid19imperial_v2" => CovidImperial.ecdc0401_v2,
+    "ecdc0401-covid19imperial_v3" => CovidImperial.ecdc0401_v3,
+    "ecdc0501-covid19imperial_v2" => CovidImperial.ecdc0501_v2,
+    "ecdc0501-covid19imperial_v3" => CovidImperial.ecdc0501_v3,
+    "state_wide_presidential_votes-hierarchical_gp" => PresidentialGP,
+    "rstan_downloads-prophet" => Prophet,
+    "mcycle_gp-accel_gp" => McycleGP,
+    "uk_drivers-state_space_stochastic_level_stochastic_seasonal" => UKDrivers,
+    "ovarian-logistic_regression_rhs" => LogisticRHS.ovarian,
+    "prostate-logistic_regression_rhs" => LogisticRHS.prostate,
 )
 const MODEL_NAMES = sort!(collect(keys(MODELS)))
 
