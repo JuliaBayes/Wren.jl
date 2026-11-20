@@ -117,7 +117,7 @@ There are two ways to turn a random quantity into an observation:
         x ~ Normal()
         @observe y ~ Normal(x)
     end
-
+    
     simulate(observations(1.0))
     ```
 
@@ -133,7 +133,7 @@ There are two ways to turn a random quantity into an observation:
         x ~ Normal()
         y ~ Normal(x)
     end
-
+    
     conditioned_model = observations() | (; y=1.0)
     ```
 
