@@ -1,6 +1,6 @@
 using WrenDists, Distributions, ForwardDiff, ReverseDiff, Mooncake, Enzyme, Test
 using Random: Xoshiro
-import DifferentiationInterface as DI
+import DifferentiationInterface as DI, DifferentiationInterfaceTest
 
 @testset "Sampling noise under AD: $T" for T in (Float32, Float64)
     x = T[0.7]

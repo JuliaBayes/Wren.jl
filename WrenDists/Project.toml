@@ -19,16 +19,18 @@ VarNames = "09a315b2-63fc-4165-8d7f-d59368e770cc"
 
 [weakdeps]
 DifferentiationInterface = "a0c0ee7d-e4b9-4e03-894e-1c5f64a51d63"
+DifferentiationInterfaceTest = "a82114a7-5aa3-49a8-9643-716bb13727a3"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 Reactant = "3c362404-f566-11ee-1572-e11a4b42c853"
 
 [extensions]
 WrenDistsReactantExt = "Reactant"
-WrenDistsTestUtils = ["DifferentiationInterface", "Distributions"]
+WrenDistsTestUtils = ["DifferentiationInterface", "DifferentiationInterfaceTest", "Distributions"]
 
 [compat]
 DensityInterface = "0.4"
 DifferentiationInterface = "0.7"
+DifferentiationInterfaceTest = "0.11"
 Distributions = "0.25"
 EnzymeCore = "0.6 - 0.8"
 FillArrays = "1"

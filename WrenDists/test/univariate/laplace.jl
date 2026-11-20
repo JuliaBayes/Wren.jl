@@ -1,6 +1,6 @@
 using WrenDists
 using WrenDists: logdensityof, test_dist, ADTestCase
-import DifferentiationInterface as DI
+import DifferentiationInterface as DI, DifferentiationInterfaceTest
 using Distributions
 using ForwardDiff
 using ReverseDiff
