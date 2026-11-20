@@ -326,3 +326,24 @@ function accumulate_addloglikelihood!!(
 )
     return acclogp(acc, value)
 end
+
+@inline _scaled_accumulate!!(f, scale::Number, acc::AbstractAccumulator, args...) =
+    f(acc, args...)
+@inline function _scaled_accumulate!!(f, scale::Number, accs::AccumulatorTuple, args...)
+    return AccumulatorTuple(
+        _scaled_accumulate!!.(Ref(f), Ref(scale), Tuple(accs.nt), map(Ref, args)...),
+    )
+end
+
+# A NoLogProb seed keeps the increment's precision and leaves unrelated events untouched.
+# Coordinate Jacobians and custom hooks use the fallback above.
+function _scaled_accumulate!!(
+    f,
+    scale::Number,
+    acc::Union{LogPriorAccumulator,LogLikelihoodAccumulator},
+    args...,
+)
+    lp = logp(f(basetypeof(acc)(NoLogProb()), args...))
+    lp isa NoLogProb && return acc
+    return acclogp(acc, oftype(lp, scale * lp))
+end
