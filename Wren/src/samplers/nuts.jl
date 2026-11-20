@@ -67,8 +67,7 @@ of model arguments that turn out not to be needed (see [`reduce_copies`](@ref)).
 
 Tracked quantities selected by `track` will be included in the returned chain. Note that
 tracked quantities are not evaluated during the log-density step, but only once per iteration.
-
-See also: [`AllQuantities`](@ref), [`SomelQuantities`](@ref), [`NoQuantities`](@ref)
+See also: [`AllQuantities`](@ref), [`SomeQuantities`](@ref), [`NoQuantities`](@ref)
 """
 function nuts(
     model::WrenCore.Model,
