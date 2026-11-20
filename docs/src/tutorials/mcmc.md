@@ -76,7 +76,7 @@ In the future, we hope to provide more initialisation strategies (e.g. using [Pa
 
     In the (near) future the API will be generalised to also accept a vector of initialisation strategies, one for each chain.
 
-```@docs
+```@docs; canonical=false
 AbstractInitialization
 FindFiniteDensity
 ```
