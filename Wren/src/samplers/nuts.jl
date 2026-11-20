@@ -45,7 +45,7 @@ close_phases!(::DynamicHMC.NoProgressReport) = nothing
 """
     nuts(
         [rng::Random.AbstractRNG=default_rng()],
-        model::WrenCore.Model,
+        model::Model,
         niters::Integer,
         nchains::Integer=1;
         adtype::DI.AbstractADType=DI.AutoEnzyme(; mode=Enzyme.Reverse),
@@ -70,7 +70,7 @@ tracked quantities are not evaluated during the log-density step, but only once 
 See also: [`AllQuantities`](@ref), [`SomeQuantities`](@ref), [`NoQuantities`](@ref)
 """
 function nuts(
-    model::WrenCore.Model,
+    model::Model,
     niters::Integer,
     nchains::Integer=1;
     adtype::DI.AbstractADType=DI.AutoEnzyme(; mode=Reverse),
@@ -93,7 +93,7 @@ function nuts(
 end
 function nuts(
     rng::Random.AbstractRNG,
-    model::WrenCore.Model,
+    model::Model,
     niters::Integer,
     nchains::Integer=1;
     adtype::DI.AbstractADType=DI.AutoEnzyme(; mode=Reverse),
