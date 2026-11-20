@@ -1,12 +1,9 @@
 name: Benchmark website
 
-# Builds the benchmark website in `bench/web` and publishes it to the `bench/` folder of the
-# `gh-pages` branch (i.e. https://juliabayes.org/Wren.jl/bench/).
-#
-# The website shows the runs saved on the `benchmark-results` branch. That branch has its
-# own small workflow which starts this one whenever it is pushed to. (A push to a branch only
-# runs the workflow files on that branch, so `on: push: branches: [benchmark-results]` here
-# would never fire.)
+# Builds the benchmark website in `bench/web` and publishes it to the `bench/`
+# folder of the `gh-pages` branch (i.e. https://juliabayes.org/Wren.jl/bench/).
+# The website shows the runs saved on the `benchmark-results` branch. That
+# branch has its own workflow which starts this one whenever it is pushed to.
 
 on:
   workflow_dispatch:
@@ -59,32 +56,30 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm build
 
+      - name: Check out gh-pages
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
+        with:
+          ref: gh-pages
+          path: pages
+
+        # The final push can fail if something else (e.g. a workflow) pushed to
+        # gh-pages in the meantime. In such an instance, this workflow can just
+        # be rerun -- running this multiple times is idempotent.
       - name: Publish to gh-pages
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898299+github-actions[bot]@users.noreply.github.com"
           sha=$(git rev-parse --short HEAD)
           results_sha=$(git -C results rev-parse --short HEAD)
-          # The docs workflow also pushes to gh-pages, so a push can fail if it pushed in
-          # the meantime. If so, start again from the new gh-pages.
-          for attempt in 1 2 3 4 5; do
-            rm -rf pages
-            git clone --depth 1 --branch gh-pages \
-              "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" pages
-            rm -rf pages/bench
-            cp -r bench/web/dist pages/bench
-            git -C pages add --all bench
-            if git -C pages diff --cached --quiet; then
-              echo "No changes to publish."
-              exit 0
-            fi
-            git -C pages commit -m "Update benchmark website (main ${sha}, results ${results_sha})"
-            if git -C pages push origin gh-pages; then
-              exit 0
-            fi
-            echo "Push failed (attempt ${attempt}), trying again."
-            sleep $((attempt * 10))
-          done
-          exit 1
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
+
+          git -C pages config user.name "github-actions[bot]"
+          git -C pages config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          rm -rf pages/bench
+          cp -r bench/web/dist pages/bench
+          git -C pages add --all bench
+          if git -C pages diff --cached --quiet; then
+            echo "No changes to publish."
+            exit 0
+          fi
+          git -C pages commit -m "Update benchmark website (main ${sha}, results ${results_sha})"
+
+          git -C pages push origin gh-pages
