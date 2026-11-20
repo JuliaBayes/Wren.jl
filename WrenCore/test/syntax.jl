@@ -174,7 +174,7 @@ WrenCore.accumulate_observe!!(acc::SiteNames, args...) = record_site(acc, last(a
                   logdensityof(Normal(), data.a) + logdensityof(Normal(data.a), data.b)
             # Removing a field must not make part of an ordinary observation latent.
             model = observed_fields((a=0.0, b=0.0)) | (y=data,)
-            @test_throws ErrorException logjoint(
+            @test_throws r"(?s)conditioned variable y.a.*not found" logjoint(
                 decondition(model, @vn(y.a)),
                 VarNamedTuple(y=(a=2.0,)),
             )
@@ -194,7 +194,10 @@ WrenCore.accumulate_observe!!(acc::SiteNames, args...) = record_site(acc, last(a
             x = parameters(result)[@vn(x)]
             @test loglikelihood(result) ≈ sum(logdensityof.(Normal(x), data))
             # Indexing past the conditioned array is an error, not a new latent variable.
-            @test_throws ErrorException simulate(observe_loop(4) | (; y=data), FromPrior())
+            @test_throws r"(?s)conditioned variable y\[4\].*1\.0.*not found" simulate(
+                observe_loop(4) | (; y=data),
+                FromPrior(),
+            )
         end
     end
 

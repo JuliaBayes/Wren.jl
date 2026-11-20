@@ -146,12 +146,18 @@ function _evaluate_scoped_submodel(
 end
 
 # The parent's conditioned values for the submodel at `vn`, keyed relative to `vn`.
-function scope(conditioned::NamedTuple, vn::VarName)
+@inline function scope(conditioned::NamedTuple, vn::VarName)
     if haskey(conditioned, VarNames.getsym(vn))
-        return _scope_conditioned(
-            getproperty(conditioned, VarNames.getsym(vn)),
-            VarNames.getoptic(vn),
-        )
+        supplied = getproperty(conditioned, VarNames.getsym(vn))
+        context = (; vn, supplied, namespace=true)
+        child = _lookup_conditioned(supplied, VarNames.getoptic(vn), context)
+        if !(child isa NamedTuple)
+            _conditioned_lookup_error(
+                context,
+                ArgumentError("expected a NamedTuple, got $(typeof(child))"),
+            )
+        end
+        return child
     else
         return NamedTuple()
     end
@@ -167,3 +173,88 @@ function _scope_conditioned(values::NamedTuple, optic::VarNames.Property{sym}) w
 end
 _scope_conditioned(values, optic::Union{VarNames.Property,VarNames.Index}) =
     _scope_conditioned(VarNames.ohead(optic)(values), VarNames.otail(optic))
+
+@inline function _conditioned_value(values::NamedTuple, vn::VarName{sym}) where {sym}
+    supplied = getproperty(values, sym)
+    return _lookup_conditioned(
+        supplied,
+        VarNames.getoptic(vn),
+        (; vn, supplied, namespace=false),
+    )
+end
+
+_lookup_conditioned(value, ::VarNames.Iden, context) = value
+
+@inline function _lookup_conditioned(
+    value::NamedTuple,
+    optic::VarNames.Property{sym},
+    context,
+) where {sym}
+    if haskey(value, sym)
+        return _lookup_conditioned(getproperty(value, sym), optic.child, context)
+    elseif context.namespace
+        return NamedTuple()
+    end
+    return _conditioned_lookup_failure(value, optic, context)
+end
+
+# Keep exception handling off native success paths for loop optimisation and AD.
+@inline function _lookup_conditioned(
+    value::Union{Array,Tuple,Base.RefValue},
+    optic::VarNames.Index,
+    context,
+)
+    head = VarNames.ohead(optic)
+    native =
+        isempty(optic.kw) && (
+            value isa Array && all(i -> i isa Union{Int,CartesianIndex}, optic.ix) ||
+            value isa Tuple && length(optic.ix) == 1 && only(optic.ix) isa Int ||
+            value isa Base.RefValue && isempty(optic.ix)
+        )
+    if native
+        assigned =
+            !(value isa Array) ||
+            isbitstype(eltype(value)) ||
+            isassigned(value, optic.ix...)
+        if assigned && VarNames.canview(head, value)
+            return _lookup_conditioned(head(value), optic.child, context)
+        end
+        _conditioned_lookup_failure(value, optic, context)
+    end
+    return _lookup_conditioned_fallback(value, optic, context)
+end
+
+_lookup_conditioned(value, optic, context) =
+    _lookup_conditioned_fallback(value, optic, context)
+
+# Preserve a non-returning bounds-failure edge for the optimiser and AD backend.
+@noinline function _conditioned_lookup_failure(value, optic, context)::Union{}
+    _lookup_conditioned_fallback(value, optic, context)
+    _conditioned_lookup_error(context, ArgumentError("invalid conditioned access"))
+end
+
+@noinline function _lookup_conditioned_fallback(value, optic, context)
+    try
+        if context.namespace
+            return _scope_conditioned(value, optic)
+        else
+            values = NamedTuple{(VarNames.getsym(context.vn),)}((context.supplied,))
+            return VarNames.getvalue(values, context.vn)
+        end
+    catch error
+        error isa InterruptException && rethrow()
+        _conditioned_lookup_error(context, error)
+    end
+end
+
+@noinline function _conditioned_lookup_error(context, error)
+    (; vn, supplied, namespace) = context
+    kind = if namespace
+        "submodel namespace"
+    else
+        "variable"
+    end
+    value = sprint(show, supplied; context=(:compact => true, :limit => true))
+    cause = sprint(showerror, error)
+    throw(ArgumentError("could not access conditioned $kind $vn in $value: $cause"))
+end
