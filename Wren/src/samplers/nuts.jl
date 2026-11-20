@@ -45,7 +45,7 @@ close_phases!(::DynamicHMC.NoProgressReport) = nothing
 """
     nuts(
         [rng::Random.AbstractRNG=default_rng()],
-        model::WrenCore.Model,
+        model::Model,
         niters::Integer,
         nchains::Integer=1;
         adtype::DI.AbstractADType=DI.AutoEnzyme(; mode=Enzyme.Reverse),
@@ -66,7 +66,7 @@ Each chain starts from an independent prior draw unless `initialization` is supp
 of model arguments that turn out not to be needed (see [`reduce_copies`](@ref)).
 """
 function nuts(
-    model::WrenCore.Model,
+    model::Model,
     niters::Integer,
     nchains::Integer=1;
     adtype::DI.AbstractADType=DI.AutoEnzyme(; mode=Reverse),
@@ -89,7 +89,7 @@ function nuts(
 end
 function nuts(
     rng::Random.AbstractRNG,
-    model::WrenCore.Model,
+    model::Model,
     niters::Integer,
     nchains::Integer=1;
     adtype::DI.AbstractADType=DI.AutoEnzyme(; mode=Reverse),
