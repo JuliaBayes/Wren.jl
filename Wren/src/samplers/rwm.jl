@@ -9,7 +9,7 @@
         progress::Bool=true,
         track::TrackedQuantitySpec=AllQuantities(),
         max_init_attempts::Integer=1000,
-        adtype::Union{Nothing,AutoReactant}=nothing,
+        with_reactant::Bool=false,
     ) -> FlexiChains.VNChain
 
 Gaussian random-walk Metropolis for fixed, continuous latents.
@@ -17,7 +17,7 @@ Gaussian random-walk Metropolis for fixed, continuous latents.
 - `step_size` sets the proposal standard deviation in unconstrained space.
   The default is `2.38 / sqrt(d)` in `d` dimensions.
 - `max_init_attempts` caps the prior draws used to find a finite starting log density.
-- `adtype=AutoReactant()` runs transitions on the device.
+- `with_reactant=true` runs transitions on the device.
 """
 rwm(args...; kwargs...) = _random_walk(Val(:rwm), args...; kwargs...)
 

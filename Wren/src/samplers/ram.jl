@@ -16,7 +16,7 @@ end
         progress::Bool=true,
         track::TrackedQuantitySpec=AllQuantities(),
         max_init_attempts::Integer=1000,
-        adtype::Union{Nothing,AutoReactant}=nothing,
+        with_reactant::Bool=false,
     ) -> FlexiChains.VNChain
 
 Robust Adaptive Metropolis for fixed, continuous latents ([Vihola](https://arxiv.org/abs/1011.4381)).
@@ -25,7 +25,7 @@ Robust Adaptive Metropolis for fixed, continuous latents ([Vihola](https://arxiv
 - `step_size` sets the initial proposal standard deviation in unconstrained space.
   The default is `2.38 / sqrt(d)` in `d` dimensions.
 - `max_init_attempts` caps the prior draws used to find a finite starting log density.
-- `adtype=AutoReactant()` runs transitions on the device.
+- `with_reactant=true` runs transitions on the device.
 """
 function ram(args...; warmup::Integer=1000, target_acceptance::Real=0.234, kwargs...)
     0 < target_acceptance < 1 || throw(ArgumentError("target_acceptance must be in (0, 1)"))

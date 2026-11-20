@@ -104,7 +104,7 @@ That is more or less the same thing as having a Reactant-compatible NUTS sampler
 
 ## Metropolis–Hastings samplers
 
-With `adtype=AutoReactant()`, Wren's [Metropolis–Hastings samplers](@ref metropolis-hastings)
+With `with_reactant=true`, Wren's [Metropolis–Hastings samplers](@ref metropolis-hastings)
 run transitions and proposal adaptation on the device. Models must have fixed latent names
 and shapes.
 

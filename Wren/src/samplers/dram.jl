@@ -16,7 +16,7 @@ end
         progress::Bool=true,
         track::TrackedQuantitySpec=AllQuantities(),
         max_init_attempts::Integer=1000,
-        adtype::Union{Nothing,AutoReactant}=nothing,
+        with_reactant::Bool=false,
     ) -> FlexiChains.VNChain
 
 Delayed Rejection Adaptive Metropolis for fixed, continuous latents
@@ -27,7 +27,7 @@ Delayed Rejection Adaptive Metropolis for fixed, continuous latents
 - `step_size` sets the initial proposal standard deviation in unconstrained space.
   The default is `2.38 / sqrt(d)` in `d` dimensions.
 - `max_init_attempts` caps the prior draws used to find a finite starting log density.
-- `adtype=AutoReactant()` runs transitions on the device.
+- `with_reactant=true` runs transitions on the device.
 """
 function dram(args...; warmup::Integer=1000, second_scale::Real=0.5, kwargs...)
     0 < second_scale < 1 || throw(ArgumentError("second_scale must be in (0, 1)"))

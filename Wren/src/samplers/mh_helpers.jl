@@ -1,4 +1,3 @@
-using ADTypes: AutoReactant
 using LinearAlgebra: Cholesky, Diagonal, lmul!
 using MCMCProgress: Determinate, advance!, chain_at, close_phase!, open_phase!
 using Random: Random
@@ -61,12 +60,11 @@ function _run_mh_chains(f, rng, model, nchains, progress)
     return stack(first.(outputs)), stack(last.(outputs))
 end
 
-_mh_backend(::Nothing) = nothing
-
-function _mh_backend(::AutoReactant)
+function _mh_backend(with_reactant::Bool)
+    with_reactant || return nothing
     backend = Base.get_extension(WrenCore, :WrenCoreReactantExt)
     backend === nothing &&
-        throw(ArgumentError("Load Reactant and Enzyme before using AutoReactant"))
+        throw(ArgumentError("Load Reactant and Enzyme before setting with_reactant=true"))
     return backend
 end
 
@@ -85,14 +83,14 @@ function _random_walk(
     progress::Bool=true,
     track::TrackedQuantitySpec=AllQuantities(),
     max_init_attempts::Integer=1000,
-    adtype::Union{Nothing,AutoReactant}=nothing,
+    with_reactant::Bool=false,
 )
     _check_mh_arguments(niters, nchains, max_init_attempts)
     warmup >= 0 || throw(ArgumentError("warmup must be nonnegative"))
     if step_size !== nothing && !(0 < step_size < Inf)
         throw(ArgumentError("step_size must be finite and positive"))
     end
-    backend = _mh_backend(adtype)
+    backend = _mh_backend(with_reactant)
     options = (; warmup, step_size, track, max_init_attempts)
     results, stats = _run_mh_chains(rng, model, nchains, progress) do chain_rng, run, j
         source = _ContinuousPrior(WrenCore.FromPrior(chain_rng))

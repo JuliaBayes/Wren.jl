@@ -10,14 +10,14 @@ using VarNames: VarNames, VarNamedTuple, parameters
         progress::Bool=true,
         track::TrackedQuantitySpec=AllQuantities(),
         max_init_attempts::Integer=1000,
-        adtype::Union{Nothing,AutoReactant}=nothing,
+        with_reactant::Bool=false,
     ) -> FlexiChains.VNChain
 
 Independent Metropolis–Hastings with prior proposals.
 
 - `max_init_attempts` caps the prior draws used to find a finite starting log likelihood.
 - The chain records `loglikelihood` and `accepted`.
-- `adtype=AutoReactant()` runs transitions on the device with traceable priors and fixed
+- `with_reactant=true` runs transitions on the device with traceable priors and fixed
   latent names and shapes.
 """
 independent_mh(model::WrenCore.Model, niters::Integer, nchains::Integer=1; kwargs...) =
@@ -30,10 +30,10 @@ function independent_mh(
     progress::Bool=true,
     track::TrackedQuantitySpec=AllQuantities(),
     max_init_attempts::Integer=1000,
-    adtype::Union{Nothing,AutoReactant}=nothing,
+    with_reactant::Bool=false,
 )
     _check_mh_arguments(niters, nchains, max_init_attempts)
-    backend = _mh_backend(adtype)
+    backend = _mh_backend(with_reactant)
 
     results, stats = _run_mh_chains(rng, model, nchains, progress) do chain_rng, run, j
         chain_model = WrenCore._copy_for_thread(model)
