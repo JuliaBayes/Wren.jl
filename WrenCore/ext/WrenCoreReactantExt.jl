@@ -5,6 +5,9 @@ using Enzyme: Enzyme
 using Reactant: Reactant
 using WrenCore: WrenCore
 
+include("reactant_device.jl")
+include("reactant_prior.jl")
+
 """
     ReactantPrep
 
