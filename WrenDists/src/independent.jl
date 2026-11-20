@@ -176,10 +176,11 @@ _append_iid_indices(::Nothing, indices::Tuple) = nothing
 function _append_iid_indices(optic::VarNames.AbstractOptic, indices::Tuple)
     isempty(indices) && return optic
     last = VarNames.olast(optic)
-    if last isa VarNames.Index
-        return VarNames.Index((last.ix..., indices...), last.kw) ∘ VarNames.oinit(optic)
+    return if last isa VarNames.Index
+        VarNames.Index((last.ix..., indices...), last.kw) ∘ VarNames.oinit(optic)
+    else
+        VarNames.Index(indices, (;)) ∘ optic
     end
-    return VarNames.Index(indices, (;)) ∘ optic
 end
 
 function Plaice.unconstrained_optic_vec(d::IIDMultivariate)
