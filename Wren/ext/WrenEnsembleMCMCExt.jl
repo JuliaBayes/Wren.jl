@@ -1,6 +1,7 @@
 module WrenEnsembleMCMCExt
 
 using Wren: Wren, WrenCore, Model, FromPrior, FromValues, VarNamedTuple, Draw
+using PureRNGs: Philox4x64
 using Random: AbstractRNG, default_rng, rand
 using FlexiChains: VNChain
 import AbstractMCMC
@@ -57,8 +58,9 @@ function Wren.ensemble(
                 WrenCore.vectorise_latents(FromValues(initial_params[walker, chain]), vm)
             end
         end
+        key = Philox4x64((rand(rng, UInt64), rand(rng, UInt64)))
         history =
-            Wren._sample_ensemble(rng, vm, initial, niters, adtype; move, warmup, thin)
+            Wren._sample_ensemble(key, vm, initial, niters, adtype; move, warmup, thin)
         result = [
             Draw(
                 view(history.positions, :, walker, i),

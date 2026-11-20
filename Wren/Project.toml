@@ -23,10 +23,11 @@ WrenDists = "2ad4af40-d7c9-42b2-92b0-e09d37d1e75a"
 [weakdeps]
 EnsembleMCMC = "ee15a35a-54c9-4a12-9721-3f3d8c2797c8"
 Optimization = "7f7a1694-90dd-40f0-9382-eb1efda571ba"
+PureRNGs = "2ccaadc3-3d9a-45d4-a2ec-95a2424790b7"
 Reactant = "3c362404-f566-11ee-1572-e11a4b42c853"
 
 [extensions]
-WrenEnsembleMCMCExt = "EnsembleMCMC"
+WrenEnsembleMCMCExt = ["EnsembleMCMC", "PureRNGs"]
 WrenEnsembleMCMCReactantExt = ["EnsembleMCMC", "Reactant"]
 WrenOptimizationExt = "Optimization"
 
@@ -35,12 +36,13 @@ AbstractMCMC = "5"
 DensityInterface = "0.4"
 DifferentiationInterface = "0.7"
 DynamicHMC = "3"
-EnsembleMCMC = "0.1"
+EnsembleMCMC = "0.0.6"
 Enzyme = "0.13"
 EnzymeCore = "0.6 - 0.8"
 FlexiChains = "0.7"
 LinearAlgebra = "1"
 Optimization = "5"
+PureRNGs = "0.0.2"
 Random = "1"
 Reactant = "0.2.304"
 Reexport = "1"
