@@ -77,7 +77,7 @@ function _zero_logdensity(dist::WrenDist, x::AbstractArray)
 end
 
 # Equivalent to `sum(f, x; init=zero_value)`, but the sum-with-init-kwarg is slower under AD
-# (and VERY much slower under Mooncake in particular).
+# (and VERY much slower under Mooncake in particular). See #326.
 @inline _sum_or_zero(f, x, zero_value) = isempty(x) ? zero_value : sum(f, x)
 
 # Each slice is one draw. This fallback is CPU-only.
