@@ -18,7 +18,6 @@ WrenDists.Laplace
 WrenDists.Cauchy
 WrenDists.TDist
 WrenDists.Flat
-WrenDists.TruncatedFlat
 ```
 
 ### Continuous $\mathbb{R}^+$
@@ -32,6 +31,7 @@ WrenDists.Weibull
 WrenDists.HalfNormal
 WrenDists.HalfCauchy
 WrenDists.HalfTDist
+WrenDists.PositiveFlat
 ```
 
 ### Continuous bounded
@@ -39,6 +39,7 @@ WrenDists.HalfTDist
 ```@docs
 WrenDists.Uniform
 WrenDists.Beta
+WrenDists.TruncatedFlat
 ```
 
 ### Discrete

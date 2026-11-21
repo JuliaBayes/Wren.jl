@@ -28,18 +28,16 @@ end
 Base.rand(rng::AbstractRNG, ::TruncatedFlatReference) = 10 * randn(rng)
 Distributions.logpdf(d::TruncatedFlatReference, x) = d.lower <= x <= d.upper ? 0.0 : -Inf
 
-for (lower, upper) in ((0.0, Inf), (-Inf, 5.0), (-1.0, 3.0))
-    test_dist(
-        "TruncatedFlat($lower, $upper)",
-        WrenDists.TruncatedFlat(lower, upper),
-        TruncatedFlatReference(lower, upper);
-        plaice_zero_allocs=(from_vec, from_unconstrained_vec),
-    )
-end
+test_dist(
+    "TruncatedFlat",
+    WrenDists.TruncatedFlat(-1.0, 3.0),
+    TruncatedFlatReference(-1.0, 3.0);
+    plaice_zero_allocs=(from_vec, from_unconstrained_vec),
+)
 
 @testset "TruncatedFlat: sample type" begin
-    @test rand(WrenDists.TruncatedFlat(0, Inf)) isa Float64
-    @test rand(WrenDists.TruncatedFlat(0.0f0, Inf32)) isa Float32
+    @test rand(WrenDists.TruncatedFlat(0, 1)) isa Float64
+    @test rand(WrenDists.TruncatedFlat(0.0f0, 1.0f0)) isa Float32
 end
 
 @testset "TruncatedFlat: empty interval" begin
