@@ -204,14 +204,15 @@ However, the name of a tracked quantity must be a single symbol, so names like `
 
 !!! note "Tracked quantities are not copied"
 
-    After initialising a tracked quantity `@track my_array`, mutating `my_array` will change its values. 
+    After initialising a tracked quantity `@track my_array`, mutating `my_array` will change its values.
     To create a snapshot of `my_array` at the time it is initialised, you need to copy explicitly: `@track snapshot = deepcopy(my_array)`.
 
 By default, all tracked quantities are calculated and returned during model evaluation or MCMC sampling.
-You can, however, skip the statements marked with `@track`—for example because they're expensive and not needed at this time—by passing `track=NoQuantities()` to `simulate`, `prior` or `nuts`. 
+You can, however, skip the statements marked with `@track`—for example because they're expensive and not needed at this time—by passing `track=NoQuantities()` to `simulate`, `prior` or `nuts`.
 If you want to keep specific tracked quantities, use `SomeQuantities((:x,))` instead.
 
 !!! note "Side effects may be skipped"
+
     Quantities marked with `@track` are not evaluated unless they are explicitly requested.
     This means that if you write, for example, `@track x = push!(my_vec, elem)` and `x` is not requested or otherwise used, the side effect of `push!` will not be executed (i.e. `my_vec` will not be mutated).
 
