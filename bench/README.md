@@ -15,6 +15,8 @@ To run the benchmarks locally (e.g. to try out local changes), run:
 julia --project=bench bench/suite/run.jl --no-save
 ```
 
+This just prints to stdout without any other effects.
+
 ### Instructions for production benchmarking
 
 Generally, we'll want to run prod benchmarks on:
