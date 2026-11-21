@@ -37,6 +37,8 @@ include("univariate/laplace.jl")
 include("univariate/cauchy.jl")
 include("univariate/logistic.jl")
 include("univariate/flat.jl")
+include("univariate/truncatedflat.jl")
+include("univariate/positiveflat.jl")
 include("univariate/gamma.jl")
 include("univariate/inversegamma.jl")
 include("univariate/tdist.jl")
@@ -96,7 +98,9 @@ export Bernoulli,
     Normal,
     Poisson,
     PoissonLog,
+    PositiveFlat,
     TDist,
+    TruncatedFlat,
     Uniform,
     Weibull
 
