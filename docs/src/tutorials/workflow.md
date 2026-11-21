@@ -69,7 +69,10 @@ chain_prior = prior(model, 1000, 4; progress=false)
 summarystats(chain_prior[[@vn(beta1), @vn(beta2), @vn(sigma)]])
 ```
 
-While we could technically continue working with the chain, the `simulate(model)` syntax lends itself nicely towards visualising individual samples from the prior distribution.
+While we could technically continue working with the chain, the `parameters(model)` syntax lends itself nicely towards visualising individual samples from the prior distribution.
+
+You may wonder why we now use `parameters(model)` to draw from the prior distribution instead of `simulate(model)` as above.
+In short, `parameters(model)` is a lighter version of `simulate(model)` that skips calculating the log-density terms; it would have been equivalent—except very slightly slower—to call `parameters(simulate(model))`.
 
 ```@example workflow
 using CairoMakie
@@ -82,7 +85,7 @@ xs_z = -3:0.1:3
 
 # Draw 20 prior predictions for the slope of body mass
 for _ in 1:20
-    vnt = parameters(simulate(model))
+    vnt = parameters(model)
     ys_z = vnt[@vn(beta2)] * xs_z
     ys = reconstruct(bill_zs, ys_z)
     xs = reconstruct(mass_zs, xs_z)
@@ -150,7 +153,7 @@ FlexiChains.Makie.pushforward_hist(
 
 The model seems to capture the distribution of the observed data well!
 
-Now let's see what the model learned about how `body_mass` relates to `bill_length`, by drawing single samples from the chain and extracting them with [`parameters`](@extref VarNames.parameters).
+Now let's see what the model learned about how `body_mass` relates to `bill_length` by drawing from `chain_post`.
 
 ```@example workflow
 fig = Figure()
