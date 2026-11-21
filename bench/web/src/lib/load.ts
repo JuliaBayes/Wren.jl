@@ -39,7 +39,22 @@ export async function fetchIndex(): Promise<IndexEntry[]> {
     }
 }
 
-export async function fetchRun(file: string): Promise<Run> {
+// Saved runs don't change, so each one only needs to be fetched once (the history view
+// fetches all of them, and the compare view then reuses them).
+const runCache = new Map<string, Promise<Run>>();
+
+export function fetchRun(file: string): Promise<Run> {
+    let run = runCache.get(file);
+    if (run === undefined) {
+        run = fetchRunUncached(file);
+        // Don't keep failures, so that they can be retried.
+        run.catch(() => runCache.delete(file));
+        runCache.set(file, run);
+    }
+    return run;
+}
+
+async function fetchRunUncached(file: string): Promise<Run> {
     const res = await fetch(`runs/${file}`);
     if (!res.ok) throw new Error(`Could not fetch runs/${file} (${res.status})`);
     return parseRun(file, await res.json());

@@ -63,7 +63,8 @@ is uploaded as an artifact; tick 'save' to also save it to the
 
 `web/` is a small website that shows one run as a table, or compares two runs
 (pick a 'tip' and a 'base'; cells are coloured by how much faster or slower tip
-is, and hovering shows the base time).
+is, and hovering shows the base time). Its 'History' tab has a chart for each
+model showing the times of all runs, in commit order.
 
 It's hosted at https://juliabayes.org/Wren.jl/bench/. The 'Benchmark website'
 workflow (`.github/workflows/bench-site.yml`) builds it and publishes it to the
