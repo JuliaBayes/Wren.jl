@@ -77,9 +77,9 @@ function DensityInterface.logdensityof(d::BatchedCategorical, x)
             k = x[i]
             validi = isinteger(k) & (1 <= k) & (k <= size(P, 1))
             valid &= validi
-            # if `k` is invalid, we will return -Inf at the end of the loop, but we replace
-            # it with 1 here just to avoid bounds errors.
-            s += log(convert(T, P[Int(ifelse(validi, k, one(k))), i]))
+            # if `k` is invalid, we will return -Inf at the end of the loop; so the
+            # one(T) is just a placeholder.
+            s += log(validi ? convert(T, P[Int(k), i]) : one(T))
         end
         ifelse(valid, s, convert(T, -Inf))
     end
