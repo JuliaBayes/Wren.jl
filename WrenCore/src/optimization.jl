@@ -9,7 +9,7 @@ Both objectives use the latent support declared by the model's priors.
 
 Returns `(params, solution)`: named model-space parameters and the native Optimization
 solution, including its convergence status. The solver minimises the negative original-space
-log-density in unconstrained coordinates. Initialisation and AD preparation use [`logdensity`](@ref).
+log-density in unconstrained coordinates. Initialisation and AD preparation use [`VecModel`](@ref).
 Solver keywords are forwarded to `Optimization.solve`.
 """
 function optimize end
@@ -20,7 +20,7 @@ function optimize end
 Find the original-space MAP estimate with [`optimize`](@ref), fixing the objective to
 `logjoint`. Forward all other keywords to `optimize`. Requires Optimization.jl.
 """
-MAP(model::WrenCore.Model, solver; kwargs...) =
+MAP(model::Model, solver; kwargs...) =
     optimize(model, solver; kwargs..., lp_function=logjoint)
 
 """
@@ -30,5 +30,5 @@ Find the MLE with [`optimize`](@ref), fixing the objective to `loglikelihood`.
 The model's priors still define the parameter support. Forward all other keywords
 to `optimize`. Requires Optimization.jl.
 """
-MLE(model::WrenCore.Model, solver; kwargs...) =
+MLE(model::Model, solver; kwargs...) =
     optimize(model, solver; kwargs..., lp_function=loglikelihood)

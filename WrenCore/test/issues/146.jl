@@ -33,6 +33,22 @@ using Test
         @test WrenCore._copy_for_thread(outer).args.sub.args.x !== outer.args.sub.args.x
     end
 
+    @testset "deepcopy" begin
+        copied = deepcopy(vm)
+        @test copied.model.args.x !== vm.model.args.x
+        # The model and the log-density function must still share the copied arguments.
+        @test copied.lp_func.model_args.x === copied.model.args.x
+        @test copied.model.evaluation_fn === vm.model.evaluation_fn
+        p = randn(Xoshiro(1), n)
+        @test lp(copied, p) == lp(vm, p)
+
+        outer = wraps_arg(writes_arg(zeros(n), zeros(n)))
+        @test deepcopy(outer).args.sub.args.x !== outer.args.sub.args.x
+        conditioned_model = vm.model | (; x=zeros(n))
+        @test conditioned(deepcopy(conditioned_model)).x !==
+              conditioned(conditioned_model).x
+    end
+
     @testset "conditioned values are independent" begin
         model = vm.model | (; x=zeros(n))
         expected = logjoint(model, VarNamedTuple())

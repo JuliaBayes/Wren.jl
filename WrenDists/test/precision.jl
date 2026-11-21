@@ -17,6 +17,7 @@ using Test
         WrenDists.Weibull(2.0f0, 1.0f0),
         WrenDists.Uniform(0.0f0, 1.0f0),
         WrenDists.Laplace(1.0f0),
+        WrenDists.Logistic(1.0f0),
         WrenDists.Cauchy(1.0f0),
         WrenDists.Flat{Float32}(),
         WrenDists.Gamma(2.0f0),

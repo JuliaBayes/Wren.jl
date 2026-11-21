@@ -7,6 +7,7 @@
     import RunPicker from "./lib/RunPicker.svelte";
     import ResultsTable from "./lib/ResultsTable.svelte";
     import Manifest from "./lib/Manifest.svelte";
+    import History from "./lib/History.svelte";
 
     let theme = $state(document.documentElement.getAttribute("data-theme") ?? "light");
     function toggleTheme() {
@@ -24,6 +25,8 @@
     const params = new URLSearchParams(window.location.search);
     let tipKey = $state(params.get("tip") ?? "");
     let baseKey = $state(params.get("base") ?? "");
+    // "compare" shows one or two runs as a table; "history" shows charts of all runs.
+    let view: "compare" | "history" = $state(params.get("view") === "history" ? "history" : "compare");
 
     let tip = $state<Run | null>(null);
     let base = $state<Run | null>(null);
@@ -63,6 +66,8 @@
             if (key === "" || key.startsWith("local:")) url.searchParams.delete(name);
             else url.searchParams.set(name, key);
         }
+        if (view === "history") url.searchParams.set("view", view);
+        else url.searchParams.delete("view");
         history.replaceState(null, "", url);
     });
 
@@ -80,6 +85,13 @@
         };
     }
 
+    function compareRuns(tip: string, base: string) {
+        tipKey = tip;
+        baseKey = base;
+        view = "compare";
+        window.scrollTo(0, 0);
+    }
+
     const tipSha = $derived(tip ? runSha(tip.meta) : null);
     const baseSha = $derived(base ? runSha(base.meta) : null);
 </script>
@@ -87,70 +99,80 @@
 <main>
     <div class="header">
         <h1>Wren benchmarks</h1>
-        <button class="theme-toggle" onclick={toggleTheme} title="Toggle theme">
-            {theme === "dark" ? "☀" : "☾"}
+        <button class="theme-toggle" onclick={toggleTheme} title={`${theme === "dark" ? "Dark" : "Light"} theme (click to switch)`}>
+            <!-- Shows the current theme. -->
+            {theme === "dark" ? "☾" : "☀"}
         </button>
     </div>
 
-    <div class="pickers">
-        <RunPicker
-            label="Tip"
-            {index}
-            {localFiles}
-            bind:value={tipKey}
-            run={tip}
-            allowNone={false}
-            onLoadFile={loadFile("tip")}
-        />
-        <RunPicker
-            label="Base"
-            {index}
-            {localFiles}
-            bind:value={baseKey}
-            run={base}
-            allowNone={true}
-            onLoadFile={loadFile("base")}
-        />
-    </div>
+    <nav class="tabs">
+        <button class:active={view === "compare"} onclick={() => (view = "compare")}>Compare runs</button>
+        <button class:active={view === "history"} onclick={() => (view = "history")}>History</button>
+    </nav>
 
-    {#if error}
-        <p class="error">{error}</p>
-    {/if}
+    {#if view === "history"}
+        <History {index} {theme} onCompare={compareRuns} />
+    {:else}
+        <div class="pickers">
+            <RunPicker
+                label="Tip"
+                {index}
+                {localFiles}
+                bind:value={tipKey}
+                run={tip}
+                allowNone={false}
+                onLoadFile={loadFile("tip")}
+            />
+            <RunPicker
+                label="Base"
+                {index}
+                {localFiles}
+                bind:value={baseKey}
+                run={base}
+                allowNone={true}
+                onLoadFile={loadFile("base")}
+            />
+        </div>
 
-    {#if tip}
-        {#if tipSha && baseSha && tipSha !== baseSha}
-            <p class="diff">
-                <a href={compareUrl(baseSha, tipSha)} target="_blank" rel="noreferrer">
-                    View diff on GitHub ({shortSha(baseSha)}...{shortSha(tipSha)})
-                </a>
-            </p>
+        {#if error}
+            <p class="error">{error}</p>
         {/if}
-        <ul class="legend">
-            <li>Times are the median of many evaluations of the log density (primal) or its gradient. Smaller is faster.</li>
-            <li>Numbers in brackets are the gradient time divided by the primal time.</li>
-            <li>
-                Model names link to their definitions
-                {#if tipSha}
-                    at the tip commit (<a href={commitUrl(tipSha)} target="_blank" rel="noreferrer">{shortSha(tipSha)}</a>).
-                {:else}
-                    on <code>main</code>, since the tip commit is unknown.
-                {/if}
-            </li>
-            {#if base}
-                <li>
-                    <span class="swatch faster"></span> faster than base,
-                    <span class="swatch slower"></span> slower than base
-                    (changes under {NOISE_THRESHOLD * 100}% are not coloured).
-                    Hover over a cell to see the base time.
-                </li>
-            {/if}
-        </ul>
-        <ResultsTable {tip} {base} />
 
-        <h2>Manifest</h2>
-        <Manifest {tip} {base} />
-    {:else if !error}
-        <p>No runs found. Load a results file with the button above.</p>
+        {#if tip}
+            {#if tipSha && baseSha && tipSha !== baseSha}
+                <p class="diff">
+                    <a href={compareUrl(baseSha, tipSha)} target="_blank" rel="noreferrer">
+                        View diff on GitHub ({shortSha(baseSha)}...{shortSha(tipSha)})
+                    </a>
+                </p>
+            {/if}
+            <ul class="legend">
+                <li>Times are the fastest of many evaluations of the log density (primal) or its gradient. Smaller is faster.</li>
+                <li>Numbers in brackets are the gradient time divided by the primal time.</li>
+                <li>
+                    Model names link to their definitions
+                    {#if tipSha}
+                        at the tip commit (<a href={commitUrl(tipSha)} target="_blank" rel="noreferrer">{shortSha(tipSha)}</a>).
+                    {:else}
+                        on <code>main</code>, since the tip commit is unknown.
+                    {/if}
+                </li>
+                {#if base}
+                    <li>
+                        <span class="swatch faster"></span> faster than base,
+                        <span class="swatch slower"></span> slower than base
+                        (changes under {NOISE_THRESHOLD * 100}% are not coloured).
+                        Hover over a cell to see the base time.
+                    </li>
+                {/if}
+            </ul>
+            <ResultsTable {tip} {base} />
+
+            <h2>Manifest</h2>
+            <Manifest {tip} {base} />
+        {:else if !error}
+            <p>No runs found. Load a results file with the button above.</p>
+        {/if}
     {/if}
 </main>
 
@@ -180,6 +202,29 @@
         border-radius: 8px;
         cursor: pointer;
         font-size: 1rem;
+    }
+    .tabs {
+        display: flex;
+        gap: 4px;
+        margin-bottom: 16px;
+    }
+    .tabs button {
+        font: inherit;
+        font-size: 0.9rem;
+        padding: 4px 12px;
+        border: 1px solid var(--table-border);
+        border-radius: 6px;
+        background-color: transparent;
+        color: var(--text-secondary);
+        cursor: pointer;
+    }
+    .tabs button:hover {
+        background-color: var(--btn-hover);
+    }
+    .tabs button.active {
+        background-color: var(--btn-bg);
+        color: var(--btn-text);
+        font-weight: 600;
     }
     .pickers {
         display: flex;

@@ -64,7 +64,7 @@ function accumulate_assume!!(
     return update_values(acc, new_vnt)
 end
 
-function combine(
+function _combine(
     acc1::VNTAccumulator{PARAMS_ACCNAME,<:Any,DebugGetParams},
     acc2::VNTAccumulator{PARAMS_ACCNAME,<:Any,DebugGetParams},
 )

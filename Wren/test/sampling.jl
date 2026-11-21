@@ -9,6 +9,27 @@ using Random: Xoshiro
 using ForwardDiff: ForwardDiff
 using Test
 
+const failure_worker = Threads.Atomic{Int}(0)
+const sibling_finished = Threads.Atomic{Bool}(false)
+const sibling_running = Base.Event()
+
+function fail_or_finish()
+    if Threads.atomic_add!(failure_worker, 1) == 0
+        wait(sibling_running)
+        error("intentional worker failure")
+    end
+    notify(sibling_running)
+    # Keep this worker alive when the other chain fails, so early cleanup is observable.
+    sleep(0.1)
+    sibling_finished[] = true
+    return nothing
+end
+
+@wren function failing_prior_model()
+    fail_or_finish()
+    x ~ Normal()
+end
+
 # Check that the mean and variance of `samples` (an iter × chain matrix) agree with the
 # expected values, to within a tolerance derived from the Monte Carlo standard error.
 function test_moments(samples, expected_mean, expected_var; nmcse=5)
@@ -63,19 +84,34 @@ end
         niters, nchains = 100, 2
         @testset "$name" for (name, sampler) in (
             "nuts" =>
-                (rng, m) ->
-                    nuts(rng, m, niters, nchains; adtype=AutoForwardDiff(), progress=false),
-            "prior" => (rng, m) -> prior(rng, m, niters, nchains; progress=false),
+                (rng, m; progress=false) ->
+                    nuts(rng, m, niters, nchains; adtype=AutoForwardDiff(), progress),
+            "prior" => (rng, m; progress=false) -> prior(rng, m, niters, nchains; progress),
         )
             chn1 = sampler(Xoshiro(468), model)
             chn2 = sampler(Xoshiro(468), model)
             @test FlexiChains.has_same_data(chn1, chn2)
+            displayed = redirect_stdout(devnull) do
+                redirect_stderr(devnull) do
+                    sampler(Xoshiro(468), model; progress=true)
+                end
+            end
+            @test FlexiChains.has_same_data(chn1, displayed)
             chn3 = sampler(Xoshiro(469), model)
             @test !FlexiChains.has_same_data(chn1, chn3)
             x = chn1[@vn(x)]
             @test size(x) == (niters, nchains)
             @test x[:, 1] != x[:, 2]
         end
+    end
+
+    @testset "failed chain waits for its sibling" begin
+        @test_throws CompositeException redirect_stdout(devnull) do
+            redirect_stderr(devnull) do
+                prior(Xoshiro(468), failing_prior_model(), 1, 2; progress=true)
+            end
+        end
+        @test sibling_finished[]
     end
 end
 
