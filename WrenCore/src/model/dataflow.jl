@@ -40,14 +40,16 @@ struct DataflowAnalysisState
     # The subset of `lhs_syms` that were seen again in a later expression, which we thus
     # need the values of
     required_syms::Set{Symbol}
-    # Tracked quantities assumed not to be required. Uses inside their expressions are
-    # recorded in `tq_uses` instead of `required_syms`, because those expressions are only
-    # evaluated when a tracked quantity that depends on them is requested.
+    # Tracked quantities that are not required, i.e. whose expressions are only
+    # evaluated when a tracked quantity that depends on them is requested. This is
+    # filled in by `analyse_dataflow` after the traversal.
     skippable_tqs::Set{Symbol}
-    # For each tracked quantity in `skippable_tqs`, the `lhs_syms` used in its expression
+    # For each tracked quantity, the `lhs_syms` used in its expression. Uses inside
+    # tracked quantity expressions are recorded here instead of `required_syms`, because
+    # whether they are required depends on whether the tracked quantity is required.
     tq_uses::Dict{Symbol,Set{Symbol}}
-    # The skippable tracked quantity whose expression is being traversed, if any
-    enclosing_skippable_tq::Base.RefValue{Union{Nothing,Symbol}}
+    # The tracked quantity whose expression is being traversed, if any
+    enclosing_tq::Base.RefValue{Union{Nothing,Symbol}}
     # All model arguments
     args::Set{Symbol}
     # Arguments which have potentially been written to
@@ -55,13 +57,13 @@ struct DataflowAnalysisState
     # Dirty arguments which have potentially been read from again
     args_to_copy::Set{Symbol}
 end
-function DataflowAnalysisState(args::Set{Symbol}, skippable_tqs::Set{Symbol})
+function DataflowAnalysisState(args::Set{Symbol})
     return DataflowAnalysisState(
         Set{Symbol}(),
         Set{Symbol}(),
         Set{Symbol}(),
         Set{Symbol}(),
-        skippable_tqs,
+        Set{Symbol}(),
         Dict{Symbol,Set{Symbol}}(),
         Ref{Union{Nothing,Symbol}}(nothing),
         args,
@@ -78,7 +80,7 @@ function mark_symbol_used!(state::DataflowAnalysisState, syms::Set{Symbol})
     # Record that we've used `syms` in a later expression. In general, 'use' means
     # that the symbol may have been both written to and read from.
     used_lhs_syms = intersect(state.lhs_syms, syms)
-    enclosing_tq = state.enclosing_skippable_tq[]
+    enclosing_tq = state.enclosing_tq[]
     if enclosing_tq === nothing
         union!(state.required_syms, used_lhs_syms)
     else
@@ -171,13 +173,9 @@ function parse_variables!(stmt::AddLogLikelihood, state::DataflowAnalysisState)
     return nothing
 end
 function parse_variables!(stmt::TrackedQuantity, state::DataflowAnalysisState)
-    if stmt.name in state.skippable_tqs
-        state.enclosing_skippable_tq[] = stmt.name
-        parse_variables!(stmt.expr, state)
-        state.enclosing_skippable_tq[] = nothing
-    else
-        parse_variables!(stmt.expr, state)
-    end
+    state.enclosing_tq[] = stmt.name
+    parse_variables!(stmt.expr, state)
+    state.enclosing_tq[] = nothing
     mark_lhs_symbol!(state, stmt.name)
     push!(state.tq_syms, stmt.name)
     return nothing
@@ -277,44 +275,42 @@ function reconstruct_statement(expr::WrenExpr, result::DataflowAnalysisResult)
     return WrenExpr(expr.head, new_args)
 end
 
-function analyse_dataflow_once(
+# A tracked quantity is required if a statement other than a tracked quantity uses it,
+# or if a required tracked quantity uses it. Uses inside tracked quantities are
+# recorded in `tq_uses` during the traversal, and then propagated from the required
+# tracked quantities in a flood fill.
+function analyse_dataflow(
     stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}},
     args::Set{Symbol},
-    skippable_tqs::Set{Symbol},
 )
-    state = DataflowAnalysisState(args, skippable_tqs)
+    state = DataflowAnalysisState(args)
     for stmt in stmts
         parse_variables!(stmt, state)
     end
+    # Flood fill: everything used by a required tracked quantity is required too.
+    frontier = collect(intersect(state.required_syms, state.tq_syms))
+    while !isempty(frontier)
+        tq = pop!(frontier)
+        for sym in get(state.tq_uses, tq, ())
+            if !(sym in state.required_syms)
+                push!(state.required_syms, sym)
+                sym in state.tq_syms && push!(frontier, sym)
+            end
+        end
+    end
+    union!(state.skippable_tqs, setdiff(state.tq_syms, state.required_syms))
     # A skippable tracked quantity is only evaluated alongside the tracked quantities
     # that depend on it, but any sampled variable it uses must always be bound.
     for used_syms in values(state.tq_uses)
         union!(state.required_syms, intersect(used_syms, state.sample_syms))
     end
-    return state
-end
-
-# Each pass can only add tracked quantities to `skippable_tqs`, and there are finitely
-# many of them, so the loop terminates.
-function analyse_dataflow(
-    stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}},
-    args::Set{Symbol},
-)
-    skippable_tqs = Set{Symbol}()
-    while true
-        state = analyse_dataflow_once(stmts, args, skippable_tqs)
-        unrequired_tqs = setdiff(state.tq_syms, state.required_syms)
-        if unrequired_tqs == skippable_tqs
-            if WREN_COMPILATION_DEBUG[]
-                @info "[dataflow.jl] lhs_syms = $(state.lhs_syms)"
-                @info "[dataflow.jl] required_syms = $(state.required_syms)"
-                @info "[dataflow.jl] tq_uses = $(state.tq_uses)"
-                @info "[dataflow.jl] args_to_copy = $(state.args_to_copy)"
-            end
-            return state
-        end
-        skippable_tqs = unrequired_tqs
+    if WREN_COMPILATION_DEBUG[]
+        @info "[dataflow.jl] lhs_syms = $(state.lhs_syms)"
+        @info "[dataflow.jl] required_syms = $(state.required_syms)"
+        @info "[dataflow.jl] tq_uses = $(state.tq_uses)"
+        @info "[dataflow.jl] args_to_copy = $(state.args_to_copy)"
     end
+    return state
 end
 
 function get_required_syms_and_args(
