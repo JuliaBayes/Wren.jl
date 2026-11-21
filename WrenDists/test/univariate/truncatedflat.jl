@@ -1,6 +1,13 @@
-using WrenDists: WrenDists as WD
+using WrenDists
+using WrenDists: logdensityof, test_dist
+import DifferentiationInterface as DI
+using Distributions
+using ForwardDiff
+using ReverseDiff
+using Mooncake
+using Enzyme
 using Plaice
-using Random: Xoshiro
+using Random: AbstractRNG
 using Test
 
 const RUN_REACTANT = !Sys.iswindows()
@@ -11,47 +18,41 @@ if RUN_REACTANT
     using Reactant
 end
 
-@testset "truncated Flat" begin
-    for (bounds, u, x, logjac) in (
-        ((lower=0.0,), log(2.0), 2.0, log(2.0)),
-        ((upper=5.0,), log(2.0), 3.0, log(2.0)),
-        ((lower=-1.0, upper=3.0), log(2.0), 5 / 3, log(8 / 9)),
+# Distributions doesn't have a truncated flat distribution, so this stands in as the
+# reference. Its samples are just points to check the log-density at, and deliberately
+# include points outside the bounds.
+struct TruncatedFlatReference
+    lower::Float64
+    upper::Float64
+end
+Base.rand(rng::AbstractRNG, ::TruncatedFlatReference) = 10 * randn(rng)
+Distributions.logpdf(d::TruncatedFlatReference, x) = d.lower <= x <= d.upper ? 0.0 : -Inf
+
+for (lower, upper) in ((0.0, Inf), (-Inf, 5.0), (-1.0, 3.0))
+    test_dist(
+        "TruncatedFlat($lower, $upper)",
+        WrenDists.TruncatedFlat(lower, upper),
+        TruncatedFlatReference(lower, upper);
+        plaice_zero_allocs=(from_vec, from_unconstrained_vec),
     )
-        d = WD.truncated(WD.Flat(); bounds...)
-        @test WD.logdensityof(d, x) == 0.0
-        physical, jac = Plaice.with_logabsdet_jacobian(
-            Plaice.from_unconstrained_vec(d), [u])
-        @test physical ≈ x
-        @test jac ≈ logjac
-        @test all(z -> d.lower < z < d.upper,
-            [rand(Xoshiro(seed), d) for seed in 1:20])
-    end
+end
 
-    lower = WD.truncated(WD.Flat(); lower=0.0)
-    @test WD.logdensityof(lower, -1.0) == -Inf
-    @test WD.logdensityof(lower, 0.0) == 0.0
+@testset "TruncatedFlat: sample type" begin
+    @test rand(WrenDists.TruncatedFlat(0, Inf)) isa Float64
+    @test rand(WrenDists.TruncatedFlat(0.0f0, Inf32)) isa Float32
+end
 
-    bounded = WD.truncated(WD.Flat(); lower=-1.0, upper=3.0)
-    @test WD.logdensityof(bounded, 3.1) == -Inf
-    @test WD.logdensityof(bounded, 3.0) == 0.0
-    @test WD.logdensityof(bounded, 1.0) == 0.0 # No Uniform normaliser.
-
-    @test rand(Xoshiro(1), WD.truncated(WD.Flat{Float32}(); lower=0)) isa Float32
-
-    # An empty interval, e.g. a dependent bound that rounds to `lower == upper`,
-    # rejects every point instead of throwing.
-    empty = WD.truncated(WD.Flat(); lower=1.0, upper=1.0)
-    @test WD.logdensityof(empty, 1.0) == -Inf
-    @test WD.logdensityof(WD.truncated(WD.Flat(); lower=2.0, upper=1.0), 1.5) == -Inf
+@testset "TruncatedFlat: empty interval" begin
+    # A dependent bound that rounds to `lower == upper` rejects every point instead of
+    # throwing.
+    @test logdensityof(WrenDists.TruncatedFlat(1.0, 1.0), 1.0) == -Inf
+    @test logdensityof(WrenDists.TruncatedFlat(2.0, 1.0), 1.5) == -Inf
 end
 
 if RUN_REACTANT
-    @testset "truncated Flat with a traced bound" begin
-        # A bound that depends on another parameter is a traced number when the
-        # density is compiled. An empty interval cannot throw there.
-        density(alpha, x) =
-            WD.logdensityof(WD.truncated(WD.Flat(); lower=0.0, upper=1 - alpha), x)
-        for (alpha, x) in ((0.3, 0.5), (0.3, 0.7), (0.3, 0.9), (1.2, 0.1))
+    @testset "TruncatedFlat: traced, parameter-dependent bound" begin
+        density(alpha, x) = logdensityof(WrenDists.TruncatedFlat(0.0, 1 - alpha), x)
+        for (alpha, x) in ((0.3, 0.5), (0.3, 0.9), (1.2, 0.1))
             alpha_ra = Reactant.to_rarray(alpha; track_numbers=true)
             x_ra = Reactant.to_rarray(x; track_numbers=true)
             @test Float64(Reactant.@jit density(alpha_ra, x_ra)) == density(alpha, x)

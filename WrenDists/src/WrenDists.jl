@@ -96,6 +96,7 @@ export Bernoulli,
     Poisson,
     PoissonLog,
     TDist,
+    TruncatedFlat,
     Uniform,
     Weibull
 
