@@ -14,87 +14,79 @@ PoissonLog() = PoissonLog(0.0)
 
 Base.eltype(::Type{PoissonLog{L}}) where {L} = float(L)
 
-@inline function insupport(d::PoissonLog, x::Number)
+@inline function insupport(::PoissonLog, x::Number)
     return isinteger(x) & (x >= zero(x))
 end
 
-# `log(k!) - [(k + 1/2) log(k) - k + log(2π)/2]`, i.e. the error in Stirling's formula.
-# For the usual float types, k < 16 is looked up in a table and larger k use the
-# asymptotic series. Both are accurate to that type's precision.
-@inline function _stirlerr(k::T) where {T<:Base.IEEEFloat}
-    return k < 16 ? _stirlerr_table(k) : _stirlerr_series(k)
-end
-
-# Other types (e.g. BigFloat) may need more precision than the table and the series give,
-# so work it out directly. Any cancellation here is in that type's own precision.
-@inline function _stirlerr(k::T) where {T}
-    return loggamma(k + one(T)) - (k + convert(T, 0.5)) * log(k) + k - convert(T, log2π) / 2
-end
-
-# `stirlerr(n)` for n = 1, ..., 15, worked out in BigFloat and rounded to Float64.
+# The error in Stirling's formula, which is
+#
+#   1/(12k) - 1/(360k^3) + 1/(1260k^5) + O(k^-7).
+#  
+# See e.g.
+# https://en.wikipedia.org/wiki/Stirling%27s_approximation#Speed_of_convergence_and_error_estimates
+# https://www.r-project.org/doc/reports/CLoader-dbinom-2002.pdf
 const STIRLERR_TABLE = ntuple(
     n -> Float64(
         loggamma(big(n) + 1) - (n + big(0.5)) * log(big(n)) + n - log(2 * big(π)) / 2,
     ),
     15,
 )
-
-# Only whole numbers 1, ..., 15 reach here from `logdensityof`.
-@inline _stirlerr_table(k::T) where {T} = convert(T, STIRLERR_TABLE[Int(k)])
-
-# Asymptotic series; for k >= 16 the first omitted term is below 1e-20.
 @inline function _stirlerr_series(k::T) where {T}
     ki = inv(k)
     c = (1 / 12, -1 / 360, 1 / 1260, -1 / 1680, 1 / 1188)
     return ki * evalpoly(ki * ki, map(ci -> convert(T, ci), c))
 end
+@inline function _stirlerr(k::T) where {T<:Base.IEEEFloat}
+    # Fast path for Float16/Float32/Float64. When k is >= 16, the O(k^-7) term is tiny, so
+    # we can drop it and use the polynomial approximation. For k < 16, we use a precomputed
+    # table of values. This is substantially faster than computing the series.
+    return k < 16 ? convert(T, STIRLERR_TABLE[Int(k)]) : _stirlerr_series(k)
+end
+@inline function _stirlerr(k::T) where {T}
+    # For other types (e.g. BigFloat), we compute it analytically.
+    return loggamma(k + one(T)) - (k + convert(T, 0.5)) * log(k) + k - convert(T, log2π) / 2
+end
 
-# Log-mass for k >= 1, given `s = stirlerr(k)`.
-@inline function _poissonlog_pos(logλ, k, s)
+@inline function _poissonlog_logpmf(logλ, k, stirlerr)
+    # note: the k = 0 case was already handled in logdensityof
     logk = log(k)
     δ = logλ - logk
-    return -s - k * (expm1(δ) - δ) - (log2π + logk) / 2
+    return -stirlerr - k * (expm1(δ) - δ) - (log2π + logk) / 2
 end
 
-# Enzyme is slower when it differentiates through the expression above. The partials are:
-#   logλ: k - exp(logλ)
-#   k (with s held fixed): δ - 1/(2k), since d/dk [k (exp(δ) - 1 - δ)] = -δ
-#   s: -1
+# Our PoissonLog density is pretty convoluted for the sake of numerical accuracy. However,
+# the requisite derivatives are much simpler! This leads to a quite noticeable speedup. We
+# have that
+#
+# logpmf = k(logλ) - exp(logλ) - log(k!)
+#        = k(logλ) - exp(logλ) - log(2πk)/2 - k(log(k)) + k - stirlerr
+#
+# from which the derivatives below can be obtained.
 EnzymeRules.@easy_rule(
-    _poissonlog_pos(logλ, k, s),
-    (k - exp(logλ), logλ - log(k) - inv(2k), -one(s)),
+    _poissonlog_logpmf(logλ, k, stirlerr),
+    (k - exp(logλ), logλ - log(k) - inv(2k), -one(stirlerr)),
 )
 
-# Computing `k * logλ - λ - log(k!)` directly cancels badly when k and λ are large, since
-# all three terms are huge but their sum is not. Instead use Loader (2000):
-#   log p(k) = -stirlerr(k) - bd0(k, λ) - log(2πk)/2,
-# where bd0(k, λ) = k log(k/λ) + λ - k = k * (exp(δ) - 1 - δ) with δ = logλ - log(k).
-# This also never forms `log(k!)`, so nothing overflows for huge k.
 @inline function DensityInterface.logdensityof(d::PoissonLog, x::Number)
+    # The logpmf we're trying to express here is `k * logλ - exp(logλ) - log(k!)`. However,
+    # the expression here is liable to catastrophic cancellation when `k` is large and
+    # `logλ` is close to `log(k)`. We therefore use an alternative expression. See #319 for
+    # the mathematical details.
     T = masstype(d, x)
     logλ, k = convert(T, d.logλ), convert(T, x)
-    within_compile() && return _poissonlog_traced(d, x, logλ, k)
-    insupport(d, x) || return convert(T, -Inf)
-    # k = 0 gives `-λ`, which also handles `logλ = -Inf` putting all mass on zero.
-    k == zero(T) && return -exp(logλ)
-    # `stirlerr` only depends on the data, so work it out on the plain float type
-    # (`typeof(eps(T))`, as in `rngtype`), where the fast table and series apply even when
-    # `T` is an AD number type.
-    F = typeof(eps(T))
-    return _poissonlog_pos(logλ, k, convert(T, _stirlerr(convert(F, x))))
-end
-
-# Under Reactant both sides of each `select` are evaluated, and `x` may be traced.
-@inline function _poissonlog_traced(d::PoissonLog, x, logλ::T, k::T) where {T}
-    # `max` keeps the k >= 1 branch finite when k = 0, and for k < 0 before the support
-    # check (where `loggamma` would also reject negative integers).
-    kp = max(k, one(T))
-    lp = select(
-        k == zero(T),
-        () -> -exp(logλ),
-        () -> _poissonlog_pos(logλ, kp, _stirlerr(kp)),
-    )
-    return select(insupport(d, x), () -> lp, () -> convert(T, -Inf))
+    return if within_compile()
+        kp = max(k, one(T))
+        lp = ifelse(k == zero(T), -exp(logλ), _poissonlog_logpmf(logλ, kp, _stirlerr(kp)))
+        ifelse(insupport(d, x), lp, convert(T, -Inf))
+    else
+        insupport(d, x) || return convert(T, -Inf)
+        # avoid calculating log(k) in _poissonlog_logpmf when k == 0.
+        k == zero(T) && return -exp(logλ)
+        # If `T` is an AD type e.g. ForwardDiff.Dual, we need to unwrap it to calculate
+        # `_stirlerr` on its 'underlying' float type.
+        F = typeof(eps(T))
+        _poissonlog_logpmf(logλ, k, convert(T, _stirlerr(convert(F, x))))
+    end
 end
 
 @inline Base.rand(rng::AbstractRNG, d::PoissonLog) = rand(rng, Poisson(exp(d.logλ)))
