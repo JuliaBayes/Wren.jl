@@ -47,7 +47,7 @@ end
     @test logdensityof(WrenDists.TruncatedFlat(2.0, 1.0), 1.5) == -Inf
 end
 
-if RUN_REACTANT
+@static if RUN_REACTANT
     @testset "TruncatedFlat: traced, parameter-dependent bound" begin
         density(alpha, x) = logdensityof(WrenDists.TruncatedFlat(0.0, 1 - alpha), x)
         for (alpha, x) in ((0.3, 0.5), (0.3, 0.9), (1.2, 0.1))
