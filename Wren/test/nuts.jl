@@ -20,6 +20,27 @@ function Wren.DynamicHMC.warmup(_, recorder::RecordStarts, state)
     return nothing, state
 end
 
+struct RecordInitialization
+    states::Channel{NamedTuple}
+end
+function Wren.DynamicHMC.warmup(_, recorder::RecordInitialization, state)
+    put!(recorder.states, (; q=copy(state.Q.q), state.ϵ))
+    return nothing, state
+end
+
+mutable struct SequenceValues <: WrenCore.AbstractLatentSource
+    values::Vector{Float64}
+    next::Int
+end
+SequenceValues(values) = SequenceValues(values, 1)
+function WrenCore.get_latent(source::SequenceValues, ::VarName, dist, ::Val)
+    index = source.next
+    source.next += 1
+    value = source.values[index]
+    return WrenCore.TransformedValue(value, WrenCore.AsOriginal())
+end
+WrenCore.scope(source::SequenceValues, ::VarName) = source
+
 @testset "nuts.jl" begin
     @testset "interface" begin
         chain = nuts(model, 1000, 4; progress=false)
@@ -45,17 +66,6 @@ end
         @test all(x -> 9.0 < x < 11.0, chn1[@vn(x)])
         @test FlexiChains.has_same_data(chn1, chn2)
         @test q1 != q2
-
-        chn = nuts(
-            Xoshiro(468),
-            model,
-            3;
-            progress=false,
-            initialization=(; q=[10.0], ϵ=0.01),
-            warmup_stages=(),
-            algorithm=Wren.DynamicHMC.NUTS(; max_depth=1),
-        )
-        @test all(x -> 9.8 < x < 10.2, chn[@vn(x)])
     end
 
     @testset "rng" begin
@@ -70,6 +80,120 @@ end
         chn1 = nuts(s, model, 100, 3; progress=false)
         chn2 = nuts(s, model, 100, 3; progress=false)
         @test !FlexiChains.has_same_data(chn1, chn2)
+    end
+
+    @testset "model-space initialization" begin
+        @wren function positive_parameter()
+            x ~ LogNormal()
+        end
+        states = Channel{NamedTuple}(2)
+        kwargs = (;
+            progress=false,
+            initial_stepsize=0.125f0,
+            warmup_stages=(RecordInitialization(states),),
+            algorithm=Wren.DynamicHMC.NUTS(; max_depth=1),
+        )
+        initial = FindFiniteDensity(VarNamedTuple(; x=exp(2.0)))
+        nuts(Xoshiro(468), positive_parameter(), 3, 2; init=initial, kwargs...)
+        s1, s2 = take!(states), take!(states)
+        @test s1.q ≈ s2.q ≈ [2.0]
+        @test s1.ϵ == s2.ϵ == 0.125
+        chn = nuts(
+            Xoshiro(468),
+            positive_parameter(),
+            3;
+            init=initial,
+            progress=false,
+            initial_stepsize=0.01,
+        )
+        @test all(>(0), chn[@vn(x)])
+
+        nuts(
+            Xoshiro(468),
+            positive_parameter(),
+            3,
+            2;
+            init=FindFiniteDensity(FromPrior(Xoshiro(123))),
+            kwargs...,
+        )
+        q1, q2 = take!(states).q, take!(states).q
+        nuts(
+            Xoshiro(468),
+            positive_parameter(),
+            3,
+            2;
+            init=FindFiniteDensity(FromPrior(Xoshiro(123))),
+            kwargs...,
+        )
+        @test q1 != q2
+        @test sort([q1, q2]) == sort([take!(states).q, take!(states).q])
+
+        source = SequenceValues(Float64[])
+        @test_throws ArgumentError nuts(
+            positive_parameter(),
+            3;
+            init=FindFiniteDensity(source),
+            initialization=(; q=[0.0]),
+            progress=false,
+        )
+        @test source.next == 1
+    end
+
+    @testset "finite-density search" begin
+        @wren function finite_region()
+            x ~ Normal()
+            @addloglikelihood (x > 1 ? 0.0 : -Inf)
+        end
+        @wren function flat_parameter()
+            x ~ Flat()
+        end
+        starts = Channel{Vector{Float64}}(1)
+        kwargs = (;
+            progress=false,
+            reduce_copies=false,
+            initial_stepsize=0.01,
+            warmup_stages=(RecordStarts(starts),),
+            algorithm=Wren.DynamicHMC.NUTS(; max_depth=1),
+        )
+
+        # Preparation consumes the first value, separately from the candidate budget.
+        source = SequenceValues([0.0, 2.0])
+        nuts(Xoshiro(468), finite_region(), 3; init=FindFiniteDensity(source), kwargs...)
+        @test take!(starts) == [2.0]
+        @test source.next == 3
+
+        source = SequenceValues([0.0, 0.0, 2.0])
+        nuts(
+            Xoshiro(468),
+            finite_region(),
+            3;
+            init=FindFiniteDensity(source; max_attempts=2),
+            kwargs...,
+        )
+        @test take!(starts) == [2.0]
+        @test source.next == 4
+
+        source = SequenceValues([0.0, 0.0, 2.0])
+        @test_throws ArgumentError nuts(
+            Xoshiro(468),
+            finite_region(),
+            3;
+            init=FindFiniteDensity(source),
+            kwargs...,
+        )
+        @test source.next == 3
+        @test !isready(starts)
+
+        source = SequenceValues([0.0, NaN, 2.0])
+        nuts(
+            Xoshiro(468),
+            flat_parameter(),
+            3;
+            init=FindFiniteDensity(source; max_attempts=2),
+            kwargs...,
+        )
+        @test take!(starts) == [2.0]
+        @test_throws ArgumentError FindFiniteDensity(FromPrior(); max_attempts=0)
     end
 end
 
