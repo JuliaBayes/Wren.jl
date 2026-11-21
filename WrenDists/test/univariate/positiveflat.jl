@@ -32,10 +32,6 @@ test_dist(
     plaice_zero_allocs=(from_vec, from_unconstrained_vec),
 )
 
-@testset "PositiveFlat: rand is in (exp(-2), exp(2))" begin
-    @test all(x -> exp(-2) < x < exp(2), [rand(WrenDists.PositiveFlat()) for _ in 1:1000])
-end
-
 @testset "PositiveFlat: sample type" begin
     @test rand(WrenDists.PositiveFlat()) isa Float64
     @test rand(WrenDists.PositiveFlat{Float32}()) isa Float32

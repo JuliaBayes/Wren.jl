@@ -1,20 +1,17 @@
 """
     TruncatedFlat(lower, upper)
 
-Flat distribution on the finite interval `[lower, upper]`, i.e. a log-density of zero
-inside the bounds and `-Inf` outside. No normalising constant is added, so unlike
-`Uniform(lower, upper)`, the log-density does not depend on the bounds. This is like a
-Stan `real<lower=lower, upper=upper>` parameter without a prior.
+Flat distribution on the finite interval `[lower, upper]`, i.e. a log-density of zero inside
+the bounds and `-Inf` outside. If `lower >= upper`, the log-density is `-Inf` everywhere
+(rather than an error).
 
-The bounds may depend on other parameters, as in `TruncatedFlat(0, 1 - alpha)`. If
-`lower >= upper`, the log-density is `-Inf` everywhere (rather than an error).
+No normalising constant is added, so unlike `Uniform(lower, upper)`, the log-density does
+not depend on the bounds. 
+
+This is like a Stan `real<lower=lower, upper=upper>` parameter without a prior.
 
 Both bounds must be finite. For a flat distribution on `[0, ∞)`, use
 [`PositiveFlat`](@ref).
-
-`rand` draws from `Uniform(lower, upper)`.
-
-The type of samples is determined by the types of `lower` and `upper`.
 
 **Customised batched implementations**: Not yet (will fall back to a product of scalar
 distributions)

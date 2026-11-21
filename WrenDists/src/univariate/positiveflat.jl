@@ -3,15 +3,14 @@
     PositiveFlat{T}()
 
 Improper flat distribution over the positive real line, i.e. a log-density of zero for
-`x >= 0` and `-Inf` otherwise. This is like a Stan `real<lower=0>` parameter without a
-prior.
+`x >= 0` and `-Inf` otherwise.
 
 Since this isn't a proper distribution, `rand` can't draw from it. Instead it returns
 `exp(u)` where `u` is drawn uniformly from (-2, 2), which is the same way that Stan
-initialises positive parameters.
+initialises positive parameters. The optional type parameter `T` can be used to specify the
+sample type, e.g. `PositiveFlat{Float32}()`.
 
-Since there are no parameters to take the type of samples from, it is given by `T`, which
-defaults to `Float64`.
+This is like a Stan `real<lower=0>` parameter without a prior.
 
 **Customised batched implementations**: Not yet (will fall back to a product of scalar
 distributions)
