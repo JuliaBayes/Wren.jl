@@ -18,15 +18,6 @@ export interface ModelHistory {
 }
 
 /**
- * Describes the machine a run was on, or null if it's unknown (older files). Runs on
- * different machines can't be compared.
- */
-export function machineKey(run: Run): string | null {
-    const m = run.meta.machine;
-    return m ? `${m.cpu}, ${m.memory_gb} GB, ${m.os} ${m.arch}` : null;
-}
-
-/**
  * Sort runs oldest first, by the date of the benchmarked commit (falling back to when the
  * benchmark was run, for older files). This keeps runs in the order of the git history even
  * if older commits were benchmarked later.

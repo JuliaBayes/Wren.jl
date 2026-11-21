@@ -2,7 +2,7 @@
     import { fetchRun } from "./load";
     import { POINT_STYLES, NUM_SERIES_COLOURS } from "./chart";
     import { modelUrl, runSha } from "./github";
-    import { allBackends, machineKey, modelHistories, sortRuns, type Range } from "./history";
+    import { allBackends, modelHistories, sortRuns, type Range } from "./history";
     import HistoryChart from "./HistoryChart.svelte";
     import type { IndexEntry, Run } from "./types";
 
@@ -14,7 +14,7 @@
     }
     let { index, theme, onCompare }: Props = $props();
 
-    let allRuns: Run[] = $state([]);
+    let runs: Run[] = $state([]);
     let loading = $state(true);
     let failed: string[] = $state([]);
 
@@ -24,24 +24,15 @@
         loading = true;
         Promise.allSettled(entries.map((e) => fetchRun(e.file))).then((results) => {
             if (entries !== index) return;
-            allRuns = sortRuns(results.flatMap((r) => (r.status === "fulfilled" ? [r.value] : [])));
+            runs = sortRuns(results.flatMap((r) => (r.status === "fulfilled" ? [r.value] : [])));
             failed = entries.filter((_, i) => results[i].status === "rejected").map((e) => e.file);
             loading = false;
         });
     });
 
-    // Runs on different machines can't be compared, so by default only the runs on the same
-    // machine as the newest run are shown.
-    let sameMachine = $state(true);
-    const newestMachine = $derived(allRuns.length > 0 ? machineKey(allRuns[allRuns.length - 1]) : null);
-    const runs = $derived(
-        sameMachine ? allRuns.filter((r) => machineKey(r) === newestMachine) : allRuns,
-    );
-    const otherMachineCount = $derived(allRuns.length - allRuns.filter((r) => machineKey(r) === newestMachine).length);
-
     const histories = $derived(modelHistories(runs));
-    // Each backend keeps the same colour in every chart (and when runs are filtered out).
-    const backends = $derived(allBackends(allRuns));
+    // Each backend keeps the same colour in every chart.
+    const backends = $derived(allBackends(runs));
     const slots = $derived(new Map(backends.map((b, i) => [b, i % NUM_SERIES_COLOURS])));
     const newestSha = $derived(runs.length > 0 ? runSha(runs[runs.length - 1].meta) : null);
 
@@ -76,9 +67,9 @@
     };
 </script>
 
-{#if loading && allRuns.length === 0}
+{#if loading && runs.length === 0}
     <p>Loading runs…</p>
-{:else if allRuns.length === 0}
+{:else if runs.length === 0}
     <p>No runs found.</p>
 {:else}
     <ul class="legend">
@@ -113,14 +104,6 @@
         </div>
         <button class="reset" onclick={() => (range = null)} disabled={range === null}>Reset zoom</button>
     </div>
-
-    {#if otherMachineCount > 0}
-        <label class="machine">
-            <input type="checkbox" bind:checked={sameMachine} />
-            Only show runs on the same machine as the newest run ({newestMachine ?? "unknown machine"};
-            {otherMachineCount} other {otherMachineCount === 1 ? "run" : "runs"})
-        </label>
-    {/if}
 
     {#if failed.length > 0}
         <p class="error">Could not load: {failed.join(", ")}</p>
@@ -219,12 +202,6 @@
     .reset:disabled {
         opacity: 0.5;
         cursor: default;
-    }
-    .machine {
-        display: block;
-        font-size: 0.9rem;
-        color: var(--text-secondary);
-        margin-bottom: 8px;
     }
     .grid {
         display: grid;
