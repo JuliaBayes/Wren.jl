@@ -19,16 +19,31 @@ Base.eltype(::Type{PoissonLog{L}}) where {L} = float(L)
 end
 
 # `log(k!) - [(k + 1/2) log(k) - k + log(2π)/2]`, i.e. the error in Stirling's formula.
-@inline function _stirlerr(k::T) where {T}
-    return select(k < convert(T, 16), () -> _stirlerr_direct(k), () -> _stirlerr_series(k))
+# For the usual float types, k < 16 is looked up in a table and larger k use the
+# asymptotic series. Both are accurate to that type's precision.
+@inline function _stirlerr(k::T) where {T<:Base.IEEEFloat}
+    return select(k < convert(T, 16), () -> _stirlerr_table(k), () -> _stirlerr_series(k))
 end
 
-# Below 16 the direct difference loses little precision. `min` keeps `loggamma` finite
-# when both branches are evaluated (e.g. under Reactant).
-@inline function _stirlerr_direct(k::T) where {T}
-    ks = min(k, convert(T, 16))
-    return loggamma(ks + one(T)) - (ks + convert(T, 0.5)) * log(ks) + ks -
-           convert(T, log2π) / 2
+# Other types (e.g. BigFloat) may need more precision than the table and the series give,
+# so work it out directly. Any cancellation here is in that type's own precision.
+@inline function _stirlerr(k::T) where {T}
+    return loggamma(k + one(T)) - (k + convert(T, 0.5)) * log(k) + k - convert(T, log2π) / 2
+end
+
+# `stirlerr(n)` for n = 1, ..., 15, worked out in BigFloat and rounded to Float64.
+const STIRLERR_TABLE = ntuple(
+    n -> Float64(
+        loggamma(big(n) + 1) - (n + big(0.5)) * log(big(n)) + n - log(2 * big(π)) / 2,
+    ),
+    15,
+)
+
+@inline function _stirlerr_table(k::T) where {T}
+    # Only whole numbers 1, ..., 15 reach here from `logdensityof`; anything else is
+    # outside the support and its result is discarded, so it just needs a valid index.
+    i = clamp(unsafe_trunc(Int, k), 1, 15)
+    return convert(T, @inbounds STIRLERR_TABLE[i])
 end
 
 # Asymptotic series; for k >= 16 the first omitted term is below 1e-20.
@@ -38,15 +53,21 @@ end
     return ki * evalpoly(ki * ki, map(ci -> convert(T, ci), c))
 end
 
-@inline function _poissonlog_pos(logλ, k)
+# Log-mass for k >= 1, given `s = stirlerr(k)`.
+@inline function _poissonlog_pos(logλ, k, s)
     logk = log(k)
     δ = logλ - logk
-    return -_stirlerr(k) - k * (expm1(δ) - δ) - (log2π + logk) / 2
+    return -s - k * (expm1(δ) - δ) - (log2π + logk) / 2
 end
 
-# The derivatives are those of `k * logλ - exp(logλ) - loggamma(k + 1)`. Enzyme is slower
-# when it differentiates through the expression above.
-EnzymeRules.@easy_rule(_poissonlog_pos(logλ, k), (k - exp(logλ), logλ - digamma(k + 1)))
+# Enzyme is slower when it differentiates through the expression above. The partials are:
+#   logλ: k - exp(logλ)
+#   k (with s held fixed): δ - 1/(2k), since d/dk [k (exp(δ) - 1 - δ)] = -δ
+#   s: -1
+EnzymeRules.@easy_rule(
+    _poissonlog_pos(logλ, k, s),
+    (k - exp(logλ), logλ - log(k) - inv(2k), -one(s)),
+)
 
 @inline function DensityInterface.logdensityof(d::PoissonLog, x::Number)
     T = masstype(d, x)
@@ -59,8 +80,18 @@ EnzymeRules.@easy_rule(_poissonlog_pos(logλ, k), (k - exp(logλ), logλ - digam
     # `max` keeps this branch finite when k = 0 (and for k < 0, before the support check).
     # It is computed inside the closure so reverse-mode AD does not record it when k = 0.
     kp = max(k, one(T))
+    # `stirlerr` only depends on the data, so work it out on the plain float type
+    # (`typeof(eps(T))`, as in `rngtype`), where the fast table and series apply even when
+    # `T` is an AD number type. Under Reactant `x` may be traced, so work it out directly.
+    F = typeof(eps(T))
+    s() =
+        if within_compile()
+            _stirlerr(kp)
+        else
+            convert(T, _stirlerr(max(convert(F, x), one(F))))
+        end
     # k = 0 gives `-λ`, which also handles `logλ = -Inf` putting all mass on zero.
-    lp = select(k == zero(T), () -> -exp(logλ), () -> _poissonlog_pos(logλ, kp))
+    lp = select(k == zero(T), () -> -exp(logλ), () -> _poissonlog_pos(logλ, kp, s()))
     return select(insupport(d, x), () -> lp, () -> convert(T, -Inf))
 end
 
