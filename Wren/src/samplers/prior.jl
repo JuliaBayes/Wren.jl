@@ -9,12 +9,17 @@ using MCMCProgress: Determinate, advance!, chain_at, close_phase!, open_phase!
         model::Model,
         niters::Integer,
         nchains::Integer=1;
-        progress::Bool=true,
+        progress_backend=TermBackend(),
         track::TrackedQuantitySpec=AllQuantities(),
     ) -> FlexiChains.VNChain
 
 Sample from the prior distribution of a Wren model. The returned chain holds the tracked
 quantities selected by `track`.
+
+`progress_backend` configures how sampling progress is displayed.
+Skip progress reports with `progress_backend=()`. To use several backends, pass
+a tuple of backends. Available backends: [`TermBackend`](@ref),
+[`ProgressLoggingBackend`](@ref), [`PlainTextBackend`](@ref).
 
 See also: [`TrackedQuantitySpec`](@ref)
 """
@@ -22,37 +27,37 @@ function prior(
     model::Model,
     niters::Integer,
     nchains::Integer=1;
-    progress::Bool=true,
+    progress_backend=TermBackend(),
     track::TrackedQuantitySpec=AllQuantities(),
 )
-    return prior(Random.default_rng(), model, niters, nchains; progress, track)
+    return prior(Random.default_rng(), model, niters, nchains; progress_backend, track)
 end
 function prior(
     rng::Random.AbstractRNG,
     model::Model,
     niters::Integer,
     nchains::Integer=1;
-    progress::Bool=true,
+    progress_backend=TermBackend(),
     track::TrackedQuantitySpec=AllQuantities(),
 )
     copy!(Random.TaskLocalRNG(), rng)
 
     t = time()
     label = "Sampling $(model.name) from the prior"
-    results = with_progress(progress, label, nchains) do run
+    results = with_progress(progress_backend, label, nchains) do run
         tasks = @sync [
             Threads.@spawn _prior_chain(model, niters, run, j, track) for j in 1:nchains
         ]
         stack(fetch.(tasks))
     end
 
-    if progress
+    if shows_progress(progress_backend)
         println("Sampling done in $(round(time() - t, digits=2)) seconds.")
         t = time()
         print("Constructing chain... ")
     end
     chn = WrenCore.to_flexichain(results)
-    if progress
+    if shows_progress(progress_backend)
         println("took $(round(time() - t, digits=2)) seconds")
     end
     return chn

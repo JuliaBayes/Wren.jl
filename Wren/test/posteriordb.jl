@@ -20,7 +20,7 @@ pdb = PosteriorDB.database()
     )
         reference_chain = FlexiChains.from_posteriordb(pdb, model_name)
         model = WrenCore.posteriordb_model(model_name)
-        new_chain = nuts(StableRNG(468), model, 10_000, 4; progress=false)
+        new_chain = nuts(StableRNG(468), model, 10_000, 4; progress_backend=())
 
         display(summarystats(new_chain))
         display(summarystats(reference_chain))

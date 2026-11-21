@@ -22,7 +22,7 @@ end
 
 @testset "nuts.jl" begin
     @testset "interface" begin
-        chain = nuts(model, 1000, 4; progress=false)
+        chain = nuts(model, 1000, 4; progress_backend=())
         @test chain isa VNChain
         @test FlexiChains.niters(chain) == 1000
         @test FlexiChains.nchains(chain) == 4
@@ -36,7 +36,7 @@ end
         end
         starts = Channel{Vector{Float64}}(2)
         kwargs = (;
-            progress=false,
+            progress_backend=(),
             warmup_stages=(RecordStarts(starts), Wren.DynamicHMC.InitialStepsizeSearch()),
         )
         chn1 = nuts(Xoshiro(468), bounded_posterior(), 3, 2; kwargs...)
@@ -50,7 +50,7 @@ end
             Xoshiro(468),
             model,
             3;
-            progress=false,
+            progress_backend=(),
             initialization=(; q=[10.0], ϵ=0.01),
             warmup_stages=(),
             algorithm=Wren.DynamicHMC.NUTS(; max_depth=1),
@@ -59,16 +59,16 @@ end
     end
 
     @testset "rng" begin
-        chn1 = nuts(Xoshiro(468), model, 100, 3; progress=false)
-        chn2 = nuts(Xoshiro(468), model, 100, 3; progress=false)
+        chn1 = nuts(Xoshiro(468), model, 100, 3; progress_backend=())
+        chn2 = nuts(Xoshiro(468), model, 100, 3; progress_backend=())
         @test FlexiChains.has_same_data(chn1, chn2)
-        chn3 = nuts(Xoshiro(469), model, 100, 3; progress=false)
+        chn3 = nuts(Xoshiro(469), model, 100, 3; progress_backend=())
         @test !FlexiChains.has_same_data(chn1, chn3)
 
         # reusing RNG should give new chains
         s = Xoshiro(468)
-        chn1 = nuts(s, model, 100, 3; progress=false)
-        chn2 = nuts(s, model, 100, 3; progress=false)
+        chn1 = nuts(s, model, 100, 3; progress_backend=())
+        chn2 = nuts(s, model, 100, 3; progress_backend=())
         @test !FlexiChains.has_same_data(chn1, chn2)
     end
 end

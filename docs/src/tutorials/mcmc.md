@@ -32,7 +32,7 @@ Wren.prior
 
 ```@example mcmc
 using Wren
-prior(model, 1000, 4; progress=false)
+prior(model, 1000, 4; progress_backend=())
 ```
 
 ## [NUTS](@id nuts)
@@ -46,5 +46,5 @@ using Enzyme
 adtype = AutoEnzyme(; mode=Reverse)
 
 using Wren
-nuts(model, 1000, 4; adtype=adtype, progress=false)
+nuts(model, 1000, 4; adtype=adtype, progress_backend=())
 ```

@@ -65,7 +65,7 @@ parameters(model)
 Alternatively, we can use [`prior`](@ref) to create a [`FlexiChain`](@extref FlexiChains.FlexiChain) that contains as many prior draws as we specify, and summarise it with [`summarystats`](@extref FlexiChains :jl:method:`StatsBase.summarystats-Tuple{FlexiChains.FlexiChain}`).
 
 ```@example workflow
-chain_prior = prior(model, 1000, 4; progress=false)
+chain_prior = prior(model, 1000, 4; progress_backend=())
 summarystats(chain_prior[[@vn(beta1), @vn(beta2), @vn(sigma)]])
 ```
 
@@ -119,7 +119,7 @@ Then we condition with `|` (see [`condition`](@ref)) and sample with [`nuts`](@r
 ```@example workflow
 import Enzyme
 model_cond = model | (; bill_length=penguins.bill_length_mm)
-chain_post = nuts(model_cond, 1000, 4; progress=false)
+chain_post = nuts(model_cond, 1000, 4; progress_backend=())
 summarystats(chain_post)
 ```
 

@@ -61,7 +61,7 @@ end
             2000,
             2;
             adtype=AutoForwardDiff(),
-            progress=false,
+            progress_backend=(),
         )
         test_moments(chn[@vn(λ)], shape * scale, shape * scale^2)
     end
@@ -71,7 +71,7 @@ end
             μ ~ Normal(1.0, 2.0)
             λ ~ Gamma(3.0, 0.5)
         end
-        chn = prior(Xoshiro(468), two_priors(), 2000, 2; progress=false)
+        chn = prior(Xoshiro(468), two_priors(), 2000, 2; progress_backend=())
         test_moments(chn[@vn(μ)], 1.0, 4.0)
         test_moments(chn[@vn(λ)], 1.5, 0.75)
     end
@@ -84,19 +84,33 @@ end
         niters, nchains = 100, 2
         @testset "$name" for (name, sampler) in (
             "nuts" =>
-                (rng, m; progress=false) ->
-                    nuts(rng, m, niters, nchains; adtype=AutoForwardDiff(), progress),
-            "prior" => (rng, m; progress=false) -> prior(rng, m, niters, nchains; progress),
+                (rng, m; progress_backend=()) -> nuts(
+                    rng,
+                    m,
+                    niters,
+                    nchains;
+                    adtype=AutoForwardDiff(),
+                    progress_backend,
+                ),
+            "prior" =>
+                (rng, m; progress_backend=()) ->
+                    prior(rng, m, niters, nchains; progress_backend),
         )
             chn1 = sampler(Xoshiro(468), model)
             chn2 = sampler(Xoshiro(468), model)
             @test FlexiChains.has_same_data(chn1, chn2)
-            displayed = redirect_stdout(devnull) do
-                redirect_stderr(devnull) do
-                    sampler(Xoshiro(468), model; progress=true)
+            @testset "$make_backend" for make_backend in (
+                TermBackend,
+                ProgressLoggingBackend,
+                PlainTextBackend,
+            )
+                displayed = redirect_stdout(devnull) do
+                    redirect_stderr(devnull) do
+                        sampler(Xoshiro(468), model; progress_backend=make_backend())
+                    end
                 end
+                @test FlexiChains.has_same_data(chn1, displayed)
             end
-            @test FlexiChains.has_same_data(chn1, displayed)
             chn3 = sampler(Xoshiro(469), model)
             @test !FlexiChains.has_same_data(chn1, chn3)
             x = chn1[@vn(x)]
@@ -108,7 +122,7 @@ end
     @testset "failed chain waits for its sibling" begin
         @test_throws CompositeException redirect_stdout(devnull) do
             redirect_stderr(devnull) do
-                prior(Xoshiro(468), failing_prior_model(), 1, 2; progress=true)
+                prior(Xoshiro(468), failing_prior_model(), 1, 2)
             end
         end
         @test sibling_finished[]
