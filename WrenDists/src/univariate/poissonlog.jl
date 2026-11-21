@@ -22,7 +22,7 @@ end
 # For the usual float types, k < 16 is looked up in a table and larger k use the
 # asymptotic series. Both are accurate to that type's precision.
 @inline function _stirlerr(k::T) where {T<:Base.IEEEFloat}
-    return select(k < convert(T, 16), () -> _stirlerr_table(k), () -> _stirlerr_series(k))
+    return k < 16 ? _stirlerr_table(k) : _stirlerr_series(k)
 end
 
 # Other types (e.g. BigFloat) may need more precision than the table and the series give,
@@ -39,12 +39,8 @@ const STIRLERR_TABLE = ntuple(
     15,
 )
 
-@inline function _stirlerr_table(k::T) where {T}
-    # Only whole numbers 1, ..., 15 reach here from `logdensityof`; anything else is
-    # outside the support and its result is discarded, so it just needs a valid index.
-    i = clamp(unsafe_trunc(Int, k), 1, 15)
-    return convert(T, @inbounds STIRLERR_TABLE[i])
-end
+# Only whole numbers 1, ..., 15 reach here from `logdensityof`.
+@inline _stirlerr_table(k::T) where {T} = convert(T, STIRLERR_TABLE[Int(k)])
 
 # Asymptotic series; for k >= 16 the first omitted term is below 1e-20.
 @inline function _stirlerr_series(k::T) where {T}
@@ -69,29 +65,35 @@ EnzymeRules.@easy_rule(
     (k - exp(logλ), logλ - log(k) - inv(2k), -one(s)),
 )
 
+# Computing `k * logλ - λ - log(k!)` directly cancels badly when k and λ are large, since
+# all three terms are huge but their sum is not. Instead use Loader (2000):
+#   log p(k) = -stirlerr(k) - bd0(k, λ) - log(2πk)/2,
+# where bd0(k, λ) = k log(k/λ) + λ - k = k * (exp(δ) - 1 - δ) with δ = logλ - log(k).
+# This also never forms `log(k!)`, so nothing overflows for huge k.
 @inline function DensityInterface.logdensityof(d::PoissonLog, x::Number)
     T = masstype(d, x)
     logλ, k = convert(T, d.logλ), convert(T, x)
-    # Computing `k * logλ - λ - log(k!)` directly cancels badly when k and λ are large,
-    # since all three terms are huge but their sum is not. Instead use Loader (2000):
-    #   log p(k) = -stirlerr(k) - bd0(k, λ) - log(2πk)/2,
-    # where bd0(k, λ) = k log(k/λ) + λ - k = k * (exp(δ) - 1 - δ) with δ = logλ - log(k).
-    # This also never forms `log(k!)`, so nothing overflows for huge k.
-    # `max` keeps this branch finite when k = 0 (and for k < 0, before the support check).
-    # It is computed inside the closure so reverse-mode AD does not record it when k = 0.
-    kp = max(k, one(T))
+    within_compile() && return _poissonlog_traced(d, x, logλ, k)
+    insupport(d, x) || return convert(T, -Inf)
+    # k = 0 gives `-λ`, which also handles `logλ = -Inf` putting all mass on zero.
+    k == zero(T) && return -exp(logλ)
     # `stirlerr` only depends on the data, so work it out on the plain float type
     # (`typeof(eps(T))`, as in `rngtype`), where the fast table and series apply even when
-    # `T` is an AD number type. Under Reactant `x` may be traced, so work it out directly.
+    # `T` is an AD number type.
     F = typeof(eps(T))
-    s() =
-        if within_compile()
-            _stirlerr(kp)
-        else
-            convert(T, _stirlerr(max(convert(F, x), one(F))))
-        end
-    # k = 0 gives `-λ`, which also handles `logλ = -Inf` putting all mass on zero.
-    lp = select(k == zero(T), () -> -exp(logλ), () -> _poissonlog_pos(logλ, kp, s()))
+    return _poissonlog_pos(logλ, k, convert(T, _stirlerr(convert(F, x))))
+end
+
+# Under Reactant both sides of each `select` are evaluated, and `x` may be traced.
+@inline function _poissonlog_traced(d::PoissonLog, x, logλ::T, k::T) where {T}
+    # `max` keeps the k >= 1 branch finite when k = 0, and for k < 0 before the support
+    # check (where `loggamma` would also reject negative integers).
+    kp = max(k, one(T))
+    lp = select(
+        k == zero(T),
+        () -> -exp(logλ),
+        () -> _poissonlog_pos(logλ, kp, _stirlerr(kp)),
+    )
     return select(insupport(d, x), () -> lp, () -> convert(T, -Inf))
 end
 
