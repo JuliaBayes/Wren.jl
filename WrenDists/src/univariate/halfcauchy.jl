@@ -34,7 +34,7 @@ HalfCauchy() = HalfCauchy(0.0, 1.0)
 @inline zval(d::HalfCauchy, x::Number) = (x - d.μ) / d.σ
 
 @inline function DensityInterface.logdensityof(d::HalfCauchy, x::Number)
-    value = -2 * log(hypot(one(x), zval(d, x))) - d.lognorm
+    value = -log1psq(zval(d, x)) - d.lognorm
     return select(x >= zero(x), () -> value, () -> oftype(value, -Inf))
 end
 
