@@ -1,8 +1,8 @@
 <script lang="ts">
     import { untrack } from "svelte";
     import type { Plugin } from "chart.js";
-    import { Chart, POINT_STYLES, cssVar } from "./chart";
-    import { formatTime, formatTimestamp, isRelease, runLabel, shortSha } from "./format";
+    import { Chart, MARKERS, POINT_STYLES, cssVar } from "./chart";
+    import { formatTime, isRelease, runLabel, shortSha } from "./format";
     import type { Range, Series } from "./history";
     import type { Run } from "./types";
 
@@ -19,10 +19,27 @@
         /** The range of run indices shown, or null for all of them. Shared by all charts. */
         range: Range;
         onRangeChange: (range: Range) => void;
+        /** The index of the run under the mouse (in any chart), or null. Shared by all charts. */
+        hovered: number | null;
+        onHover: (i: number | null) => void;
+        /** The index of the run selected by clicking (in any chart), or null. Shared by all charts. */
+        selected: number | null;
         /** Called with the index of a run when it is clicked. */
-        onPick: (i: number) => void;
+        onSelect: (i: number) => void;
     }
-    let { runs, series, slots, hidden, theme, range, onRangeChange, onPick }: Props = $props();
+    let {
+        runs,
+        series,
+        slots,
+        hidden,
+        theme,
+        range,
+        onRangeChange,
+        hovered,
+        onHover,
+        selected,
+        onSelect,
+    }: Props = $props();
 
     let canvas: HTMLCanvasElement;
     let chart: Chart<"line", (number | null)[], string> | null = null;
@@ -64,6 +81,47 @@
         return shown.some((m) => Math.abs(mantissa - m) < 1e-6) ? formatTime(v) : "";
     }
 
+    /**
+     * The index of the shown run nearest to `x` (in pixels), or null if `x` is over the y-axis.
+     * Anything right of the last run counts as the last run, so that it's easy to hover.
+     */
+    function runAt(x: number): number | null {
+        if (chart === null || x < chart.chartArea.left) return null;
+        const { min, max } = chart.scales.x;
+        const i = Math.round(chart.scales.x.getValueForPixel(x) ?? -1);
+        return Math.min(Math.max(i, min), max);
+    }
+
+    // Copies of `hovered` and `selected` for the plugin that draws lines through them, since
+    // plugins can't depend on Svelte state.
+    let hoverLine: number | null = null;
+    let selectedLine: number | null = null;
+
+    /** Highlight the points of the hovered (or else the selected) run. */
+    function showHover() {
+        if (chart === null) return;
+        const c = chart;
+        const i = hoverLine ?? selectedLine;
+        const active =
+            i === null
+                ? []
+                : c.data.datasets.flatMap((d, k) =>
+                      c.isDatasetVisible(k) && d.data[i] != null ? [{ datasetIndex: k, index: i }] : [],
+                  );
+        c.setActiveElements(active);
+        c.update("none");
+    }
+
+    $effect(() => {
+        hoverLine = hovered;
+        selectedLine = selected;
+        showHover();
+    });
+
+    // The run whose times are shown below the chart: the hovered one, or else the selected
+    // one. Nothing is shown if there is neither.
+    const shown = $derived(hovered ?? selected);
+
     function reportRange() {
         if (chart === null) return;
         const { min, max } = chart.scales.x;
@@ -94,22 +152,34 @@
         const border = cssVar("--table-border");
         const releases = runs.flatMap((r, i) => (isRelease(r.meta) ? [i] : []));
 
-        // Dashed vertical lines marking releases.
-        const releaseLines: Plugin<"line"> = {
-            id: "releaseLines",
+        // Dashed vertical lines marking releases, and solid ones through the selected and
+        // hovered runs.
+        const verticalLines: Plugin<"line"> = {
+            id: "verticalLines",
             beforeDatasetsDraw(c) {
                 const { ctx, chartArea, scales } = c;
-                ctx.save();
-                ctx.strokeStyle = text;
-                ctx.lineWidth = 1;
-                ctx.setLineDash([4, 4]);
-                for (const i of releases) {
+                const line = (i: number) => {
                     const x = scales.x.getPixelForValue(i);
-                    if (x < chartArea.left || x > chartArea.right) continue;
+                    if (x < chartArea.left || x > chartArea.right) return;
                     ctx.beginPath();
                     ctx.moveTo(x, chartArea.top);
                     ctx.lineTo(x, chartArea.bottom);
                     ctx.stroke();
+                };
+                ctx.save();
+                ctx.strokeStyle = text;
+                ctx.lineWidth = 1;
+                ctx.setLineDash([4, 4]);
+                releases.forEach(line);
+                ctx.setLineDash([]);
+                if (selectedLine !== null) {
+                    ctx.lineWidth = 2;
+                    line(selectedLine);
+                }
+                if (hoverLine !== null && hoverLine !== selectedLine) {
+                    ctx.lineWidth = 1;
+                    ctx.globalAlpha = 0.5;
+                    line(hoverLine);
                 }
                 ctx.restore();
             },
@@ -140,13 +210,16 @@
                     };
                 }),
             },
-            plugins: [releaseLines],
+            plugins: [verticalLines],
             options: {
                 animation: false,
                 maintainAspectRatio: false,
                 interaction: { mode: "index", intersect: false },
                 scales: {
                     x: {
+                        // Leave half a run's width at each end, so that the first and last
+                        // runs aren't on the edge of the chart and are easy to hover and click.
+                        offset: true,
                         ticks: { color: text, maxRotation: 0, font: { family: "Fira Code", size: 10 } },
                         grid: { display: false },
                         border: { color: border },
@@ -165,29 +238,9 @@
                     },
                 },
                 plugins: {
-                    tooltip: {
-                        callbacks: {
-                            title: (items) => {
-                                const r = runs[items[0].dataIndex];
-                                // The tooltip is drawn inside the chart, so long labels
-                                // would be cut off.
-                                const label = runLabel(r.meta);
-                                return [
-                                    label.length > 45 ? `${label.slice(0, 44)}…` : label,
-                                    `${shortSha(r.meta.git_sha)} · ${formatTimestamp(r.meta.commit_date ?? r.meta.timestamp)} · Julia ${r.meta.julia_version}`,
-                                ];
-                            },
-                            label: (item) => ` ${item.dataset.label}: ${formatTime(item.parsed.y ?? NaN)}`,
-                            footer: (items) => {
-                                const i = items[0].dataIndex;
-                                const errored = series.filter((s) => !hidden.has(s.backend) && s.errors[i] !== null);
-                                return [
-                                    ...errored.map((s) => `${s.backend}: error`),
-                                    i > 0 ? "Click to compare with the previous run" : "Click to view this run",
-                                ];
-                            },
-                        },
-                    },
+                    // Hover info is shown below the chart instead, so that it doesn't
+                    // cover the lines.
+                    tooltip: { enabled: false },
                     zoom: {
                         // Only the x-axis is zoomed; the y-axis fits the runs that are shown.
                         pan: {
@@ -209,15 +262,11 @@
                         limits: { x: { min: "original", max: "original", minRange: 1 } },
                     },
                 },
-                onClick: (e) => {
-                    if (Date.now() - lastPanEnd < 300 || e.x === null) return;
-                    const i = Math.round(c.scales.x.getValueForPixel(e.x) ?? -1);
-                    if (i >= 0 && i < runs.length) onPick(i);
-                },
             },
         });
         chart = c;
         untrack(() => applyRange(range));
+        showHover();
         return () => {
             c.destroy();
             chart = null;
@@ -229,7 +278,46 @@
 </script>
 
 <div class="chart">
-    <canvas bind:this={canvas}></canvas>
+    <canvas
+        bind:this={canvas}
+        onmousemove={(e) => onHover(runAt(e.offsetX))}
+        onmouseleave={() => onHover(null)}
+        onclick={(e) => {
+            // Chart.js ignores clicks outside the area where the lines are drawn, so clicks
+            // are handled here instead.
+            if (Date.now() - lastPanEnd < 300) return;
+            const i = runAt(e.offsetX);
+            if (i !== null) onSelect(i);
+        }}
+    ></canvas>
+</div>
+
+<!-- This model's times for the hovered (or else selected) run. Always present (even if
+empty), so that the chart doesn't move. -->
+<div class="times">
+    {#if shown !== null}
+        {#each series.filter((s) => !hidden.has(s.backend)) as s (s.backend)}
+            {@const slot = slots.get(s.backend) ?? 0}
+            {@const time = s.times[shown]}
+            <span class="time" title={s.backend}>
+                <svg width="12" height="12" viewBox="7 4 12 12" aria-hidden="true">
+                    <path
+                        d={MARKERS[POINT_STYLES[slot]]}
+                        style:fill={`var(--series-${slot + 1})`}
+                        style:stroke={`var(--series-${slot + 1})`}
+                        stroke-width="1.5"
+                    />
+                </svg>
+                {#if time !== null}
+                    {formatTime(time)}
+                {:else if s.errors[shown] !== null}
+                    <span class="error">error</span>
+                {:else}
+                    –
+                {/if}
+            </span>
+        {/each}
+    {/if}
 </div>
 
 <style>
@@ -239,5 +327,24 @@
     }
     canvas {
         cursor: pointer;
+    }
+    .times {
+        margin-top: 6px;
+        min-height: 1.6em;
+        font-size: 0.8rem;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 0 14px;
+        color: var(--text-primary);
+        font-variant-numeric: tabular-nums;
+    }
+    .time {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .error {
+        color: var(--error-color);
     }
 </style>
