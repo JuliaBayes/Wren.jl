@@ -88,11 +88,24 @@ function WrenCore.to_flexichain(
     iter_indices::AbstractVector{Int}=1:size(vnts, 1),
     chain_indices::AbstractVector{Int}=1:size(vnts, 2),
 )
+    return WrenCore._to_flexichain(vnts, fill((;), size(vnts)); iter_indices, chain_indices)
+end
+
+function WrenCore._to_flexichain(
+    vnts::AbstractMatrix{<:VarNamedTuple},
+    stats::AbstractMatrix{<:NamedTuple};
+    iter_indices::AbstractVector{Int}=1:size(vnts, 1),
+    chain_indices::AbstractVector{Int}=1:size(vnts, 2),
+)
     dense_vnts = map(VarNames.densify!!, vnts)
-    dicts = map(dense_vnts) do vnt
-        OrderedDict{ParameterOrExtra{<:VarName},Any}(
+    dicts = map(dense_vnts, stats) do vnt, stat
+        d = OrderedDict{ParameterOrExtra{<:VarName},Any}(
             Parameter(vn) => val for (vn, val) in pairs(vnt)
         )
+        for (name, value) in pairs(stat)
+            d[Extra(name)] = value
+        end
+        return d
     end
     return FlexiChain{VarName}(
         size(vnts)...,

@@ -5,8 +5,15 @@ using WrenCore
 # Samplers
 include("samplers/progress.jl")
 include("samplers/prior.jl")
+include("samplers/mh_helpers.jl")
+include("samplers/independent_mh.jl")
+include("samplers/rwm.jl")
+include("samplers/ram.jl")
+include("samplers/am.jl")
+include("samplers/dram.jl")
+include("samplers/reactant_walk.jl")
 include("samplers/nuts.jl")
-export prior, nuts
+export prior, independent_mh, rwm, ram, am, dram, nuts
 
 # Distributions
 module Dists

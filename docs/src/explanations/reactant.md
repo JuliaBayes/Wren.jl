@@ -21,7 +21,7 @@ If there isn't a distribution you need, do feel free to [open an issue or a pull
 
 ## Using Reactant with Wren
 
-Currently, Reactant can only be used with vectorised Wren models, i.e., the `VecModel` struct.
+Reactant can be used with vectorised Wren models, i.e., the `VecModel` struct.
 Because this struct obeys the LogDensityProblems.jl interface, this does still allow for compatibility with a wide range of packages that expect this interface!
 In particular, you can use Reactant with Wren's [`nuts`](@ref) sampler (which uses DynamicHMC under the hood).
 
@@ -101,6 +101,12 @@ At present, to the best of our knowledge, we don't really have that available to
 
 (Conceptually, what we would like to have is something like [the 'iterative NUTS' procedure developed for NumPyro](https://github.com/pyro-ppl/numpyro/wiki/Iterative-NUTS).
 That is more or less the same thing as having a Reactant-compatible NUTS sampler, but for JAX instead of Reactant.)
+
+## Metropolis–Hastings samplers
+
+With `with_reactant=true`, Wren's [Metropolis–Hastings samplers](@ref metropolis-hastings)
+run transitions and proposal adaptation on the device. Models must have fixed latent names
+and shapes.
 
 ## Do I need to call `to_rarray`?
 

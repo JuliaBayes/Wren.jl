@@ -1,6 +1,6 @@
 # MCMC sampling
 
-Wren currently provides two very simple samplers.
+Wren provides prior sampling, Metropolis–Hastings, and NUTS.
 
 Results are stored as `FlexiChain{VarName}`; please see the [FlexiChains documentation](https://juliabayes.org/FlexiChains.jl) for more information.
 
@@ -33,6 +33,23 @@ Wren.prior
 ```@example mcmc
 using Wren
 prior(model, 1000, 4; progress=false)
+```
+
+## [Metropolis–Hastings](@id metropolis-hastings)
+
+Independent MH proposes from the prior. The random-walk samplers use Gaussian proposals in
+unconstrained space. RAM, AM, and DRAM adapt the proposal covariance during warmup.
+
+```@docs
+Wren.independent_mh
+Wren.rwm
+Wren.ram
+Wren.am
+Wren.dram
+```
+
+```@example mcmc
+ram(model, 1000, 4; progress=false)
 ```
 
 ## [NUTS](@id nuts)
