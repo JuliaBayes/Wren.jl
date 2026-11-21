@@ -199,19 +199,21 @@ model = with_track() | (; y=1.0)
 simulate(model)
 ```
 
-You can write any expression on the right-hand side of `@track`, including `begin` or `let` blocks.
+You can write any expression on the right-hand side of `@track sym = expr`, including `begin` or `let` blocks.
 However, the name of a tracked quantity must be a single symbol, so names like `@track x[1]` or `@track x.a` are not allowed.
 
 !!! note "Tracked quantities are not copied"
 
-    After initialising a tracked quantity `@track my_array`, mutating `my_array` will change its values. To create a snapshot of `my_array` at the time it is initialised, you need to copy explicitly: `@track snapshot = deepcopy(my_array)`.
+    After initialising a tracked quantity `@track my_array`, mutating `my_array` will change its values. 
+    To create a snapshot of `my_array` at the time it is initialised, you need to copy explicitly: `@track snapshot = deepcopy(my_array)`.
 
-By default, all tracked quantities are calculated and returned.
-You can, however, skip the statements marked with `@track` - for example because they're expensive and not needed at this time - by passing `track=NoQuantities()` to `simulate`, `prior` or `nuts`. If you want to keep specific tracked quantities, use `SomeQuantities((:x,))` instead.
+By default, all tracked quantities are calculated and returned during model evaluation or MCMC sampling.
+You can, however, skip the statements marked with `@track`—for example because they're expensive and not needed at this time—by passing `track=NoQuantities()` to `simulate`, `prior` or `nuts`. 
+If you want to keep specific tracked quantities, use `SomeQuantities((:x,))` instead.
 
-!!! note "No side effects... again"
-
-    When the definition of a tracked quantity `x` involves side effects, such as calling `push!` or drawing a random number, and `x` is skipped via `track`, the side effects in its definition will not happen!
+!!! note "Side effects may be skipped"
+    Quantities marked with `@track` are not evaluated unless they are explicitly requested.
+    This means that if you write, for example, `@track x = push!(my_vec, elem)` and `x` is not requested or otherwise used, the side effect of `push!` will not be executed (i.e. `my_vec` will not be mutated).
 
 ### [`@addloglikelihood`](@id addloglike)
 

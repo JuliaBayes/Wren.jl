@@ -133,7 +133,7 @@ A posterior predictive check uses the fitted parameters and values of the covari
 This can be done with either the same covariate values used to fit the model, or with a new set of covariate values.
 A new set could either represent a hypothetical new group of penguins that we want to predict for, or help us visualise how `bill_length` changes with `body_mass`, resulting in a plot similar to the prior slope visualisation above.
 
-We'll begin with the former and once again use [`simulate`](@ref) - but this time we'll simulate from the conditioned model instead of the prior!
+We'll begin with the former and once again use [`simulate`](@ref)—but this time we'll simulate from the conditioned model instead of the prior!
 `FlexiChains.pushforward_hist` then plots histograms for our posterior prediction and overlays the observed data, giving us an opportunity to spot if the two would clearly diverge:
 
 ```@example workflow
@@ -160,7 +160,7 @@ xs_z = -3:0.1:3
 
 # Draw 20 posterior samples of the slope of body mass
 for _ in 1:20
-    vnt = parameters(rand(chain_post))
+    vnt = rand(chain_post; parameters_only=true)
     ys_z = vnt[@vn(beta2)] * xs_z
     ys = reconstruct(bill_zs, ys_z)
     xs = reconstruct(mass_zs, xs_z)
@@ -196,7 +196,7 @@ end
 !!! info "Intro to hierarchical models"
 
     In this hierarchical model, we define a global average bill length across all islands $\mu$ and the heterogeneity between islands $\tau$.
-    To illustrate this, let's assume a scenario where $\tau$ is rather small - this would correspond to a world where conditions between islands aren't that different after all.
+    To illustrate this, let's assume a scenario where $\tau$ is rather small; this would correspond to a world where conditions between islands aren't that different after all.
     It might be helpful to also consider the most extreme setting where $\tau = 0$: here, all islands would have identical conditions, and the hierarchical structure would disappear entirely.
     This scenario is called "complete pooling".
     On the contrary, if we assume $\tau$ to be really, really large, this would correspond to a scenario where islands are _so different_ that we might as well estimate each of their means individually.
@@ -258,7 +258,7 @@ What if we want to quantify the effect in general, in the hypothetical "populati
 To transfer our inferences to this population, we need to sample from the inferred population of islands `Normal(isl.mu, isl.tau)`.
 
 But how would we do this in our model?
-After all, the number of islands is part of our model -- our `z` parameter has as many entries as we have islands!
+After all, the number of islands is part of our model—our `z` parameter has as many entries as we have islands!
 
 Before figuring out how to escape the structure of our initial model, we first define a new data set with 300 hypothetical new islands (the number 300 is arbitrary here, it should just be large enough to represent the hypothetical "population" of islands).
 
