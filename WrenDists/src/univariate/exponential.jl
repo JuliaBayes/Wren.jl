@@ -44,10 +44,9 @@ function DensityInterface.logdensityof(d::BatchedExponential, x)
     else
         T = float(promote_type(eltype(x), eltype(θ)))
         s = zero(T)
-        # Checking the support without an early return keeps the loop free of branches,
-        # which makes the Enzyme gradient faster.
         valid = true
         for i in eachindex(x, θ)
+            # don't return -Inf inside the loop: see #317
             valid &= x[i] >= zero(x[i])
             s -= convert(T, x[i]) / convert(T, θ[i]) + log(convert(T, θ[i]))
         end

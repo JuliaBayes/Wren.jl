@@ -69,10 +69,9 @@ function DensityInterface.logdensityof(d::BatchedBinomial, x)
     else
         T = float(promote_type(eltype(x), eltype(n), eltype(p)))
         s = zero(T)
-        # Checking the support without an early return keeps the loop free of branches,
-        # which makes the Enzyme gradient faster.
         valid = true
         for i in eachindex(x)
+            # don't return -Inf inside the loop: see #317
             valid &= isinteger(x[i]) & (0 <= x[i]) & (x[i] <= n[i])
             ni, ki, pi = convert(T, n[i]), convert(T, x[i]), convert(T, p[i])
             s += logbinom(ni, ki) + xlogy(ki, pi) + xlogy(ni - ki, one(T) - pi)
