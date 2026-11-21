@@ -71,11 +71,16 @@ function DensityInterface.logdensityof(d::BatchedCategorical, x)
     else
         T = float(eltype(P))
         s = zero(T)
+        # Checking the support without an early return keeps the loop free of branches,
+        # which makes the Enzyme gradient faster. Invalid `k` are replaced with 1 so that
+        # the lookup stays in bounds.
+        valid = true
         for i in eachindex(x)
             k = x[i]
-            isinteger(k) && 1 <= k <= size(P, 1) || return convert(T, -Inf)
-            s += log(convert(T, P[Int(k), i]))
+            validi = isinteger(k) & (1 <= k) & (k <= size(P, 1))
+            valid &= validi
+            s += log(convert(T, P[Int(ifelse(validi, k, one(k))), i]))
         end
-        s
+        ifelse(valid, s, convert(T, -Inf))
     end
 end
