@@ -1,7 +1,8 @@
 <script lang="ts">
     import { fetchRun } from "./load";
-    import { POINT_STYLES, NUM_SERIES_COLOURS } from "./chart";
-    import { modelUrl, runSha } from "./github";
+    import { MARKERS, POINT_STYLES, NUM_SERIES_COLOURS } from "./chart";
+    import { commitUrl, modelUrl, runSha } from "./github";
+    import { runLabel, shortSha } from "./format";
     import { allBackends, modelHistories, sortRuns, type Range } from "./history";
     import HistoryChart from "./HistoryChart.svelte";
     import type { IndexEntry, Run } from "./types";
@@ -42,6 +43,7 @@
     $effect(() => {
         void runs;
         range = null;
+        selected = null;
     });
 
     // Backends hidden by clicking them in the legend, in all charts.
@@ -52,20 +54,36 @@
         hidden = next;
     }
 
-    function pick(i: number) {
+    // The run under the mouse in any chart. It is highlighted in all charts, so that the
+    // times of all models at that run can be seen at once.
+    let hovered: number | null = $state(null);
+    // The run selected by clicking on it, which stays highlighted when the mouse moves away.
+    let selected: number | null = $state(null);
+
+    function select(i: number) {
+        selected = selected === i ? null : i;
+    }
+
+    function compareWithPrevious(i: number) {
         onCompare(runs[i].source, i > 0 ? runs[i - 1].source : "");
     }
 
-    // SVG versions of the Chart.js marker shapes, for the legend.
-    const MARKERS: Record<(typeof POINT_STYLES)[number], string> = {
-        circle: "M 13 6 a 4 4 0 1 0 0.01 0",
-        rect: "M 9.5 6.5 h 7 v 7 h -7 z",
-        triangle: "M 13 5.5 L 17.5 13.5 L 8.5 13.5 z",
-        rectRot: "M 13 5 L 18 10 L 13 15 L 8 10 z",
-        crossRot: "M 10 7 L 16 13 M 16 7 L 10 13",
-        star: "M 13 5 V 15 M 8 10 H 18 M 9.5 6.5 L 16.5 13.5 M 16.5 6.5 L 9.5 13.5",
-    };
+    // The run whose details are shown above the charts: the hovered one, or else the
+    // selected one.
+    const shown = $derived(hovered ?? selected);
+    const shownRun = $derived(shown === null ? undefined : runs[shown]);
+    const shownSha = $derived(shownRun ? runSha(shownRun.meta) : null);
+
+    function formatDate(ts: string): string {
+        const d = new Date(ts);
+        return isNaN(d.getTime())
+            ? ts
+            : d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+    }
+
 </script>
+
+<svelte:window onkeydown={(e) => e.key === "Escape" && (selected = null)} />
 
 {#if loading && runs.length === 0}
     <p>Loading runs…</p>
@@ -109,6 +127,36 @@
         <p class="error">Could not load: {failed.join(", ")}</p>
     {/if}
 
+    <!-- Details of the hovered (or else selected) run. It stays at the top of the window when
+    scrolling, so that it can be seen while hovering over any chart. -->
+    <div class="run-info">
+        {#if shownRun}
+            <div class="run" title={runLabel(shownRun.meta)}>
+                {#if shownSha}
+                    <a class="sha" href={commitUrl(shownSha)} target="_blank" rel="noreferrer">{shortSha(shownSha)}</a>
+                {:else}
+                    <span class="sha">{shortSha(shownRun.meta.git_sha)}</span>
+                {/if}
+                · {formatDate(shownRun.meta.commit_date ?? shownRun.meta.timestamp)}
+                · Julia {shownRun.meta.julia_version}
+                · <span class="title">{runLabel(shownRun.meta)}</span>
+            </div>
+            <!-- Links for the selected run. They aren't shown while hovering a different run,
+            since the mouse can't reach them without leaving it. -->
+            <div class="actions">
+                {#if selected !== null && shown === selected}
+                    <button class="link" onclick={() => compareWithPrevious(selected!)}>
+                        {selected > 0 ? "Compare with previous run" : "View in Compare"}
+                    </button>
+                    · <button class="link" onclick={() => (selected = null)}>Clear selection</button>
+                {/if}
+            </div>
+        {:else}
+            <div class="run hint">Hover over a run to see its details, or click to select it.</div>
+            <div class="actions"></div>
+        {/if}
+    </div>
+
     <div class="grid">
         {#each histories as h (h.model)}
             {@const url = modelUrl(h.model, newestSha)}
@@ -129,7 +177,10 @@
                     {theme}
                     {range}
                     onRangeChange={(r) => (range = r)}
-                    onPick={pick}
+                    {hovered}
+                    onHover={(i) => (hovered = i)}
+                    {selected}
+                    onSelect={select}
                 />
             </section>
         {/each}
@@ -202,6 +253,44 @@
     .reset:disabled {
         opacity: 0.5;
         cursor: default;
+    }
+    .run-info {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        background-color: var(--bg-primary);
+        border-bottom: 1px solid var(--table-border);
+        padding: 6px 0;
+        margin-bottom: 12px;
+        font-size: 0.9rem;
+    }
+    /* One line each, so that the charts don't move when a different run is hovered. */
+    .run,
+    .actions {
+        height: 1.6em;
+        line-height: 1.6em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .sha {
+        font-family: "Fira Code", monospace;
+    }
+    .title {
+        font-weight: 600;
+    }
+    .hint {
+        color: var(--text-secondary);
+    }
+    /* Buttons that look like links, for actions within the page. */
+    button.link {
+        font: inherit;
+        color: var(--link-color);
+        background: none;
+        border: none;
+        padding: 0;
+        cursor: pointer;
+        text-decoration: underline;
     }
     .grid {
         display: grid;
