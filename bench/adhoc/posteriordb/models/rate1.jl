@@ -12,7 +12,7 @@ const data = let
 end
 
 @model function pdb_Rate_1_model(n, k)
-    theta ~ Beta(1, 1)
+    theta ~ Uniform(0, 1)
     return k ~ Binomial(n, theta)
 end
 
