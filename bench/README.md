@@ -56,11 +56,6 @@ inconsistent. (If one day we have dedicated machines, we could do that
 instead.) Instead, the production benchmarks are currently manually run on
 Penny's laptop.
 
-The suite can also be run on CI by hand, from the 'Benchmarks' workflow in the
-Actions tab. The results table is shown in the job summary and the JSON file
-is uploaded as an artifact; tick 'save' to also save it to the
-`benchmark-results` branch.
-
 ### The website
 
 `web/` is a small website that shows one run as a table, or compares two runs
