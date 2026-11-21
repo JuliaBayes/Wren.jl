@@ -37,9 +37,9 @@ const STIRLERR_TABLE = ntuple(
     return ki * evalpoly(ki * ki, map(ci -> convert(T, ci), c))
 end
 @inline function _stirlerr(k::T) where {T<:Base.IEEEFloat}
-    # Fast path for Float16/Float32/Float64. When k is >= 16, the O(k^-7) term is tiny, so
-    # we can drop it and use the polynomial approximation. For k < 16, we use a precomputed
-    # table of values. This is substantially faster than computing the series.
+    # Fast path for Float16/Float32/Float64. When k is >= 16, we can use the polynomial
+    # approximation as the dropped terms are small. For k < 16, we use a precomputed table
+    # of values. This is substantially faster than computing the series.
     return k < 16 ? convert(T, STIRLERR_TABLE[Int(k)]) : _stirlerr_series(k)
 end
 @inline function _stirlerr(k::T) where {T}
