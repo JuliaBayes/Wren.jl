@@ -10,7 +10,7 @@
   - `DensityInterface.logdensityof`, most relevant ADTypes, and `Enzyme.Reverse` are re-exported by WrenCore.
     No need to import them.
 
-  - When doing MCMC sampling **always** use the `progress_backend=()` keyword argument unless you are working on the progress logging code itself.
+  - When doing MCMC sampling **always** use the `progress=false` keyword argument unless you are working on the progress logging code itself.
 
 # Overview
 

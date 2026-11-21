@@ -49,7 +49,7 @@ close_phases!(::DynamicHMC.NoProgressReport) = nothing
         niters::Integer,
         nchains::Integer=1;
         adtype::DI.AbstractADType=DI.AutoEnzyme(; mode=Enzyme.Reverse),
-        progress_backend=TermBackend(),
+        progress=true,
         reduce_copies::Bool=true,
         track::TrackedQuantitySpec=AllQuantities(),
         dynamichmc_kwargs...
@@ -65,10 +65,9 @@ Each chain starts from an independent prior draw unless `initialization` is supp
 `reduce_copies` is passed to [`VecModel`](@ref): when sampling with Enzyme, it skips copies
 of model arguments that turn out not to be needed (see [`reduce_copies`](@ref)).
 
-`progress_backend` configures how sampling progress is displayed.
-Skip progress reports with `progress_backend=()`. To use several backends, pass
-a tuple of backends. Available backends: [`TermBackend`](@ref),
-[`ProgressLoggingBackend`](@ref), [`PlainTextBackend`](@ref).
+`progress` configures how sampling progress is displayed: `true` uses `TermBackend`,
+`false` displays nothing. To choose a backend, pass it directly; to use several, pass
+a tuple of backends.
 
 Tracked quantities selected by `track` will be included in the returned chain. Note that
 tracked quantities are not evaluated during the log-density step, but only once per iteration.
@@ -79,7 +78,7 @@ function nuts(
     niters::Integer,
     nchains::Integer=1;
     adtype::DI.AbstractADType=DI.AutoEnzyme(; mode=Reverse),
-    progress_backend=TermBackend(),
+    progress::ProgressSpec=true,
     reduce_copies::Bool=true,
     track::TrackedQuantitySpec=AllQuantities(),
     dynamichmc_kwargs...,
@@ -90,7 +89,7 @@ function nuts(
         niters,
         nchains;
         adtype,
-        progress_backend,
+        progress,
         reduce_copies,
         track,
         dynamichmc_kwargs...,
@@ -102,18 +101,21 @@ function nuts(
     niters::Integer,
     nchains::Integer=1;
     adtype::DI.AbstractADType=DI.AutoEnzyme(; mode=Reverse),
-    progress_backend=TermBackend(),
+    progress::ProgressSpec=true,
     reduce_copies::Bool=true,
     track::TrackedQuantitySpec=AllQuantities(),
     dynamichmc_kwargs...,
 )
+    backends = progress_backends(progress)
+    show_progress = !isempty(backends)
+
     # AD preparation
-    if shows_progress(progress_backend)
+    if show_progress
         t = time()
         print("Doing AD preparation... ")
     end
     vm_single = WrenCore.VecModel(model, adtype; reduce_copies)
-    if shows_progress(progress_backend)
+    if show_progress
         println("done in $(round(time() - t, digits=2)) seconds.")
         t = time()
     end
@@ -122,7 +124,7 @@ function nuts(
 
     t = time()
     label = "Sampling $(model.name)"
-    outputs = with_progress(progress_backend, label, nchains) do run
+    outputs = with_progress(backends, label, nchains) do run
         tasks = @sync [
             Threads.@spawn _nuts_chain(
                 vm_single,
@@ -136,7 +138,7 @@ function nuts(
         fetch.(tasks)
     end
 
-    if shows_progress(progress_backend)
+    if show_progress
         println("Sampling done in $(round(time() - t, digits=2)) seconds.")
         t = time()
         print("Constructing chain... ")
@@ -144,7 +146,7 @@ function nuts(
     model_results = stack(first.(outputs))
     stats = stack(last.(outputs))
     chn = WrenCore.to_flexichain(model_results, stats)
-    if shows_progress(progress_backend)
+    if show_progress
         println("took $(round(time() - t, digits=2)) seconds")
     end
     return chn

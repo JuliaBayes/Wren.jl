@@ -9,17 +9,16 @@ using MCMCProgress: Determinate, advance!, chain_at, close_phase!, open_phase!
         model::Model,
         niters::Integer,
         nchains::Integer=1;
-        progress_backend=TermBackend(),
+        progress=true,
         track::TrackedQuantitySpec=AllQuantities(),
     ) -> FlexiChains.VNChain
 
 Sample from the prior distribution of a Wren model. The returned chain holds the tracked
 quantities selected by `track`.
 
-`progress_backend` configures how sampling progress is displayed.
-Skip progress reports with `progress_backend=()`. To use several backends, pass
-a tuple of backends. Available backends: [`TermBackend`](@ref),
-[`ProgressLoggingBackend`](@ref), [`PlainTextBackend`](@ref).
+`progress` configures how sampling progress is displayed: `true` uses `TermBackend`,
+`false` displays nothing. To choose a backend, pass it directly; to use several, pass
+a tuple of backends.
 
 See also: [`TrackedQuantitySpec`](@ref)
 """
@@ -27,37 +26,39 @@ function prior(
     model::Model,
     niters::Integer,
     nchains::Integer=1;
-    progress_backend=TermBackend(),
+    progress::ProgressSpec=true,
     track::TrackedQuantitySpec=AllQuantities(),
 )
-    return prior(Random.default_rng(), model, niters, nchains; progress_backend, track)
+    return prior(Random.default_rng(), model, niters, nchains; progress, track)
 end
 function prior(
     rng::Random.AbstractRNG,
     model::Model,
     niters::Integer,
     nchains::Integer=1;
-    progress_backend=TermBackend(),
+    progress::ProgressSpec=true,
     track::TrackedQuantitySpec=AllQuantities(),
 )
     copy!(Random.TaskLocalRNG(), rng)
+    backends = progress_backends(progress)
+    show_progress = !isempty(backends)
 
     t = time()
     label = "Sampling $(model.name) from the prior"
-    results = with_progress(progress_backend, label, nchains) do run
+    results = with_progress(backends, label, nchains) do run
         tasks = @sync [
             Threads.@spawn _prior_chain(model, niters, run, j, track) for j in 1:nchains
         ]
         stack(fetch.(tasks))
     end
 
-    if shows_progress(progress_backend)
+    if show_progress
         println("Sampling done in $(round(time() - t, digits=2)) seconds.")
         t = time()
         print("Constructing chain... ")
     end
     chn = WrenCore.to_flexichain(results)
-    if shows_progress(progress_backend)
+    if show_progress
         println("took $(round(time() - t, digits=2)) seconds")
     end
     return chn

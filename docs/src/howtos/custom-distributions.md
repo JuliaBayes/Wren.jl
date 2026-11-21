@@ -89,7 +89,7 @@ end
 
 prior_model = poisson_zeroinflated(y)
 model = prior_model | (; y=y)
-chain = nuts(model, 1000, 4; progress_backend=())
+chain = nuts(model, 1000, 4; progress=false)
 summarystats(chain)
 ```
 

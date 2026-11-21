@@ -61,7 +61,7 @@ end
             2000,
             2;
             adtype=AutoForwardDiff(),
-            progress_backend=(),
+            progress=false,
         )
         test_moments(chn[@vn(λ)], shape * scale, shape * scale^2)
     end
@@ -71,7 +71,7 @@ end
             μ ~ Normal(1.0, 2.0)
             λ ~ Gamma(3.0, 0.5)
         end
-        chn = prior(Xoshiro(468), two_priors(), 2000, 2; progress_backend=())
+        chn = prior(Xoshiro(468), two_priors(), 2000, 2; progress=false)
         test_moments(chn[@vn(μ)], 1.0, 4.0)
         test_moments(chn[@vn(λ)], 1.5, 0.75)
     end
@@ -84,29 +84,23 @@ end
         niters, nchains = 100, 2
         @testset "$name" for (name, sampler) in (
             "nuts" =>
-                (rng, m; progress_backend=()) -> nuts(
-                    rng,
-                    m,
-                    niters,
-                    nchains;
-                    adtype=AutoForwardDiff(),
-                    progress_backend,
-                ),
-            "prior" =>
-                (rng, m; progress_backend=()) ->
-                    prior(rng, m, niters, nchains; progress_backend),
+                (rng, m; progress=false) ->
+                    nuts(rng, m, niters, nchains; adtype=AutoForwardDiff(), progress),
+            "prior" => (rng, m; progress=false) -> prior(rng, m, niters, nchains; progress),
         )
             chn1 = sampler(Xoshiro(468), model)
             chn2 = sampler(Xoshiro(468), model)
             @test FlexiChains.has_same_data(chn1, chn2)
-            @testset "$make_backend" for make_backend in (
+            @testset "$make_progress" for make_progress in (
+                () -> true,
                 TermBackend,
                 ProgressLoggingBackend,
                 PlainTextBackend,
+                () -> (TermBackend(), PlainTextBackend()),
             )
                 displayed = redirect_stdout(devnull) do
                     redirect_stderr(devnull) do
-                        sampler(Xoshiro(468), model; progress_backend=make_backend())
+                        sampler(Xoshiro(468), model; progress=make_progress())
                     end
                 end
                 @test FlexiChains.has_same_data(chn1, displayed)
