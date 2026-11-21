@@ -24,7 +24,7 @@ struct RecordInitialization
     states::Channel{NamedTuple}
 end
 function Wren.DynamicHMC.warmup(_, recorder::RecordInitialization, state)
-    put!(recorder.states, (; q=copy(state.Q.q), state.κ, state.ϵ))
+    put!(recorder.states, (; q=copy(state.Q.q), state.ϵ))
     return nothing, state
 end
 
@@ -66,21 +66,6 @@ WrenCore.scope(source::SequenceValues, ::VarName) = source
         @test all(x -> 9.0 < x < 11.0, chn1[@vn(x)])
         @test FlexiChains.has_same_data(chn1, chn2)
         @test q1 != q2
-
-        states = Channel{NamedTuple}(1)
-        κ = Wren.DynamicHMC.GaussianKineticEnergy(1, 2.0)
-        @test_deprecated r"initialization.q" nuts(
-            Xoshiro(468),
-            model,
-            3;
-            progress=false,
-            initialization=(:q => [10.0], :κ => κ, :ϵ => 0.01),
-            warmup_stages=(RecordInitialization(states),),
-            algorithm=Wren.DynamicHMC.NUTS(; max_depth=1),
-        )
-        state = take!(states)
-        @test state.q == [10.0]
-        @test state.κ === κ
     end
 
     @testset "rng" begin
@@ -104,7 +89,7 @@ WrenCore.scope(source::SequenceValues, ::VarName) = source
         states = Channel{NamedTuple}(2)
         kwargs = (;
             progress=false,
-            initialization=(; ϵ=0.01),
+            initial_stepsize=0.125f0,
             warmup_stages=(RecordInitialization(states),),
             algorithm=Wren.DynamicHMC.NUTS(; max_depth=1),
         )
@@ -112,8 +97,15 @@ WrenCore.scope(source::SequenceValues, ::VarName) = source
         nuts(Xoshiro(468), positive_parameter(), 3, 2; init=initial, kwargs...)
         s1, s2 = take!(states), take!(states)
         @test s1.q ≈ s2.q ≈ [2.0]
-        @test s1.ϵ == s2.ϵ == 0.01
-        chn = nuts(Xoshiro(468), positive_parameter(), 3; init=initial, progress=false)
+        @test s1.ϵ == s2.ϵ == 0.125
+        chn = nuts(
+            Xoshiro(468),
+            positive_parameter(),
+            3;
+            init=initial,
+            progress=false,
+            initial_stepsize=0.01,
+        )
         @test all(>(0), chn[@vn(x)])
 
         nuts(
@@ -137,15 +129,13 @@ WrenCore.scope(source::SequenceValues, ::VarName) = source
         @test sort([q1, q2]) == sort([take!(states).q, take!(states).q])
 
         source = SequenceValues(Float64[])
-        for initialization in ((; q=[0.0]), (; κ=ones(1, 1)), (; unknown=1), (; ϵ=[0.01]))
-            @test_throws ArgumentError nuts(
-                positive_parameter(),
-                3;
-                init=FindFiniteDensity(source),
-                initialization,
-                progress=false,
-            )
-        end
+        @test_throws ArgumentError nuts(
+            positive_parameter(),
+            3;
+            init=FindFiniteDensity(source),
+            initialization=(; q=[0.0]),
+            progress=false,
+        )
         @test source.next == 1
     end
 
@@ -161,7 +151,7 @@ WrenCore.scope(source::SequenceValues, ::VarName) = source
         kwargs = (;
             progress=false,
             reduce_copies=false,
-            initialization=(; ϵ=0.01),
+            initial_stepsize=0.01,
             warmup_stages=(RecordStarts(starts),),
             algorithm=Wren.DynamicHMC.NUTS(; max_depth=1),
         )

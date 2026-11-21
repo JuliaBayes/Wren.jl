@@ -62,8 +62,10 @@ However, you can specify how that point is searched for by passing an [`Abstract
 For example, to replicate Stan's default behaviour of sampling from `[-2, 2]` in unconstrained space, you can pass:
 
 ```julia
+using WrenCore: FromUnconstrainedInterval
+
 init = FindFiniteDensity(FromUnconstrainedInterval(-2, 2); max_attempts=100)
-nuts(model, 1000, 4; init=init)
+nuts(model, 1000, 4; adtype, init, progress=false)
 ```
 
 In the future, we hope to provide more initialisation strategies (e.g. using [Pathfinder](@ref pathfinder)).

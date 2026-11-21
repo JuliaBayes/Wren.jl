@@ -33,9 +33,6 @@ To use Stan-style initialisation from a uniform interval, use
 [`source=FromUnconstrainedInterval([rng, ]lower, upper)`](@ref FromUnconstrainedInterval).
 
 If initialisation fails after `max_attempts`, an error is thrown.
-
-The same source supplies [`VecModel`](@ref) preparation values. Preparation draws do not
-count towards `max_attempts`; errors during preparation or model evaluation propagate.
 """
 struct FindFiniteDensity{S<:WrenCore.AbstractLatentSource} <: AbstractInitialization
     source::S
@@ -114,7 +111,7 @@ close_phases!(::DynamicHMC.NoProgressReport) = nothing
         reduce_copies::Bool=true,
         track::TrackedQuantitySpec=AllQuantities(),
         init::Union{Nothing,AbstractInitialization}=nothing,
-        initialization=nothing,
+        initial_stepsize::Union{Nothing,Real}=nothing,
         dynamichmc_kwargs...
     ) -> FlexiChains.VNChain
 
@@ -122,21 +119,8 @@ No U-Turn Sampler (NUTS) for a Wren model. All `dynamichmc_kwargs` are passed to
 [`DynamicHMC.mcmc_with_warmup`](@extref), allowing you to customise the warmup and sampling
 behaviour. The returned chain holds the tracked quantities selected by `track`.
 
-Each chain starts from an independent prior draw by default.
-
-Use `init=FindFiniteDensity(FromValues(VarNamedTuple(; x=1.0)))` to supply initial values in
-model space. [`FindFiniteDensity`](@ref) checks one candidate per chain by default; increase
-`max_attempts` to retry non-finite starting points or log-densities. For opt-in interval
-initialisation, use `init=FindFiniteDensity(WrenCore.FromUnconstrainedInterval())` and set
-the attempt bound as needed.
-
-With `init`, Wren owns the position and metric. DynamicHMC warmup and scalar options remain
-available; `initialization` may contain only the scalar real step size `ϵ` (or `nothing`).
-For direct control of unconstrained positions or metrics, construct a [`VecModel`](@ref)
-and pass it to [`DynamicHMC.mcmc_with_warmup`](@extref).
-
-Without `init`, legacy raw `initialization` options remain supported. Passing raw `q` or
-`κ` through this legacy path is deprecated.
+Each chain starts from an independent prior draw by default. Use `init` to select an
+initialization policy. `initial_stepsize` replaces the default initial step-size search.
 
 `reduce_copies` is passed to [`VecModel`](@ref): when sampling with Enzyme, it skips copies
 of model arguments that turn out not to be needed (see [`reduce_copies`](@ref)).
@@ -150,7 +134,7 @@ function nuts(
     reduce_copies::Bool=true,
     track::TrackedQuantitySpec=AllQuantities(),
     init::Union{Nothing,AbstractInitialization}=nothing,
-    initialization=nothing,
+    initial_stepsize::Union{Nothing,Real}=nothing,
     dynamichmc_kwargs...,
 )
     return nuts(
@@ -163,7 +147,7 @@ function nuts(
         reduce_copies,
         track,
         init,
-        initialization,
+        initial_stepsize,
         dynamichmc_kwargs...,
     )
 end
@@ -177,31 +161,15 @@ function nuts(
     reduce_copies::Bool=true,
     track::TrackedQuantitySpec=AllQuantities(),
     init::Union{Nothing,AbstractInitialization}=nothing,
-    initialization=nothing,
+    initial_stepsize::Union{Nothing,Real}=nothing,
     dynamichmc_kwargs...,
 )
-    initialization = initialization === nothing ? nothing : (; initialization...)
-    if init !== nothing && initialization !== nothing
-        issubset(keys(initialization), (:ϵ,)) || throw(
-            ArgumentError(
-                "With `init`, `initialization` may contain only `ϵ`; use VecModel and DynamicHMC for raw positions or metrics.",
-            ),
-        )
-        ϵ = get(initialization, :ϵ, nothing)
-        ϵ === nothing ||
-            ϵ isa Real ||
-            throw(
-                ArgumentError(
-                    "With `init`, the initial step size `ϵ` must be a scalar Real or nothing.",
-                ),
-            )
-    elseif initialization !== nothing &&
-           (haskey(initialization, :q) || haskey(initialization, :κ))
-        Base.depwarn(
-            "Passing `initialization.q` or `initialization.κ` to `nuts` is deprecated. Use a Wren initialization policy, or construct a VecModel and call DynamicHMC directly for unconstrained positions or metrics.",
-            :nuts,
-        )
-    end
+    haskey(dynamichmc_kwargs, :initialization) && throw(
+        ArgumentError(
+            "Use `init` for starting points and `initial_stepsize` for the step size.",
+        ),
+    )
+    initial_stepsize = initial_stepsize === nothing ? nothing : Float64(initial_stepsize)
     source = init === nothing ? WrenCore.FromPrior() : _initial_source(init)
     # AD preparation
     if progress
@@ -217,12 +185,8 @@ function nuts(
     Random.seed!(Random.TaskLocalRNG(), rand(rng, UInt64))
 
     # Sources can contain mutable RNGs, so draw initial points before spawning tasks.
-    chain_initializations = if init === nothing
-        fill(initialization, nchains)
-    else
-        options = initialization === nothing ? (;) : initialization
-        [(; options..., q=_initial_position(vm_single, init)) for _ in 1:nchains]
-    end
+    starts =
+        init === nothing ? nothing : [_initial_position(vm_single, init) for _ in 1:nchains]
 
     t = time()
     label = "Sampling $(model.name)"
@@ -234,7 +198,8 @@ function nuts(
                 run,
                 j;
                 track,
-                initialization=chain_initializations[j],
+                q=starts === nothing ? nothing : starts[j],
+                initial_stepsize,
                 dynamichmc_kwargs...,
             ) for j in 1:nchains
         ]
@@ -261,13 +226,16 @@ function _nuts_chain(
     run,
     j::Integer;
     track::TrackedQuantitySpec,
-    initialization=nothing,
+    q,
+    initial_stepsize,
+    warmup_stages=initial_stepsize === nothing ? DynamicHMC.default_warmup_stages() :
+                  DynamicHMC.default_warmup_stages(; stepsize_search=nothing),
     dynamichmc_kwargs...,
 )
     vm = WrenCore._copy_for_thread(vm_single)
     rng = Random.TaskLocalRNG()
-    if initialization === nothing
-        initialization = (; q=WrenCore.vector_parameters(vm, WrenCore.FromPrior(rng)))
+    if q === nothing
+        q = WrenCore.vector_parameters(vm, WrenCore.FromPrior(rng))
     end
     reporter = run === nothing ? DynamicHMC.NoProgressReport() : ChainReporter(run, j)
     results = DynamicHMC.mcmc_with_warmup(
@@ -275,7 +243,8 @@ function _nuts_chain(
         vm,
         niters;
         reporter,
-        initialization,
+        initialization=(; q, ϵ=initial_stepsize),
+        warmup_stages,
         dynamichmc_kwargs...,
     )
     close_phases!(reporter)
