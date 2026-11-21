@@ -69,17 +69,21 @@ Sum of `logdensityof(dist, xᵢ)` over every draw `xᵢ` stored in `x`. Add meth
 function to provide closed-form expressions for specific measures.
 """
 function _iid_logdensityof(dist::UnivariateDist, x::AbstractArray)
-    return sum(Base.Fix1(logdensityof, dist), x; init=_zero_logdensity(dist, x))
+    return _sum_or_zero(Base.Fix1(logdensityof, dist), x, _zero_logdensity(dist, x))
 end
 
 function _zero_logdensity(dist::WrenDist, x::AbstractArray)
     return zero(float(promote_type(eltype(x), noisetype(dist))))
 end
 
+# Equivalent to `sum(f, x; init=zero_value)`, but the sum-with-init-kwarg is slower under AD
+# (and VERY much slower under Mooncake in particular).
+@inline _sum_or_zero(f, x, zero_value) = isempty(x) ? zero_value : sum(f, x)
+
 # Each slice is one draw. This fallback is CPU-only.
 function _iid_logdensityof(dist::MultivariateDist, x::AbstractArray{<:Any,M}) where {M}
     slices = eachslice(x; dims=ntuple(i -> i + 1, Val(M - 1)))
-    return sum(Base.Fix1(logdensityof, dist), slices; init=_zero_logdensity(dist, x))
+    return _sum_or_zero(Base.Fix1(logdensityof, dist), slices, _zero_logdensity(dist, x))
 end
 
 # --- ElementwiseLink / ElementwiseInvLink ---
