@@ -13,8 +13,8 @@ using MCMCProgress: Determinate, advance!, chain_at, close_phase!, open_phase!
         track::TrackedQuantitySpec=AllQuantities(),
     ) -> FlexiChains.VNChain
 
-Sample from the prior distribution of a Wren model. The returned chain holds the tracked
-quantities selected by `track`.
+Sample from the prior distribution of a Wren model. Tracked quantities selected by `track`
+will be included in the returned chain.
 See also: [`AllQuantities`](@ref), [`SomeQuantities`](@ref), [`NoQuantities`](@ref)
 """
 function prior(
