@@ -45,12 +45,13 @@ close_phases!(::DynamicHMC.NoProgressReport) = nothing
 """
     nuts(
         [rng::Random.AbstractRNG=default_rng()],
-        model::WrenCore.Model,
+        model::Model,
         niters::Integer,
         nchains::Integer=1;
         adtype::DI.AbstractADType=DI.AutoEnzyme(; mode=Enzyme.Reverse),
         progress::Bool=true,
         reduce_copies::Bool=true,
+        track::TrackedQuantitySpec=AllQuantities(),
         dynamichmc_kwargs...
     ) -> FlexiChains.VNChain
 
@@ -58,16 +59,24 @@ No U-Turn Sampler (NUTS) for a Wren model. All `dynamichmc_kwargs` are passed to
 [`DynamicHMC.mcmc_with_warmup`](@extref), allowing you to customise the warmup and sampling
 behaviour.
 
+Each chain starts from an independent prior draw unless `initialization` is supplied in
+`dynamichmc_kwargs`.
+
 `reduce_copies` is passed to [`VecModel`](@ref): when sampling with Enzyme, it skips copies
 of model arguments that turn out not to be needed (see [`reduce_copies`](@ref)).
+
+Tracked quantities selected by `track` will be included in the returned chain. Note that
+tracked quantities are not evaluated during the log-density step, but only once per iteration.
+See also: [`AllQuantities`](@ref), [`SomeQuantities`](@ref), [`NoQuantities`](@ref)
 """
 function nuts(
-    model::WrenCore.Model,
+    model::Model,
     niters::Integer,
     nchains::Integer=1;
     adtype::DI.AbstractADType=DI.AutoEnzyme(; mode=Reverse),
     progress::Bool=true,
     reduce_copies::Bool=true,
+    track::TrackedQuantitySpec=AllQuantities(),
     dynamichmc_kwargs...,
 )
     return nuts(
@@ -78,17 +87,19 @@ function nuts(
         adtype,
         progress,
         reduce_copies,
+        track,
         dynamichmc_kwargs...,
     )
 end
 function nuts(
     rng::Random.AbstractRNG,
-    model::WrenCore.Model,
+    model::Model,
     niters::Integer,
     nchains::Integer=1;
     adtype::DI.AbstractADType=DI.AutoEnzyme(; mode=Reverse),
     progress::Bool=true,
     reduce_copies::Bool=true,
+    track::TrackedQuantitySpec=AllQuantities(),
     dynamichmc_kwargs...,
 )
     # AD preparation
@@ -108,7 +119,14 @@ function nuts(
     label = "Sampling $(model.name)"
     outputs = with_progress(progress, label, nchains) do run
         tasks = @sync [
-            Threads.@spawn _nuts_chain(vm_single, niters, run, j; dynamichmc_kwargs...) for j in 1:nchains
+            Threads.@spawn _nuts_chain(
+                vm_single,
+                niters,
+                run,
+                j;
+                track,
+                dynamichmc_kwargs...,
+            ) for j in 1:nchains
         ]
         fetch.(tasks)
     end
@@ -132,19 +150,26 @@ function _nuts_chain(
     niters::Integer,
     run,
     j::Integer;
+    track::TrackedQuantitySpec,
+    initialization=nothing,
     dynamichmc_kwargs...,
 )
     vm = WrenCore._copy_for_thread(vm_single)
+    rng = Random.TaskLocalRNG()
+    if initialization === nothing
+        initialization = (; q=WrenCore.vector_parameters(vm, WrenCore.FromPrior(rng)))
+    end
     reporter = run === nothing ? DynamicHMC.NoProgressReport() : ChainReporter(run, j)
     results = DynamicHMC.mcmc_with_warmup(
-        Random.TaskLocalRNG(),
+        rng,
         vm,
         niters;
         reporter,
+        initialization,
         dynamichmc_kwargs...,
     )
     close_phases!(reporter)
-    return _nuts_results_and_stats(results, vm)
+    return _nuts_results_and_stats(results, vm, track)
 end
 
 function _nuts_stats(tree_stat, step_size)
@@ -158,10 +183,15 @@ function _nuts_stats(tree_stat, step_size)
         log_density=tree_stat.π,
     )
 end
-function _nuts_results_and_stats(results::NamedTuple, vecmodel::WrenCore.VecModel)
+function _nuts_results_and_stats(
+    results::NamedTuple,
+    vecmodel::WrenCore.VecModel,
+    track::TrackedQuantitySpec,
+)
     ϵ = results.ϵ
-    model_results =
-        [WrenCore.simulate(vecmodel, col) for col in eachcol(results.posterior_matrix)]
+    model_results = [
+        WrenCore.simulate(vecmodel, col; track) for col in eachcol(results.posterior_matrix)
+    ]
     stats = [_nuts_stats(ts, ϵ) for ts in results.tree_statistics]
     return model_results, stats
 end

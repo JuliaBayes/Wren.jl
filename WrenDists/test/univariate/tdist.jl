@@ -26,6 +26,46 @@ end
     @test rand(Xoshiro(8675309), d) === rand(Xoshiro(8675309), explicit)
 end
 
+@testset "TDist finite tails" begin
+    for T in (Float32, Float64)
+        x = T(2) * sqrt(floatmax(T))
+        reference = logdensityof(WrenDists.Cauchy(zero(T), one(T)), x)
+        @test logdensityof(WrenDists.TDist(one(T)), x) ≈ reference
+        iid = WrenDists.IIDTDist((1,), one(T), zero(T), one(T))
+        @test logdensityof(iid, [x]) ≈ reference
+        for ν in (T[1], Fill(one(T), 1))
+            @test logdensityof(WrenDists.BatchedTDist(ν, T[0], T[1]), [x]) ≈ reference
+        end
+    end
+    f(x) = logdensityof(WrenDists.TDist(1.0), only(x))
+    ad = DI.AutoReverseDiff(; compile=true)
+    prep = DI.prepare_gradient(f, ad, [0.0])
+    for x in (1.0, -1.0, 1e155, -1e155, Inf, -Inf, 1.0)
+        value, gradient = DI.value_and_gradient(f, prep, ad, [x])
+        @test value ≈ logdensityof(WrenDists.Cauchy(), x)
+        isfinite(x) && @test only(gradient) ≈ -2 * (x / hypot(1, x)) / hypot(1, x)
+    end
+    nu_score(p) = logdensityof(WrenDists.TDist(only(p)), 1e10)
+    nu_tie_score(p) = logdensityof(WrenDists.TDist(only(p)), 1.0)
+    for (_, adtype) in Base.get_extension(WrenDists, :WrenDistsTestUtils).TESTED_ADTYPES
+        for x in (1.0, floatmax(Float64))
+            @test only(DI.gradient(f, adtype, [x])) ≈ -2 * (x / hypot(1, x)) / hypot(1, x)
+        end
+        @test only(DI.gradient(nu_tie_score, adtype, [1.0])) ≈ log(2) / 2
+        @test only(DI.gradient(nu_score, adtype, [1e-300])) ≈ 1e300
+    end
+    @static if RUN_REACTANT
+        d = WrenDists.TDist(1.0f0)
+        WrenDists.test_dist_reactant(d, Float32[2*sqrt(floatmax(Float32)), Inf])
+        g(ν, x) = logdensityof(WrenDists.TDist(ν), x)
+        gradient(ν, x) = Enzyme.gradient(Reverse, g, ν, x)
+        ν = Reactant.to_rarray(1.0f0; track_numbers=true)
+        x = Reactant.to_rarray(1.0f0; track_numbers=true)
+        compiled = Reactant.@compile gradient(ν, x)
+        @test collect(Float32.(compiled(ν, x))) ≈ [log(2.0f0) / 2, -1.0f0]
+    end
+end
+
 test_dist(
     "TDist",
     WrenDists.TDist(4.0, 1.0, 2.0),

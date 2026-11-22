@@ -13,7 +13,7 @@ available_posteriordb_models()
 
 !!! note "Benchmarks"
 
-    These PosteriorDB models are also benchmarked in order to track performance over time: see [https://pysm.dev/Wren.jl/bench](https://pysm.dev/Wren.jl/bench).
+    These PosteriorDB models are also benchmarked in order to track performance over time: see [https://juliabayes.org/Wren.jl/bench](https://juliabayes.org/Wren.jl/bench).
 
 And to load one of these:
 

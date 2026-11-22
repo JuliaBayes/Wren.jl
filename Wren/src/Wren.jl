@@ -8,9 +8,6 @@ include("samplers/prior.jl")
 include("samplers/nuts.jl")
 export prior, nuts
 
-include("optimization.jl")
-export optimize, MAP, MLE
-
 # Distributions
 module Dists
 using Reexport: @reexport
@@ -27,6 +24,7 @@ using WrenCore:
     @sample,
     @observe,
     @batch,
+    @track,
     # Models
     Model,
     condition,
@@ -34,11 +32,15 @@ using WrenCore:
     simulate,
     ModelResult,
     return_value,
+    tracked_quantities,
+    TrackedQuantitySpec,
+    AllQuantities,
+    SomeQuantities,
+    NoQuantities,
     logjoint,
     logprior,
     # Vectorisation
     VecModel,
-    logdensity,
     vector_parameters,
     lp,
     lp_and_grad,
@@ -54,6 +56,10 @@ using WrenCore:
     # Initialisations for MCMC
     FromPrior,
     FromValues,
+    # Optimisation
+    optimize,
+    MAP,
+    MLE,
     # PosteriorDB
     posteriordb_model,
     available_posteriordb_models
@@ -66,6 +72,7 @@ export WrenCore,
     @sample,
     @observe,
     @batch,
+    @track,
     # Models
     Model,
     condition,
@@ -73,11 +80,15 @@ export WrenCore,
     simulate,
     ModelResult,
     return_value,
+    tracked_quantities,
+    TrackedQuantitySpec,
+    AllQuantities,
+    SomeQuantities,
+    NoQuantities,
     logjoint,
     logprior,
     # Vectorisation
     VecModel,
-    logdensity,
     vector_parameters,
     lp,
     lp_and_grad,
@@ -93,6 +104,10 @@ export WrenCore,
     # Initialisations for MCMC
     FromPrior,
     FromValues,
+    # Optimisation
+    optimize,
+    MAP,
+    MLE,
     # PosteriorDB
     posteriordb_model,
     available_posteriordb_models
@@ -106,8 +121,11 @@ export logdensityof
 using StatsAPI: loglikelihood
 export loglikelihood
 
-using DifferentiationInterface: AutoForwardDiff, AutoReverseDiff, AutoMooncake, AutoEnzyme
-export AutoForwardDiff, AutoReverseDiff, AutoMooncake, AutoEnzyme
+using DifferentiationInterface:
+    AutoForwardDiff, AutoReverseDiff, AutoMooncake, AutoMooncakeForward, AutoEnzyme
+export AutoForwardDiff, AutoReverseDiff, AutoMooncake, AutoMooncakeForward, AutoEnzyme
+using ADTypes: AutoReactant
+export AutoReactant
 
 using EnzymeCore: Forward, Reverse
 export Forward, Reverse

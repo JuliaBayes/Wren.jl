@@ -656,6 +656,53 @@ _samples(stmts) = filter(s -> s isa WrenCore.Sample, stmts)
         @test !only(filter(s -> s isa WrenCore.AddLogLikelihood, ir)).expr.lhs_is_reused
     end
 
+    @testset "tracked quantity" begin
+        @test first(analyse(@wren internal_to_ir=true function r8()
+            x ~ Normal()
+            @track y = x
+        end)) == Set{Symbol}([:x])
+
+        ir, args = @wren internal_to_ir=true function r9()
+            x ~ Normal()
+            @track x
+        end
+        ir, _ = run_dataflow_analysis(ir, args)
+        @test only(filter(s -> s isa WrenCore.Sample, ir)).lhs_is_reused
+
+        ir, args = @wren internal_to_ir=true function r10(x, y)
+            a ~ Normal()
+            @track mu = a .+ x
+            @observe y ~ MvNormal(mu, I)
+            @track rss = sum(abs2, y .- mu)
+        end
+        ir, _ = run_dataflow_analysis(ir, args)
+        tqs = filter(s -> s isa WrenCore.TrackedQuantity, ir)
+        @test [(s.name, s.always_evaluated) for s in tqs] == [(:mu, true), (:rss, false)]
+
+        @test first(analyse(@wren internal_to_ir=true function r11()
+            a ~ Normal()
+            @track b = a
+            @track c = b
+        end)) == Set{Symbol}([:a])
+
+        ir, args = @wren internal_to_ir=true function r12()
+            a ~ Normal()
+            @track b = a
+            @track c = b
+            @track d = c
+            @track e = a
+            f ~ Normal(e)
+        end
+        ir, _ = run_dataflow_analysis(ir, args)
+        tqs = filter(s -> s isa WrenCore.TrackedQuantity, ir)
+        @test [(s.name, s.always_evaluated, s.tqs_triggering_evaluation) for s in tqs] == [
+            (:b, false, [:c, :d]),
+            (:c, false, [:d]),
+            (:d, false, Symbol[]),
+            (:e, true, Symbol[]),
+        ]
+    end
+
     @testset "lhs_top_level_symbol" begin
         ir, args = @wren internal_to_ir=true function r5()
             x ~ a
