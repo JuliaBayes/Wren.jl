@@ -24,7 +24,7 @@ export function compareUrl(baseSha: string, tipSha: string): string {
 const MODEL_DIR = "WrenCore/ext/WrenCorePosteriorDBExt/models";
 const MODEL_FILES = new Map<string, string>([
     ["ArK", `${MODEL_DIR}/ark.jl`],
-    ["EightSchoolsCentered", `${MODEL_DIR}/eight_schools_centered.jl`],
+    ["EightSchoolsCentered", `${MODEL_DIR}/eight_schools.jl`],
     ["GLMBinomial", `${MODEL_DIR}/glm_binomial.jl`],
     ["GLMPoisson", `${MODEL_DIR}/glm_poisson.jl`],
     ["GLMMPoisson", `${MODEL_DIR}/glmm_poisson.jl`],

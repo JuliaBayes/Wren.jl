@@ -4,8 +4,7 @@ using WrenCore: WrenCore
 
 include("models/ark.jl")
 include("models/earnings.jl")
-include("models/eight_schools_centered.jl")
-include("models/eight_schools_noncentered.jl")
+include("models/eight_schools.jl")
 include("models/glm_binomial.jl")
 include("models/glm_poisson.jl")
 include("models/glmm_poisson.jl")
@@ -34,8 +33,8 @@ const MODELS = Dict(
     "earnings-logearn_interaction" => Earnings.logearn_interaction,
     "earnings-logearn_interaction_z" => Earnings.logearn_interaction_z,
     "earnings-logearn_logheight_male" => Earnings.logearn_logheight_male,
-    "eight_schools-eight_schools_centered" => EightSchoolsCentered.model,
-    "eight_schools-eight_schools_noncentered" => EightSchoolsNoncentered.model,
+    "eight_schools-eight_schools_centered" => EightSchools.centered,
+    "eight_schools-eight_schools_noncentered" => EightSchools.noncentered,
     "GLM_Binomial_data-GLM_Binomial_model" => GLMBinomial.model,
     "GLM_Poisson_Data-GLM_Poisson_model" => GLMPoisson.model,
     "GLMM_Poisson_data-GLMM_Poisson_model" => GLMMPoisson.model,
