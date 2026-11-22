@@ -85,6 +85,8 @@ To set this up, first install [`pre-commit`](https://pre-commit.com/), and then 
 pre-commit install
 ```
 
+If you are contributing to Wren regularly you might want to speed up the pre-commit hook; to do so please follow the steps in the [JuliaFormatter documentation](https://juliaeditorsupport.github.io/JuliaFormatter.jl/stable/packagecompiler/).
+
 ## Changelogs
 
 We require all code changes to be accompanied by a changelog entry.
