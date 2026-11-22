@@ -25,8 +25,15 @@
     const params = new URLSearchParams(window.location.search);
     let tipKey = $state(params.get("tip") ?? "");
     let baseKey = $state(params.get("base") ?? "");
-    // "compare" shows one or two runs as a table; "history" shows charts of all runs.
-    let view: "compare" | "history" = $state(params.get("view") === "history" ? "history" : "compare");
+    // "history" shows charts of all runs; "compare" shows one or two runs as a table.
+    // History is the default. Older links to comparisons have `tip`/`base` but no `view`,
+    // so those still open the comparison.
+    const viewParam = params.get("view");
+    let view: "compare" | "history" = $state(
+        viewParam === "compare" || (viewParam === null && (params.has("tip") || params.has("base")))
+            ? "compare"
+            : "history",
+    );
 
     let tip = $state<Run | null>(null);
     let base = $state<Run | null>(null);
@@ -59,14 +66,15 @@
     });
 
     // Keep the URL in sync, so that comparisons can be linked. Local files can't be
-    // linked to, so they're left out.
+    // linked to, so they're left out. The selected runs are only shown in the compare
+    // view, so they're left out of the URL in the history view.
     $effect(() => {
         const url = new URL(window.location.href);
         for (const [name, key] of [["tip", tipKey], ["base", baseKey]]) {
-            if (key === "" || key.startsWith("local:")) url.searchParams.delete(name);
+            if (view === "history" || key === "" || key.startsWith("local:")) url.searchParams.delete(name);
             else url.searchParams.set(name, key);
         }
-        if (view === "history") url.searchParams.set("view", view);
+        if (view === "compare") url.searchParams.set("view", view);
         else url.searchParams.delete("view");
         history.replaceState(null, "", url);
     });
@@ -106,8 +114,8 @@
     </div>
 
     <nav class="tabs">
-        <button class:active={view === "compare"} onclick={() => (view = "compare")}>Compare runs</button>
         <button class:active={view === "history"} onclick={() => (view = "history")}>History</button>
+        <button class:active={view === "compare"} onclick={() => (view = "compare")}>Compare runs</button>
     </nav>
 
     {#if view === "history"}
