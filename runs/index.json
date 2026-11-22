@@ -1,5 +1,12 @@
 [
   {
+    "commit_date": "2026-11-22T19:05:38Z",
+    "file": "20261122T190941Z-1f5d8b4.json",
+    "git_sha": "1f5d8b4d50d5251cc863fe1262eff8df1bc019e7",
+    "label": "Fix PoissonLog accuracy at very large numbers + Enzyme gradient (#321)",
+    "timestamp": "2026-11-22T19:09:41.285Z"
+  },
+  {
     "commit_date": "2026-11-22T16:59:46Z",
     "file": "20261122T170343Z-05320bf.json",
     "git_sha": "05320bfdbc5885ecda742518fd092873d04ae4b7",
