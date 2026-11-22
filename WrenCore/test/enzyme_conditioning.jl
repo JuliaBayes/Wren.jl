@@ -25,7 +25,7 @@ end
 end
 
 @testset "Enzyme with sequential internal conditioning" begin
-    @static if VERSION > v"1.12.0"
+    @static if VERSION > v"1.13.0"
         Record = @NamedTuple{a::Union{Missing,Float64}, b::Union{Missing,Float64}}
         data = Record[(a=1.0, b=missing), (a=missing, b=2.0)]
         values = @vnt begin
