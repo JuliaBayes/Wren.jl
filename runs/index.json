@@ -1,5 +1,12 @@
 [
   {
+    "commit_date": "2026-11-22T13:44:52Z",
+    "file": "20261122T135040Z-bb47a7e.json",
+    "git_sha": "bb47a7eb30ef757b6f0c568ef5429d58893a58f9",
+    "label": "Inline `accumulate_assume` on logprior (#318)",
+    "timestamp": "2026-11-22T13:50:40.259Z"
+  },
+  {
     "commit_date": "2026-11-22T03:14:59Z",
     "file": "20261122T032252Z-e9623dd.json",
     "git_sha": "e9623dddda6c6414089c026b533fe0951d9cd7ad",
