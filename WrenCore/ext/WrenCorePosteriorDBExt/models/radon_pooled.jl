@@ -3,7 +3,7 @@
 module RadonPooled
 
 using PosteriorDB
-using WrenCore: @wren, @observe, @batch
+using WrenCore: @wren
 using WrenDists: WrenDists as WD
 
 @wren function radon_pooled_model(log_radon, floor_measure)

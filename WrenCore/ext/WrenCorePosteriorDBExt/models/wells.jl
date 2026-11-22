@@ -4,7 +4,7 @@ module Wells
 
 using PosteriorDB
 using Statistics: mean
-using WrenCore: @wren, @observe, @batch, @iid
+using WrenCore: @wren
 using WrenDists: WrenDists as WD
 
 const data = let

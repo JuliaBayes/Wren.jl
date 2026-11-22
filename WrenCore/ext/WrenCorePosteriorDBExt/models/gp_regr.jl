@@ -3,7 +3,7 @@ module GPRegr
 
 using PosteriorDB
 using LinearAlgebra: Symmetric, I, cholesky, issuccess
-using WrenCore: @wren, @observe, @addloglikelihood
+using WrenCore: @wren
 using WrenDists: WrenDists as WD
 
 const data = let

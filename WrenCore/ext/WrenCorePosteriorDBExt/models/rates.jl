@@ -2,7 +2,7 @@
 module Rates
 
 using PosteriorDB
-using WrenCore: @wren, @observe
+using WrenCore: @wren
 using WrenDists: WrenDists as WD
 
 load_data(name) = PosteriorDB.load(

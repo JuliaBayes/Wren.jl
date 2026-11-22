@@ -3,7 +3,7 @@
 module NES
 
 using PosteriorDB
-using WrenCore: @wren, @observe, @batch, @iid
+using WrenCore: @wren
 using WrenDists: WrenDists as WD
 
 @wren function nes_base(partyid7, X)

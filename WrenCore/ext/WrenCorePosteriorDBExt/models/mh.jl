@@ -5,7 +5,7 @@ module Mh
 
 using PosteriorDB
 using LogExpFunctions: log1pexp, logaddexp, logit
-using WrenCore: @wren, @observe, @batch, @iid, @addloglikelihood
+using WrenCore: @wren
 using WrenDists: WrenDists as WD
 
 const data = let
