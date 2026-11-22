@@ -64,8 +64,18 @@ end
 # from which the derivatives below can be obtained.
 EnzymeRules.@easy_rule(
     _poissonlog_logpmf(logλ, k, stirlerr),
-    (k - exp(logλ), logλ - log(k) - inv(2k), -one(stirlerr)),
+    (_poissonlog_dlogλ(logλ, k), logλ - log(k) - inv(2k), -one(stirlerr)),
 )
+
+@inline function _poissonlog_dlogλ(logλ, k)
+    # The derivative with respect to logλ is `k - exp(logλ)`. `exp(logλ)` can overflow even
+    # when `k - exp(logλ)` is representable (e.g. logλ = 710, k = 1e308). In that case we
+    # use the equivalent form `-k * expm1(logλ - log(k))`, which is valid since k > 0
+    # here. We don't use it all the time because it's less accurate: the rounding error in
+    # `log(k)` gets multiplied by `k`.
+    λ = exp(logλ)
+    return isinf(λ) ? -k * expm1(logλ - log(k)) : k - λ
+end
 
 @inline function DensityInterface.logdensityof(d::PoissonLog, x::Number)
     # The logpmf we're trying to express here is `k * logλ - exp(logλ) - log(k!)`. However,

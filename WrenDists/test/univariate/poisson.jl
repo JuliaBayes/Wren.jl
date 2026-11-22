@@ -117,3 +117,15 @@ end
     # `log(k!)` overflows here, but the log-mass does not.
     @test isfinite(logdensityof(WrenDists.PoissonLog(log(1e306)), 1e306))
 end
+
+@testset "PoissonLog Enzyme gradient when exp(logλ) overflows" begin
+    # The gradient wrt logλ is `k - exp(logλ)`. Here `exp(logλ)` overflows but the gradient
+    # itself does not.
+    for (logλ, k) in ((710.0, 1e308), (88.8f0, 3.0f38))
+        f(x) = logdensityof(WrenDists.PoissonLog(x), k)
+        grad = Enzyme.autodiff(Reverse, f, Active, Active(logλ))[1][1]
+        expected = oftype(logλ, big(k) - exp(big(logλ)))
+        @test isfinite(grad)
+        @test grad ≈ expected rtol = 1e-4
+    end
+end
