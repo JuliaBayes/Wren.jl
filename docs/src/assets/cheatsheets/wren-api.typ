@@ -11,7 +11,6 @@
   blue: rgb("#4063D8"),
 )
 #let ink = rgb("#1A1A2E")
-#let muted = ink.transparentize(32%)
 #let neutral = rgb("#555a66")
 
 #let body-font = "IBM Plex Sans"
@@ -28,11 +27,13 @@
 #let line-pitch = 9.5pt
 #let line-top-edge = 7pt
 
+#let panel-inset-x = 6pt
+// From the baseline of a panel title to the rule below it; card titles keep the same
+// distance to their first panel.
+#let header-gap = line-pitch / 2 + line-pitch - line-top-edge
+
 #let wren-docs = "https://pysm.dev/Wren.jl/"
 #let flexichains-docs = "https://juliabayes.org/FlexiChains.jl/stable/"
-#let varnames-docs = "https://juliabayes.org/VarNames.jl/stable/"
-#let plaice-docs = "https://juliabayes.org/Plaice.jl/stable/"
-#let mcmcprogress-docs = "https://juliabayes.org/MCMCProgress.jl/stable/"
 
 // The accent mixed 9% into white in sRGB, as Sass `mix` does on the website.
 #let tint(accent) = color.mix((accent, 9%), (white, 91%), space: rgb)
@@ -47,7 +48,7 @@
 // The lines of api/<card>.jl between `#region name` and the next `#endregion`, with
 // their common indentation removed.
 #let snippet(card, name) = {
-  let path = "api/" + card + ".jl"
+  let path = "src/" + card + ".jl"
   let lines = read(path).split("\n")
   let first = lines.position(line => line.trim() == "#region " + name)
   assert(first != none, message: path + " has no region " + name)
@@ -68,7 +69,13 @@
   text(fill: accent.darken(30%), size: 6.8pt, body),
 )
 
-#let panel(accent, title, url, code, pitfall: none) = {
+#let panel-header(accent, title, url) = grid(
+  columns: (1fr, auto),
+  text(size: 8pt, weight: 600, fill: accent.darken(20%), title),
+  link(url, icon("link", accent, 7pt)),
+)
+
+#let outlined-panel(accent, title, url, code, pitfall: none) = {
   set text(top-edge: line-top-edge, bottom-edge: line-top-edge - line-pitch)
   set par(leading: 0pt)
   let box-stroke = 1pt + color.mix((accent, 16%), (white, 84%), space: rgb)
@@ -79,18 +86,36 @@
     radius: 5pt,
     grid(
       columns: 1fr,
-      inset: (x: 6pt, y: line-pitch / 2),
-      grid(
-        columns: (1fr, auto),
-        text(size: 6pt, weight: 600, tracking: 0.05em, fill: accent.darken(20%), upper(title)),
-        link(url, icon("link", accent, 7pt)),
-      ),
+      inset: (x: panel-inset-x, y: line-pitch / 2),
+      panel-header(accent, title, url),
       grid.hline(stroke: box-stroke),
       raw(code, lang: "julia", block: true),
       ..if pitfall != none { (grid.hline(stroke: box-stroke), pitfall-row(accent, pitfall)) },
     ),
   )
 }
+
+// Bootstrap's translucent border colour, which the website uses between panel rows.
+#let panel-rule-stroke = 1pt + black.transparentize(82.5%)
+
+// The rule above the pitfall row stops where the text does, as on the website.
+#let tinted-panel(accent, title, url, code, pitfall: none) = {
+  set text(top-edge: line-top-edge, bottom-edge: line-top-edge - line-pitch)
+  set par(leading: 0pt)
+  let rule = block(inset: (x: panel-inset-x), line(length: 100%, stroke: panel-rule-stroke))
+  let row(body) = block(width: 100%, inset: (x: panel-inset-x, y: line-pitch / 2), body)
+  block(
+    width: 100%,
+    fill: tint(accent),
+    radius: 5pt,
+    stack(
+      row(stack(spacing: line-pitch / 2, panel-header(accent, title, url), raw(code, lang: "julia", block: true))),
+      ..if pitfall != none { (rule, row(pitfall-row(accent, pitfall))) },
+    ),
+  )
+}
+
+#let panel = tinted-panel
 
 #let card-title(accent, title) = text(size: 10.5pt, weight: 700, fill: accent, title)
 
@@ -100,8 +125,8 @@
   fill: white,
   stroke: 2pt + accent,
   radius: 8pt,
-  inset: (x: 7pt, top: 6pt, bottom: 7pt),
-  stack(spacing: line-pitch / 2, card-title(accent, title), ..panels.pos()),
+  inset: (x: 7pt, top: header-gap, bottom: 7pt),
+  stack(card-title(accent, title), v(header-gap), stack(spacing: line-pitch / 2, ..panels.pos())),
 )
 
 // Cards side by side in one row, all as tall as the tallest of them.
@@ -121,22 +146,15 @@
 #set raw(theme: "juliabayes-light.tmTheme")
 #show raw: set text(font: code-font, size: code-size)
 
-#let link-colour = julia.green.darken(6%)
-#let masthead-link(url, label) = link(url, text(fill: link-colour, label))
-
 #let masthead = grid(
-  columns: (auto, auto, auto),
+  columns: (auto, auto),
   column-gutter: 5mm,
-  align: (horizon, horizon, horizon),
+  align: (horizon, horizon),
   image("../logo.svg", height: 52pt),
-  text(size: 18pt, weight: 700, "Wren.jl"),
   stack(
-    spacing: 3pt,
-    text(size: 6pt, weight: 600, tracking: 0.05em, fill: muted, upper("Related packages")),
-    masthead-link(flexichains-docs, "FlexiChains.jl"),
-    masthead-link(varnames-docs, "VarNames.jl"),
-    masthead-link(plaice-docs, "Plaice.jl"),
-    masthead-link(mcmcprogress-docs, "MCMCProgress.jl"),
+    spacing: 8pt,
+    text(size: 18pt, weight: 700, "Wren.jl"),
+    text(size: 11pt, fill: neutral, "API overview"),
   ),
 )
 
@@ -202,10 +220,10 @@
   fill: white,
   stroke: 2pt + dists,
   radius: 8pt,
-  inset: (x: 7pt, top: 6pt, bottom: 7pt),
+  inset: (x: 7pt, top: header-gap, bottom: 7pt),
   stack(
-    spacing: line-pitch / 2,
-    card-title(dists, "Wren.Dists"),
+    card-title(dists, "WrenDists"),
+    v(header-gap),
     grid(
       columns: (1fr, 1fr, 1fr),
       column-gutter: line-pitch / 2,

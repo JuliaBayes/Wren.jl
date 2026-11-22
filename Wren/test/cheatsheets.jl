@@ -7,7 +7,7 @@ using Test
 const api_cards =
     joinpath(@__DIR__, "..", "..", "docs", "src", "assets", "cheatsheets", "api")
 
-# Runs one card's script in a fresh module, as a reader would run it in a new session.
+# Run card content in a new module like a user would do
 function run_card(card)
     path = joinpath(api_cards, card * ".jl")
     Core.eval(@__MODULE__, :(module $(Symbol(card, "_card"))
