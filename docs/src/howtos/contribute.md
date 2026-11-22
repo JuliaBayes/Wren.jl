@@ -42,14 +42,6 @@ However, we recommend developing on 1.13, as precompilation is much faster on 1.
 
 Once you have made your changes, you should run the package tests.
 You can do this the traditional way with `]test` from the Julia REPL in each package one by one.
-However, there is also a `runtests` script at the top-level of the repository.
-You can run
-
-```
-./runtests all
-```
-
-to sequentially run the tests for all packages.
 
 !!! note "Save time by running targeted tests"
 
