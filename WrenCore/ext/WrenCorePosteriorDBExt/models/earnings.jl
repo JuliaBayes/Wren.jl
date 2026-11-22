@@ -1,75 +1,77 @@
-# PosteriorDB: the seven earnings-height regression fixtures.
-module EarningsCommon
+# PosteriorDB: the seven earnings-height regressions. They share a dataset and differ only
+# in the response and predictors, so each module just builds its own `y` and `X`.
+module EarningsBase
 
 using PosteriorDB
-using Statistics: mean, std
-using ..FlatGaussianRegression: flat_gaussian
+using WrenCore: @wren, @observe, @batch, @iid
+using WrenDists: WrenDists as WD
 
 const data = let
     pdb = PosteriorDB.database()
-    PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-        pdb, "earnings-earn_height",
-    )))
+    PosteriorDB.load(
+        PosteriorDB.dataset(PosteriorDB.posterior(pdb, "earnings-earn_height")),
+    )
 end
 
-function fixture(kind::Symbol)
-    earn, height, male = data["earn"], data["height"], data["male"]
-    N = data["N"]
-    if kind == :earn_height
-        y = earn
-        X = hcat(ones(N), height)
-    elseif kind == :log10earn_height
-        y = log10.(earn)
-        X = hcat(ones(N), height)
-    elseif kind == :logearn_height
-        y = log.(earn)
-        X = hcat(ones(N), height)
-    elseif kind == :logearn_height_male
-        y = log.(earn)
-        X = hcat(ones(N), height, male)
-    elseif kind == :logearn_interaction
-        y = log.(earn)
-        X = hcat(ones(N), height, male, height .* male)
-    elseif kind == :logearn_interaction_z
-        y = log.(earn)
-        zheight = (height .- mean(height)) ./ std(height)
-        X = hcat(ones(N), zheight, male, zheight .* male)
-    elseif kind == :logearn_logheight_male
-        y = log.(earn)
-        X = hcat(ones(N), log.(height), male)
-    else
-        throw(ArgumentError("unknown earnings model: $kind"))
+@wren function earnings_base(y, X)
+    @iid beta ~ WD.Flat() size=size(X, 2)
+    sigma ~ WD.PositiveFlat()
+    mu = X * beta
+    @batch for i in eachindex(y)
+        @observe y[i] ~ WD.Normal(mu[i], sigma)
     end
-    return flat_gaussian(y, X)
+    return nothing
 end
 
 end
 
 module EarnHeight
-using ..EarningsCommon: fixture
-const wren_model = fixture(:earn_height)
+using ..EarningsBase: data, earnings_base
+const wren_model = earnings_base(data["earn"], hcat(ones(data["N"]), data["height"]))
 end
+
 module Log10EarnHeight
-using ..EarningsCommon: fixture
-const wren_model = fixture(:log10earn_height)
+using ..EarningsBase: data, earnings_base
+const wren_model =
+    earnings_base(log10.(data["earn"]), hcat(ones(data["N"]), data["height"]))
 end
+
 module LogEarnHeight
-using ..EarningsCommon: fixture
-const wren_model = fixture(:logearn_height)
+using ..EarningsBase: data, earnings_base
+const wren_model = earnings_base(log.(data["earn"]), hcat(ones(data["N"]), data["height"]))
 end
+
 module LogEarnHeightMale
-using ..EarningsCommon: fixture
-const wren_model = fixture(:logearn_height_male)
+using ..EarningsBase: data, earnings_base
+const wren_model =
+    earnings_base(log.(data["earn"]), hcat(ones(data["N"]), data["height"], data["male"]))
 end
+
 module LogEarnInteraction
-using ..EarningsCommon: fixture
-const wren_model = fixture(:logearn_interaction)
+using ..EarningsBase: data, earnings_base
+const wren_model = let
+    height, male = data["height"], data["male"]
+    earnings_base(log.(data["earn"]), hcat(ones(data["N"]), height, male, height .* male))
 end
+end
+
 module LogEarnInteractionZ
-using ..EarningsCommon: fixture
-const wren_model = fixture(:logearn_interaction_z)
+using Statistics: mean, std
+using ..EarningsBase: data, earnings_base
+const wren_model = let
+    height, male = data["height"], data["male"]
+    z_height = (height .- mean(height)) ./ std(height)
+    earnings_base(
+        log.(data["earn"]),
+        hcat(ones(data["N"]), z_height, male, z_height .* male),
+    )
 end
+end
+
 module LogEarnLogheightMale
-using ..EarningsCommon: fixture
-const wren_model = fixture(:logearn_logheight_male)
+using ..EarningsBase: data, earnings_base
+const wren_model = earnings_base(
+    log.(data["earn"]),
+    hcat(ones(data["N"]), log.(data["height"]), data["male"]),
+)
 end

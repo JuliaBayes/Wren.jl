@@ -7,7 +7,9 @@ using WrenDists: WrenDists as WD
 
 const data = let
     pdb = PosteriorDB.database()
-    PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(pdb, "wells_data-wells_dist")))
+    PosteriorDB.load(
+        PosteriorDB.dataset(PosteriorDB.posterior(pdb, "wells_data-wells_dist")),
+    )
 end
 
 @wren function wells_dist_model(switched, X)

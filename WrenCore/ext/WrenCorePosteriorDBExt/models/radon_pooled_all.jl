@@ -7,7 +7,9 @@ using WrenDists: WrenDists as WD
 
 const data = let
     pdb = PosteriorDB.database()
-    PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(pdb, "radon_all-radon_pooled")))
+    PosteriorDB.load(
+        PosteriorDB.dataset(PosteriorDB.posterior(pdb, "radon_all-radon_pooled")),
+    )
 end
 
 @wren function radon_pooled_model(log_radon, floor_measure)

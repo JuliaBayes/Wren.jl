@@ -6,12 +6,14 @@ using ..WellsDist: wells_glm_model
 
 const data = let
     pdb = PosteriorDB.database()
-    PosteriorDB.load(PosteriorDB.dataset(
-        PosteriorDB.posterior(pdb, "wells_data-wells_dist100ars_model"),
-    ))
+    PosteriorDB.load(
+        PosteriorDB.dataset(
+            PosteriorDB.posterior(pdb, "wells_data-wells_dist100ars_model"),
+        ),
+    )
 end
 
-const wren_model = wells_glm_model(data["switched"],
-    hcat(data["dist"] ./ 100.0, data["arsenic"]))
+const wren_model =
+    wells_glm_model(data["switched"], hcat(data["dist"] ./ 100.0, data["arsenic"]))
 
 end

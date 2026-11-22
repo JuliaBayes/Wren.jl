@@ -5,7 +5,6 @@ using WrenCore: WrenCore
 include("models/ark.jl")
 include("models/eight_schools_centered.jl")
 include("models/eight_schools_noncentered.jl")
-include("models/flat_gaussian_regression.jl")
 include("models/earnings.jl")
 include("models/glm_binomial.jl")
 include("models/glm_poisson.jl")

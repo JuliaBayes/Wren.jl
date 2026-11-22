@@ -25,7 +25,12 @@ end
     return nothing
 end
 
-const wren_model = pilots_model(data["group_id"], data["scenario_id"], data["y"],
-    data["n_groups"], data["n_scenarios"])
+const wren_model = pilots_model(
+    data["group_id"],
+    data["scenario_id"],
+    data["y"],
+    data["n_groups"],
+    data["n_scenarios"],
+)
 
 end

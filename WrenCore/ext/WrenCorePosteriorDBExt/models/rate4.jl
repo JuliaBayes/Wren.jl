@@ -7,7 +7,9 @@ using WrenDists: WrenDists as WD
 
 const data = let
     pdb = PosteriorDB.database()
-    PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(pdb, "Rate_4_data-Rate_4_model")))
+    PosteriorDB.load(
+        PosteriorDB.dataset(PosteriorDB.posterior(pdb, "Rate_4_data-Rate_4_model")),
+    )
 end
 
 @wren function rate_4_model(k, n)

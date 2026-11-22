@@ -8,7 +8,9 @@ using ..WellsDist: wells_glm_model
 const data = let
     pdb = PosteriorDB.database()
     PosteriorDB.load(
-        PosteriorDB.dataset(PosteriorDB.posterior(pdb, "wells_data-wells_interaction_c_model")),
+        PosteriorDB.dataset(
+            PosteriorDB.posterior(pdb, "wells_data-wells_interaction_c_model"),
+        ),
     )
 end
 

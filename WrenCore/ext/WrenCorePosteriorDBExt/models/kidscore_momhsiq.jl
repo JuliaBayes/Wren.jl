@@ -6,7 +6,9 @@ using ..KidscoreInteraction: kidscore_interaction
 
 const data = let
     pdb = PosteriorDB.database()
-    PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(pdb, "kidiq-kidscore_momhsiq")))
+    PosteriorDB.load(
+        PosteriorDB.dataset(PosteriorDB.posterior(pdb, "kidiq-kidscore_momhsiq")),
+    )
 end
 
 const wren_model = kidscore_interaction(
