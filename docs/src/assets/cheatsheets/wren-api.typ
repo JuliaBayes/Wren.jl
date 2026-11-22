@@ -48,7 +48,7 @@
 // The lines of api/<card>.jl between `#region name` and the next `#endregion`, with
 // their common indentation removed.
 #let snippet(card, name) = {
-  let path = "src/" + card + ".jl"
+  let path = "scripts/" + card + ".jl"
   let lines = read(path).split("\n")
   let first = lines.position(line => line.trim() == "#region " + name)
   assert(first != none, message: path + " has no region " + name)
