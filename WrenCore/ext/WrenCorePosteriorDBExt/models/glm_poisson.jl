@@ -24,6 +24,7 @@ end
     @batch for i in eachindex(counts)
         @observe counts[i] ~ WD.PoissonLog(log_lambda[i])
     end
+    @track lambda = exp.(log_lambda)
     return nothing
 end
 

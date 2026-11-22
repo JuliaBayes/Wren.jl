@@ -15,7 +15,6 @@ end
 @wren function rats_model(rat, x, y, xbar, N)
     mu_alpha ~ WD.Normal(0.0, 100.0)
     mu_beta ~ WD.Normal(0.0, 100.0)
-    # The three scales have no prior in the Stan source, i.e. they are flat on (0, ∞).
     sigma_y ~ WD.PositiveFlat()
     sigma_alpha ~ WD.PositiveFlat()
     sigma_beta ~ WD.PositiveFlat()
@@ -25,6 +24,7 @@ end
     @batch for i in eachindex(y)
         @observe y[i] ~ WD.Normal(mu[i], sigma_y)
     end
+    @track alpha0 = mu_alpha - xbar * mu_beta
     return nothing
 end
 

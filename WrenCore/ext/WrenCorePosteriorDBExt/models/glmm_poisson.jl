@@ -27,6 +27,7 @@ end
         @observe counts[i] ~ WD.PoissonLog(log_lambda[i])
     end
     @observe @iid eps ~ WD.Normal(0.0, sigma) size=n
+    @track lambda = exp.(log_lambda)
     return nothing
 end
 

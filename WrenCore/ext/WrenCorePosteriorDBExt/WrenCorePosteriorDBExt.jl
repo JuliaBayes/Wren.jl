@@ -67,13 +67,8 @@ const MODELS = Dict(
     "Rate_1_data-Rate_1_model" => Rates.rate1,
     "Rate_2_data-Rate_2_model" => Rates.rate2,
     "Rate_3_data-Rate_3_model" => Rates.rate3,
-    # Rate_4 and Rate_5 are hidden for now: their Stan sources have generated quantities
-    # that draw random numbers (posterior and prior predictive counts), which Wren doesn't
-    # yet replicate. However, since this is planned for the future, we avoid exposing
-    # half-done models now. The models themselves still have definitions in
-    # `models/rates.jl`.
-    # "Rate_4_data-Rate_4_model" => Rates.rate4,
-    # "Rate_5_data-Rate_5_model" => Rates.rate5,
+    "Rate_4_data-Rate_4_model" => Rates.rate4,
+    "Rate_5_data-Rate_5_model" => Rates.rate5,
     "rats_data-rats_model" => RatsModel.model,
     "sblri-blr" => SblriBLR.model,
     "wells_data-wells_daae_c_model" => Wells.daae_c_model,

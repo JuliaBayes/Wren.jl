@@ -1,6 +1,7 @@
 # PosteriorDB: GLM_Binomial_data-GLM_Binomial_model
 module GLMBinomial
 
+using LogExpFunctions: logistic
 using PosteriorDB
 using WrenCore: @wren
 using WrenDists: WrenDists as WD
@@ -22,6 +23,7 @@ end
     @batch for i in eachindex(counts)
         @observe counts[i] ~ WD.BinomialLogit(trials[i], logit_p[i])
     end
+    @track p = logistic.(logit_p)
     return nothing
 end
 
