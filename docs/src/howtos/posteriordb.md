@@ -1,6 +1,6 @@
 # Loading PosteriorDB models
 
-Wren (technically, WrenCore) provides a PosteriorDB extension where some PosteriorDB models are available for use.
+Wren provides a PosteriorDB extension where some PosteriorDB models are available for use.
 (Not all have been added yet, but the intent is that Wren will eventually provide a complete collection.)
 
 To list the available models, use:
@@ -28,6 +28,10 @@ using Enzyme # Wren's default AD backend.
 
 nuts(model, 1000, 4)
 ```
+
+## Source code
+
+If you want to see the Wren implementations, here is [a handy link to the relevant directory on GitHub](https://github.com/JuliaBayes/Wren.jl/tree/main/WrenCore/ext/WrenCorePosteriorDBExt/models).
 
 ## Differences with Stan models
 
