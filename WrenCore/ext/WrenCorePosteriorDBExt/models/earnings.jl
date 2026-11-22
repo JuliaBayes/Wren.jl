@@ -1,8 +1,9 @@
 # PosteriorDB: the seven earnings-height regressions. They share a dataset and differ only
-# in the response and predictors, so each module just builds its own `y` and `X`.
-module EarningsBase
+# in the response and predictors.
+module Earnings
 
 using PosteriorDB
+using Statistics: mean, std
 using WrenCore: @wren, @observe, @batch, @iid
 using WrenDists: WrenDists as WD
 
@@ -23,55 +24,28 @@ end
     return nothing
 end
 
-end
+const earn = data["earn"]
+const height = data["height"]
+const male = data["male"]
+const intercept = ones(data["N"])
+const z_height = (height .- mean(height)) ./ std(height)
 
-module EarnHeight
-using ..EarningsBase: data, earnings_base
-const wren_model = earnings_base(data["earn"], hcat(ones(data["N"]), data["height"]))
-end
+# earnings-earn_height
+const earn_height = earnings_base(earn, hcat(intercept, height))
+# earnings-log10earn_height
+const log10earn_height = earnings_base(log10.(earn), hcat(intercept, height))
+# earnings-logearn_height
+const logearn_height = earnings_base(log.(earn), hcat(intercept, height))
+# earnings-logearn_height_male
+const logearn_height_male = earnings_base(log.(earn), hcat(intercept, height, male))
+# earnings-logearn_interaction
+const logearn_interaction =
+    earnings_base(log.(earn), hcat(intercept, height, male, height .* male))
+# earnings-logearn_interaction_z
+const logearn_interaction_z =
+    earnings_base(log.(earn), hcat(intercept, z_height, male, z_height .* male))
+# earnings-logearn_logheight_male
+const logearn_logheight_male =
+    earnings_base(log.(earn), hcat(intercept, log.(height), male))
 
-module Log10EarnHeight
-using ..EarningsBase: data, earnings_base
-const wren_model =
-    earnings_base(log10.(data["earn"]), hcat(ones(data["N"]), data["height"]))
-end
-
-module LogEarnHeight
-using ..EarningsBase: data, earnings_base
-const wren_model = earnings_base(log.(data["earn"]), hcat(ones(data["N"]), data["height"]))
-end
-
-module LogEarnHeightMale
-using ..EarningsBase: data, earnings_base
-const wren_model =
-    earnings_base(log.(data["earn"]), hcat(ones(data["N"]), data["height"], data["male"]))
-end
-
-module LogEarnInteraction
-using ..EarningsBase: data, earnings_base
-const wren_model = let
-    height, male = data["height"], data["male"]
-    earnings_base(log.(data["earn"]), hcat(ones(data["N"]), height, male, height .* male))
-end
-end
-
-module LogEarnInteractionZ
-using Statistics: mean, std
-using ..EarningsBase: data, earnings_base
-const wren_model = let
-    height, male = data["height"], data["male"]
-    z_height = (height .- mean(height)) ./ std(height)
-    earnings_base(
-        log.(data["earn"]),
-        hcat(ones(data["N"]), z_height, male, z_height .* male),
-    )
-end
-end
-
-module LogEarnLogheightMale
-using ..EarningsBase: data, earnings_base
-const wren_model = earnings_base(
-    log.(data["earn"]),
-    hcat(ones(data["N"]), log.(data["height"]), data["male"]),
-)
 end

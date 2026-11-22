@@ -1,6 +1,6 @@
 # PosteriorDB: nes1972-nes through nes2000-nes. All eight use the same Stan model on a
 # different year's survey data.
-module NESBase
+module NES
 
 using PosteriorDB
 using WrenCore: @wren, @observe, @batch, @iid
@@ -35,37 +35,13 @@ function nes_model(year)
     return nes_base(data["partyid7"], X)
 end
 
-end
+const nes1972 = nes_model(1972)
+const nes1976 = nes_model(1976)
+const nes1980 = nes_model(1980)
+const nes1984 = nes_model(1984)
+const nes1988 = nes_model(1988)
+const nes1992 = nes_model(1992)
+const nes1996 = nes_model(1996)
+const nes2000 = nes_model(2000)
 
-module NES1972
-using ..NESBase: nes_model
-const wren_model = nes_model(1972)
-end
-module NES1976
-using ..NESBase: nes_model
-const wren_model = nes_model(1976)
-end
-module NES1980
-using ..NESBase: nes_model
-const wren_model = nes_model(1980)
-end
-module NES1984
-using ..NESBase: nes_model
-const wren_model = nes_model(1984)
-end
-module NES1988
-using ..NESBase: nes_model
-const wren_model = nes_model(1988)
-end
-module NES1992
-using ..NESBase: nes_model
-const wren_model = nes_model(1992)
-end
-module NES1996
-using ..NESBase: nes_model
-const wren_model = nes_model(1996)
-end
-module NES2000
-using ..NESBase: nes_model
-const wren_model = nes_model(2000)
 end
