@@ -24,22 +24,26 @@ export function compareUrl(baseSha: string, tipSha: string): string {
 const MODEL_DIR = "WrenCore/ext/WrenCorePosteriorDBExt/models";
 const MODEL_FILES = new Map<string, string>([
     ["ArK", `${MODEL_DIR}/ark.jl`],
-    ["EightSchoolsCentered", `${MODEL_DIR}/eight_schools_centered.jl`],
+    ["EightSchoolsCentered", `${MODEL_DIR}/eight_schools.jl`],
     ["GLMBinomial", `${MODEL_DIR}/glm_binomial.jl`],
     ["GLMPoisson", `${MODEL_DIR}/glm_poisson.jl`],
     ["GLMMPoisson", `${MODEL_DIR}/glmm_poisson.jl`],
     ["GPRegr", `${MODEL_DIR}/gp_regr.jl`],
-    ["KidscoreInteraction", `${MODEL_DIR}/kidscore_interaction.jl`],
+    ["KidscoreInteraction", `${MODEL_DIR}/kidscore.jl`],
     ["Mh", `${MODEL_DIR}/mh.jl`],
-    ["Rate1", `${MODEL_DIR}/rate1.jl`],
+    ["Rate1", `${MODEL_DIR}/rates.jl`],
     ["SblriBLR", `${MODEL_DIR}/sblri_blr.jl`],
 ]);
 
 /**
- * Link to the definition of a model at the given commit (or on main if the commit is
- * unknown), or null if the model's file can't be found.
+ * Link to the definition of a model on main, or null if the model's file can't be found.
+ *
+ * This always links to main rather than to the commit of a run, because the models' 
+ * definitions don't change with time (they're direct translations of Stan
+ * models). Linking to main also means the model files can be moved or merged
+ * without breaking links for old runs.
  */
-export function modelUrl(name: string, sha: string | null): string | null {
+export function modelUrl(name: string): string | null {
     const file = MODEL_FILES.get(name);
-    return file === undefined ? null : `${REPO_URL}/blob/${sha ?? "main"}/${file}`;
+    return file === undefined ? null : `${REPO_URL}/blob/main/${file}`;
 }
