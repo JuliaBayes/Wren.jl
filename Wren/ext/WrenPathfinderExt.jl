@@ -40,7 +40,7 @@ positive, and cannot be combined with an explicit `init_sampler`.
 Finally, if `init` is not given, the starting point is also drawn from `init_sampler`.
 
 Note that only  `ntasks=1` is allowed due to [Pathfinder not supporting thread-unsafe
-log-densities]( https://github.com/mlcolab/Pathfinder.jl/issues/439).
+log-densities](https://github.com/mlcolab/Pathfinder.jl/issues/439).
 
 ## Returns
 

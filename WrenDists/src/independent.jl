@@ -48,7 +48,7 @@ Base.rand(rng::Random.AbstractRNG, d::IndependentArray) =
 Base.rand(d::Independent) = rand(Random.default_rng(), d)
 
 DensityInterface.DensityKind(::Independent) = DensityInterface.HasDensity()
-function _check_size(d::Independent, x::AbstractArray)
+function _check_size(d, x::AbstractArray)
     size(x) == size(d) ||
         throw(DimensionMismatch("expected size $(size(d)), got $(size(x))"))
     return nothing
@@ -69,17 +69,21 @@ Sum of `logdensityof(dist, xᵢ)` over every draw `xᵢ` stored in `x`. Add meth
 function to provide closed-form expressions for specific measures.
 """
 function _iid_logdensityof(dist::UnivariateDist, x::AbstractArray)
-    return sum(Base.Fix1(logdensityof, dist), x; init=_zero_logdensity(dist, x))
+    return _sum_or_zero(Base.Fix1(logdensityof, dist), x, _zero_logdensity(dist, x))
 end
 
 function _zero_logdensity(dist::WrenDist, x::AbstractArray)
     return zero(float(promote_type(eltype(x), noisetype(dist))))
 end
 
+# Equivalent to `sum(f, x; init=zero_value)`, but the sum-with-init-kwarg is slower under AD
+# (and VERY much slower under Mooncake in particular). See #326.
+@inline _sum_or_zero(f, x, zero_value) = isempty(x) ? zero_value : sum(f, x)
+
 # Each slice is one draw. This fallback is CPU-only.
 function _iid_logdensityof(dist::MultivariateDist, x::AbstractArray{<:Any,M}) where {M}
     slices = eachslice(x; dims=ntuple(i -> i + 1, Val(M - 1)))
-    return sum(Base.Fix1(logdensityof, dist), slices; init=_zero_logdensity(dist, x))
+    return _sum_or_zero(Base.Fix1(logdensityof, dist), slices, _zero_logdensity(dist, x))
 end
 
 # --- ElementwiseLink / ElementwiseInvLink ---
@@ -171,9 +175,21 @@ Plaice.unconstrained_vec_length(d::IIDMultivariate) =
 _index_optics(d) = [VarNames.Index(Tuple(I), (;)) for I in vec(CartesianIndices(size(d)))]
 Plaice.optic_vec(d::Independent) = _index_optics(d)
 Plaice.unconstrained_optic_vec(d::Independent) = _index_optics(d)
+
+_append_iid_indices(::Nothing, indices::Tuple) = nothing
+function _append_iid_indices(optic::VarNames.AbstractOptic, indices::Tuple)
+    isempty(indices) && return optic
+    last = VarNames.olast(optic)
+    return if last isa VarNames.Index
+        VarNames.Index((last.ix..., indices...), last.kw) ∘ VarNames.oinit(optic)
+    else
+        VarNames.Index(indices, (;)) ∘ optic
+    end
+end
+
 function Plaice.unconstrained_optic_vec(d::IIDMultivariate)
     return vec([
-        foldl(Plaice.append_index, Tuple(I); init=optic) for
+        _append_iid_indices(optic, Tuple(I)) for
         optic in Plaice.unconstrained_optic_vec(_dist(d)), I in CartesianIndices(_dims(d))
     ])
 end

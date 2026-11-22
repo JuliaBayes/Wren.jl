@@ -38,7 +38,7 @@ include("accs/logp.jl")
 include("accs/vnt.jl")
 include("accs/params.jl")
 include("accs/sitename_tracker.jl")
-include("accs/gq.jl")
+include("accs/tq.jl")
 include("accs/accessors.jl")
 
 # Model definition
@@ -46,7 +46,7 @@ include("model/expr.jl")
 using .Expressions:
     AbstractWrenExpr,
     AddLogLikelihood,
-    GeneratedQuantity,
+    TrackedQuantity,
     IID,
     Observe,
     OtherStatement,
@@ -75,6 +75,7 @@ include("evaluate.jl")
 include("condition.jl")
 include("test_ad.jl")
 include("test_utils.jl")
+include("optimization.jl")
 
 # Overloaded in extensions
 function to_flexichain end
@@ -87,7 +88,8 @@ export @wren,
     @sample,
     @observe,
     @batch,
-    @gq,
+    @track,
+    Model,
     AbstractLatentSource,
     AbstractTransform,
     AbstractParameterSpace,
@@ -98,7 +100,7 @@ export @wren,
     LogLikelihoodAccumulator,
     LogJacobianAccumulator,
     ParamsAccumulator,
-    GeneratedQuantityAccumulator,
+    TrackedQuantityAccumulator,
     AsUnconstrainedVec,
     AsVec,
     ADIncorrectException,
@@ -127,11 +129,11 @@ export @wren,
     simulate,
     ModelResult,
     return_value,
-    generated_quantities,
-    GeneratedQuantitySpec,
-    AllGQs,
-    SomeGQs,
-    NoGQs,
+    tracked_quantities,
+    TrackedQuantitySpec,
+    AllQuantities,
+    SomeQuantities,
+    NoQuantities,
     evaluate,
     EvalContext,
     get_latent,
@@ -148,6 +150,10 @@ export @wren,
     test_ad,
     reduce_copies,
     target_transform,
+    # Optimisation
+    optimize,
+    MAP,
+    MLE,
     # FlexiChains
     to_flexichain,
     # PosteriorDB

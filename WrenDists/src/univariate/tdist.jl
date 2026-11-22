@@ -44,7 +44,7 @@ end
     if abs(z) <= sqrt(floatmax(typeof(z)))
         q = abs2(z)
         # Leave a rounding margin before division can overflow.
-        q <= (floatmax(typeof(z)) / 2) * ν && return log(one(q) + q / ν)
+        q <= (floatmax(typeof(z)) / 2) * ν && return log1p(q / ν)
     end
     return tdist_logkernel_tail(z, ν)
 end

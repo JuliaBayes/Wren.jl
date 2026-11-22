@@ -1,4 +1,4 @@
-# Pathfinder
+# [Pathfinder](@id pathfinder)
 
 [Pathfinder.jl](https://mlcolab.github.io/Pathfinder.jl/stable/) fits a Gaussian approximation
 to the posterior in unconstrained coordinates. It provides approximate posterior draws and

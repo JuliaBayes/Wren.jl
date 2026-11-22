@@ -200,7 +200,7 @@ logp(acc::LogPriorAccumulator) = acc.logp
 
 accumulator_name(::Type{<:LogPriorAccumulator}) = LOG_PRIOR_ACCNAME
 
-function accumulate_assume!!(
+@inline function accumulate_assume!!(
     acc::LogPriorAccumulator,
     val,
     tval,

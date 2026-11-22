@@ -1,13 +1,11 @@
 # MCMC sampling
 
-Wren currently ships with two very simple samplers.
+Wren currently provides two very simple samplers.
 
 Results are stored as `FlexiChain{VarName}`; please see the [FlexiChains documentation](https://juliabayes.org/FlexiChains.jl) for more information.
 
 ```@example mcmc
-using Wren
-using Distributions
-using LinearAlgebra: I
+using Wren, Wren.Dists
 
 y = [28, 8, -3, 7, -1, 1, 18, 12]
 sigma = [15, 10, 16, 11, 9, 11, 10, 18]
@@ -15,8 +13,8 @@ J = 8
 
 @wren function eight_schools(y, sigma, J)
     mu ~ Normal(0, 5)
-    tau ~ truncated(Cauchy(0, 5); lower=0)
-    theta ~ MvNormal(fill(mu, J), tau^2 * I)
+    tau ~ HalfCauchy(0, 5)
+    theta ~ MvNormalScale(fill(mu, J), tau * I)
     for i in 1:J
         @observe y[i] ~ Normal(theta[i], sigma[i])
     end
@@ -27,6 +25,8 @@ model = eight_schools(y, sigma, J)
 ```
 
 ## Prior
+
+This simply creates a chain with samples from the prior.
 
 ```@docs
 Wren.prior
@@ -49,4 +49,36 @@ adtype = AutoEnzyme(; mode=Reverse)
 
 using Wren
 nuts(model, 1000, 4; adtype=adtype, progress=false)
+```
+
+### Initialisation
+
+The [`nuts`](@ref) function accepts an optional `init` argument, which controls how the initial parameter values for the MCMC chains are controlled.
+
+`init` should be a subtype of [`AbstractInitialization`](@ref).
+Currently, Wren only provides a single `FindFiniteDensity`, which attempts to find a point with finite probability density.
+
+However, you can specify how that point is searched for by passing an [`AbstractLatentSource`](@ref) to the `FindFiniteDensity` constructor.
+For example, to replicate Stan's default behaviour of sampling from `[-2, 2]` in unconstrained space, you can pass:
+
+```julia
+using WrenCore: FromUnconstrainedInterval
+
+init = FindFiniteDensity(FromUnconstrainedInterval(-2, 2); max_attempts=100)
+nuts(model, 1000, 4; adtype, init, progress=false)
+```
+
+In the future, we hope to provide more initialisation strategies (e.g. using [Pathfinder](@ref pathfinder)).
+
+!!! note "Separate initialisation for different chains"
+
+    Currently, the same initialisation strategy is used for all chains.
+    This does not necessarily mean that all chains will start at the same point; it just means that the way the starting point is searched for is the same.
+    For example, the four starting points may all be drawn from the prior, but that does not mean that they will all be the same point.
+
+    In the (near) future the API will be generalised to also accept a vector of initialisation strategies, one for each chain.
+
+```@docs; canonical=false
+AbstractInitialization
+FindFiniteDensity
 ```

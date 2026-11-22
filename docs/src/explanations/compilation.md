@@ -1,13 +1,15 @@
-# Staged computation
+# [Compilation model](@id compilation)
 
-One of Wren's unique features is that it uses staged computation to generate the evaluation functions for models.
-That sounds like a scary term, but it essentially means that the evaluation function is not generated in a single shot but rather in a multi-stage pipeline:
+One of Wren's features, inspired by [Soss.jl](https://github.com/cscherrer/Soss.jl) and [Tilde.jl](https://github.com/cscherrer/Tilde.jl), is that it uses staged computation to generate the evaluation functions for models.
+That sounds like a scary term, but it essentially means that the evaluation function is generated via a multi-stage pipeline:
 
 ```mermaid
 flowchart TD
     A[Model definition] --> B[Probabilistic intermediate representation]
     B --> C[Evaluation function]
 ```
+
+(Note that this intermediate representation, or IR, has nothing to do with the IR that Julia uses in its own compilation pipeline; this is entirely within Wren.)
 
 The model definition is what you write:
 
@@ -49,9 +51,9 @@ function __mymodel_evaluate__(y, params, accs, ...)
 end
 ```
 
-!!! details "The actual IR"
+!!! details "The actual evaluation function"
 
-    Again, although it's not really useful for the average user, you can view this if you want with
+    Again, although it's not really useful for the average user, you can view this with
 
     ```@example staged
     using WrenCore
@@ -71,12 +73,19 @@ The main motivation is that the intermediate representation (IR):
   - allows Wren to do some optimisations, for example [elision of submodel parameter collection](@ref submodel-performance);
   - allows for the programmatic generation of Wren models, in that a user can construct an IR and then generate a Wren model from it, instead of having to do some macro gymnastics to create the original model definition.
 
-!!! details "Example: generated quantities"
+!!! details "Example: tracked quantities"
 
-    TODO: Should we use generated quantities to illustrate staging or just leave this page as is?
+    TODO: Should we use tracked quantities to illustrate staging or just leave this page as is?
 
 This of course doesn't come for free.
 Besides the substantial extra complexity of the codebase, it also means that we have to use [RuntimeGeneratedFunctions.jl](https://github.com/SciML/RuntimeGeneratedFunctions.jl) in the second step (IR to evaluation function), which brings with it some limitations.
+
+!!! note
+
+    Soss and Tilde use [GeneralizedGenerated.jl](https://github.com/JuliaStaging/GeneralizedGenerated.jl) instead of RGF.
+    GG is supposedly more powerful than RGF, but I haven't yet come across a use case where GG was absolutely necessary.
+    Furthermore, RGF is actually maintained (for example it is used in ModelingToolkit.jl), and so it seems like a better choice for a dependency.
+
 For example, model bodies cannot close over local variables (only global variables).
 This is surprisingly easy to trigger:
 
@@ -102,15 +111,15 @@ However, it's still of course a limitation, and the error message isn't super he
 Above we saw two of the 'special expressions' that Wren uses in its IR, namely `Sample` and `Observe`.
 These have a very unimaginative one-to-one mapping to the special nodes in Wren:
 
-| Syntax                  | IR node           |
-|:----------------------- |:----------------- |
-| `a ~ b`                 | Sample            |
-| `@observe a ~ b`        | Observe           |
-| `@iid size=N ...`       | IID               |
-| `@batch for ...`        | Batch             |
-| `@addloglikelihood ...` | AddLogLikelihood  |
-| `@gq ...`               | GeneratedQuantity |
-| `return ...`            | ReturnStatement   |
+| Syntax                  | IR node          |
+|:----------------------- |:---------------- |
+| `a ~ b`                 | Sample           |
+| `@observe a ~ b`        | Observe          |
+| `@iid size=N ...`       | IID              |
+| `@batch for ...`        | Batch            |
+| `@addloglikelihood ...` | AddLogLikelihood |
+| `@track ...`            | TrackedQuantity  |
+| `return ...`            | ReturnStatement  |
 
 As you can see, most of these are denoted by macros.
 As it turns out, none of these macros actually have a meaning outside of Wren model bodies: they don't actually expand into anything.
@@ -125,11 +134,13 @@ This means that, for example, we don't want to parse `a => b` into something, be
 Once we eliminate those, we are actually left with very few operators that aren't weird Unicode stuff that is impossible to type.
 
 In principle, we could use any kind of function call to denote these.
-For example, we could say that `sample(a, b)` is what is now `a ~ b`, and `iid(sample(a, b); size=N)` is what is now `@iid size=N a ~ b`.
+For example, we could say that `sample(a, b)` is what is now `a ~ b`, and `iid(sample(a, b); size=N)` is what is now `@iid a ~ b size=N`.
 However, this is a bit too understated: it looks just like a normal function call, and it's not obvious to the user that these have special semantics.
+On top of that, it actually stops the user from using any function named `sample` or `iid` in their model.
 
 Macros are the best compromise between all of these.
 We aren't restricted to a fixed set of possibilities (as is the case with operators), but also to most Julia programmers it should be intuitive that macros have special effects!
+It does preclude the use of macros with the same name, but that is quite unlikely to be a problem as there are much fewer macros than functions in Julia.
 
 ## Programmatic generation
 

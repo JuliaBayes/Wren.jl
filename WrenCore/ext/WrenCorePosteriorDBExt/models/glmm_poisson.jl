@@ -19,18 +19,19 @@ end
     beta1 ~ WD.Uniform(-10.0, 10.0)
     beta2 ~ WD.Uniform(-10.0, 10.0)
     beta3 ~ WD.Uniform(-10.0, 10.0)
-    sigma ~ WD.Uniform(0.0, 5.0)
     @iid eps ~ WD.Flat() size=n
-    log_lambda =
+    sigma ~ WD.Uniform(0.0, 5.0)
+    @track log_lambda =
         alpha .+ beta1 .* year .+ beta2 .* year_squared .+ beta3 .* year_cubed .+ eps
     @batch for i in eachindex(counts)
         @observe counts[i] ~ WD.PoissonLog(log_lambda[i])
     end
     @observe @iid eps ~ WD.Normal(0.0, sigma) size=n
+    @track lambda = exp.(log_lambda)
     return nothing
 end
 
-const wren_model = let
+const model = let
     counts = data["C"]
     year = data["year"]
     glmm_poisson_model(counts, year, year .^ 2, year .^ 3, data["n"])

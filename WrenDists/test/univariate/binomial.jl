@@ -29,7 +29,7 @@ end
         isfinite(value) && @test only(gradient) ≈ inv(1 + exp(η))
     end
     @test logdensityof(WrenDists.BinomialLogit(0, Inf), 0) == 0
-    if RUN_REACTANT
+    @static if RUN_REACTANT
         p, x = Reactant.to_rarray.((Float32[40], [1]))
         value_and_gradient(p, x) =
             (f(p, x), first(Enzyme.gradient(Reverse, f, p, Const(x))))
@@ -50,7 +50,7 @@ end
     for x in (-1.0, 1.5, 4.0)
         @test logdensityof(d, [x]) == -Inf
     end
-    if RUN_REACTANT
+    @static if RUN_REACTANT
         dr = Reactant.to_rarray(d)
         compiled = Reactant.@compile logdensityof(dr, Reactant.to_rarray([1.5]))
         for x in (-1.0, 1.5, 4.0)
