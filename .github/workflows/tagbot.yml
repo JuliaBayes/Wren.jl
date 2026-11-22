@@ -13,8 +13,26 @@ jobs:
   TagBot:
     if: github.event_name == 'workflow_dispatch' || github.actor == 'JuliaTagBot'
     runs-on: ubuntu-latest
+    # Each package lives in its own subdirectory, so it needs its own TagBot step.
+    # Tags are prefixed with the package name, e.g. `Wren-v0.1.0`.
+    # The SSH key is needed so that the tag push starts the docs workflow (tags
+    # pushed with GITHUB_TOKEN do not start other workflows).
     steps:
-      - uses: JuliaRegistries/TagBot@14d7645453716d7a2f09b1da0504a024f97462a1 # 1.25.10
+      - name: Tag Wren
+        uses: JuliaRegistries/TagBot@14d7645453716d7a2f09b1da0504a024f97462a1 # 1.25.10
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           ssh: ${{ secrets.DOCUMENTER_KEY }}
+          subdir: Wren
+      - name: Tag WrenCore
+        uses: JuliaRegistries/TagBot@14d7645453716d7a2f09b1da0504a024f97462a1 # 1.25.10
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ssh: ${{ secrets.DOCUMENTER_KEY }}
+          subdir: WrenCore
+      - name: Tag WrenDists
+        uses: JuliaRegistries/TagBot@14d7645453716d7a2f09b1da0504a024f97462a1 # 1.25.10
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ssh: ${{ secrets.DOCUMENTER_KEY }}
+          subdir: WrenDists

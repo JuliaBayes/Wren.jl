@@ -29,6 +29,21 @@ using Enzyme # Wren's default AD backend.
 nuts(model, 1000, 4)
 ```
 
+## Reference posteriors
+
+PosteriorDB.jl also provides reference posteriors, i.e., chains sampled in Stan, for several of the models.
+FlexiChains contains an extension which lets you load these as `VNChain` objects.
+This is not part of Wren itself, but since FlexiChains is a dependency of Wren you will automatically be able to access these when importing Wren and PosteriorDB.
+
+```@example posteriordb
+using FlexiChains, PosteriorDB
+
+pdb = PosteriorDB.database()
+FlexiChains.from_posteriordb(pdb, "eight_schools-eight_schools_centered")
+```
+
+Please see [the FlexiChains docs](@extref FlexiChains integrations-posteriordb) for more info.
+
 ## Source code
 
 If you want to see the Wren implementations, here is [a handy link to the relevant directory on GitHub](https://github.com/JuliaBayes/Wren.jl/tree/main/WrenCore/ext/WrenCorePosteriorDBExt/models).
