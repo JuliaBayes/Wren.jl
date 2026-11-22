@@ -61,6 +61,7 @@ makedocs(;
             "howtos/pathfinder.md"
             "howtos/posteriordb.md"
             "howtos/custom-distributions.md"
+            "howtos/contribute.md"
         ],
         "Explanations" => [
             "explanations/enzyme.md",
