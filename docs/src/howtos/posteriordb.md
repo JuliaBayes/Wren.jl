@@ -45,7 +45,9 @@ There are a few differences which we note here:
     In particular, for transformed parameters, this matches Stan's behaviour by including them in the chain.
     Note that for benchmarking purposes these tracked quantities will not contribute to performance as log-density evaluations are always performed with tracking off.
 
- 2. Some constant log-density terms have been added / dropped, for example, where Stan uses a flat constrained prior Wren sometimes uses `Uniform`, which adds a constant log-density of `1 / (upper - lower)` to the log-density.
+ 2. Some constant log-density terms have been added / dropped.
+    For example, where Stan uses a flat constrained prior Wren sometimes uses `Uniform`, which adds a constant log-density of `-log(upper - lower)`.
+    Wren's `HalfNormal` and `HalfCauchy` distributions also include a constant normalisation term which Stan drops.
 
  3. `Mh` is somewhat rewritten in order to make use of the batching in Wren; it has the same log-density but is expressed quite differently.
 
