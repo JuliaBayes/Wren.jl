@@ -25,6 +25,6 @@ end
     return nothing
 end
 
-const wren_model = eight_schools_noncentered(data["y"], data["sigma"], data["J"])
+const model = eight_schools_noncentered(data["y"], data["sigma"], data["J"])
 
 end

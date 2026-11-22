@@ -26,7 +26,7 @@ end
     return nothing
 end
 
-const wren_model = let
+const model = let
     counts = data["C"]
     year = data["year"]
     glm_poisson_model(counts, year, year .^ 2, year .^ 3)

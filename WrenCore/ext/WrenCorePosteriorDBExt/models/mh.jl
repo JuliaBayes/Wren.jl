@@ -29,7 +29,7 @@ end
     return nothing
 end
 
-const wren_model = let
+const model = let
     M = data["M"]
     trials = data["T"]
     y = data["y"]

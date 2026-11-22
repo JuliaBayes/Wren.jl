@@ -19,15 +19,14 @@ include("models/mh.jl")
 include("models/nes.jl")
 include("models/pilots.jl")
 include("models/radon_pooled.jl")
-include("models/rate1.jl")
-include("models/rate2_5.jl")
+include("models/rates.jl")
 include("models/rats_model.jl")
 include("models/sblri_blr.jl")
 include("models/wells.jl")
 
 # Maps PosteriorDB posterior names to the Wren models.
 const MODELS = Dict(
-    "arK-arK" => ArK.wren_model,
+    "arK-arK" => ArK.model,
     "earnings-earn_height" => Earnings.earn_height,
     "earnings-log10earn_height" => Earnings.log10earn_height,
     "earnings-logearn_height" => Earnings.logearn_height,
@@ -35,13 +34,13 @@ const MODELS = Dict(
     "earnings-logearn_interaction" => Earnings.logearn_interaction,
     "earnings-logearn_interaction_z" => Earnings.logearn_interaction_z,
     "earnings-logearn_logheight_male" => Earnings.logearn_logheight_male,
-    "eight_schools-eight_schools_centered" => EightSchoolsCentered.wren_model,
-    "eight_schools-eight_schools_noncentered" => EightSchoolsNoncentered.wren_model,
-    "GLM_Binomial_data-GLM_Binomial_model" => GLMBinomial.wren_model,
-    "GLM_Poisson_Data-GLM_Poisson_model" => GLMPoisson.wren_model,
-    "GLMM_Poisson_data-GLMM_Poisson_model" => GLMMPoisson.wren_model,
-    "gp_pois_regr-gp_regr" => GPRegr.wren_model,
-    "kidiq-kidscore_interaction" => KidscoreInteraction.wren_model,
+    "eight_schools-eight_schools_centered" => EightSchoolsCentered.model,
+    "eight_schools-eight_schools_noncentered" => EightSchoolsNoncentered.model,
+    "GLM_Binomial_data-GLM_Binomial_model" => GLMBinomial.model,
+    "GLM_Poisson_Data-GLM_Poisson_model" => GLMPoisson.model,
+    "GLMM_Poisson_data-GLMM_Poisson_model" => GLMMPoisson.model,
+    "gp_pois_regr-gp_regr" => GPRegr.model,
+    "kidiq-kidscore_interaction" => KidscoreInteraction.model,
     "kidiq-kidscore_momhs" => KidscoreMom.momhs,
     "kidiq-kidscore_momhsiq" => KidscoreMom.momhsiq,
     "kidiq-kidscore_momiq" => KidscoreMom.momiq,
@@ -49,14 +48,14 @@ const MODELS = Dict(
     "kidiq_with_mom_work-kidscore_interaction_c2" => KidscoreWork.interaction_c2,
     "kidiq_with_mom_work-kidscore_interaction_z" => KidscoreWork.interaction_z,
     "kidiq_with_mom_work-kidscore_mom_work" => KidscoreWork.mom_work_model,
-    "kilpisjarvi_mod-kilpisjarvi" => Kilpisjarvi.wren_model,
+    "kilpisjarvi_mod-kilpisjarvi" => Kilpisjarvi.model,
     "mesquite-logmesquite" => Mesquite.logmesquite,
     "mesquite-logmesquite_logva" => Mesquite.logmesquite_logva,
     "mesquite-logmesquite_logvas" => Mesquite.logmesquite_logvas,
     "mesquite-logmesquite_logvash" => Mesquite.logmesquite_logvash,
     "mesquite-logmesquite_logvolume" => Mesquite.logmesquite_logvolume,
     "mesquite-mesquite" => Mesquite.mesquite,
-    "Mh_data-Mh_model" => Mh.wren_model,
+    "Mh_data-Mh_model" => Mh.model,
     "nes1972-nes" => NES.nes1972,
     "nes1976-nes" => NES.nes1976,
     "nes1980-nes" => NES.nes1980,
@@ -65,16 +64,16 @@ const MODELS = Dict(
     "nes1992-nes" => NES.nes1992,
     "nes1996-nes" => NES.nes1996,
     "nes2000-nes" => NES.nes2000,
-    "pilots-pilots" => Pilots.wren_model,
+    "pilots-pilots" => Pilots.model,
     "radon_all-radon_pooled" => RadonPooled.radon_all,
     "radon_mn-radon_pooled" => RadonPooled.radon_mn,
-    "Rate_1_data-Rate_1_model" => Rate1.wren_model,
+    "Rate_1_data-Rate_1_model" => Rates.rate1,
     "Rate_2_data-Rate_2_model" => Rates.rate2,
     "Rate_3_data-Rate_3_model" => Rates.rate3,
     "Rate_4_data-Rate_4_model" => Rates.rate4,
     "Rate_5_data-Rate_5_model" => Rates.rate5,
-    "rats_data-rats_model" => RatsModel.wren_model,
-    "sblri-blr" => SblriBLR.wren_model,
+    "rats_data-rats_model" => RatsModel.model,
+    "sblri-blr" => SblriBLR.model,
     "wells_data-wells_daae_c_model" => Wells.daae_c_model,
     "wells_data-wells_dae_c_model" => Wells.dae_c_model,
     "wells_data-wells_dae_inter_model" => Wells.dae_inter_model,

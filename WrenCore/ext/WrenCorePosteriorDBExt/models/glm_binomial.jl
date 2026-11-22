@@ -25,7 +25,7 @@ end
     return nothing
 end
 
-const wren_model = let
+const model = let
     counts = data["C"]
     trials = data["N"]
     year = data["year"]

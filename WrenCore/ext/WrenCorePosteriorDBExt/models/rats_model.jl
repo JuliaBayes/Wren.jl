@@ -28,6 +28,6 @@ end
     return nothing
 end
 
-const wren_model = rats_model(data["rat"], data["x"], data["y"], data["xbar"], data["N"])
+const model = rats_model(data["rat"], data["x"], data["y"], data["xbar"], data["N"])
 
 end

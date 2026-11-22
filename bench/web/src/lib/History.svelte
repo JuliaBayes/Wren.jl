@@ -35,7 +35,6 @@
     // Each backend keeps the same colour in every chart.
     const backends = $derived(allBackends(runs));
     const slots = $derived(new Map(backends.map((b, i) => [b, i % NUM_SERIES_COLOURS])));
-    const newestSha = $derived(runs.length > 0 ? runSha(runs[runs.length - 1].meta) : null);
 
     // The zoomed range, shared by all charts. Reset when the set of runs changes, since the
     // indices then refer to different runs.
@@ -159,7 +158,7 @@
 
     <div class="grid">
         {#each histories as h (h.model)}
-            {@const url = modelUrl(h.model, newestSha)}
+            {@const url = modelUrl(h.model)}
             <section>
                 <h3>
                     {#if url}

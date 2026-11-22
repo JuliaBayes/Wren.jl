@@ -22,7 +22,7 @@ end
     return nothing
 end
 
-const wren_model = let
+const model = let
     mom_hs = data["mom_hs"]
     mom_iq = data["mom_iq"]
     X = hcat(ones(length(mom_hs)), mom_hs, mom_iq, mom_hs .* mom_iq)

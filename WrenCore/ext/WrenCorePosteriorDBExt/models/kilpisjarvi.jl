@@ -23,7 +23,7 @@ end
     return nothing
 end
 
-const wren_model = kilpisjarvi_model(
+const model = kilpisjarvi_model(
     data["x"],
     data["y"],
     data["pmualpha"],

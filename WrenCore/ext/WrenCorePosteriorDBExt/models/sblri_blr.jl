@@ -20,7 +20,7 @@ end
     return nothing
 end
 
-const wren_model = let
+const model = let
     X = data["X"]
     sblri_blr(data["y"], X, data["D"])
 end

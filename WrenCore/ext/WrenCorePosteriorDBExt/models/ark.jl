@@ -21,7 +21,7 @@ end
     end
 end
 
-const wren_model = let
+const model = let
     K = data["K"]
     T = data["T"]
     series = data["y"]

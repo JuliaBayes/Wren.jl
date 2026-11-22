@@ -30,7 +30,7 @@ end
     return nothing
 end
 
-const wren_model = let
+const model = let
     x = data["x"]
     y = data["y"]
     gp_regr(y, (x .- x') .^ 2, data["N"])
