@@ -63,9 +63,9 @@ const dae_inter_model = wells_glm_model(
         c_dist100,
         c_arsenic,
         c_educ4,
-        c_dist100 .* c_arsenic,
-        c_dist100 .* c_educ4,
-        c_arsenic .* c_educ4,
+        c_dist100 .* c_arsenic, # da_inter
+        c_dist100 .* c_educ4,   # de_inter
+        c_arsenic .* c_educ4,   # ae_inter
     ),
 )
 # wells_data-wells_daae_c_model
