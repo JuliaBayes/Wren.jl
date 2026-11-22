@@ -150,12 +150,7 @@
                 <li>Times are the fastest of many evaluations of the log density (primal) or its gradient. Smaller is faster.</li>
                 <li>Numbers in brackets are the gradient time divided by the primal time.</li>
                 <li>
-                    Model names link to their definitions
-                    {#if tipSha}
-                        at the tip commit (<a href={commitUrl(tipSha)} target="_blank" rel="noreferrer">{shortSha(tipSha)}</a>).
-                    {:else}
-                        on <code>main</code>, since the tip commit is unknown.
-                    {/if}
+                    Model names link to their definitions on <code>main</code>.
                 </li>
                 {#if base}
                     <li>
