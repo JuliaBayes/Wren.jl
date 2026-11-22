@@ -57,9 +57,9 @@ const rate4 = let
     data = load_data("Rate_4_data-Rate_4_model")
     rate_4_model(data["k"], data["n"])
 end
-# The generated predictive counts in the Stan source are outside the target density, so
-# Rate_5 has the same density as Rate_3.
 const rate5 = let
+    # Rate5 is the same as Rate3 but with different generated quantities, which isn't fully
+    # supported yet.
     data = load_data("Rate_5_data-Rate_5_model")
     rate_3_model(data["k1"], data["n1"], data["k2"], data["n2"])
 end

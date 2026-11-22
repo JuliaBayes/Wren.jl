@@ -18,7 +18,7 @@ end
     alpha ~ WD.Normal(0.0, 100.0)
     beta1 ~ WD.Normal(0.0, 100.0)
     beta2 ~ WD.Normal(0.0, 100.0)
-    logit_p = alpha .+ beta1 .* year .+ beta2 .* year_squared
+    @track logit_p = alpha .+ beta1 .* year .+ beta2 .* year_squared
     @batch for i in eachindex(counts)
         @observe counts[i] ~ WD.BinomialLogit(trials[i], logit_p[i])
     end

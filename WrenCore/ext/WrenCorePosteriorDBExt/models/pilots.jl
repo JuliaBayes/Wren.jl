@@ -22,7 +22,7 @@ end
     sigma_y ~ WD.Uniform(0.0, 100.0)
     @iid a ~ WD.Normal(10 * mu_a, sigma_a) size=n_groups
     @iid b ~ WD.Normal(10 * mu_b, sigma_b) size=n_scenarios
-    y_hat = a[group_id] .+ b[scenario_id]
+    @track y_hat = a[group_id] .+ b[scenario_id]
     @batch for i in eachindex(y)
         @observe y[i] ~ WD.Normal(y_hat[i], sigma_y)
     end

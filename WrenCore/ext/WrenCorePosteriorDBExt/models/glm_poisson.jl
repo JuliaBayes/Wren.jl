@@ -19,7 +19,8 @@ end
     beta1 ~ WD.Uniform(-10.0, 10.0)
     beta2 ~ WD.Uniform(-10.0, 10.0)
     beta3 ~ WD.Uniform(-10.0, 10.0)
-    log_lambda = alpha .+ beta1 .* year .+ beta2 .* year_squared .+ beta3 .* year_cubed
+    @track log_lambda =
+        alpha .+ beta1 .* year .+ beta2 .* year_squared .+ beta3 .* year_cubed
     @batch for i in eachindex(counts)
         @observe counts[i] ~ WD.PoissonLog(log_lambda[i])
     end
