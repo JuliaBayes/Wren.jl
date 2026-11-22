@@ -78,6 +78,13 @@ Then, from the top level of the Wren directory, run
 jlfmt --inplace .
 ```
 
+Optionally, Wren also has a pre-commit hook that automatically formats your code on each commit.
+To set this up, first install [`pre-commit`](https://pre-commit.com/), and then run from the top level of the repo
+
+```
+pre-commit install
+```
+
 ## Changelogs
 
 We require all code changes to be accompanied by a changelog entry.
