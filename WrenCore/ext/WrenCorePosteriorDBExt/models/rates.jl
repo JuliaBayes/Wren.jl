@@ -1,4 +1,7 @@
 # PosteriorDB: Rate_1 to Rate_5.
+#
+# The Stan sources use `beta(1, 1)` priors. We use `Uniform(0, 1)` since it's faster (and a
+# tiny bit more readable). It's exactly the same distribution.
 module Rates
 
 using PosteriorDB
@@ -16,23 +19,23 @@ load_data(name) = PosteriorDB.load(
 end
 
 @wren function rate_2_model(k1, n1, k2, n2)
-    theta1 ~ WD.Beta(1.0, 1.0)
-    theta2 ~ WD.Beta(1.0, 1.0)
+    theta1 ~ WD.Uniform(0.0, 1.0)
+    theta2 ~ WD.Uniform(0.0, 1.0)
     @observe k1 ~ WD.Binomial(n1, theta1)
     @observe k2 ~ WD.Binomial(n2, theta2)
     return nothing
 end
 
 @wren function rate_3_model(k1, n1, k2, n2)
-    theta ~ WD.Beta(1.0, 1.0)
+    theta ~ WD.Uniform(0.0, 1.0)
     @observe k1 ~ WD.Binomial(n1, theta)
     @observe k2 ~ WD.Binomial(n2, theta)
     return nothing
 end
 
 @wren function rate_4_model(k, n)
-    theta ~ WD.Beta(1.0, 1.0)
-    thetaprior ~ WD.Beta(1.0, 1.0)
+    theta ~ WD.Uniform(0.0, 1.0)
+    thetaprior ~ WD.Uniform(0.0, 1.0)
     @observe k ~ WD.Binomial(n, theta)
     return nothing
 end
