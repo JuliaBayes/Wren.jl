@@ -139,7 +139,9 @@ const MODELS = (
     "KidscoreInteraction" => "kidiq-kidscore_interaction",
     "Mh" => "Mh_data-Mh_model",
     "Rate1" => "Rate_1_data-Rate_1_model",
+    "Rats" => "rats_data-rats_model",
     "SblriBLR" => "sblri-blr",
+    "WellsDaeInter" => "wells_data-wells_dae_inter_model",
 )
 
 function bench(model, adtype)

@@ -32,7 +32,9 @@ const MODEL_FILES = new Map<string, string>([
     ["KidscoreInteraction", `${MODEL_DIR}/kidscore.jl`],
     ["Mh", `${MODEL_DIR}/mh.jl`],
     ["Rate1", `${MODEL_DIR}/rates.jl`],
+    ["Rats", `${MODEL_DIR}/rats_model.jl`],
     ["SblriBLR", `${MODEL_DIR}/sblri_blr.jl`],
+    ["WellsDaeInter", `${MODEL_DIR}/wells.jl`],
 ]);
 
 /**
