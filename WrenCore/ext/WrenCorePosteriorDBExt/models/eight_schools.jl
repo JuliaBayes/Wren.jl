@@ -26,9 +26,9 @@ end
 end
 
 @wren function eight_schools_noncentered(y, sigma, J)
-    @iid theta_trans ~ WD.Normal(0.0, 1.0) size=J
     mu ~ WD.Normal(0.0, 5.0)
     tau ~ WD.HalfCauchy(0.0, 5.0)
+    @iid theta_trans ~ WD.Normal(0.0, 1.0) size=J
     theta = theta_trans .* tau .+ mu
     @batch for i in eachindex(y)
         @observe y[i] ~ WD.Normal(theta[i], sigma[i])
