@@ -29,7 +29,7 @@ const MODEL_FILES = new Map<string, string>([
     ["GLMPoisson", `${MODEL_DIR}/glm_poisson.jl`],
     ["GLMMPoisson", `${MODEL_DIR}/glmm_poisson.jl`],
     ["GPRegr", `${MODEL_DIR}/gp_regr.jl`],
-    ["KidscoreInteraction", `${MODEL_DIR}/kidscore_interaction.jl`],
+    ["KidscoreInteraction", `${MODEL_DIR}/kidscore.jl`],
     ["Mh", `${MODEL_DIR}/mh.jl`],
     ["Rate1", `${MODEL_DIR}/rates.jl`],
     ["SblriBLR", `${MODEL_DIR}/sblri_blr.jl`],

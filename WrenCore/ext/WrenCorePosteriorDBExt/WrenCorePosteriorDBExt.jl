@@ -9,9 +9,7 @@ include("models/glm_binomial.jl")
 include("models/glm_poisson.jl")
 include("models/glmm_poisson.jl")
 include("models/gp_regr.jl")
-include("models/kidscore_interaction.jl")
-include("models/kidscore_mom.jl")
-include("models/kidscore_work.jl")
+include("models/kidscore.jl")
 include("models/kilpisjarvi.jl")
 include("models/mesquite.jl")
 include("models/mh.jl")
@@ -39,14 +37,14 @@ const MODELS = Dict(
     "GLM_Poisson_Data-GLM_Poisson_model" => GLMPoisson.model,
     "GLMM_Poisson_data-GLMM_Poisson_model" => GLMMPoisson.model,
     "gp_pois_regr-gp_regr" => GPRegr.model,
-    "kidiq-kidscore_interaction" => KidscoreInteraction.model,
-    "kidiq-kidscore_momhs" => KidscoreMom.momhs,
-    "kidiq-kidscore_momhsiq" => KidscoreMom.momhsiq,
-    "kidiq-kidscore_momiq" => KidscoreMom.momiq,
-    "kidiq_with_mom_work-kidscore_interaction_c" => KidscoreWork.interaction_c,
-    "kidiq_with_mom_work-kidscore_interaction_c2" => KidscoreWork.interaction_c2,
-    "kidiq_with_mom_work-kidscore_interaction_z" => KidscoreWork.interaction_z,
-    "kidiq_with_mom_work-kidscore_mom_work" => KidscoreWork.mom_work_model,
+    "kidiq-kidscore_interaction" => Kidscore.interaction,
+    "kidiq-kidscore_momhs" => Kidscore.momhs,
+    "kidiq-kidscore_momhsiq" => Kidscore.momhsiq,
+    "kidiq-kidscore_momiq" => Kidscore.momiq,
+    "kidiq_with_mom_work-kidscore_interaction_c" => Kidscore.interaction_c,
+    "kidiq_with_mom_work-kidscore_interaction_c2" => Kidscore.interaction_c2,
+    "kidiq_with_mom_work-kidscore_interaction_z" => Kidscore.interaction_z,
+    "kidiq_with_mom_work-kidscore_mom_work" => Kidscore.mom_work,
     "kilpisjarvi_mod-kilpisjarvi" => Kilpisjarvi.model,
     "mesquite-logmesquite" => Mesquite.logmesquite,
     "mesquite-logmesquite_logva" => Mesquite.logmesquite_logva,
