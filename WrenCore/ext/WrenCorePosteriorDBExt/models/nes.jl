@@ -25,9 +25,9 @@ function nes_model(year)
         ones(data["N"]),
         data["real_ideo"],
         data["race_adj"],
-        age .== 2,
-        age .== 3,
-        age .== 4,
+        age .== 2,  # age30_44
+        age .== 3,  # age45_64
+        age .== 4,  # age65up
         data["educ1"],
         data["gender"],
         data["income"],
