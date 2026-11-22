@@ -61,6 +61,7 @@ makedocs(;
             "howtos/pathfinder.md"
             "howtos/posteriordb.md"
             "howtos/custom-distributions.md"
+            "howtos/contribute.md"
         ],
         "Explanations" => [
             "explanations/enzyme.md",
@@ -81,4 +82,8 @@ Documenter.deploydocs(;
     repo="github.com/JuliaBayes/Wren.jl",
     target="build",
     push_preview=true,
+    # The docs cover all three packages but are versioned by Wren's releases, which are
+    # tagged by TagBot as e.g. `Wren-v0.1.0`. Documenter strips the prefix, so the docs
+    # for that tag go into the `v0.1.0` folder.
+    tag_prefix="Wren-",
 )
