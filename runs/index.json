@@ -1,5 +1,12 @@
 [
   {
+    "commit_date": "2026-11-22T16:59:46Z",
+    "file": "20261122T170343Z-05320bf.json",
+    "git_sha": "05320bfdbc5885ecda742518fd092873d04ae4b7",
+    "label": "Fix BatchedBernoulliLogit perf (#338)",
+    "timestamp": "2026-11-22T17:03:43.592Z"
+  },
+  {
     "commit_date": "2026-11-22T16:25:00Z",
     "file": "20261122T162903Z-12a1cd9.json",
     "git_sha": "12a1cd9e64290bd6876a1228aa8c66dcecd45f98",
