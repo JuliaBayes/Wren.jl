@@ -1,5 +1,12 @@
 [
   {
+    "commit_date": "2026-11-22T16:25:00Z",
+    "file": "20261122T162903Z-12a1cd9.json",
+    "git_sha": "12a1cd9e64290bd6876a1228aa8c66dcecd45f98",
+    "label": "Add rats and wells to the benchmark suite (#335)",
+    "timestamp": "2026-11-22T16:29:03.438Z"
+  },
+  {
     "commit_date": "2026-11-22T13:44:52Z",
     "file": "20261122T135040Z-bb47a7e.json",
     "git_sha": "bb47a7eb30ef757b6f0c568ef5429d58893a58f9",
