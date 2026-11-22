@@ -69,7 +69,7 @@ Wren uses JuliaFormatter across the entire repository.
 The easiest way to format your code is to install JuliaFormatter as a Pkg app:
 
 ```
-julia> import Pkg; Pkg.Apps.add("JuliaFormatter")
+julia> ]app add JuliaFormatter
 ```
 
 Then, from the top level of the Wren directory, run
@@ -84,8 +84,6 @@ To set this up, first install [`pre-commit`](https://pre-commit.com/), and then 
 ```
 pre-commit install
 ```
-
-If you are contributing to Wren regularly you might want to speed up the pre-commit hook; to do so please follow the steps in the [JuliaFormatter documentation](https://juliaeditorsupport.github.io/JuliaFormatter.jl/stable/packagecompiler/).
 
 ## Changelogs
 
