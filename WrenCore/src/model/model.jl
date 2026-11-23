@@ -239,13 +239,15 @@ function evaluation_fn_expr(
     fn_args=_evaluation_fn_args(),
 )
     body = Expr(:block)
-    latent_source,
-    parameter_space,
-    accs,
-    model_args,
-    conditioned,
-    enzyme_copy_argnames,
-    ctx = fn_args
+    (
+        latent_source,
+        parameter_space,
+        accs,
+        model_args,
+        conditioned,
+        enzyme_copy_argnames,
+        ctx,
+    ) = fn_args
     retval = gensym()
     for k in argnames
         # Conditioning an argument replaces it, so the model sees one value for `k`.

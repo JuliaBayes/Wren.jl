@@ -10,16 +10,12 @@ function WrenCore.get_latent(
 end
 
 # Base.view does not accept traced scalar indices. Tensor indexing handles both ranks.
+# https://github.com/EnzymeAD/Reactant.jl/issues/3830
 WrenCore._maybe_view(value::Reactant.TracedRArray, indices...) = value[indices...]
 
 function _reactant_evaluation_fn(model::WrenCore.Model)
     fn_args = WrenCore._evaluation_fn_args()
     expr = WrenCore.evaluation_fn_expr(keys(model.args), model.stmts; fn_args)
-    conditioned = fn_args[5]
-    pushfirst!(
-        expr.args[2].args,
-        :($conditioned = $(map)($(WrenCore._dealias), $conditioned)),
-    )
     expr.args[2] = Expr(
         :macrocall,
         GlobalRef(Reactant, Symbol("@allowscalar")),
@@ -30,7 +26,10 @@ function _reactant_evaluation_fn(model::WrenCore.Model)
     return Core.eval(model.mod, expr)
 end
 
-# Converting arrays avoids slow untraced matmuls (Reactant issues #3167 and #3195).
+# Model arguments should be constant data, with only parameters traced. However,
+# untraced arrays make some matmuls very slow, so we convert all model arguments.
+# https://github.com/EnzymeAD/Reactant.jl/issues/3167
+# https://github.com/EnzymeAD/Reactant.jl/issues/3195
 _reactant_arg(value; kwargs...) = Reactant.to_rarray(WrenCore._dealias(value); kwargs...)
 _reactant_arg(model::WrenCore.Model; kwargs...) = Reactant.to_rarray(model; kwargs...)
 
