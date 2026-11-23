@@ -6,64 +6,6 @@ using DynamicHMC: DynamicHMC
 using MCMCProgress:
     MCMCProgress, RunProgress, Determinate, advance!, chain_at, close_phase!, open_phase!
 
-"""
-    AbstractInitialization
-
-An abstract type for ways to initialise MCMC samplers.
-
-Currently, only [`FindFiniteDensity`](@ref) is provided.
-"""
-abstract type AbstractInitialization end
-
-"""
-    FindFiniteDensity(source; max_attempts::Integer=1)
-
-Initialise a chain by drawing from `source` until its unconstrained coordinates and
-log-density are finite, trying at most `max_attempts` candidates per chain.
-
-`source` can either be a [`WrenCore.AbstractLatentSource`](@ref), or something that can
-be converted to it. In particular:
-
-- `source::Random.AbstractRNG` is shorthand for `FromPrior(source)`, i.e., draw from the
-  prior with the given RNG.
-- `source::VarNamedTuple` is shorthand for `FromValues(source)`, i.e., use the given values
-  *(in model space)* as the initial point.
-
-To use Stan-style initialisation from a uniform interval, use
-[`source=FromUnconstrainedInterval([rng, ]lower, upper)`](@ref FromUnconstrainedInterval).
-
-If initialisation fails after `max_attempts`, an error is thrown.
-"""
-struct FindFiniteDensity{S<:WrenCore.AbstractLatentSource} <: AbstractInitialization
-    source::S
-    max_attempts::Int
-
-    function FindFiniteDensity(
-        source::S,
-        max_attempts::Integer,
-    ) where {S<:WrenCore.AbstractLatentSource}
-        max_attempts > 0 || throw(ArgumentError("`max_attempts` must be positive."))
-        return new{S}(source, Int(max_attempts))
-    end
-end
-
-FindFiniteDensity(source; max_attempts::Integer=1) =
-    FindFiniteDensity(WrenCore.to_latent_source(source), max_attempts)
-
-_initial_source(init::FindFiniteDensity) = init.source
-
-function _initial_position(vm::WrenCore.VecModel, init::FindFiniteDensity)
-    for _ in 1:init.max_attempts
-        q = WrenCore.vector_parameters(vm, init.source)
-        all(isfinite, q) && isfinite(WrenCore.lp(vm, q)) && return q
-    end
-    throw(
-        ArgumentError(
-            "No finite-density initial point found after $(init.max_attempts) attempts.",
-        ),
-    )
-end
-
 mutable struct ChainReporter
     const run::RunProgress
     const chain_index::Int
@@ -110,7 +52,7 @@ close_phases!(::DynamicHMC.NoProgressReport) = nothing
         progress::Bool=true,
         reduce_copies::Bool=true,
         track=AllQuantities(),
-        init::Union{Nothing,AbstractInitialization}=nothing,
+        init=nothing,
         initial_stepsize::Union{Nothing,Real}=nothing,
         dynamichmc_kwargs...
     ) -> FlexiChains.VNChain
@@ -120,7 +62,9 @@ No U-Turn Sampler (NUTS) for a Wren model. All `dynamichmc_kwargs` are passed to
 behaviour.
 
 Each chain starts from an independent prior draw by default. Use `init` to select an
-initialization policy. `initial_stepsize` replaces the default initial step-size search.
+[`AbstractInitialization`](@ref) policy. Anything else passed as `init`, such as a
+`VarNamedTuple` or a latent source, is treated as `FindFiniteDensity(init)`.
+`initial_stepsize` replaces the default initial step-size search.
 
 `reduce_copies` is passed to [`VecModel`](@ref): when sampling with Enzyme, it skips copies
 of model arguments that turn out not to be needed (see [`reduce_copies`](@ref)).
@@ -138,7 +82,7 @@ function nuts(
     progress::Bool=true,
     reduce_copies::Bool=true,
     track=AllQuantities(),
-    init::Union{Nothing,AbstractInitialization}=nothing,
+    init=nothing,
     initial_stepsize::Union{Nothing,Real}=nothing,
     dynamichmc_kwargs...,
 )
@@ -165,7 +109,7 @@ function nuts(
     progress::Bool=true,
     reduce_copies::Bool=true,
     track=AllQuantities(),
-    init::Union{Nothing,AbstractInitialization}=nothing,
+    init=nothing,
     initial_stepsize::Union{Nothing,Real}=nothing,
     dynamichmc_kwargs...,
 )
@@ -176,7 +120,8 @@ function nuts(
     )
     tq_spec = WrenCore.to_tq_spec(track)
     initial_stepsize = initial_stepsize === nothing ? nothing : Float64(initial_stepsize)
-    source = init === nothing ? WrenCore.FromPrior() : _initial_source(init)
+    init = init === nothing ? nothing : WrenCore.to_initialization(init)
+    source = init === nothing ? WrenCore.FromPrior() : WrenCore._initial_source(init)
     # AD preparation
     if progress
         t = time()
@@ -192,7 +137,8 @@ function nuts(
 
     # Sources can contain mutable RNGs, so draw initial points before spawning tasks.
     starts =
-        init === nothing ? nothing : [_initial_position(vm_single, init) for _ in 1:nchains]
+        init === nothing ? nothing :
+        [WrenCore._initial_position(vm_single, init) for _ in 1:nchains]
 
     t = time()
     label = "Sampling $(model.name)"
