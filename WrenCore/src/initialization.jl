@@ -82,9 +82,10 @@ function _initial_position(vm::VecModel, init::FindFiniteDensity)
         q = vector_parameters(vm, init.source)
         all(isfinite, q) && isfinite(lp(vm, q)) && return q
     end
+    word = init.max_attempts == 1 ? "attempt" : "attempts"
     throw(
         ArgumentError(
-            "No finite-density initial point found after $(init.max_attempts) attempts.",
+            "No finite-density initial point found after $(init.max_attempts) $(word).",
         ),
     )
 end
