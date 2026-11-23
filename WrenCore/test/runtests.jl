@@ -26,6 +26,7 @@ using Test
     include("tq.jl")
     include("enzyme_conditioning.jl")
     include("vecmodel.jl")
+    include("allocs.jl")
     include("ad.jl")
     include("reactant.jl")
     include("posteriordb.jl")

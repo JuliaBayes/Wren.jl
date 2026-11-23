@@ -55,11 +55,13 @@ using WrenCore:
     WithExpectedResult,
     # Initialisations for MCMC
     FromPrior,
+    FromUnconstrainedInterval,
     FromValues,
     # Optimisation
     optimize,
     MAP,
     MLE,
+    PointEstimate,
     # PosteriorDB
     posteriordb_model,
     available_posteriordb_models
@@ -103,11 +105,13 @@ export WrenCore,
     WithExpectedResult,
     # Initialisations for MCMC
     FromPrior,
+    FromUnconstrainedInterval,
     FromValues,
     # Optimisation
     optimize,
     MAP,
     MLE,
+    PointEstimate,
     # PosteriorDB
     posteriordb_model,
     available_posteriordb_models

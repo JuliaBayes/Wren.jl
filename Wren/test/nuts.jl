@@ -98,6 +98,16 @@ WrenCore.scope(source::SequenceValues, ::VarName) = source
         s1, s2 = take!(states), take!(states)
         @test s1.q ≈ s2.q ≈ [2.0]
         @test s1.ϵ == s2.ϵ == 0.125
+        # A plain VarNamedTuple is shorthand for `FindFiniteDensity(...)`.
+        nuts(
+            Xoshiro(468),
+            positive_parameter(),
+            3,
+            2;
+            init=VarNamedTuple(; x=exp(2.0)),
+            kwargs...,
+        )
+        @test take!(states).q ≈ take!(states).q ≈ [2.0]
         chn = nuts(
             Xoshiro(468),
             positive_parameter(),
@@ -178,7 +188,7 @@ WrenCore.scope(source::SequenceValues, ::VarName) = source
             Xoshiro(468),
             finite_region(),
             3;
-            init=FindFiniteDensity(source),
+            init=FindFiniteDensity(source; max_attempts=1),
             kwargs...,
         )
         @test source.next == 3

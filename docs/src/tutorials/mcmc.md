@@ -59,12 +59,11 @@ The [`nuts`](@ref) function accepts an optional `init` argument, which controls 
 Currently, Wren only provides a single `FindFiniteDensity`, which attempts to find a point with finite probability density.
 
 However, you can specify how that point is searched for by passing an [`AbstractLatentSource`](@ref) to the `FindFiniteDensity` constructor.
+As a shorthand, you can also pass a latent source (or a `VarNamedTuple` of values) directly as `init`; this is treated as `FindFiniteDensity(init)`.
 For example, to replicate Stan's default behaviour of sampling from `[-2, 2]` in unconstrained space, you can pass:
 
 ```julia
-using WrenCore: FromUnconstrainedInterval
-
-init = FindFiniteDensity(FromUnconstrainedInterval(-2, 2); max_attempts=100)
+init = FindFiniteDensity(FromUnconstrainedInterval(-2, 2))
 nuts(model, 1000, 4; adtype, init, progress=false)
 ```
 
