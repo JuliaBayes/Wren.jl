@@ -28,7 +28,7 @@ end
     for (_, adtype) in Base.get_extension(WrenDists, :WrenDistsTestUtils).TESTED_ADTYPES
         @test last(DI.value_and_gradient(f, adtype, d.p, DI.Constant(points[1]))) ≈ [-1, 1]
     end
-    if RUN_REACTANT
+    @static if RUN_REACTANT
         WrenDists.test_dist_reactant(d, points)
         WrenDists.test_dist_reactant(interior, [[0.0, 1.0], [2.0, 1.0]])
         p, x = Reactant.to_rarray.((d.p, points[1]))

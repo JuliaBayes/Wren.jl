@@ -54,7 +54,7 @@ end
         @test only(DI.gradient(nu_tie_score, adtype, [1.0])) ≈ log(2) / 2
         @test only(DI.gradient(nu_score, adtype, [1e-300])) ≈ 1e300
     end
-    if RUN_REACTANT
+    @static if RUN_REACTANT
         d = WrenDists.TDist(1.0f0)
         WrenDists.test_dist_reactant(d, Float32[2*sqrt(floatmax(Float32)), Inf])
         g(ν, x) = logdensityof(WrenDists.TDist(ν), x)

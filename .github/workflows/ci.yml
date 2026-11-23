@@ -29,9 +29,9 @@ jobs:
 
       matrix:
         project:
-          - core
-          - wren
-          - dists
+          - WrenCore
+          - Wren
+          - WrenDists
         runner:
           # Ubuntu (note workspace support only goes back to 1.12, so 1.10/1.11
           # might have to wait until it's registered in General, as it's a faff
@@ -56,4 +56,10 @@ jobs:
 
       - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # 3.1.0
 
-      - run: ./runtests ${{ matrix.project }}
+      - uses: julia-actions/julia-runtest@e89ac6c957d7c4d7e0cb3162f12d8290a008f9d1 # 1.13.0
+        with:
+          project: ${{ matrix.project }}
+          # TODO(penelopeysm): maybe enable this one day. We don't use the
+          # coverage data, so enabling it would just make CI slower for no
+          # reason.
+          coverage: false

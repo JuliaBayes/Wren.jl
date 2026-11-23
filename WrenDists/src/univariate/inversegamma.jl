@@ -66,4 +66,4 @@ function DensityInterface.logdensityof(d::BatchedInverseGamma, x)
         s
     end
 end
-Plaice.scalar_to_scalar_bijector(::BatchedInverseGamma) = Plaice.Log(0.0, 1)
+Plaice.scalar_to_scalar_bijector(d::BatchedInverseGamma) = Plaice.Log(zero(noisetype(d)), 1)

@@ -74,7 +74,7 @@ test_dist(
     f(x) = logdensityof(WrenDists.BatchedBeta([1.0, 2.0], [2.0, 1.0]), x)
     @test only(Enzyme.gradient(Reverse, f, [0.0, 1.0])) ≈ [-1.0, 1.0]
 
-    if RUN_REACTANT
+    @static if RUN_REACTANT
         # The zero coefficient at shape one must retain its parameter derivative.
         g(a, b) = logdensityof(WrenDists.BatchedBeta(a, b), [0.25f0])
         parameter_gradient(a, b) = Enzyme.gradient(Reverse, g, a, b)

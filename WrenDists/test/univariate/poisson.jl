@@ -94,3 +94,38 @@ end
         RUN_REACTANT && WrenDists.test_dist_reactant(d, points)
     end
 end
+
+@testset "PoissonLog accuracy vs analytical BigFloat" begin
+    ref(logλ, k) = Float64(k * big(logλ) - exp(big(logλ)) - WrenDists.loggamma(big(k) + 1))
+    # Note: above 1e20 it starts to drift anyway. See #319.
+    for k in (1, 2, 15, 16, 17, 100, 1e4, 1e10, 1e15, 1e20), logλ in log(k) .+ (-1, 0, 1)
+        @test logdensityof(WrenDists.PoissonLog(logλ), k) ≈ ref(logλ, k) rtol = 1e-8
+    end
+end
+
+@testset "PoissonLog edge cases" begin
+    for (logλ, k, expected) in (
+        (log(7.0), 2.5, -Inf),
+        (log(7.0), -1, -Inf),
+        (-Inf, 0, 0.0),
+        (-Inf, 3, -Inf),
+        # The true value (about -7e308) is too large for Float64.
+        (0.0, 1e306, -Inf),
+    )
+        @test logdensityof(WrenDists.PoissonLog(logλ), k) == expected
+    end
+    # `log(k!)` overflows here, but the log-mass does not.
+    @test isfinite(logdensityof(WrenDists.PoissonLog(log(1e306)), 1e306))
+end
+
+@testset "PoissonLog Enzyme gradient when exp(logλ) overflows" begin
+    # The gradient wrt logλ is `k - exp(logλ)`. Here `exp(logλ)` overflows but the gradient
+    # itself does not.
+    for (logλ, k) in ((710.0, 1e308), (88.8f0, 3.0f38))
+        f(x) = logdensityof(WrenDists.PoissonLog(x), k)
+        grad = Enzyme.autodiff(Reverse, f, Active, Active(logλ))[1][1]
+        expected = oftype(logλ, big(k) - exp(big(logλ)))
+        @test isfinite(grad)
+        @test grad ≈ expected rtol = 1e-4
+    end
+end
