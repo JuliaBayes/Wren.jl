@@ -91,8 +91,9 @@ Some examples are:
 # Initialise from [-2, 2] in unconstrained space
 initial = FindFiniteDensity(FromUnconstrainedInterval(-2, 2))
 
-# Draw from the prior
-initial = FindFiniteDensity(FromPrior(); max_attempts=100)
+# Draw from a seeded prior
+using Random: Xoshiro
+initial = FindFiniteDensity(FromPrior(Xoshiro(468)))
 
 # Specific values, as a VarNamedTuple in model space.
 initial = VarNamedTuple(rate=1.5)

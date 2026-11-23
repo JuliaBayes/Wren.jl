@@ -63,7 +63,7 @@ As a shorthand, you can also pass a latent source (or a `VarNamedTuple` of value
 For example, to replicate Stan's default behaviour of sampling from `[-2, 2]` in unconstrained space, you can pass:
 
 ```julia
-init = FindFiniteDensity(FromUnconstrainedInterval(-2, 2); max_attempts=100)
+init = FindFiniteDensity(FromUnconstrainedInterval(-2, 2))
 nuts(model, 1000, 4; adtype, init, progress=false)
 ```
 

@@ -188,7 +188,7 @@ WrenCore.scope(source::SequenceValues, ::VarName) = source
             Xoshiro(468),
             finite_region(),
             3;
-            init=FindFiniteDensity(source),
+            init=FindFiniteDensity(source; max_attempts=1),
             kwargs...,
         )
         @test source.next == 3

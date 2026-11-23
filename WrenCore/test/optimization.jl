@@ -29,6 +29,15 @@ end
 end
 
 @testset "initialisation" begin
+    # Fixed values get one attempt; anything random gets more.
+    to_init = WrenCore.to_initialization
+    @test to_init(VarNamedTuple(rate=1.5)).max_attempts == 1
+    @test to_init(FromValues(VarNamedTuple(rate=1.5), FromPrior())).max_attempts == 100
+    @test to_init(FromPrior()).max_attempts == 100
+    @test FindFiniteDensity(FromPrior()).max_attempts == 100
+    @test FindFiniteDensity(VarNamedTuple(rate=1.5)).max_attempts == 1
+    @test FindFiniteDensity(FromPrior(); max_attempts=3).max_attempts == 3
+
     # `init` also accepts an AbstractInitialization, as for `nuts`.
     init = FindFiniteDensity(VarNamedTuple(rate=1.5))
     fit = MAP(poisson_rate(3), LBFGS(); init, abstol=1e-10)
