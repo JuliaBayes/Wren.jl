@@ -171,7 +171,7 @@ function WrenCore.tracked_quantities(
     model::WrenCore.Model,
     chain::VNChain;
     rng::AbstractRNG=default_rng(),
-    track=AllQuantities(),
+    track=WrenCore.AllQuantities(),
 )
     fallback = WrenCore.FromPrior(rng)
     tq_spec = WrenCore.to_tq_spec(track)

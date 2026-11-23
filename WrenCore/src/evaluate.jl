@@ -55,6 +55,24 @@ struct ModelResult{V<:VarNamedTuple,G<:VarNamedTuple,R,LP<:Number,LL<:Number}
     loglikelihood::LL
 end
 
+function Base.:(==)(a::ModelResult, b::ModelResult)
+    return a.parameters == b.parameters &&
+           a.tracked_quantities == b.tracked_quantities &&
+           a.return_value == b.return_value &&
+           a.logprior == b.logprior &&
+           a.loglikelihood == b.loglikelihood
+end
+function Base.hash(result::ModelResult, h::UInt)
+    fields = (
+        result.parameters,
+        result.tracked_quantities,
+        result.return_value,
+        result.logprior,
+        result.loglikelihood,
+    )
+    return hash((ModelResult, fields), h)
+end
+
 function Base.show(io::IO, ::MIME"text/plain", result::ModelResult)
     println(io, "ModelResult")
     print(io, "├─ ")
@@ -270,7 +288,11 @@ This is equivalent to `tracked_quantities(simulate(model, latents; track))`, but
 efficient than [`simulate`](@ref) because it does not compute the log-density terms or store
 the parameters.
 """
-function tracked_quantities(model::Model, latents::AbstractLatentSource; track=AllQuantities())
+function tracked_quantities(
+    model::Model,
+    latents::AbstractLatentSource;
+    track=AllQuantities(),
+)
     _, accs = evaluate(
         model,
         latents,

@@ -4,17 +4,12 @@ module WrenTQTests
 
 using Distributions
 using FlexiChains: FlexiChains, Parameter, VNChain
+import ForwardDiff
 using LinearAlgebra
 using StableRNGs
 using Test
 using WrenCore
-using WrenCore:
-    TrackedQuantity,
-    is_accumulating_tq,
-    to_tq_spec,
-    AllQuantities,
-    SomeQuantities,
-    NoQuantities
+using WrenCore: TrackedQuantity, is_accumulating_tq
 
 # Run `@wren` on a quoted function definition and return the error message it throws.
 function wren_error(ex)
@@ -246,18 +241,34 @@ end
         @test is_accumulating_tq(AccumulatorTuple(TrackedQuantityAccumulator()), Val(:b))
     end
 
-    @testset "to_tq_spec" begin
-        @test to_tq_spec(true) === AllQuantities()
-        @test to_tq_spec(false) === NoQuantities()
-        @test to_tq_spec(:a) === SomeQuantities((:a,))
-        @test to_tq_spec((:a, :b)) === SomeQuantities((:a, :b))
-        @test to_tq_spec(()) === SomeQuantities(())
-        @test to_tq_spec(SomeQuantities((:a,))) === SomeQuantities((:a,))
-        @test_throws "`track` must be `true`, `false`, a Symbol or a tuple of Symbols" to_tq_spec([
-            :a,
-        ],)
-        @test_throws "`track` must be" to_tq_spec("a")
-        @test_throws "`track` must be" simulate(tq_demo([1.0, 2.0]); track=[:s])
+    @testset "track shorthands match their specs" begin
+        model = tq_demo([1.0, 2.0])
+        vecmodel = VecModel(model, AutoForwardDiff())
+        params = vector_parameters(vecmodel, StableRNG(468))
+        shorthands_and_specs = [
+            true => AllQuantities(),
+            false => NoQuantities(),
+            :s => SomeQuantities((:s,)),
+            (:mu, :r) => SomeQuantities((:mu, :r)),
+        ]
+        @testset "$shorthand" for (shorthand, spec) in shorthands_and_specs
+            @test simulate(model, StableRNG(468); track=shorthand) ==
+                  simulate(model, StableRNG(468); track=spec)
+            @test tracked_quantities(model, StableRNG(468); track=shorthand) ==
+                  tracked_quantities(model, StableRNG(468); track=spec)
+            @test simulate(vecmodel, params; track=shorthand) ==
+                  simulate(vecmodel, params; track=spec)
+        end
+        @test_throws "`track` must be a `Bool`, `Symbol`, tuple of `Symbol`s, or `TrackedQuantitySpec`" simulate(
+            model;
+            track=[:s],
+        )
+    end
+
+    @testset "ModelResult ==" begin
+        model = tq_demo([1.0, 2.0])
+        @test simulate(model, StableRNG(468)) == simulate(model, StableRNG(468))
+        @test simulate(model, StableRNG(468)) != simulate(model, StableRNG(469))
     end
 
     @testset "submodels" begin
@@ -464,6 +475,26 @@ parameter_keys(chain) = Set(FlexiChains.parameters(chain))
         @test @vn(x2) in parameter_keys(simulated_x2_only)
         @test !(@vn(xp1) in parameter_keys(simulated_x2_only))
         @test !(@vn(a.z) in parameter_keys(simulated_x2_only))
+    end
+
+    @testset "track shorthands match their specs" begin
+        shorthands_and_specs = [
+            true => AllQuantities(),
+            false => NoQuantities(),
+            :x2 => SomeQuantities((:x2,)),
+            (:x2, :a) => SomeQuantities((:x2, :a)),
+        ]
+        # `==` on these chains returns `missing`; `isequal` compares them fully.
+        @testset "$shorthand" for (shorthand, spec) in shorthands_and_specs
+            @test isequal(
+                simulate(model, chn; rng=StableRNG(468), track=shorthand),
+                simulate(model, chn; rng=StableRNG(468), track=spec),
+            )
+            @test isequal(
+                tracked_quantities(model, chn; rng=StableRNG(468), track=shorthand),
+                tracked_quantities(model, chn; rng=StableRNG(468), track=spec),
+            )
+        end
     end
 
     @testset "parameters take precedence over tracked quantities" begin
