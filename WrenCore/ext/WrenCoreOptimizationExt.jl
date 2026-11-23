@@ -9,7 +9,7 @@ function WrenCore.optimize(
     model::Model,
     solver;
     adtype::DI.AbstractADType=DEFAULT_AD,
-    init=nothing,
+    init=FromPrior(),
     lp_function=logjoint,
     reduce_copies=true,
     kwargs...,
@@ -17,7 +17,7 @@ function WrenCore.optimize(
     # The starting point is set by `init`, so don't let users pass Optimization.jl's `u0`.
     haskey(kwargs, :u0) &&
         throw(ArgumentError("Use `init` instead of `u0` to set the starting point."))
-    init = WrenCore.to_initialization(init === nothing ? FromPrior() : init)
+    init = WrenCore.to_initialization(init)
     density = VecModel(
         model,
         adtype;

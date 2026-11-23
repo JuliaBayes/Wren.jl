@@ -7,13 +7,18 @@ The result of [`optimize`](@ref), [`MAP`](@ref), or [`MLE`](@ref).
 
 - `lp_function`: the objective that was maximised, e.g. `logjoint` for MAP or
   `loglikelihood` for MLE.
+
 - `parameters`: a `VarNamedTuple` of the fitted parameters, in model space (i.e. not in
   unconstrained coordinates, even though the optimisation itself is carried out in
-  unconstrained coordinates).
+  unconstrained coordinates). To access this we recommend using `parameters(::PointEstimate)`
+  rather than accessing the field, but both are equivalent.
+
 - `lp`: the value of `lp_function` at `parameters`. This is the actual log-density, not the
   negated value that the solver minimises.
+
 - `vecmodel`: the [`VecModel`](@ref) used to evaluate the objective. It should hold that
-  `p.lp ≈ lp(p.vecmodel, p.solution.u)` for a `PointEstimate` `p`.
+  `p.lp ≈ lp(p.vecmodel, p.solution.u)` for a `p::PointEstimate`.
+
 - `solution`: the solution object returned by `Optimization.solve`. Check
   `p.solution.retcode` to see whether the solver converged.
 """
@@ -26,10 +31,9 @@ struct PointEstimate{F,P<:VarNamedTuple,LP<:Real,V<:VecModel,S}
 end
 
 """
-    parameters(p::PointEstimate)
+    parameters(p::PointEstimate)::VarNamedTuple
 
-Return the fitted model-space parameters of `p` as a `VarNamedTuple`. This is the same as
-`p.parameters`.
+Return the fitted model-space parameters of `p` as a `VarNamedTuple`.
 """
 VarNames.parameters(p::PointEstimate) = p.parameters
 
@@ -78,34 +82,40 @@ function _abbreviated_type(x)
 end
 
 """
-    optimize(model, solver; adtype=DEFAULT_AD, init=nothing,
-             lp_function=logjoint, reduce_copies=true, kwargs...)
+    optimize(
+        model,
+        solver;
+        adtype=DEFAULT_AD,
+        init=FromPrior(),
+        lp_function=logjoint,
+        reduce_copies=true,
+        solve_kwargs...
+    )
 
 Find a maximum a posteriori (MAP) estimate with an Optimization.jl solver. Requires
-Optimization.jl and the selected AD backend to be loaded, as for [`VecModel`](@ref).
-Use `lp_function=loglikelihood` for maximum likelihood (MLE).
-Both objectives use the latent support declared by the model's priors.
+Optimization.jl and the selected AD backend to be loaded.
 
 Returns a [`PointEstimate`](@ref), which contains the fitted model-space parameters, the
 value of the objective there, and the native Optimization solution (including its
 convergence status). The solver minimises the negative original-space log-density in
-unconstrained coordinates. AD preparation uses [`VecModel`](@ref).
+unconstrained coordinates.
 
-The starting point is chosen by `init`, an [`AbstractInitialization`](@ref), as for
-`nuts`. Anything else passed as `init`, such as a `VarNamedTuple` of values, an
-`AbstractRNG`, or a latent source, is treated as [`FindFiniteDensity(init)`](@ref
-FindFiniteDensity). The default is a draw from the prior. Passing `u0` is not allowed; use
-`init` instead.
+The starting point is chosen by `init`, which should be an [`AbstractInitialization`](@ref)
+or anything that can be implicitly converted to one. The default is to attempt drawing from
+the prior.
 
-Solver keywords are forwarded to `Optimization.solve`.
+Other keywords are forwarded to `Optimization.solve`, although passing `u0` is not allowed
+(you should use `init` instead).
 """
 function optimize end
 
 """
     MAP(model, solver; kwargs...)
 
-Find the original-space MAP estimate with [`optimize`](@ref), fixing the objective to
-`logjoint`. Forward all other keywords to `optimize`. Requires Optimization.jl.
+Find the original-space maximum a posteriori estimate of a model.
+
+All arguments are forwarded to [`optimize`](@ref) but with the objective function set to
+`logjoint`. Please see its documentation for details.
 """
 MAP(model::Model, solver; kwargs...) =
     optimize(model, solver; kwargs..., lp_function=logjoint)
@@ -113,9 +123,10 @@ MAP(model::Model, solver; kwargs...) =
 """
     MLE(model, solver; kwargs...)
 
-Find the MLE with [`optimize`](@ref), fixing the objective to `loglikelihood`.
-The model's priors still define the parameter support. Forward all other keywords
-to `optimize`. Requires Optimization.jl.
+Find the original-space maximum likelihood estimate of a model.
+
+All arguments are forwarded to [`optimize`](@ref) but with the objective function set to
+`logjoint`. Please see its documentation for details.
 """
 MLE(model::Model, solver; kwargs...) =
     optimize(model, solver; kwargs..., lp_function=loglikelihood)
