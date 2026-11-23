@@ -83,4 +83,4 @@ function DensityInterface.logdensityof(d::BatchedWeibull, x)
         s
     end
 end
-Plaice.scalar_to_scalar_bijector(::BatchedWeibull) = Plaice.Log(0.0, 1)
+Plaice.scalar_to_scalar_bijector(d::BatchedWeibull) = Plaice.Log(zero(noisetype(d)), 1)

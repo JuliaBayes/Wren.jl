@@ -53,4 +53,4 @@ function DensityInterface.logdensityof(d::BatchedExponential, x)
         ifelse(valid, s, convert(T, -Inf))
     end
 end
-Plaice.scalar_to_scalar_bijector(::BatchedExponential) = Plaice.Log(0.0, 1)
+Plaice.scalar_to_scalar_bijector(d::BatchedExponential) = Plaice.Log(zero(noisetype(d)), 1)
