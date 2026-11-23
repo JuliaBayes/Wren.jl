@@ -56,20 +56,10 @@ struct ModelResult{V<:VarNamedTuple,G<:VarNamedTuple,R,LP<:Number,LL<:Number}
 end
 
 function Base.:(==)(a::ModelResult, b::ModelResult)
-    return a.parameters == b.parameters &&
-           a.tracked_quantities == b.tracked_quantities &&
-           a.return_value == b.return_value &&
-           a.logprior == b.logprior &&
-           a.loglikelihood == b.loglikelihood
+    return all(name -> getfield(a, name) == getfield(b, name), fieldnames(ModelResult))
 end
 function Base.hash(result::ModelResult, h::UInt)
-    fields = (
-        result.parameters,
-        result.tracked_quantities,
-        result.return_value,
-        result.logprior,
-        result.loglikelihood,
-    )
+    fields = ntuple(i -> getfield(result, i), fieldcount(ModelResult))
     return hash((ModelResult, fields), h)
 end
 
