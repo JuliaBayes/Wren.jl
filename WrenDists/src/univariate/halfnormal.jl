@@ -17,8 +17,8 @@ struct HalfNormal{M<:Number,S<:Number,L<:Number} <: PositiveUnivariateDist
     σ::S
     lognorm::L
     function HalfNormal(μ::Number, σ::Number)
-        T = float(promote_type(typeof(μ), typeof(σ)))  
-        lognorm = log(σ) + convert(T, log2π) / 2 + normlogcdf(μ / σ) 
+        T = float(promote_type(typeof(μ), typeof(σ)))
+        lognorm = log(σ) + convert(T, log2π) / 2 + normlogcdf(μ / σ)
         return new{typeof(μ),typeof(σ),typeof(lognorm)}(μ, σ, lognorm)
     end
 end

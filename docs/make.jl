@@ -1,8 +1,6 @@
 # Accept PalmerPenguins download
 ENV["DATADEPS_ALWAYS_ACCEPT"] = "true"
 
-using Pkg: Pkg
-
 using Wren
 using WrenCore
 using WrenDists
@@ -11,12 +9,19 @@ using DocumenterCodeBlocks
 using DocumenterInterLinks
 using DocumenterMermaid
 
+# To get docstrings from extensions, we need to load their triggers.
+import Pathfinder
+import PosteriorDB
+
 links = InterLinks(
     "DynamicHMC" => "https://www.tamaspapp.eu/DynamicHMC.jl/dev/",
     "FlexiChains" => "https://juliabayes.org/FlexiChains.jl/stable/",
-    "Plaice" => "https://juliabayes.org/Plaice.jl/dev/",
+    "Pathfinder" => "https://mlcolab.github.io/Pathfinder.jl/stable/",
+    "Plaice" => "https://juliabayes.org/Plaice.jl/stable/",
     "VarNames" => "https://juliabayes.org/VarNames.jl/stable/",
 )
+
+MAX_HTML_SIZE = 400 * 1024 # 400 KB
 
 makedocs(;
     sitename="Wren.jl",
@@ -24,34 +29,48 @@ makedocs(;
     # This has no effect on deployed docs (i.e. on GitHub Pages) since Documenter will
     # automatically detect the inventory version from the git tag. See
     # https://github.com/JuliaDocs/Documenter.jl/pull/2449
-    format=Documenter.HTML(; inventory_version=""),
+    format=Documenter.HTML(;
+        inventory_version="",
+        assets=["assets/custom.css"],
+        size_threshold=MAX_HTML_SIZE,
+        size_threshold_warn=MAX_HTML_SIZE,
+    ),
     modules=[
         Wren,
         WrenCore,
         WrenDists,
+        Base.get_extension(Wren, :WrenPathfinderExt),
         Base.get_extension(WrenCore, :WrenCoreFlexiChainsExt),
+        Base.get_extension(WrenCore, :WrenCorePosteriorDBExt),
     ],
     pages=[
         "index.md",
         "Tutorials" => [
-            "tutorials/syntax.md",
-            "tutorials/models.md",
+            "tutorials/beginner.md",
+            "tutorials/defining_models.md",
+            "tutorials/using_models.md",
             "tutorials/distributions.md",
             "tutorials/submodels.md",
             "tutorials/mcmc.md",
             "tutorials/workflow.md",
         ],
         "How-tos" => [
+            "howtos/vecmodel.md"
             "howtos/benchmarking.md"
+            "howtos/optimization.md"
+            "howtos/pathfinder.md"
             "howtos/posteriordb.md"
+            "howtos/custom-distributions.md"
+            "howtos/contribute.md"
         ],
         "Explanations" => [
             "explanations/enzyme.md",
+            "explanations/reactant.md",
             "explanations/batch.md",
-            "explanations/staged.md",
-            "explanations/motivation.md",
+            "explanations/compilation.md",
         ],
-        "Reference" => ["reference/distributions.md", "reference/api.md"],
+        "Reference" =>
+            ["reference/syntax.md", "reference/distributions.md", "reference/api.md"],
     ],
     checkdocs=:exports,
     warnonly=false,
@@ -63,4 +82,8 @@ Documenter.deploydocs(;
     repo="github.com/JuliaBayes/Wren.jl",
     target="build",
     push_preview=true,
+    # The docs cover all three packages but are versioned by Wren's releases, which are
+    # tagged by TagBot as e.g. `Wren-v0.1.0`. Documenter strips the prefix, so the docs
+    # for that tag go into the `v0.1.0` folder.
+    tag_prefix="Wren-",
 )

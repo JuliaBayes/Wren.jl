@@ -3,9 +3,10 @@ module Wren
 using WrenCore
 
 # Samplers
+include("samplers/progress.jl")
 include("samplers/prior.jl")
 include("samplers/nuts.jl")
-export prior, nuts
+export prior, nuts, AbstractInitialization, FindFiniteDensity
 
 # Distributions
 module Dists
@@ -20,18 +21,27 @@ using WrenCore:
     @wren,
     @addloglikelihood,
     @iid,
+    @sample,
     @observe,
     @batch,
+    @track,
     # Models
     Model,
     condition,
     decondition,
-    rand_with_logp,
+    simulate,
+    ModelResult,
+    return_value,
+    tracked_quantities,
+    TrackedQuantitySpec,
+    AllQuantities,
+    SomeQuantities,
+    NoQuantities,
     logjoint,
     logprior,
     # Vectorisation
     VecModel,
-    vectorise_latents,
+    vector_parameters,
     lp,
     lp_and_grad,
     lp_and_grad!,
@@ -46,6 +56,10 @@ using WrenCore:
     # Initialisations for MCMC
     FromPrior,
     FromValues,
+    # Optimisation
+    optimize,
+    MAP,
+    MLE,
     # PosteriorDB
     posteriordb_model,
     available_posteriordb_models
@@ -55,18 +69,27 @@ export WrenCore,
     @wren,
     @addloglikelihood,
     @iid,
+    @sample,
     @observe,
     @batch,
+    @track,
     # Models
     Model,
     condition,
     decondition,
-    rand_with_logp,
+    simulate,
+    ModelResult,
+    return_value,
+    tracked_quantities,
+    TrackedQuantitySpec,
+    AllQuantities,
+    SomeQuantities,
+    NoQuantities,
     logjoint,
     logprior,
     # Vectorisation
     VecModel,
-    vectorise_latents,
+    vector_parameters,
     lp,
     lp_and_grad,
     lp_and_grad!,
@@ -81,21 +104,28 @@ export WrenCore,
     # Initialisations for MCMC
     FromPrior,
     FromValues,
+    # Optimisation
+    optimize,
+    MAP,
+    MLE,
     # PosteriorDB
     posteriordb_model,
     available_posteriordb_models
 
-using VarNames: @vn, @vnt, VarNamedTuple, VarName, Draw, parameters, extras
-export @vn, @vnt, VarNamedTuple, VarName, Draw, parameters, extras
+using VarNames: @vn, @vnt, VarNamedTuple, VarName, parameters
+export @vn, @vnt, VarNamedTuple, VarName, parameters
 
 using DensityInterface: logdensityof
 export logdensityof
 
-using StatsAPI: loglikelihood, predict
-export loglikelihood, predict
+using StatsAPI: loglikelihood
+export loglikelihood
 
-using DifferentiationInterface: AutoForwardDiff, AutoReverseDiff, AutoMooncake, AutoEnzyme
-export AutoForwardDiff, AutoReverseDiff, AutoMooncake, AutoEnzyme
+using DifferentiationInterface:
+    AutoForwardDiff, AutoReverseDiff, AutoMooncake, AutoMooncakeForward, AutoEnzyme
+export AutoForwardDiff, AutoReverseDiff, AutoMooncake, AutoMooncakeForward, AutoEnzyme
+using ADTypes: AutoReactant
+export AutoReactant
 
 using EnzymeCore: Forward, Reverse
 export Forward, Reverse

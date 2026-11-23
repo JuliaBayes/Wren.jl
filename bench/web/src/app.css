@@ -19,6 +19,14 @@
     --btn-bg: #e2e8f0;
     --btn-text: #334155;
     --btn-hover: #cbd5e1;
+
+    /* Colours of the lines in the history charts, in order. */
+    --series-1: #2a78d6;
+    --series-2: #eb6834;
+    --series-3: #1baf7a;
+    --series-4: #eda100;
+    --series-5: #e87ba4;
+    --series-6: #008300;
 }
 
 [data-theme="dark"] {
@@ -40,6 +48,13 @@
     --btn-bg: #1e293b;
     --btn-text: #e2e8f0;
     --btn-hover: #334155;
+
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
+    --series-6: #0ca30c;
 }
 
 html {

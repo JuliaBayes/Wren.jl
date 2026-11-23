@@ -14,7 +14,7 @@
 
 # Overview
 
-Wren consists of two subpackages, Wren and WrenCore.
+Wren consists of three subpackages: Wren, WrenCore, and WrenDists.
 
 WrenCore contains the functionality for defining and evaluating models.
 Wren is a higher-level package that wraps WrenCore and combines it with inference methods and post-processing.
@@ -27,7 +27,7 @@ The documentation in `docs/` is also part of this workspace, and is not tied to 
 # Running models
 
 ```
-using WrenCore, Distributions
+using WrenCore, WrenDists
 
 @wren function f(a)
     x ~ Normal(a)
@@ -36,16 +36,19 @@ end
 model = f(1.0)
 ```
 
-  - `rand(model)` draws a sample from the model.
-  - `rand_with_logp(model)` draws a sample plus the components of log density.
+  - `parameters(model)` draws a sample from the model.
+  - `simulate(model)` draws a sample plus the components of log density.
 
-For more information about model syntax, see `docs/src/syntax.md`.
+For more information about model syntax, see `docs/src/defining_models.md`.
+
+When defining models, the only macro you need to import `@wren`.
+Other macros, like `@iid`, `@observe`, `@track`, and `@batch`, are purely syntactic markers that `@wren` will interpret, and are never executed directly.
 
 # Vectorised models
 
 ```
 vecmodel = VecModel(model, AutoEnzyme(; mode=Reverse)) # or any other adtype
-v = rand(vecmodel) # draws a vector
+v = vector_parameters(vecmodel) # draws a vector
 ```
 
   - `lp(vecmodel, v)` computes the log density.

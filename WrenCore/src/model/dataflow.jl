@@ -31,11 +31,23 @@ function get_lhs_index_symbols(expr::Expr)
 end
 
 struct DataflowAnalysisState
-    # All top-level symbols on the LHS of Sample nodes
+    # All top-level symbols on the LHS of Sample nodes, and names of TrackedQuantity nodes
     lhs_syms::Set{Symbol}
-    # The subset of the above that were seen again in a later expression, which we thus need
-    # the values of
+    # Top-level symbols on the LHS of Sample nodes
+    sample_syms::Set{Symbol}
+    # Names of TrackedQuantity nodes
+    tq_syms::Set{Symbol}
+    # The subset of `lhs_syms` that were seen again in a later expression, which we thus
+    # need the values of
     required_syms::Set{Symbol}
+    # Tracked quantities assumed not to be required. Uses inside their expressions are
+    # recorded in `tq_uses` instead of `required_syms`, because those expressions are only
+    # evaluated when a tracked quantity that depends on them is requested.
+    skippable_tqs::Set{Symbol}
+    # For each tracked quantity in `skippable_tqs`, the `lhs_syms` used in its expression
+    tq_uses::Dict{Symbol,Set{Symbol}}
+    # The skippable tracked quantity whose expression is being traversed, if any
+    enclosing_skippable_tq::Base.RefValue{Union{Nothing,Symbol}}
     # All model arguments
     args::Set{Symbol}
     # Arguments which have potentially been written to
@@ -43,15 +55,35 @@ struct DataflowAnalysisState
     # Dirty arguments which have potentially been read from again
     args_to_copy::Set{Symbol}
 end
+function DataflowAnalysisState(args::Set{Symbol}, skippable_tqs::Set{Symbol})
+    return DataflowAnalysisState(
+        Set{Symbol}(),
+        Set{Symbol}(),
+        Set{Symbol}(),
+        Set{Symbol}(),
+        skippable_tqs,
+        Dict{Symbol,Set{Symbol}}(),
+        Ref{Union{Nothing,Symbol}}(nothing),
+        args,
+        Set{Symbol}(),
+        Set{Symbol}(),
+    )
+end
 function mark_lhs_symbol!(state::DataflowAnalysisState, sym::Symbol)
-    # Record that we've seen `sym` on the LHS of a tilde
+    # Record that we've seen `sym` on the LHS of a tilde or as a tracked quantity name
     push!(state.lhs_syms, sym)
     return nothing
 end
 function mark_symbol_used!(state::DataflowAnalysisState, syms::Set{Symbol})
     # Record that we've used `syms` in a later expression. In general, 'use' means
     # that the symbol may have been both written to and read from.
-    union!(state.required_syms, intersect(state.lhs_syms, syms))
+    used_lhs_syms = intersect(state.lhs_syms, syms)
+    enclosing_tq = state.enclosing_skippable_tq[]
+    if enclosing_tq === nothing
+        union!(state.required_syms, used_lhs_syms)
+    else
+        union!(get!(Set{Symbol}, state.tq_uses, enclosing_tq), used_lhs_syms)
+    end
     args = intersect(state.args, syms)
     union!(state.dirty_args, args)
     union!(state.args_to_copy, args)
@@ -103,11 +135,12 @@ function parse_variables!(stmt::Sample, state::DataflowAnalysisState)
     # overly conservative. See https://github.com/JuliaBayes/Wren.jl/issues/139.
     #
     # Note: in the case where it's conditioned on, the symbol isn't read from because Wren
-    # will read from the `model.conditioned` VNT instead. This might change if #139 is
+    # will read from the `model.conditioned` NamedTuple instead. This might change if #139 is
     # implemented.
     mark_as_written_to!(state, Set([stmt.lhs_top_level_symbol]))
     # Record the top-level LHS symbol itself.
     mark_lhs_symbol!(state, stmt.lhs_top_level_symbol)
+    push!(state.sample_syms, stmt.lhs_top_level_symbol)
     return nothing
 end
 function parse_variables!(stmt::Observe, state::DataflowAnalysisState)
@@ -135,6 +168,18 @@ function parse_variables!(stmt::Batch, state::DataflowAnalysisState)
 end
 function parse_variables!(stmt::AddLogLikelihood, state::DataflowAnalysisState)
     parse_variables!(stmt.expr, state)
+    return nothing
+end
+function parse_variables!(stmt::TrackedQuantity, state::DataflowAnalysisState)
+    if stmt.name in state.skippable_tqs
+        state.enclosing_skippable_tq[] = stmt.name
+        parse_variables!(stmt.expr, state)
+        state.enclosing_skippable_tq[] = nothing
+    else
+        parse_variables!(stmt.expr, state)
+    end
+    mark_lhs_symbol!(state, stmt.name)
+    push!(state.tq_syms, stmt.name)
     return nothing
 end
 function parse_variables!(stmt::ReturnStatement, state::DataflowAnalysisState)
@@ -187,63 +232,126 @@ function parse_variables!(expr::WrenExpr, state::DataflowAnalysisState)
     return nothing
 end
 
-reconstruct_statement(@nospecialize(x::Any), ::Set{Symbol}) = x
-reconstruct_statement(::T, ::Set{Symbol}) where {T<:AbstractWrenExpr} =
+struct DataflowAnalysisResult
+    required_syms::Set{Symbol}
+    # For each tracked quantity that is not required, the other tracked quantities
+    # whose evaluation needs its value
+    tq_dependents::Dict{Symbol,Vector{Symbol}}
+end
+
+reconstruct_statement(@nospecialize(x::Any), ::DataflowAnalysisResult) = x
+reconstruct_statement(::T, ::DataflowAnalysisResult) where {T<:AbstractWrenExpr} =
     _issue_error("unhandled node of type $(T) in reconstruct_statement")
-function reconstruct_statement(stmt::Sample, required_syms::Set{Symbol})
-    return Accessors.@set stmt.lhs_is_reused = stmt.lhs_top_level_symbol in required_syms
+function reconstruct_statement(stmt::Sample, result::DataflowAnalysisResult)
+    lhs_is_reused = stmt.lhs_top_level_symbol in result.required_syms
+    return Accessors.@set stmt.lhs_is_reused = lhs_is_reused
 end
-reconstruct_statement(stmt::Observe, ::Set{Symbol}) = stmt
+reconstruct_statement(stmt::Observe, ::DataflowAnalysisResult) = stmt
+# The expression of a TrackedQuantity cannot contain Samples.
+function reconstruct_statement(stmt::TrackedQuantity, result::DataflowAnalysisResult)
+    always_evaluated = stmt.name in result.required_syms
+    tqs_triggering_evaluation = get(result.tq_dependents, stmt.name, Symbol[])
+    return TrackedQuantity(
+        stmt.name,
+        stmt.expr,
+        always_evaluated,
+        tqs_triggering_evaluation,
+    )
+end
 # The contents of an OtherStatement are not lowered, so they can't contain Samples.
-reconstruct_statement(stmt::OtherStatement, ::Set{Symbol}) = stmt
-function reconstruct_statement(stmt::IID, required_syms::Set{Symbol})
-    return Accessors.@set stmt.tilde = reconstruct_statement(stmt.tilde, required_syms)
+reconstruct_statement(stmt::OtherStatement, ::DataflowAnalysisResult) = stmt
+function reconstruct_statement(stmt::IID, result::DataflowAnalysisResult)
+    return Accessors.@set stmt.tilde = reconstruct_statement(stmt.tilde, result)
 end
-function reconstruct_statement(stmt::Batch, required_syms::Set{Symbol})
-    return Accessors.@set stmt.body = reconstruct_statement(stmt.body, required_syms)
+function reconstruct_statement(stmt::Batch, result::DataflowAnalysisResult)
+    return Accessors.@set stmt.body = reconstruct_statement(stmt.body, result)
 end
-function reconstruct_statement(stmt::AddLogLikelihood, required_syms::Set{Symbol})
-    return Accessors.@set stmt.expr = reconstruct_statement(stmt.expr, required_syms)
+function reconstruct_statement(stmt::AddLogLikelihood, result::DataflowAnalysisResult)
+    return Accessors.@set stmt.expr = reconstruct_statement(stmt.expr, result)
 end
-function reconstruct_statement(stmt::ReturnStatement, required_syms::Set{Symbol})
-    return Accessors.@set stmt.expr = reconstruct_statement(stmt.expr, required_syms)
+function reconstruct_statement(stmt::ReturnStatement, result::DataflowAnalysisResult)
+    return Accessors.@set stmt.expr = reconstruct_statement(stmt.expr, result)
 end
-function reconstruct_statement(expr::WrenExpr, required_syms::Set{Symbol})
-    new_args = map(arg -> reconstruct_statement(arg, required_syms), expr.args)
+function reconstruct_statement(expr::WrenExpr, result::DataflowAnalysisResult)
+    new_args = map(arg -> reconstruct_statement(arg, result), expr.args)
     return WrenExpr(expr.head, new_args)
+end
+
+function analyse_dataflow_once(
+    stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}},
+    args::Set{Symbol},
+    skippable_tqs::Set{Symbol},
+)
+    state = DataflowAnalysisState(args, skippable_tqs)
+    for stmt in stmts
+        parse_variables!(stmt, state)
+    end
+    # A skippable tracked quantity is only evaluated alongside the tracked quantities
+    # that depend on it, but any sampled variable it uses must always be bound.
+    for used_syms in values(state.tq_uses)
+        union!(state.required_syms, intersect(used_syms, state.sample_syms))
+    end
+    return state
+end
+
+# Each pass can only add tracked quantities to `skippable_tqs`, and there are finitely
+# many of them, so the loop terminates.
+function analyse_dataflow(
+    stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}},
+    args::Set{Symbol},
+)
+    skippable_tqs = Set{Symbol}()
+    while true
+        state = analyse_dataflow_once(stmts, args, skippable_tqs)
+        unrequired_tqs = setdiff(state.tq_syms, state.required_syms)
+        if unrequired_tqs == skippable_tqs
+            if WREN_COMPILATION_DEBUG[]
+                @info "[dataflow.jl] lhs_syms = $(state.lhs_syms)"
+                @info "[dataflow.jl] required_syms = $(state.required_syms)"
+                @info "[dataflow.jl] tq_uses = $(state.tq_uses)"
+                @info "[dataflow.jl] args_to_copy = $(state.args_to_copy)"
+            end
+            return state
+        end
+        skippable_tqs = unrequired_tqs
+    end
 end
 
 function get_required_syms_and_args(
     stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}},
     args::Set{Symbol},
 )
-    state = DataflowAnalysisState(
-        Set{Symbol}(),
-        Set{Symbol}(),
-        args,
-        Set{Symbol}(),
-        Set{Symbol}(),
-    )
-
-    # Populate the sets in `state`.
-    for stmt in stmts
-        parse_variables!(stmt, state)
-    end
-
-    if WREN_COMPILATION_DEBUG[]
-        @info "[dataflow.jl] lhs_syms = $(state.lhs_syms)"
-        @info "[dataflow.jl] required_syms = $(state.required_syms)"
-        @info "[dataflow.jl] args_to_copy = $(state.args_to_copy)"
-    end
-
+    state = analyse_dataflow(stmts, args)
     return state.required_syms, state.args_to_copy
+end
+
+# The dependents of `tq` are the tracked quantities whose expressions use `tq`, directly
+# or through other skippable tracked quantities.
+function get_tq_dependents(state::DataflowAnalysisState)
+    tq_dependents = Dict{Symbol,Vector{Symbol}}()
+    for tq in state.skippable_tqs
+        dependents = Set{Symbol}()
+        frontier = [tq]
+        while !isempty(frontier)
+            used_tq = pop!(frontier)
+            for (user_tq, used_syms) in state.tq_uses
+                if used_tq in used_syms && user_tq != tq && !(user_tq in dependents)
+                    push!(dependents, user_tq)
+                    push!(frontier, user_tq)
+                end
+            end
+        end
+        tq_dependents[tq] = sort!(collect(dependents))
+    end
+    return tq_dependents
 end
 
 function run_dataflow_analysis(
     stmts::Vector{Union{AbstractWrenExpr,LineNumberNode}},
     args::Set{Symbol},
 )
-    required_syms, args_to_copy = get_required_syms_and_args(stmts, args)
-    new_stmts = map(stmt -> reconstruct_statement(stmt, required_syms), stmts)
-    return Vector{Union{AbstractWrenExpr,LineNumberNode}}(new_stmts), args_to_copy
+    state = analyse_dataflow(stmts, args)
+    result = DataflowAnalysisResult(state.required_syms, get_tq_dependents(state))
+    new_stmts = map(stmt -> reconstruct_statement(stmt, result), stmts)
+    return Vector{Union{AbstractWrenExpr,LineNumberNode}}(new_stmts), state.args_to_copy
 end

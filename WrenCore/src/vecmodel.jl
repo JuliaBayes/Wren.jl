@@ -50,7 +50,7 @@ This is equivalent to `_vecmodel_lp` but with the inactive arguments stored in t
 struct _VecModelLP{
     E,
     A<:NamedTuple,
-    C<:VarNamedTuple,
+    C<:NamedTuple,
     CA<:Val,
     X<:EvalContext,
     F,
@@ -92,7 +92,7 @@ function _vecmodel_lp(
     params::AbstractVector,
     evaluation_fn,
     model_args::NamedTuple,
-    conditioned::VarNamedTuple,
+    conditioned::NamedTuple,
     enzyme_copy_argnames::Val,
     ctx::EvalContext,
     lp_function,
@@ -384,19 +384,33 @@ _copied_args(vm::VecModel) = _copied_args(vm.model)
 # overloaded in EnzymeExt as it depends on runtime activity error which isn't in Core
 _handle_enzyme(@nospecialize(vm::VecModel)) = vm
 
-# Create a copy of a VecModel with a deepcopied adprep. This is necessary for multithreaded
-# sampling because AD preparation objects are not thread-safe.
+# Create a copy of a VecModel with its own model arguments and a deepcopied adprep. This is
+# necessary for multithreaded sampling because models may write into their arguments, and
+# AD preparation objects are not thread-safe.
 # https://juliadiff.org/DifferentiationInterface.jl/DifferentiationInterface/stable/faq/limitations/#Multithreading
 function _copy_for_thread(vm::VecModel)
+    model = _copy_for_thread(vm.model)
+    f = vm.lp_func
+    lp_func = _VecModelLP(
+        model.evaluation_fn,
+        model.args,
+        model.conditioned,
+        model.enzyme_copy_argnames,
+        f.ctx,
+        f.lp_function,
+        f.parameter_space,
+        f.vecinfo,
+        f.accs,
+    )
     return VecModel(
-        _dealias(vm.model),
+        model,
         vm.adtype,
         vm.lp_function,
         vm.parameter_space,
         vm.vecinfo,
         vm.accs,
         vm.dimension,
-        vm.lp_func,
+        lp_func,
         deepcopy(vm.adprep),
         copy(vm.sample),
     )
@@ -411,7 +425,7 @@ function _prepare_vecmodel_info(
 )
     accs = AccumulatorTuple(VectorisedParamsAccumulator(), SitenameCountAccumulator())
     _, accs = evaluate(model, source, parameter_space, accs, EvalContext{false}())
-    vecvals = vectorised_params(accs)
+    vecvals = _vectorised_values(accs)
     sca = getacc(accs, Val{SITENAMECOUNT_ACCNAME}())
 
     # TODO(penelopeysm): This might be slower than necessary due to boxing of the
@@ -581,22 +595,19 @@ function LogDensityProblems.logdensity_and_gradient(
 end
 
 """
-    Base.rand([rng::AbstractRNG,] vecmodel::VecModel) -> AbstractVector
+    vector_parameters(vecmodel::VecModel)::AbstractVector
+    vector_parameters(vecmodel::VecModel, latents)::AbstractVector
 
-Draw a parameter vector compatible with `vecmodel`.
-"""
-function Base.rand(rng::AbstractRNG, vecmodel::VecModel)
-    return vectorise_latents(FromPrior(rng), vecmodel)
-end
-Base.rand(vecmodel::VecModel) = rand(default_rng(), vecmodel)
+Obtain the model's parameters from `latents` and return them as a vector compatible with
+`vecmodel`. If no latent values are provided, they are drawn from the prior distribution.
 
-"""
-    WrenCore.vectorise_latents(latent_source::AbstractLatentSource, vecmodel::VecModel)
+The vector is in the parameter space of `vecmodel` (usually unconstrained), not in original
+space; `parameters(vecmodel, v)` converts it back.
 
-Draw model parameters from `latent_source` and return them as a vector compatible with
-`vecmodel`.
+`latents` is converted to a latent source with [`to_latent_source`](@ref), so it can also
+be an `AbstractRNG` (to draw from the prior) or a `VarNamedTuple` of values.
 """
-function vectorise_latents(latent_source::AbstractLatentSource, vecmodel::VecModel)
+function vector_parameters(vecmodel::VecModel, latent_source::AbstractLatentSource)
     params = similar(vecmodel.sample)
     accs = AccumulatorTuple(VecSampleAccumulator(params, vecmodel.vecinfo))
     _, accs = evaluate(
@@ -606,5 +617,9 @@ function vectorise_latents(latent_source::AbstractLatentSource, vecmodel::VecMod
         accs,
         EvalContext{false}(),
     )
-    return _get_vec_sample(accs)
+    return vector_parameters(accs)
 end
+function vector_parameters(vecmodel::VecModel, latents)
+    return vector_parameters(vecmodel, to_latent_source(latents))
+end
+vector_parameters(vecmodel::VecModel) = vector_parameters(vecmodel, FromPrior())

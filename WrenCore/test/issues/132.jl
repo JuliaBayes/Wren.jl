@@ -14,7 +14,7 @@ using WrenCore, WrenDists, Enzyme, Test
             cases[t] ~ Poisson(exp(s) * 10)
         end
     end
-    model = outer(inner(11), zeros(Int, 10)) | VarNamedTuple(; cases=rand(1:20, 10))
+    model = outer(inner(11), zeros(Int, 10)) | (; cases=rand(1:20, 10))
     @test VecModel(model, WrenCore.DEFAULT_AD) isa Any
 end
 
