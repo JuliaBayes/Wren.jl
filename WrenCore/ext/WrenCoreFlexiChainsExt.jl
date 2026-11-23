@@ -108,7 +108,7 @@ end
         model::WrenCore.Model,
         chain::FlexiChains.VNChain;
         rng::Random.AbstractRNG=Random.default_rng(),
-        track=true,
+        track=AllQuantities(),
     ) -> FlexiChains.VNChain
 
 Simulate from `model` using the parameters at each iteration of `chain`. If a parameter
@@ -116,8 +116,8 @@ required by `model` is not stored in `chain`, that parameter will be drawn from 
 distribution using `rng`.
 
 The returned `FlexiChain` will contain all the simulated variables, the tracked quantities
-selected by `track`, as well as the variables already present in the input `chain`, which
-implies that:
+selected by `track` (see [`TrackedQuantitySpec`](@ref)), as well as the variables
+already present in the input `chain`, which implies that:
 
 - variables that are in the `chain` are fixed to their respective values;
 - variables that arent in the `chain` are resampled according to the model;
@@ -138,7 +138,7 @@ function WrenCore.simulate(
     model::WrenCore.Model,
     chain::VNChain;
     rng::AbstractRNG=default_rng(),
-    track=true,
+    track=WrenCore.AllQuantities(),
 )
     fallback = WrenCore.FromPrior(rng)
     tq_spec = WrenCore.to_tq_spec(track)
@@ -158,18 +158,20 @@ end
         model::WrenCore.Model,
         chain::FlexiChains.VNChain;
         rng::Random.AbstractRNG=Random.default_rng(),
-        track=true,
+        track=WrenCore.AllQuantities(),
     ) -> FlexiChains.VNChain
 
 Re-evaluate `model` at each iteration of `chain` and return a chain holding the tracked
 quantities requested with `track`. If a parameter required by `model` is not stored in
 `chain`, that parameter will be drawn from the prior distribution using `rng`.
+
+See also: [`TrackedQuantitySpec`](@ref WrenCore.TrackedQuantitySpec)
 """
 function WrenCore.tracked_quantities(
     model::WrenCore.Model,
     chain::VNChain;
     rng::AbstractRNG=default_rng(),
-    track=true,
+    track=AllQuantities(),
 )
     fallback = WrenCore.FromPrior(rng)
     tq_spec = WrenCore.to_tq_spec(track)

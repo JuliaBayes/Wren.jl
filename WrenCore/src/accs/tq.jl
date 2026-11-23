@@ -41,8 +41,8 @@ end
 """
     to_tq_spec(track)::TrackedQuantitySpec
 
-`true` selects every tracked quantity, `false` none, and a `Symbol` or tuple of `Symbol`s
-the named ones (a submodel name selects all of that submodel's quantities).
+Converts `true` to `AllQuantities()`, `false` to `NoQuantities()`, and wraps a `Symbol` or
+tuple of `Symbol`s in `SomeQuantities()`.
 """
 to_tq_spec(spec::TrackedQuantitySpec) = spec
 to_tq_spec(track::Bool) = track ? AllQuantities() : NoQuantities()
@@ -51,7 +51,7 @@ to_tq_spec(names::Tuple{Vararg{Symbol}}) = SomeQuantities(names)
 function to_tq_spec(track)
     throw(
         ArgumentError(
-            "`track` must be `true`, `false`, a Symbol or a tuple of Symbols; got $(repr(track))",
+            "`track` must be a `Bool`, `Symbol`, tuple of `Symbol`s, or `TrackedQuantitySpec`",
         ),
     )
 end

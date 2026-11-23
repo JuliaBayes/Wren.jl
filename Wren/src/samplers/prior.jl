@@ -10,7 +10,7 @@ using MCMCProgress: Determinate, advance!, chain_at, close_phase!, open_phase!
         niters::Integer,
         nchains::Integer=1;
         progress::Bool=true,
-        track=true,
+        track=AllQuantities(),
     ) -> FlexiChains.VNChain
 
 Sample from the prior distribution of a Wren model.
@@ -24,7 +24,7 @@ function prior(
     niters::Integer,
     nchains::Integer=1;
     progress::Bool=true,
-    track=true,
+    track=AllQuantities(),
 )
     return prior(Random.default_rng(), model, niters, nchains; progress, track)
 end
@@ -34,7 +34,7 @@ function prior(
     niters::Integer,
     nchains::Integer=1;
     progress::Bool=true,
-    track=true,
+    track=AllQuantities(),
 )
     copy!(Random.TaskLocalRNG(), rng)
     tq_spec = WrenCore.to_tq_spec(track)
