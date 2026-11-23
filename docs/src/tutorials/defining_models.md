@@ -230,7 +230,7 @@ end
 simulate(with_addloglikelihood())
 ```
 
-!!! "warning"
+!!! warning
 
     `@addloglikelihood` should only be used as an escape hatch in cases where none of the above syntax works at all.
     If you have a reason for using this, please [do let us know](https://github.com/JuliaBayes/Wren.jl/issues) as it may indicate that some other feature is missing from Wren.
