@@ -2,7 +2,7 @@
 module SblriBLR
 
 using PosteriorDB
-using WrenCore: @wren, @observe, @batch, @iid
+using WrenCore: @wren
 using WrenDists: WrenDists as WD
 
 const data = let
@@ -20,7 +20,7 @@ end
     return nothing
 end
 
-const wren_model = let
+const model = let
     X = data["X"]
     sblri_blr(data["y"], X, data["D"])
 end

@@ -28,7 +28,7 @@ function _add_aliases(model, mapping, space, aliases)
             vn isa VarName && VarNames.getoptic(vn) isa VarNames.Iden ||
                 throw(ArgumentError("Aliases must be plain top-level latent names"))
             vn in used && throw(ArgumentError("Alias groups must not overlap"))
-            haskey(model.conditioned, vn) &&
+            haskey(model.conditioned, VarNames.getsym(vn)) &&
                 throw(ArgumentError("Alias members must not be conditioned"))
             push!(used, vn)
         end
@@ -85,7 +85,7 @@ split(acc::AliasAccumulator) = reset(acc)
 Base.copy(acc::AliasAccumulator) = acc
 # Alias declarations apply to this model's plain names, not a child's names.
 scope(::AliasAccumulator, ::VarName) = AliasAccumulator(())
-combine_with_namespace(parent::AliasAccumulator, ::AliasAccumulator, ::VarName, template) =
+combine_from_scope(parent::AliasAccumulator, ::AliasAccumulator, ::VarName, template) =
     parent
 combine(a::AliasAccumulator, b::AliasAccumulator) =
     AliasAccumulator(a.aliases, map(+, a.counts, b.counts))

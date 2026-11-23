@@ -16,6 +16,46 @@ end
 # eltype that `UncollectedParams` doesn't subtype.
 set_lhs!!(obj, optic, val) = Accessors.set(obj, optic, val)
 
+set_namespace_copy(obj, optic, val) = Accessors.set(obj, optic, val)
+# A deconditioned child namespace may be absent from the observed record.
+set_namespace_copy(obj::NamedTuple, ::VarNames.Property{sym}, val) where {sym} =
+    merge(obj, NamedTuple{(sym,)}((val,)))
+function set_namespace_copy(obj::Array{T}, optic::VarNames.Index, val::V) where {T,V}
+    U = Union{T,V}
+    if Base.isbitsunion(U) && all(i -> i isa Union{Integer,CartesianIndex}, optic.ix)
+        # For example, replacing (y=1.0,) with VarNamedTuple(a=0.5) should use
+        # Union{typeof((y=1.0,)),typeof(VarNamedTuple(a=0.5))}, not Any. Accessors.set
+        # and BangBang.setindex!! use promote_type here, which widens these records to
+        # Any and boxes the remaining observed entries. Copy before the first write:
+        # BangBang.setindex!! alone can also mutate a shared array when its eltype fits.
+        result = copyto!(similar(obj, U), obj)
+        Base.setindex!(result, val, optic.ix...; optic.kw...)
+        return result
+    end
+    return Accessors.set(obj, optic, val)
+end
+
+# Copy a shared namespace container at its first write, preserving observed siblings.
+# Later writes can mutate the owned container without copying it again.
+@inline function set_namespace_lhs!!(obj, observed, optic, val)
+    head, tail = VarNames.ohead(optic), VarNames.otail(optic)
+    inner = if tail isa VarNames.Iden
+        val
+    else
+        set_namespace_lhs!!(
+            _scope_conditioned(obj, head),
+            _scope_conditioned(observed, head),
+            tail,
+            val,
+        )
+    end
+    return if obj isa NamedTuple || obj === observed
+        set_namespace_copy(obj, head, inner)
+    else
+        Accessors.set(obj, VarNames.with_mutation(head), inner)
+    end
+end
+
 assign_or_set!!(lhs::Symbol, rhs, vn) = :($lhs = $rhs)
 function assign_or_set!!(lhs::Expr, rhs, vn)
     left_top_sym = get_top_level_symbol(lhs)
@@ -69,6 +109,24 @@ function emit_model_expr(
     template = get_top_level_symbol(stmt.lhs)
     collect_submodel_params =
         stmt.lhs_is_reused ? CollectSubmodelParams() : DiscardSubmodelParams()
+    assign_child_params = assign_or_set!!(stmt.lhs, child_params, vn)
+    if stmt.lhs isa Expr
+        # This generator only has a symbol for `conditioned`: the cached evaluation
+        # function is shared by condition/decondition and parent-supplied overrides.
+        # Julia folds this key check when specialising on the NamedTuple's type.
+        assign_child_params = quote
+            if $(haskey)($conditioned, $(QuoteNode(template)))
+                $template = $(set_namespace_lhs!!)(
+                    $template,
+                    $(getproperty)($conditioned, $(QuoteNode(template))),
+                    $(VarNames.getoptic)($vn),
+                    $child_params,
+                )
+            else
+                $assign_child_params
+            end
+        end
+    end
     return quote
         $rhs = $rhs_expr
         $vn = $vn_expr
@@ -101,17 +159,23 @@ function emit_model_expr(
                     $ctx,
                 )
             end
-            $(assign_or_set!!(stmt.lhs, child_params, vn))
-            $accs = $(combine_with_namespace)(
+            $assign_child_params
+            $accs = $(combine_from_scope)(
                 $accs,
                 $child_accs,
                 $vn,
                 $(stmt.lhs isa Symbol ? nothing : template),
             )
         else
-            if $(haskey)($conditioned, $vn)
-                $val = $(getindex)($conditioned, $vn)
-                $(assign_or_set!!(stmt.lhs, val, vn))
+            # Whole-symbol membership is known from the NamedTuple's type.
+            if $(haskey)($conditioned, $(QuoteNode(template)))
+                $val = $(VarNames.getvalue)($conditioned, $vn)
+                # Nothing reads an observed element back unless the symbol is reused. A
+                # plain symbol is always bound, since it is the template below.
+                $(
+                    stmt.lhs_is_reused || stmt.lhs isa Symbol ?
+                    assign_or_set!!(stmt.lhs, val, vn) : nothing
+                )
                 $accs = $(accumulate_observe!!)(
                     $accs,
                     $val,
@@ -536,6 +600,9 @@ vectorise_batch_stmt(lnn::LineNumberNode, idx, iters, size, ax, cond, ls, ps, ct
 function vectorise_batch_stmt(::IID, idx, iters, size, ax, cond, ls, ps, ctx)
     return error("@iid is not supported inside @batch")
 end
+function vectorise_batch_stmt(::TrackedQuantity, idx, iters, size, ax, cond, ls, ps, ctx)
+    return error("@track is not supported inside @batch")
+end
 
 function vectorise_batch_stmt(
     stmt::Sample,
@@ -614,6 +681,60 @@ function emit_model_expr(
     end
 end
 
+# If the TQ is not `always_evaluated`, `expr` is inside an `is_accumulating_tq`
+# branch, which the compiler removes when neither the TQ itself nor any quantity in
+# `tqs_triggering_evaluation` is requested. If `tqs_triggering_evaluation` is empty, the
+# value is assigned to a gensym so that it cannot shadow a variable of the same name.
+function emit_model_expr(
+    stmt::TrackedQuantity,
+    accs,
+    conditioned,
+    latent_source,
+    parameter_space,
+    ctx,
+)
+    # If either `stmt.always_evaluated` is true, or one of the TQs in `stmt.tqs_triggering_evaluation`
+    # is being collected, then we need to _evaluate_ the value of this TQ. This is separate to whether
+    # or not it is collected (in the TQ accumulator), which happens only if `stmt.name` was requested.
+    @gensym tq_value
+    value_expr =
+        emit_model_expr(stmt.expr, accs, conditioned, latent_source, parameter_space, ctx)
+    is_being_accumulated = :($(is_accumulating_tq)($accs, $(Val{stmt.name}())))
+    return if stmt.always_evaluated
+        quote
+            # `let` keeps locals of the expression outside of the model body
+            $(stmt.name) = let
+                $value_expr
+            end
+            if $is_being_accumulated
+                $accs = $(accumulate_tq!!)($accs, $(stmt.name), $(VarName{stmt.name}()))
+            end
+            $(stmt.name)
+        end
+    else
+        value_name = isempty(stmt.tqs_triggering_evaluation) ? tq_value : stmt.name
+        is_needed = foldl(
+            stmt.tqs_triggering_evaluation;
+            init=is_being_accumulated,
+        ) do condition, dependent
+            :($condition || $(is_accumulating_tq)($accs, $(Val{dependent}())))
+        end
+        quote
+            if $is_needed
+                $value_name = let
+                    $value_expr
+                end
+                if $is_being_accumulated
+                    $accs = $(accumulate_tq!!)($accs, $value_name, $(VarName{stmt.name}()))
+                end
+                $value_name
+            else
+                nothing
+            end
+        end
+    end
+end
+
 function emit_model_expr(
     stmt::Observe,
     accs,
@@ -638,6 +759,7 @@ function emit_model_expr(
         $vn = $vn_expr
         $accs =
             $(accumulate_observe!!)($accs, $val, $vn, $rhs, $template, $(Val{stmt.name}()))
+        $val
     end
 end
 

@@ -8,6 +8,7 @@ using Mooncake
 using Enzyme
 using FillArrays: Fill
 using Plaice
+using Random: Xoshiro
 using Test
 
 const RUN_REACTANT = !Sys.iswindows()
@@ -61,6 +62,18 @@ test_dist(
     ),
 )
 
+@testset "BatchedNormal sampling precision: $T" for T in (Float16, Float32, Float64)
+    mu = T[1 2 3 4; 5 6 7 8]
+    sigma = fill(T(0.5), size(mu))
+    d = WrenDists.BatchedNormal(mu, sigma)
+    x = rand(Xoshiro(8675309), d)
+    noise = T.(randn(Xoshiro(8675309), size(mu)))
+    @test eltype(x) === T
+    @test x == noise .* sigma .+ mu
+    draw_sum(s) = sum(rand(Xoshiro(8675309), WrenDists.BatchedNormal(mu, s)))
+    @test ReverseDiff.gradient(draw_sum, sigma) ≈ noise
+end
+
 test_dist(
     "BatchedNormal (constant sigma)",
     WrenDists.BatchedNormal([1.0, 2.0, 3.0], Fill(1.0, 3)),
@@ -98,3 +111,12 @@ test_dist(
         end,
     ),
 )
+
+@testset "BatchedNormal input shape" begin
+    for sigma in (ones(3), Fill(1.0, 3))
+        d = WrenDists.BatchedNormal(zeros(3), sigma)
+        for x in (zeros(2), zeros(4), zeros(3, 1))
+            @test_throws DimensionMismatch logdensityof(d, x)
+        end
+    end
+end

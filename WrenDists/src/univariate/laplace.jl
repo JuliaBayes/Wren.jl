@@ -23,14 +23,14 @@ Laplace() = Laplace(0.0, 1.0)
     z = zval(d, x)
     # Match `b` to `z` so integer parameters do not reduce `BigFloat` precision.
     b = oftype(z, d.b)
-    return -abs(z) - log(2 * b)
+    return -abs(z) - logtwo - log(b)
 end
 
 # The difference of two unit exponential samples follows Laplace(0, 1).
 # Applying `μ` and `b` afterward lets automatic differentiation pass through the sample.
 @inline function Base.rand(rng::AbstractRNG, d::Laplace)
     T = noisetype(d)
-    e₁ = -log(rand(rng, T))
-    e₂ = -log(rand(rng, T))
+    e₁ = -log1p(-rand(rng, T))
+    e₂ = -log1p(-rand(rng, T))
     return xval(d, e₁ - e₂)
 end

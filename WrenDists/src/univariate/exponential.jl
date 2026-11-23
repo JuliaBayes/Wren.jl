@@ -33,20 +33,24 @@ struct BatchedExponential{R<:AbstractArray} <: BatchedUnivariate
 end
 Base.size(d::BatchedExponential) = size(d.θ)
 function Base.rand(rng::AbstractRNG, d::BatchedExponential)
-    return -log.(rand(rng, noisetype(d), size(d))) .* d.θ
+    return .-log.(rand(rng, rngtype(d), size(d))) .* d.θ
 end
 function DensityInterface.logdensityof(d::BatchedExponential, x)
     # Benchmarks @ https://github.com/JuliaBayes/Wren.jl/issues/105
     θ = d.θ
     return if within_compile()
-        sum(@. -(x / θ) - log(θ))
+        value = sum(@. -(x / θ) - log(θ))
+        ifelse(all(x .>= 0), value, oftype(value, -Inf))
     else
         T = float(promote_type(eltype(x), eltype(θ)))
         s = zero(T)
+        valid = true
         for i in eachindex(x, θ)
+            # don't return -Inf inside the loop: see #317
+            valid &= x[i] >= zero(x[i])
             s -= convert(T, x[i]) / convert(T, θ[i]) + log(convert(T, θ[i]))
         end
-        s
+        ifelse(valid, s, convert(T, -Inf))
     end
 end
-Plaice.scalar_to_scalar_bijector(::BatchedExponential) = Plaice.Log(0.0, 1)
+Plaice.scalar_to_scalar_bijector(d::BatchedExponential) = Plaice.Log(zero(noisetype(d)), 1)

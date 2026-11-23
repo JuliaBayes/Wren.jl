@@ -16,6 +16,7 @@ New implementations of vectorised log-densities are very much welcome!
 WrenDists.Normal
 WrenDists.Laplace
 WrenDists.Cauchy
+WrenDists.Logistic
 WrenDists.TDist
 WrenDists.Flat
 ```
@@ -26,10 +27,12 @@ WrenDists.Flat
 WrenDists.LogNormal
 WrenDists.Exponential
 WrenDists.Gamma
+WrenDists.InverseGamma
 WrenDists.Weibull
 WrenDists.HalfNormal
 WrenDists.HalfCauchy
 WrenDists.HalfTDist
+WrenDists.PositiveFlat
 ```
 
 ### Continuous bounded
@@ -37,6 +40,7 @@ WrenDists.HalfTDist
 ```@docs
 WrenDists.Uniform
 WrenDists.Beta
+WrenDists.TruncatedFlat
 ```
 
 ### Discrete

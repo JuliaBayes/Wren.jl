@@ -2,12 +2,12 @@ module WrenDists
 
 using DensityInterface: DensityInterface, logdensityof
 using EnzymeCore: EnzymeCore, EnzymeRules, Annotation, Const
-using IrrationalConstants: invsqrt2, log2π, logπ, logtwo, sqrt2
-using LogExpFunctions: log1mexp, log1pexp, logistic, xlogy, xlog1py
+using IrrationalConstants: invsqrt2, log2π, logπ, logtwo, sqrt2, sqrtπ
+using LogExpFunctions: log1mexp, log1pexp, log1psq, logistic, xlogy, xlog1py
 using LinearAlgebra: Diagonal, LowerTriangular, UniformScaling, diag
 using Random: Random, AbstractRNG
 using ReactantCore: within_compile
-using SpecialFunctions: erfc, erfcinv, gamma_inc, logbeta, logerfc, loggamma, digamma
+using SpecialFunctions: erfc, erfcinv, erfcx, gamma_inc, logbeta, logerfc, loggamma, digamma
 using Plaice: Plaice
 using Test: @test
 using VarNames: VarNames
@@ -35,8 +35,12 @@ include("univariate/weibull.jl")
 include("univariate/uniform.jl")
 include("univariate/laplace.jl")
 include("univariate/cauchy.jl")
+include("univariate/logistic.jl")
 include("univariate/flat.jl")
+include("univariate/truncatedflat.jl")
+include("univariate/positiveflat.jl")
 include("univariate/gamma.jl")
+include("univariate/inversegamma.jl")
 include("univariate/tdist.jl")
 include("univariate/beta.jl")
 include("univariate/halfnormal.jl")
@@ -84,7 +88,9 @@ export Bernoulli,
     HalfCauchy,
     HalfNormal,
     HalfTDist,
+    InverseGamma,
     Laplace,
+    Logistic,
     LogNormal,
     Multinomial,
     MvNormalScale,
@@ -92,7 +98,9 @@ export Bernoulli,
     Normal,
     Poisson,
     PoissonLog,
+    PositiveFlat,
     TDist,
+    TruncatedFlat,
     Uniform,
     Weibull
 

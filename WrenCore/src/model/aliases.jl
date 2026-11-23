@@ -51,7 +51,7 @@ _alias_sample_counts!(
 function _alias_branch_symbols!(names, stmt::Sample, conditioned)
     stmt.lhs isa Symbol && _alias_straight_expr(stmt.rhs) || return false
     sym = stmt.lhs
-    if !haskey(conditioned, VarName{sym}())
+    if !haskey(conditioned, sym)
         sym in names && return false
         push!(names, sym)
     end

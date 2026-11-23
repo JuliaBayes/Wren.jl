@@ -61,14 +61,21 @@ function DensityInterface.logdensityof(d::BatchedBinomial, x)
     # Benchmarks @ https://github.com/JuliaBayes/Wren.jl/issues/103
     n, p = d.n, d.p
     return if within_compile()
-        sum(@. logbinom(n, x) + xlogy(x, p) + xlogy(n - x, one(x) - p))
+        valid = @. isinteger(x) & (x >= zero(x)) & (x <= n)
+        k = @. ifelse(valid, x, zero(x))
+        p = @. ifelse(valid, p, one(p) / 2)
+        logp = @. logbinom(n, k) + xlogy(k, p) + xlogy(n - k, one(k) - p)
+        sum(@. ifelse(valid, logp, oftype(logp, -Inf)))
     else
         T = float(promote_type(eltype(x), eltype(n), eltype(p)))
         s = zero(T)
+        valid = true
         for i in eachindex(x)
+            # don't return -Inf inside the loop: see #317
+            valid &= isinteger(x[i]) & (0 <= x[i]) & (x[i] <= n[i])
             ni, ki, pi = convert(T, n[i]), convert(T, x[i]), convert(T, p[i])
             s += logbinom(ni, ki) + xlogy(ki, pi) + xlogy(ni - ki, one(T) - pi)
         end
-        s
+        ifelse(valid, s, convert(T, -Inf))
     end
 end

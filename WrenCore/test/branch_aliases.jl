@@ -43,11 +43,11 @@ using WrenCore
             value, grad = lp_and_grad(vm, p)
             @test value ≈ expected
             @test grad ≈ gradient
-            draw = parameters(Draw(p, vm; include_log_probs=false))
+            draw = parameters(vm, p)
             @test draw[@vn(child.y)] == 0.5
             @test draw[@vn(common)] == 4.0
             @test draw[x > 0 ? @vn(y) : @vn(z)] ≈ (x > 0 ? exp(p[3]) : z)
-            @test vectorise_latents(FromValues(draw), vm) ≈ p
+            @test vector_parameters(vm, draw) ≈ p
         end
     end
 end

@@ -2,10 +2,10 @@ name: CI
 
 on:
   workflow_dispatch: 
-  #push:
-    #branches:
-      #- main
-  #pull_request:
+  push:
+    branches:
+      - main
+  pull_request:
 
 # needed to allow julia-actions/cache to delete old caches that it has created
 permissions:
@@ -18,25 +18,34 @@ concurrency:
   cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') || github.ref == 'refs/heads/main' }}
 
 jobs:
-  test-all:
+  test:
+    name: ${{ matrix.project }} (${{ matrix.runner.os }}, Julia ${{ matrix.runner.version }})
     runs-on: ${{ matrix.runner.os }}
+    env:
+      # Sampling multiple chains is multithreaded
+      JULIA_NUM_THREADS: 2
     strategy:
       fail-fast: false
 
       matrix:
+        project:
+          - WrenCore
+          - Wren
+          - WrenDists
         runner:
-          # Ubuntu
+          # Ubuntu (note workspace support only goes back to 1.12, so 1.10/1.11
+          # might have to wait until it's registered in General, as it's a faff
+          # to call Pkg.develop everywhere.)
           - version: '1'
             os: ubuntu-latest
-
-          # TODO(penelopeysm): Re-enable testing on more platforms once the repo is public.
-          # For now we keep the matrix small to avoid spending too many CI minutes.
-          # # Windows
-          # - version: '1'
-          #   os: windows-latest
-          # # macOS
-          # - version: '1'
-          #   os: macos-latest
+          - version: '1.12'
+            os: ubuntu-latest
+          # Windows
+          - version: '1'
+            os: windows-latest
+          # macOS
+          - version: '1'
+            os: macos-latest
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
@@ -47,4 +56,10 @@ jobs:
 
       - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # 3.1.0
 
-      - run: ./runtests core
+      - uses: julia-actions/julia-runtest@e89ac6c957d7c4d7e0cb3162f12d8290a008f9d1 # 1.13.0
+        with:
+          project: ${{ matrix.project }}
+          # TODO(penelopeysm): maybe enable this one day. We don't use the
+          # coverage data, so enabling it would just make CI slower for no
+          # reason.
+          coverage: false

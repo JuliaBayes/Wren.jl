@@ -84,7 +84,7 @@ end
             verbose=false,
         )
         @test result isa BenchmarkResult
-        @test result.rand_bench.time > 0
+        @test result.parameters_bench.time > 0
         @test result.logjoint_bench.time > 0
         @test result.lp_bench.time > 0
         @test result.lp_and_grad_bench === nothing

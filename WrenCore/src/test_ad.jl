@@ -160,7 +160,7 @@ end
 
 """
     test_ad(
-        model::WrenCore.Model,
+        model::Model,
         adtype::DI.AbstractADType;
         reference::AbstractADCorrectnessTestSetting=WithBackend(),
         atol::Real=100 * eps(),
@@ -265,7 +265,7 @@ end
 
 """
     reduce_copies(
-        model::WrenCore.Model,
+        model::Model,
         adtype::DI.AbstractADType;
         n_points::Int=10,
         rng::AbstractRNG=Xoshiro(468),
@@ -320,7 +320,7 @@ function reduce_copies(
         # `reduce_copies` must be false here, otherwise infinite recursion!
         reduce_copies=false,
     )
-    points = [rand(rng, ref_vecmodel) for _ in 1:n_points]
+    points = [vector_parameters(ref_vecmodel, rng) for _ in 1:n_points]
     expected = [lp_and_collected_grad(ref_vecmodel, p) for p in points]
 
     # Arguments in the copy set are only really copied if `_needs_copy` says so, so
@@ -380,8 +380,8 @@ $(TYPEDFIELDS)
 struct BenchmarkResult{M<:VecModel}
     "The vectorised model that was benchmarked. The parameters used are in `vecmodel.sample`."
     vecmodel::M
-    "Benchmark for drawing a sample from the model with [`rand`](@ref)."
-    rand_bench::Chairmarks.Sample
+    "Benchmark for drawing a sample from the model with [`parameters`](@ref)."
+    parameters_bench::Chairmarks.Sample
     "Benchmark for evaluating the log-joint density with [`logjoint`](@ref)."
     logjoint_bench::Chairmarks.Sample
     "Benchmark for evaluating the vectorised log-density with [`lp`](@ref)."
@@ -405,7 +405,7 @@ end
 
 function Base.show(io::IO, ::MIME"text/plain", result::BenchmarkResult)
     lines = _model_lines(result.vecmodel)
-    push!(lines, "rand" => _show_sample(result.rand_bench))
+    push!(lines, "parameters" => _show_sample(result.parameters_bench))
     push!(lines, "logjoint" => _show_sample(result.logjoint_bench))
     push!(lines, "lp" => _show_sample(result.lp_bench))
     if result.lp_and_grad_bench !== nothing
@@ -419,7 +419,7 @@ end
 
 """
     benchmark_model(
-        model::WrenCore.Model,
+        model::Model,
         adtype::Union{Nothing,DI.AbstractADType}=nothing;
         lp_function=logjoint_transformed,
         latent_source::AbstractLatentSource=FromPrior(Xoshiro(468)),
@@ -430,7 +430,7 @@ end
 
 Benchmark a model at multiple levels:
 
-- **Model level**: [`rand`](@ref) (sampling from the prior) and [`logjoint`](@ref)
+- **Model level**: [`parameters`](@ref) (sampling from the prior) and [`logjoint`](@ref)
   (log-joint density evaluation).
 - **VecModel level**: [`lp`](@ref) (log-density of the vectorised model) and, if `adtype`
   is given, [`lp_and_grad`](@ref) (log-density and its gradient).
@@ -456,14 +456,7 @@ function benchmark_model(
     seconds::Real=1,
     verbose::Bool=(!isinteractive()),
 )
-    _, accs = evaluate(
-        model,
-        latent_source,
-        OriginalSpace(),
-        WrenCore.default_accumulators(),
-        EvalContext{false}(),
-    )
-    vnt_params = parameters(accs)
+    vnt_params = parameters(model, latent_source)
     vecmodel = VecModel(
         model,
         adtype;
@@ -475,7 +468,7 @@ function benchmark_model(
 
     # Model level
     rng = Xoshiro(468) # avoid mutating global RNG
-    rand_bench = _min_bench(() -> rand(rng, model), seconds)
+    parameters_bench = _min_bench(() -> parameters(model, rng), seconds)
     logjoint_bench = _min_bench(() -> logjoint(model, vnt_params), seconds)
 
     # VecModel level
@@ -486,8 +479,13 @@ function benchmark_model(
         _min_bench(() -> lp_and_grad(vecmodel, params), seconds)
     end
 
-    result =
-        BenchmarkResult(vecmodel, rand_bench, logjoint_bench, lp_bench, lp_and_grad_bench)
+    result = BenchmarkResult(
+        vecmodel,
+        parameters_bench,
+        logjoint_bench,
+        lp_bench,
+        lp_and_grad_bench,
+    )
     if verbose
         show(stdout, MIME"text/plain"(), result)
         println()
@@ -500,7 +498,7 @@ end
     @bmodel model adtype
 
 Benchmark a model; shorthand for [`benchmark_model`](@ref). The one-argument form
-benchmarks `rand`, `logjoint`, and `lp` only. The two-argument form also benchmarks
+benchmarks `parameters`, `logjoint`, and `lp` only. The two-argument form also benchmarks
 `lp_and_grad` with the given AD backend.
 """
 macro bmodel(model)

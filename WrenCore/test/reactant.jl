@@ -19,7 +19,7 @@ end
 @testset "Reactant" begin
     adtype = AutoReactant(AutoEnzyme(; mode=Reverse))
     vecmodel = VecModel(reactant_model(1.0), adtype; reduce_copies=true)
-    params = rand(vecmodel)
+    params = vector_parameters(vecmodel)
 
     @test lp(vecmodel, params) isa Float64
     logdensity, grad = lp_and_grad(vecmodel, params)

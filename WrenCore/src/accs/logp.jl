@@ -117,7 +117,7 @@ Every subtype of `LogProbAccumulator` must implement
     other accumulator.
 
 `LogProbAccumulator` provides implementations for other common functions, like convenience
-constructors, `copy`, `show`, `==`, `isequal`, `hash`, `split`, and `combine`.
+constructors, `copy`, `show`, `==`, `isequal`, `hash`, `reset`, and `combine_from_scope`.
 
 This type has no great conceptual significance, it just reduces code duplication between
 types like LogPriorAccumulator, LogJacobianAccumulator, and LogLikelihoodAccumulator.
@@ -157,21 +157,17 @@ Base.hash(acc::T, h::UInt) where {T<:LogProbAccumulator} = hash((T, logp(acc)), 
 
 _zero(::Tacc) where {Tlogp,Tacc<:LogProbAccumulator{Tlogp}} = Tacc(zero(Tlogp))
 reset(acc::LogProbAccumulator) = _zero(acc)
-split(acc::LogProbAccumulator) = _zero(acc)
-function combine(acc::LogProbAccumulator, acc2::LogProbAccumulator)
-    if basetypeof(acc) !== basetypeof(acc2)
-        msg = "Cannot combine accumulators of different types: $(basetypeof(acc)) and $(basetypeof(acc2))"
-        throw(ArgumentError(msg))
-    end
-    return basetypeof(acc)(logp(acc) + logp(acc2))
-end
-function combine_with_namespace(
+function combine_from_scope(
     acc::LogProbAccumulator,
     acc2::LogProbAccumulator,
     ::VarName,
     template,
 )
-    return combine(acc, acc2)
+    if basetypeof(acc) !== basetypeof(acc2)
+        msg = "Cannot combine accumulators of different types: $(basetypeof(acc)) and $(basetypeof(acc2))"
+        throw(ArgumentError(msg))
+    end
+    return basetypeof(acc)(logp(acc) + logp(acc2))
 end
 
 acclogp(acc::LogProbAccumulator, val) = basetypeof(acc)(logp(acc) + val)
@@ -204,7 +200,7 @@ logp(acc::LogPriorAccumulator) = acc.logp
 
 accumulator_name(::Type{<:LogPriorAccumulator}) = LOG_PRIOR_ACCNAME
 
-function accumulate_assume!!(
+@inline function accumulate_assume!!(
     acc::LogPriorAccumulator,
     val,
     tval,

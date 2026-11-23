@@ -27,7 +27,7 @@ end
 
 # Apply `μ` and `σ` after drawing noise so automatic differentiation can follow them.
 @inline function Base.rand(rng::AbstractRNG, d::Normal)
-    return xval(d, randn(rng, noisetype(d)))
+    return xval(d, randn(rng, rngtype(d)))
 end
 
 # --- Batched Normal distributions ---
@@ -37,7 +37,7 @@ function _iid_logdensityof(dist::Normal, x::AbstractArray)
     μ = dist.μ
     _, _, σ = promote(zero(eltype(x)), μ, dist.σ)
     inv_σ = inv(float(σ))
-    z2 = sum(xi -> abs2((xi - μ) * inv_σ), x; init=zero(inv_σ))
+    z2 = _sum_or_zero(xi -> abs2((xi - μ) * inv_σ), x, zero(inv_σ))
     lognorm = logdensityof(dist, oftype(z2, μ))
     return length(x) * lognorm - z2 / 2
 end
@@ -45,7 +45,7 @@ end
 # One `randn` call for the whole array is faster than drawing element by element.
 function Base.rand(rng::AbstractRNG, d::IID{<:Normal})
     dist = _dist(d)
-    return xval.(Ref(dist), randn(rng, noisetype(dist), _dims(d)))
+    return xval.(Ref(dist), randn(rng, rngtype(dist), _dims(d)))
 end
 
 using FillArrays: AbstractFill, getindex_value
@@ -55,10 +55,12 @@ struct BatchedNormal{M<:AbstractArray,S<:AbstractArray} <: BatchedUnivariate
     sigma::S
 end
 Base.size(d::BatchedNormal) = size(d.mu)
+# Convert noise so numeric wrappers need no typed randn method.
 Base.rand(rng::Random.AbstractRNG, d::BatchedNormal) =
-    randn(rng, size(d.mu)) .* d.sigma .+ d.mu
+    convert.(noisetype(d), randn(rng, size(d.mu))) .* d.sigma .+ d.mu
 
 function DensityInterface.logdensityof(d::BatchedNormal, x::AbstractArray{<:Number})
+    _check_size(d, x)
     # Benchmarks @ https://github.com/JuliaBayes/Wren.jl/issues/99
     mu, sigma = d.mu, d.sigma
     # Promote so that integer data or parameters still give a float result.
@@ -82,6 +84,7 @@ function DensityInterface.logdensityof(
     d::BatchedNormal{<:AbstractArray,<:AbstractFill},
     x::AbstractArray{<:Number},
 )
+    _check_size(d, x)
     mu, sigma = d.mu, getindex_value(d.sigma)
     T = float(promote_type(eltype(x), eltype(mu), typeof(sigma)))
     sqdist = if within_compile()

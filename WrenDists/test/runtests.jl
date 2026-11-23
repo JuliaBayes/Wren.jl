@@ -1,10 +1,14 @@
 using Test
 
 @testset "WrenDists" begin
+    include("precision.jl")
+    include("sampling.jl")
+
     # Continuous unconstrained
     include("univariate/normal.jl")
     include("univariate/laplace.jl")
     include("univariate/cauchy.jl")
+    include("univariate/logistic.jl")
     include("univariate/tdist.jl")
     include("univariate/flat.jl")
 
@@ -13,13 +17,16 @@ using Test
     include("univariate/exponential.jl")
     include("univariate/weibull.jl")
     include("univariate/gamma.jl")
+    include("univariate/inversegamma.jl")
     include("univariate/halfnormal.jl")
     include("univariate/halfcauchy.jl")
     include("univariate/halftdist.jl")
+    include("univariate/positiveflat.jl")
 
     # Continuous bounded
     include("univariate/beta.jl")
     include("univariate/uniform.jl")
+    include("univariate/truncatedflat.jl")
 
     # Discrete univariate
     include("univariate/bernoulli.jl")
