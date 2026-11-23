@@ -91,8 +91,8 @@ function Base.show(io::IO, ::MIME"text/plain", result::ModelResult)
 end
 
 """
-    simulate(model::Model; track::TrackedQuantitySpec=AllQuantities())
-    simulate(model::Model, latents; track::TrackedQuantitySpec=AllQuantities())
+    simulate(model::Model; track=true)
+    simulate(model::Model, latents; track=true)
 
 Draw a sample from `model`, using the given latent source. If one is not provided,
 draws from the prior distribution.
@@ -101,20 +101,18 @@ draws from the prior distribution.
 be an `AbstractRNG` (to draw from the prior) or a `VarNamedTuple` of values.
 
 Returns the params, tracked quantities selected by `track`, return value, log-prior, and
-log-likelihood of the model packaged in a [`ModelResult`](@ref).
+log-likelihood of the model packaged in a [`ModelResult`](@ref). `track` is `true` (all
+tracked quantities), `false` (none), or a `Symbol` or tuple of `Symbol`s naming the ones to
+keep; see [`to_tq_spec`](@ref).
 """
-function simulate(
-    model::Model,
-    latents::AbstractLatentSource;
-    track::TrackedQuantitySpec=AllQuantities(),
-)
+function simulate(model::Model, latents::AbstractLatentSource; track=true)
     retval, accs = evaluate(
         model,
         latents,
         OriginalSpace(),
         AccumulatorTuple(
             ParamsAccumulator(),
-            TrackedQuantityAccumulator(track),
+            TrackedQuantityAccumulator(to_tq_spec(track)),
             LogPriorAccumulator(),
             LogLikelihoodAccumulator(),
         ),
@@ -128,28 +126,19 @@ function simulate(
         loglikelihood(accs),
     )
 end
-function simulate(model::Model, latents; track::TrackedQuantitySpec=AllQuantities())
+function simulate(model::Model, latents; track=true)
     return simulate(model, to_latent_source(latents); track)
 end
-simulate(model::Model; track::TrackedQuantitySpec=AllQuantities()) =
-    simulate(model, FromPrior(); track)
+simulate(model::Model; track=true) = simulate(model, FromPrior(); track)
 
 """
-    simulate(
-        vecmodel::VecModel,
-        params::AbstractVector;
-        track::TrackedQuantitySpec=AllQuantities(),
-    )::ModelResult
+    simulate(vecmodel::VecModel, params::AbstractVector; track=true)::ModelResult
 
 Evaluate the model of `vecmodel` at the parameter vector `params`, which is in the parameter
 space of `vecmodel`. The log-prior and log-likelihood in the result are in original space.
-The result holds the tracked quantities selected by `track`.
+The result holds the tracked quantities selected by `track` (see [`to_tq_spec`](@ref)).
 """
-function simulate(
-    vecmodel::VecModel,
-    params::AbstractVector;
-    track::TrackedQuantitySpec=AllQuantities(),
-)
+function simulate(vecmodel::VecModel, params::AbstractVector; track=true)
     _check_vecmodel_dimension(params, vecmodel)
     retval, accs = evaluate(
         vecmodel.model,
@@ -157,7 +146,7 @@ function simulate(
         vecmodel.parameter_space,
         AccumulatorTuple(
             ParamsAccumulator(),
-            TrackedQuantityAccumulator(track),
+            TrackedQuantityAccumulator(to_tq_spec(track)),
             LogPriorAccumulator(),
             LogLikelihoodAccumulator(),
         ),
@@ -255,11 +244,12 @@ Get the tracked quantities (values recorded by `@track` statements) from a
 tracked_quantities(result::ModelResult) = result.tracked_quantities
 
 """
-    tracked_quantities(model::Model, track::TrackedQuantitySpec=AllQuantities())
-    tracked_quantities(model::Model, latents, track::TrackedQuantitySpec=AllQuantities())
+    tracked_quantities(model::Model; track=true)
+    tracked_quantities(model::Model, latents; track=true)
 
-Obtain the tracked quantities selected by `track`, calculated with a given set of latent
-values. If no latent values are provided, they are drawn from the prior distribution.
+Obtain the tracked quantities selected by `track` (see [`to_tq_spec`](@ref)), calculated
+with a given set of latent values. If no latent values are provided, they are drawn from the
+prior distribution.
 
 `latents` is converted to a latent source with [`to_latent_source`](@ref), so it can also
 be an `AbstractRNG` (to draw from the prior) or a `VarNamedTuple` of values.
@@ -268,29 +258,21 @@ This is equivalent to `tracked_quantities(simulate(model, latents; track))`, but
 efficient than [`simulate`](@ref) because it does not compute the log-density terms or store
 the parameters.
 """
-function tracked_quantities(
-    model::Model,
-    latents::AbstractLatentSource,
-    track::TrackedQuantitySpec=AllQuantities(),
-)
+function tracked_quantities(model::Model, latents::AbstractLatentSource; track=true)
     _, accs = evaluate(
         model,
         latents,
         OriginalSpace(),
-        AccumulatorTuple(TrackedQuantityAccumulator(track)),
+        AccumulatorTuple(TrackedQuantityAccumulator(to_tq_spec(track))),
         EvalContext{false}(),
     )
     return tracked_quantities(accs)
 end
-function tracked_quantities(
-    model::Model,
-    latents,
-    track::TrackedQuantitySpec=AllQuantities(),
-)
-    return tracked_quantities(model, to_latent_source(latents), track)
+function tracked_quantities(model::Model, latents; track=true)
+    return tracked_quantities(model, to_latent_source(latents); track)
 end
-function tracked_quantities(model::Model, track::TrackedQuantitySpec=AllQuantities())
-    return tracked_quantities(model, FromPrior(), track)
+function tracked_quantities(model::Model; track=true)
+    return tracked_quantities(model, FromPrior(); track)
 end
 
 ############################################################################################

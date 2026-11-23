@@ -108,7 +108,7 @@ end
         model::WrenCore.Model,
         chain::FlexiChains.VNChain;
         rng::Random.AbstractRNG=Random.default_rng(),
-        track::TrackedQuantitySpec=AllQuantities(),
+        track=true,
     ) -> FlexiChains.VNChain
 
 Simulate from `model` at every iteration in `chain`. Variables that `chain` does not hold
@@ -133,17 +133,18 @@ contain the log-prior terms of the parameters already present in the input `chai
 you want to obtain the log-probability of the simulated variables only, you can subtract the
 two log-prior terms.
 
-See also: [`TrackedQuantitySpec`](@ref WrenCore.TrackedQuantitySpec)
+See also: [`to_tq_spec`](@ref WrenCore.to_tq_spec)
 """
 function WrenCore.simulate(
     model::WrenCore.Model,
     chain::VNChain;
     rng::AbstractRNG=default_rng(),
-    track::WrenCore.TrackedQuantitySpec=WrenCore.AllQuantities(),
+    track=true,
 )
     fallback = WrenCore.FromPrior(rng)
+    tq_spec = WrenCore.to_tq_spec(track)
     results = map(FlexiChains.parameters_at(chain)) do vnt
-        WrenCore.simulate(model, WrenCore.FromValues(vnt, fallback); track)
+        WrenCore.simulate(model, WrenCore.FromValues(vnt, fallback); track=tq_spec)
     end
     simulated_chain = WrenCore.to_flexichain(
         results;
@@ -158,24 +159,25 @@ end
         model::WrenCore.Model,
         chain::FlexiChains.VNChain;
         rng::Random.AbstractRNG=Random.default_rng(),
-        track::TrackedQuantitySpec=AllQuantities(),
+        track=true,
     ) -> FlexiChains.VNChain
 
 Re-evaluate `model` at each iteration of `chain` and return a chain holding only the
 tracked quantities requested with `track`. If a variable required by `model` is not stored
 in `chain`, that variable will be drawn from the prior distribution.
 
-See also: [`TrackedQuantitySpec`](@ref WrenCore.TrackedQuantitySpec)
+See also: [`to_tq_spec`](@ref WrenCore.to_tq_spec)
 """
 function WrenCore.tracked_quantities(
     model::WrenCore.Model,
     chain::VNChain;
     rng::AbstractRNG=default_rng(),
-    track::WrenCore.TrackedQuantitySpec=WrenCore.AllQuantities(),
+    track=true,
 )
     fallback = WrenCore.FromPrior(rng)
+    tq_spec = WrenCore.to_tq_spec(track)
     tq_matrix = map(FlexiChains.parameters_at(chain)) do vnt
-        WrenCore.tracked_quantities(model, WrenCore.FromValues(vnt, fallback), track)
+        WrenCore.tracked_quantities(model, WrenCore.FromValues(vnt, fallback); track=tq_spec)
     end
     return WrenCore.to_flexichain(
         tq_matrix;

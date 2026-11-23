@@ -38,6 +38,24 @@ struct SomeQuantities{names} <: TrackedQuantitySpec
     SomeQuantities(names::Tuple{Vararg{Symbol}}) = new{names}()
 end
 
+"""
+    to_tq_spec(track)::TrackedQuantitySpec
+
+`true` selects every tracked quantity, `false` none, and a `Symbol` or tuple of `Symbol`s
+the named ones (a submodel name selects all of that submodel's quantities).
+"""
+to_tq_spec(spec::TrackedQuantitySpec) = spec
+to_tq_spec(track::Bool) = track ? AllQuantities() : NoQuantities()
+to_tq_spec(name::Symbol) = SomeQuantities((name,))
+to_tq_spec(names::Tuple{Vararg{Symbol}}) = SomeQuantities(names)
+function to_tq_spec(track)
+    throw(
+        ArgumentError(
+            "`track` must be `true`, `false`, a Symbol or a tuple of Symbols; got $(repr(track))",
+        ),
+    )
+end
+
 _tq_requested(::AllQuantities, ::Val) = true
 _tq_requested(::NoQuantities, ::Val) = false
 _tq_requested(::SomeQuantities{names}, ::Val{sym}) where {names,sym} = sym in names

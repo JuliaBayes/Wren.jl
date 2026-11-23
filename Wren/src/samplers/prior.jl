@@ -10,19 +10,18 @@ using MCMCProgress: Determinate, advance!, chain_at, close_phase!, open_phase!
         niters::Integer,
         nchains::Integer=1;
         progress::Bool=true,
-        track::TrackedQuantitySpec=AllQuantities(),
+        track=true,
     ) -> FlexiChains.VNChain
 
 Sample from the prior distribution of a Wren model. Tracked quantities selected by `track`
-will be included in the returned chain.
-See also: [`AllQuantities`](@ref), [`SomeQuantities`](@ref), [`NoQuantities`](@ref)
+(see [`to_tq_spec`](@ref)) will be included in the returned chain.
 """
 function prior(
     model::Model,
     niters::Integer,
     nchains::Integer=1;
     progress::Bool=true,
-    track::TrackedQuantitySpec=AllQuantities(),
+    track=true,
 )
     return prior(Random.default_rng(), model, niters, nchains; progress, track)
 end
@@ -32,15 +31,16 @@ function prior(
     niters::Integer,
     nchains::Integer=1;
     progress::Bool=true,
-    track::TrackedQuantitySpec=AllQuantities(),
+    track=true,
 )
     copy!(Random.TaskLocalRNG(), rng)
+    tq_spec = to_tq_spec(track)
 
     t = time()
     label = "Sampling $(model.name) from the prior"
     results = with_progress(progress, label, nchains) do run
         tasks = @sync [
-            Threads.@spawn _prior_chain(model, niters, run, j, track) for j in 1:nchains
+            Threads.@spawn _prior_chain(model, niters, run, j, tq_spec) for j in 1:nchains
         ]
         stack(fetch.(tasks))
     end

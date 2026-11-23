@@ -109,7 +109,7 @@ close_phases!(::DynamicHMC.NoProgressReport) = nothing
         adtype::DI.AbstractADType=DI.AutoEnzyme(; mode=Enzyme.Reverse),
         progress::Bool=true,
         reduce_copies::Bool=true,
-        track::TrackedQuantitySpec=AllQuantities(),
+        track=true,
         init::Union{Nothing,AbstractInitialization}=nothing,
         initial_stepsize::Union{Nothing,Real}=nothing,
         dynamichmc_kwargs...
@@ -125,9 +125,9 @@ initialization policy. `initial_stepsize` replaces the default initial step-size
 `reduce_copies` is passed to [`VecModel`](@ref): when sampling with Enzyme, it skips copies
 of model arguments that turn out not to be needed (see [`reduce_copies`](@ref)).
 
-Tracked quantities selected by `track` will be included in the returned chain. Note that
-tracked quantities are not evaluated during the log-density step, but only once per iteration.
-See also: [`AllQuantities`](@ref), [`SomeQuantities`](@ref), [`NoQuantities`](@ref)
+Tracked quantities selected by `track` (see [`to_tq_spec`](@ref)) will be included in the
+returned chain. Note that tracked quantities are not evaluated during the log-density step,
+but only once per iteration.
 """
 function nuts(
     model::Model,
@@ -136,7 +136,7 @@ function nuts(
     adtype::DI.AbstractADType=DI.AutoEnzyme(; mode=Reverse),
     progress::Bool=true,
     reduce_copies::Bool=true,
-    track::TrackedQuantitySpec=AllQuantities(),
+    track=true,
     init::Union{Nothing,AbstractInitialization}=nothing,
     initial_stepsize::Union{Nothing,Real}=nothing,
     dynamichmc_kwargs...,
@@ -163,7 +163,7 @@ function nuts(
     adtype::DI.AbstractADType=DI.AutoEnzyme(; mode=Reverse),
     progress::Bool=true,
     reduce_copies::Bool=true,
-    track::TrackedQuantitySpec=AllQuantities(),
+    track=true,
     init::Union{Nothing,AbstractInitialization}=nothing,
     initial_stepsize::Union{Nothing,Real}=nothing,
     dynamichmc_kwargs...,
@@ -173,6 +173,7 @@ function nuts(
             "Use `init` for starting points and `initial_stepsize` for the step size.",
         ),
     )
+    tq_spec = to_tq_spec(track)
     initial_stepsize = initial_stepsize === nothing ? nothing : Float64(initial_stepsize)
     source = init === nothing ? WrenCore.FromPrior() : _initial_source(init)
     # AD preparation
@@ -201,7 +202,7 @@ function nuts(
                 niters,
                 run,
                 j;
-                track,
+                track=tq_spec,
                 q=starts === nothing ? nothing : starts[j],
                 initial_stepsize,
                 dynamichmc_kwargs...,

@@ -18,7 +18,7 @@ model = tq_model()
         @test Set(FlexiChains.parameters(chain)) == Set([@vn(x), @vn(x2)])
         @test chain[@vn(x2)] ≈ chain[@vn(x)] .^ 2
 
-        chain = prior(model, 10; progress=false, track=NoQuantities())
+        chain = prior(model, 10; progress=false, track=false)
         @test Set(FlexiChains.parameters(chain)) == Set([@vn(x)])
     end
 
@@ -27,7 +27,7 @@ model = tq_model()
         @test Set(FlexiChains.parameters(chain)) == Set([@vn(x), @vn(x2)])
         @test chain[@vn(x2)] ≈ chain[@vn(x)] .^ 2
 
-        chain = nuts(model, 20; progress=false, track=SomeQuantities(()))
+        chain = nuts(model, 20; progress=false, track=())
         @test Set(FlexiChains.parameters(chain)) == Set([@vn(x)])
     end
 end
