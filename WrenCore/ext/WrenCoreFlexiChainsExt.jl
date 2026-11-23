@@ -111,8 +111,9 @@ end
         track=true,
     ) -> FlexiChains.VNChain
 
-Simulate from `model` at every iteration in `chain`. Variables that `chain` does not hold
-are drawn from the prior using `rng`.
+Simulate from `model` using the parameters at each iteration of `chain`. If a parameter
+required by `model` is not stored in `chain`, that parameter will be drawn from the prior
+distribution using `rng`.
 
 The returned `FlexiChain` will contain all the simulated variables, the tracked quantities
 selected by `track`, as well as the variables already present in the input `chain`, which
@@ -132,8 +133,6 @@ considered as prior terms. However, note that the log-prior of the returned chai
 contain the log-prior terms of the parameters already present in the input `chain`. Thus, if
 you want to obtain the log-probability of the simulated variables only, you can subtract the
 two log-prior terms.
-
-See also: [`to_tq_spec`](@ref WrenCore.to_tq_spec)
 """
 function WrenCore.simulate(
     model::WrenCore.Model,
@@ -162,11 +161,9 @@ end
         track=true,
     ) -> FlexiChains.VNChain
 
-Re-evaluate `model` at each iteration of `chain` and return a chain holding only the
-tracked quantities requested with `track`. If a variable required by `model` is not stored
-in `chain`, that variable will be drawn from the prior distribution.
-
-See also: [`to_tq_spec`](@ref WrenCore.to_tq_spec)
+Re-evaluate `model` at each iteration of `chain` and return a chain holding the tracked
+quantities requested with `track`. If a parameter required by `model` is not stored in
+`chain`, that parameter will be drawn from the prior distribution using `rng`.
 """
 function WrenCore.tracked_quantities(
     model::WrenCore.Model,
@@ -244,8 +241,8 @@ end
         chain::FlexiChains.VNChain
     ) -> FlexiChains.VNChain
 
-Return the parameters of `model` at each iteration of `chain`. If a variable required by
-`model` is not stored in `chain`, that variable will be drawn from the prior distribution.
+Return the parameters of `model` at each iteration of `chain`. If a parameter required by
+`model` is not stored in `chain`, that parameter will be drawn from the prior distribution.
 
 This function differs from [`simulate`](@ref) in that it contains _only_ parameters. That
 makes it more efficient than `simulate`, which also computes the log-density terms.

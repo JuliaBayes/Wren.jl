@@ -101,9 +101,11 @@ draws from the prior distribution.
 be an `AbstractRNG` (to draw from the prior) or a `VarNamedTuple` of values.
 
 Returns the params, tracked quantities selected by `track`, return value, log-prior, and
-log-likelihood of the model packaged in a [`ModelResult`](@ref). `track` is `true` (all
-tracked quantities), `false` (none), or a `Symbol` or tuple of `Symbol`s naming the ones to
-keep; see [`to_tq_spec`](@ref).
+log-likelihood of the model packaged in a [`ModelResult`](@ref).
+
+By default, all tracked quantities will be included in the result. To include only one or a
+selection of tracked quantities, pass a Symbol or a tuple of Symbols; to include none, pass
+`track=false` or an empty tuple.
 """
 function simulate(model::Model, latents::AbstractLatentSource; track=true)
     retval, accs = evaluate(
@@ -136,7 +138,10 @@ simulate(model::Model; track=true) = simulate(model, FromPrior(); track)
 
 Evaluate the model of `vecmodel` at the parameter vector `params`, which is in the parameter
 space of `vecmodel`. The log-prior and log-likelihood in the result are in original space.
-The result holds the tracked quantities selected by `track` (see [`to_tq_spec`](@ref)).
+
+By default, all tracked quantities will be included in the result. To include only one or a
+selection of tracked quantities, pass a Symbol or a tuple of Symbols; to include none, pass
+`track=false` or an empty tuple.
 """
 function simulate(vecmodel::VecModel, params::AbstractVector; track=true)
     _check_vecmodel_dimension(params, vecmodel)
@@ -247,9 +252,12 @@ tracked_quantities(result::ModelResult) = result.tracked_quantities
     tracked_quantities(model::Model; track=true)
     tracked_quantities(model::Model, latents; track=true)
 
-Obtain the tracked quantities selected by `track` (see [`to_tq_spec`](@ref)), calculated
-with a given set of latent values. If no latent values are provided, they are drawn from the
-prior distribution.
+Obtain the tracked quantities selected by `track`, calculated with a given set of latent
+values. If no latent values are provided, they are drawn from the prior distribution.
+
+By default, all tracked quantities will be included. To include only one or a selection
+of tracked quantities, pass a Symbol or a tuple of Symbols; to include none, pass
+`track=false` or an empty tuple.
 
 `latents` is converted to a latent source with [`to_latent_source`](@ref), so it can also
 be an `AbstractRNG` (to draw from the prior) or a `VarNamedTuple` of values.

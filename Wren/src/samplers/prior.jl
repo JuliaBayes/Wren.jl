@@ -13,8 +13,11 @@ using MCMCProgress: Determinate, advance!, chain_at, close_phase!, open_phase!
         track=true,
     ) -> FlexiChains.VNChain
 
-Sample from the prior distribution of a Wren model. Tracked quantities selected by `track`
-(see [`to_tq_spec`](@ref)) will be included in the returned chain.
+Sample from the prior distribution of a Wren model.
+
+By default, all tracked quantities will be included in the returned chain. To include only
+one or a selection of tracked quantities, pass a Symbol or a tuple of Symbols; to include
+none, pass `track=false` or an empty tuple.
 """
 function prior(
     model::Model,
@@ -34,7 +37,7 @@ function prior(
     track=true,
 )
     copy!(Random.TaskLocalRNG(), rng)
-    tq_spec = to_tq_spec(track)
+    tq_spec = WrenCore.to_tq_spec(track)
 
     t = time()
     label = "Sampling $(model.name) from the prior"
@@ -62,7 +65,7 @@ function _prior_chain(
     niters::Integer,
     run,
     j::Integer,
-    track::TrackedQuantitySpec,
+    track::WrenCore.TrackedQuantitySpec,
 )
     chain_model = WrenCore._copy_for_thread(model)
     phase = if run === nothing

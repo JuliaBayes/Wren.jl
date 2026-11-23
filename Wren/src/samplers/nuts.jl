@@ -125,9 +125,10 @@ initialization policy. `initial_stepsize` replaces the default initial step-size
 `reduce_copies` is passed to [`VecModel`](@ref): when sampling with Enzyme, it skips copies
 of model arguments that turn out not to be needed (see [`reduce_copies`](@ref)).
 
-Tracked quantities selected by `track` (see [`to_tq_spec`](@ref)) will be included in the
-returned chain. Note that tracked quantities are not evaluated during the log-density step,
-but only once per iteration.
+By default, all tracked quantities will be included in the returned chain. To include only
+one or a selection of tracked quantities, pass a Symbol or a tuple of Symbols; to include
+none, pass `track=false` or an empty tuple. Note that tracked quantities are not evaluated
+during the log-density step, but only once per iteration.
 """
 function nuts(
     model::Model,
@@ -173,7 +174,7 @@ function nuts(
             "Use `init` for starting points and `initial_stepsize` for the step size.",
         ),
     )
-    tq_spec = to_tq_spec(track)
+    tq_spec = WrenCore.to_tq_spec(track)
     initial_stepsize = initial_stepsize === nothing ? nothing : Float64(initial_stepsize)
     source = init === nothing ? WrenCore.FromPrior() : _initial_source(init)
     # AD preparation
@@ -230,7 +231,7 @@ function _nuts_chain(
     niters::Integer,
     run,
     j::Integer;
-    track::TrackedQuantitySpec,
+    track::WrenCore.TrackedQuantitySpec,
     q,
     initial_stepsize,
     warmup_stages=initial_stepsize === nothing ? DynamicHMC.default_warmup_stages() :
@@ -270,7 +271,7 @@ end
 function _nuts_results_and_stats(
     results::NamedTuple,
     vecmodel::WrenCore.VecModel,
-    track::TrackedQuantitySpec,
+    track::WrenCore.TrackedQuantitySpec,
 )
     ϵ = results.ϵ
     model_results = [

@@ -33,8 +33,6 @@ using WrenCore:
     ModelResult,
     return_value,
     tracked_quantities,
-    TrackedQuantitySpec,
-    to_tq_spec,
     logjoint,
     logprior,
     # Vectorisation
