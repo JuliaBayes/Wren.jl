@@ -121,10 +121,10 @@ struct UncollectedParams end
 function Base.getindex(::UncollectedParams, ::VarName)
     # would like to define getindex(::UncollectedParams, ::Any), but I fear method
     # ambiguities.
-    _issue_error("submodel parameters are not available as a top-level variable")
+    @_issue_error("submodel parameters are not available as a top-level variable")
 end
 function Base.getproperty(::UncollectedParams, ::Symbol)
-    _issue_error("submodel parameters are not available as a top-level variable")
+    @_issue_error("submodel parameters are not available as a top-level variable")
 end
 # in e.g. `x[1] ~ submodel`, if we don't need the params, don't needlessly set them back
 # into `x` as that can trigger type instabilities.
