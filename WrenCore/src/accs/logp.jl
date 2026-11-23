@@ -200,7 +200,7 @@ logp(acc::LogPriorAccumulator) = acc.logp
 
 accumulator_name(::Type{<:LogPriorAccumulator}) = LOG_PRIOR_ACCNAME
 
-function accumulate_assume!!(
+@inline function accumulate_assume!!(
     acc::LogPriorAccumulator,
     val,
     tval,
@@ -345,5 +345,5 @@ function _scaled_accumulate!!(
 )
     lp = logp(f(basetypeof(acc)(NoLogProb()), args...))
     lp isa NoLogProb && return acc
-    return acclogp(acc, oftype(lp, scale * lp))
+    return acclogp(acc, convert(promote_type(typeof(logp(acc)), typeof(lp)), scale * lp))
 end

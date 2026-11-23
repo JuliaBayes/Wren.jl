@@ -73,8 +73,12 @@ evaluate_accumulators(model, source, accs) =
     @test iszero(logprior(conditioned))
 
     small = Float16[0.001]
-    weighted = simulate(local_latents(small, 100000) | (; z=small))
-    @test loglikelihood(weighted) == Float16(-100000 * Float64(only(small)))
+    weighted = evaluate_accumulators(
+        local_latents(small, 100000),
+        FromValues(VarNamedTuple(z=small)),
+        AccumulatorTuple(LogPriorAccumulator{Float64}()),
+    )
+    @test logprior(weighted) == -100000 * Float64(only(small))
 end
 
 end

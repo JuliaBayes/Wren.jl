@@ -4,7 +4,8 @@ on:
   push:
     branches:
       - main
-    tags: '*'
+    tags:
+      - 'Wren-v*'
   pull_request:
 
 concurrency:

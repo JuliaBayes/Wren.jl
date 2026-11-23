@@ -234,6 +234,11 @@ _with_rhs(stmt::Sample, rhs) =
 _with_rhs(stmt::Observe, rhs) = Observe(stmt.name, stmt.lhs, rhs)
 
 function _batch_scale(full_size, iters)
+    full_size isa Real && isfinite(full_size) && full_size > 0 || throw(
+        ArgumentError(
+            "`@batch size=` must be a finite positive real number, got $(repr(full_size))",
+        ),
+    )
     isempty(iters) && throw(ArgumentError("cannot scale an empty batch"))
     return full_size / length(iters)
 end

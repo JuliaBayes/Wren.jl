@@ -1,10 +1,33 @@
-using Wren: Wren, VecModel, lp, lp_and_grad, benchmark_model
+# With `--reactant`, Wren is also benchmarked with Reactant. This is off by default because
+# it takes a long time.
+const USAGE = "Usage: julia --project=. posteriordb/run.jl [--reactant]"
+const REACTANT = "--reactant" in ARGS
+if !all(==("--reactant"), ARGS)
+    println(stderr, USAGE)
+    exit(1)
+end
+
+using Wren: Wren, VecModel, lp, lp_and_grad, benchmark_model, posteriordb_model
+# Loaded so that WrenCore can build the PosteriorDB models.
+using PosteriorDB: PosteriorDB
+using WrenDists: WrenDists
 using DynamicPPL: DynamicPPL
 using ADTypes: AutoEnzyme, AutoMooncake, AutoReactant
 using Enzyme: Reverse, set_runtime_activity
 using Mooncake: Mooncake
-using Reactant: Reactant
+if REACTANT
+    using Reactant: Reactant
+end
 using Printf: @sprintf
+using LogDensityProblems: LogDensityProblems, logdensity, logdensity_and_gradient
+using Random: Xoshiro
+
+# BLAS's own threads make small matrix operations (as in GPRegr) much slower in some Julia
+# sessions but not others, e.g. a gradient that usually takes 5 μs taking 5–460 μs. One
+# BLAS thread makes the results consistent, and the matrices here are too small to benefit
+# from more. (Same as in `bench/suite/run.jl`.)
+using LinearAlgebra: BLAS
+BLAS.set_num_threads(1)
 
 # Each entry is either a time in seconds, or an exception that was caught.
 const BenchEntry = Union{Real,Exception}
@@ -19,9 +42,9 @@ struct BenchResult
     wren_mooncake::BenchEntry
     turing_enzyme::BenchEntry
     turing_mooncake::BenchEntry
-    # Reactant
-    wren_reactant_primal::BenchEntry
-    wren_reactant_grad::BenchEntry
+    # Reactant (`nothing` if not run)
+    wren_reactant_primal::Union{BenchEntry,Nothing}
+    wren_reactant_grad::Union{BenchEntry,Nothing}
 end
 
 function _try(f)
@@ -64,15 +87,16 @@ _sigfigs(x::Real) = @sprintf("%g", round(x; sigdigits=SIGFIGS))
 
 # Each column is a (header, field, baseline field) triple. A baseline of `nothing` means
 # the column is not compared against anything.
+# The Reactant columns are only shown with `--reactant`.
 const PRIMAL_COLUMNS = [
     ("Wren", :wren_primal, nothing),
     ("Turing", :turing_primal, :wren_primal),
-    ("Wren+R", :wren_reactant_primal, :wren_primal),
+    (REACTANT ? [("Wren+R", :wren_reactant_primal, :wren_primal)] : [])...,
 ]
 const GRAD_COLUMNS = [
     ("Wren+E", :wren_enzyme, nothing),
     ("Wren+M", :wren_mooncake, :wren_enzyme),
-    ("Wren+R", :wren_reactant_grad, :wren_enzyme),
+    (REACTANT ? [("Wren+R", :wren_reactant_grad, :wren_enzyme)] : [])...,
     ("Turing+E", :turing_enzyme, :wren_enzyme),
     ("Turing+M", :turing_mooncake, :wren_enzyme),
 ]
@@ -113,9 +137,42 @@ function print_errors(io::IO)
     end
 end
 
-function bench(mod)
+# The same log density that DynamicPPL's `run_ad` uses: the log joint in unconstrained space.
+function _turing_ldf(model, adtype)
+    return DynamicPPL.LogDensityFunction(
+        model,
+        DynamicPPL.getlogjoint_internal,
+        DynamicPPL.LinkAll();
+        adtype=adtype,
+    )
+end
+
+# The point at which to time Turing. Timings can depend on the point (e.g. `log1pexp` in
+# WellsDaeInter takes different paths for small and large inputs), so we want Turing to be
+# timed at the same point as Wren.
+#
+# The Turing models declare their variables in the same order as the Wren models, so the
+# two vectorised forms *should* be the same. This isn't guaranteed, so we check that the log
+# densities agree at Wren's point. If they don't, we fall back to a point drawn from the
+# prior, as DynamicPPL's `run_ad` does.
+function _turing_params(model, wren_params, wren_lp)
+    ldf = _turing_ldf(model, nothing)
+    if wren_params !== nothing &&
+       LogDensityProblems.dimension(ldf) == length(wren_params) &&
+       isapprox(logdensity(ldf, wren_params), wren_lp; rtol=1e-8)
+        return copy(wren_params)
+    end
+    @warn "$(model.f): Wren's parameters don't give the same log density in Turing; " *
+          "timing Turing at a point drawn from its prior instead."
+    return collect(rand(Xoshiro(468), ldf, DynamicPPL.InitFromPrior()))
+end
+
+# The Wren models come from WrenCore's PosteriorDB extension, so that they are the same as
+# the ones in the main benchmark suite (`bench/suite`). The Turing models in `models/` are
+# written to match them.
+function bench(mod, pdb_name)
     name = string(nameof(mod))
-    wren_model = mod.wren_model
+    wren_model = posteriordb_model(pdb_name)
     turing_model = mod.turing_model
 
     enzyme = AutoEnzyme(; mode=Reverse)
@@ -138,35 +195,51 @@ function bench(mod)
     end
 
     # -- Turing (DynamicPPL) --
-    run_ad = DynamicPPL.TestUtils.AD.run_ad
+    # Timed with `_min_bench`, the same as Wren in `benchmark_model`, so that both report
+    # the fastest sample. (DynamicPPL's `run_ad` reports the median instead.)
+    # Wren's point and log density there, which Turing is timed at if possible.
+    wren_params, wren_lp = if wren_enzyme_result isa Exception
+        nothing, nothing
+    else
+        p = wren_enzyme_result.vecmodel.sample
+        p, lp(wren_enzyme_result.vecmodel, p)
+    end
+    params = _turing_params(turing_model, wren_params, wren_lp)
     turing_enzyme_adtype = AutoEnzyme(; mode=set_runtime_activity(Reverse))
     turing_enzyme_result = _try() do
-        run_ad(turing_model, turing_enzyme_adtype; test=false, benchmark=true, verbose=false)
+        ldf = _turing_ldf(turing_model, turing_enzyme_adtype)
+        primal = Wren.WrenCore._min_bench(() -> logdensity(ldf, params), 1).time
+        grad =
+            Wren.WrenCore._min_bench(() -> logdensity_and_gradient(ldf, params), 1).time
+        (; primal, grad)
     end
     turing_primal =
         turing_enzyme_result isa Exception ? turing_enzyme_result :
-        turing_enzyme_result.primal_time
+        turing_enzyme_result.primal
     turing_enzyme =
         turing_enzyme_result isa Exception ? turing_enzyme_result :
-        turing_enzyme_result.grad_time
+        turing_enzyme_result.grad
     turing_mooncake = _try() do
-        r = run_ad(turing_model, mooncake; test=false, benchmark=true, verbose=false)
-        r.grad_time
+        ldf = _turing_ldf(turing_model, mooncake)
+        Wren.WrenCore._min_bench(() -> logdensity_and_gradient(ldf, params), 1).time
     end
 
-    # -- Wren + Reactant --
-    wren_reactant_primal = _try() do
-        # Benchmarked separately from the gradient, so that we still get a primal time
-        # even if the gradient fails.
-        vecmodel = VecModel(wren_model, reactant)
-        params = vecmodel.sample
-        # Timed the same way as in `benchmark_model`.
-        Wren.WrenCore._min_bench(() -> lp(vecmodel, params), 1).time
-    end
-    wren_reactant_grad = _try() do
-        r = benchmark_model(wren_model, reactant; verbose=false)
-        r.lp_and_grad_bench.time
-    end
+    # -- Wren + Reactant (only with `--reactant`) --
+    wren_reactant_primal =
+        !REACTANT ? nothing :
+        _try() do
+            # Benchmarked separately from the gradient, so that we still get a primal time
+            # even if the gradient fails.
+            vecmodel = VecModel(wren_model, reactant)
+            params = vecmodel.sample
+            # Timed the same way as in `benchmark_model`.
+            Wren.WrenCore._min_bench(() -> lp(vecmodel, params), 1).time
+        end
+    wren_reactant_grad =
+        !REACTANT ? nothing : _try() do
+            r = benchmark_model(wren_model, reactant; verbose=false)
+            r.lp_and_grad_bench.time
+        end
 
     return BenchResult(
         name,
@@ -189,29 +262,43 @@ include("models/glmm_poisson.jl")
 include("models/gp_regr.jl")
 include("models/kidscore_interaction.jl")
 include("models/mh.jl")
+include("models/rats.jl")
 include("models/rate1.jl")
 include("models/sblri_blr.jl")
+include("models/wells_dae_inter.jl")
 
-results = map((
-    ArK,
-    EightSchoolsCentered,
-    GLMBinomial,
-    GLMPoisson,
-    GLMMPoisson,
-    GPRegr,
-    KidscoreInteraction,
-    Mh,
-    Rate1,
-    SblriBLR,
-)) do mod
+# Maps each module in `models/` to its PosteriorDB posterior name.
+const MODELS = (
+    ArK => "arK-arK",
+    EightSchoolsCentered => "eight_schools-eight_schools_centered",
+    GLMBinomial => "GLM_Binomial_data-GLM_Binomial_model",
+    GLMPoisson => "GLM_Poisson_Data-GLM_Poisson_model",
+    GLMMPoisson => "GLMM_Poisson_data-GLMM_Poisson_model",
+    GPRegr => "gp_pois_regr-gp_regr",
+    KidscoreInteraction => "kidiq-kidscore_interaction",
+    Mh => "Mh_data-Mh_model",
+    Rate1 => "Rate_1_data-Rate_1_model",
+    Rats => "rats_data-rats_model",
+    SblriBLR => "sblri-blr",
+    WellsDaeInter => "wells_data-wells_dae_inter_model",
+)
+
+results = map(MODELS) do (mod, pdb_name)
     println("Benchmarking ", nameof(mod), "...")
-    bench(mod)
+    bench(mod, pdb_name)
 end
 println()
-print_table(stdout, "Primals (R = Reactant; ratios vs Wren):", results, PRIMAL_COLUMNS)
 print_table(
     stdout,
-    "Gradients (E = Enzyme, M = Mooncake, R = Reactant; ratios vs Wren+E):",
+    REACTANT ? "Primals (R = Reactant; ratios vs Wren):" : "Primals (ratios vs Wren):",
+    results,
+    PRIMAL_COLUMNS,
+)
+print_table(
+    stdout,
+    "Gradients (E = Enzyme, M = Mooncake" *
+    (REACTANT ? ", R = Reactant" : "") *
+    "; ratios vs Wren+E):",
     results,
     GRAD_COLUMNS,
 )
