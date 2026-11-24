@@ -56,7 +56,12 @@ struct ModelResult{V<:VarNamedTuple,G<:VarNamedTuple,R,LP<:Number,LL<:Number}
 end
 
 function Base.:(==)(a::ModelResult, b::ModelResult)
-    return all(name -> getfield(a, name) == getfield(b, name), fieldnames(ModelResult))
+    fields = fieldnames(ModelResult)
+    return mapreduce(x -> getfield(a, x) == getfield(b, x), &, fields)
+end
+function Base.isequal(a::ModelResult, b::ModelResult)
+    fields = fieldnames(ModelResult)
+    return all(x -> isequal(getfield(a, x), getfield(b, x)), fields)
 end
 function Base.hash(result::ModelResult, h::UInt)
     fields = ntuple(i -> getfield(result, i), fieldcount(ModelResult))
@@ -151,7 +156,9 @@ space of `vecmodel`. The log-prior and log-likelihood in the result are in origi
 
 By default, all tracked quantities will be included in the result. To include only one or a
 selection of tracked quantities, pass a Symbol or a tuple of Symbols; to include none, pass
-`track=false` or an empty tuple.
+`track=false` or an empty tuple. If you are using `simulate` in a performance-sensitive loop,
+you should instead pass one of [`AllQuantities`](@ref), [`SomeQuantities`](@ref), or
+[`NoQuantities`](@ref).
 """
 function simulate(vecmodel::VecModel, params::AbstractVector; track=AllQuantities())
     _check_vecmodel_dimension(params, vecmodel)
@@ -267,9 +274,9 @@ values. If no latent values are provided, they are drawn from the prior distribu
 
 By default, all tracked quantities will be included. To include only one or a selection
 of tracked quantities, pass a Symbol or a tuple of Symbols; to include none, pass
-`track=false` or an empty tuple. If you are using `simulate` in a performance-sensitive loop,
-you should instead pass one of [`AllQuantities`](@ref), [`SomeQuantities`](@ref), or
-[`NoQuantities`](@ref).
+`track=false` or an empty tuple. If you are using `tracked_quantities` in a
+performance-sensitive loop, you should instead pass one of [`AllQuantities`](@ref),
+[`SomeQuantities`](@ref), or [`NoQuantities`](@ref).
 
 `latents` is converted to a latent source with [`to_latent_source`](@ref), so it can also
 be an `AbstractRNG` (to draw from the prior) or a `VarNamedTuple` of values.

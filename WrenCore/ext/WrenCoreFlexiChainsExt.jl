@@ -116,8 +116,8 @@ required by `model` is not stored in `chain`, that parameter will be drawn from 
 distribution using `rng`.
 
 The returned `FlexiChain` will contain all the simulated variables, the tracked quantities
-selected by `track` (see [`TrackedQuantitySpec`](@ref)), as well as the variables
-already present in the input `chain`, which implies that:
+selected by `track` (see [`TrackedQuantitySpec`](@ref WrenCore.TrackedQuantitySpec)), as
+well as the variables already present in the input `chain`, which implies that:
 
 - variables that are in the `chain` are fixed to their respective values;
 - variables that arent in the `chain` are resampled according to the model;
