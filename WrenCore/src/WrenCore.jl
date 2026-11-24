@@ -16,8 +16,6 @@ end
 
 const WREN_COMPILATION_DEBUG = Ref(false)
 
-# `file:line` for a macro call's `__source__`. Files inside WrenCore are shown relative to
-# the package, e.g. `WrenCore/src/model/dataflow.jl:10`, rather than as full paths.
 function _source_location(source::LineNumberNode)
     source.file === nothing && return "unknown location"
     file = String(source.file)
