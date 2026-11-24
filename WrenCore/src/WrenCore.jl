@@ -26,70 +26,23 @@ function _source_location(source::LineNumberNode)
     return string(replace(file, '\\' => '/'), ":", source.line)
 end
 
-# Callable structs have no name, so show their type's name instead.
-_function_name(f::Function) = string(nameof(f))
-_function_name(f) = string(nameof(typeof(f)))
-
-# An expression which evaluates to a description of where a macro was called from, for use
-# in error and debug messages. On Julia 1.13+, this includes the enclosing function, so the
-# macro must be called inside a function.
-function _caller_location(source::LineNumberNode)
-    location = _source_location(source)
-    @static if isdefined(Base, Symbol("@__FUNCTION__"))
-        fn = Expr(:macrocall, GlobalRef(Base, Symbol("@__FUNCTION__")), source)
-        return :($(Base.string)($_function_name($fn), " at ", $location))
-    else
-        return location
-    end
-end
-
 """
     @_issue_error msg
 
-Throw an error saying that `msg` is a bug in Wren, asking the user to report it.
-
-The message says where `@_issue_error` was called from (on Julia 1.13+, including the
-enclosing function), so it must be called inside a function. This is a macro rather than a
-function so that the location is the caller's.
+Throw an internal Wren error, including the source location
+and a request to report the issue.
 """
 macro _issue_error(msg)
-    return :($_throw_issue_error($(esc(msg)), $(_caller_location(__source__))))
+    location = _source_location(__source__)
+    return :($_throw_issue_error($(esc(msg)), $location))
 end
 
 @noinline function _throw_issue_error(msg, location)
     error(
-        "$msg.\n\nThis is an internal error in Wren (from $location). Please report this " *
-        "issue at https://github.com/JuliaBayes/Wren.jl/issues. Thank you!\n",
+        "$msg.\n\nThis is an internal error in Wren (from $location). " *
+        "Please report this issue at " *
+        "https://github.com/JuliaBayes/Wren.jl/issues. Thank you!\n",
     )
-end
-
-"""
-    @_compilation_debug msg [key=value | value]...
-
-If `WrenCore.WREN_COMPILATION_DEBUG[]` is `true`, log `msg` and the given key-value pairs
-at `Info` level, as `@info` would. The message is prefixed with where
-`@_compilation_debug` was called from (on Julia 1.13+, including the enclosing function),
-so it must be called inside a function. Does nothing otherwise.
-"""
-macro _compilation_debug(msg, kwargs...)
-    file = __source__.file === nothing ? "unknown" : String(__source__.file)
-    message = :($(Base.string)("[", $(_caller_location(__source__)), "] ", $msg))
-    log = Expr(
-        :macrocall,
-        GlobalRef(Base, Symbol("@info")),
-        __source__,
-        message,
-        kwargs...,
-        :(_file = $file),
-        :(_line = $(__source__.line)),
-    )
-    flag = GlobalRef(@__MODULE__, :WREN_COMPILATION_DEBUG)
-    # Escape everything so that `@info` sees the key-value pairs as written.
-    return esc(:(
-        if $flag[]
-            $log
-        end
-    ))
 end
 
 # Parameter spaces

@@ -305,13 +305,7 @@ function analyse_dataflow(
         state = analyse_dataflow_once(stmts, args, skippable_tqs)
         unrequired_tqs = setdiff(state.tq_syms, state.required_syms)
         if unrequired_tqs == skippable_tqs
-            # The values are interpolated rather than passed as key-value pairs, since
-            # `@info` truncates multi-line displays of the latter.
-            @_compilation_debug """dataflow analysis
-                lhs_syms = $(state.lhs_syms)
-                required_syms = $(state.required_syms)
-                tq_uses = $(state.tq_uses)
-                args_to_copy = $(state.args_to_copy)"""
+            @debug "Dataflow analysis" lhs_syms=state.lhs_syms required_syms=state.required_syms tq_uses=state.tq_uses args_to_copy=state.args_to_copy
             return state
         end
         skippable_tqs = unrequired_tqs
