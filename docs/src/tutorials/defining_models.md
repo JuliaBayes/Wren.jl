@@ -208,8 +208,8 @@ However, the name of a tracked quantity must be a single symbol, so names like `
     To create a snapshot of `my_array` at the time it is initialised, you need to copy explicitly: `@track snapshot = deepcopy(my_array)`.
 
 By default, all tracked quantities are calculated and returned during model evaluation or MCMC sampling.
-You can, however, skip the statements marked with `@track`—for example because they're expensive and not needed at this time—by passing `track=NoQuantities()` to `simulate`, `prior` or `nuts`.
-If you want to keep specific tracked quantities, use `SomeQuantities((:x,))` instead.
+You can, however, skip the statements marked with `@track`—for example because they're expensive and not needed at this time—by passing `track=false` to `simulate`, `tracked_quantities`, `prior` or `nuts`.
+If you want to keep specific tracked quantities, pass their names instead, e.g. `track=:x` or `track=(:x, :y)`.
 
 !!! note "Side effects may be skipped"
 

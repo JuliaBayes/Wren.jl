@@ -4,6 +4,7 @@ module WrenTQTests
 
 using Distributions
 using FlexiChains: FlexiChains, Parameter, VNChain
+import ForwardDiff
 using LinearAlgebra
 using StableRNGs
 using Test
@@ -128,8 +129,7 @@ end
         @test tqs[@vn(in_let)] ≈ a^2
         @test tqs[@vn(reused)] ≈ a + 1
         @test tqs[@vn(reused_after)] ≈ a + 3
-        @test collect(keys(tracked_quantities(model, SomeQuantities((:in_if,))))) ==
-              [@vn(in_if)]
+        @test collect(keys(tracked_quantities(model; track=:in_if))) == [@vn(in_if)]
         @test !haskey(tracked_quantities(tq_nested(false)), @vn(in_if))
     end
 
@@ -204,7 +204,7 @@ end
         a = parameters(accs)[@vn(a)]
         @test loglikelihood(accs) ≈ logpdf(MvNormal(a .+ [0.0, 1.0], I), [0.5, 1.5])
 
-        mu = tracked_quantities(model, SomeQuantities((:mu,)))[@vn(mu)]
+        mu = tracked_quantities(model; track=:mu)[@vn(mu)]
         @test mu ≈ mu[1] .+ [0.0, 1.0]
     end
 
@@ -218,17 +218,17 @@ end
             EvalContext{false}(),
         )
         @test haskey(parameters(accs), @vn(a))
-        @test isempty(tracked_quantities(model, SomeQuantities((:a,))))
+        @test isempty(tracked_quantities(model; track=:a))
         @test_throws "tracked quantity was evaluated" simulate(model)
     end
 
     @testset "selection" begin
         model = tq_demo([1.0, 2.0])
-        @test collect(keys(tracked_quantities(model, SomeQuantities((:s,))))) == [@vn(s)]
-        @test Set(keys(tracked_quantities(model, SomeQuantities((:mu, :r))))) ==
+        @test collect(keys(tracked_quantities(model; track=:s))) == [@vn(s)]
+        @test Set(keys(tracked_quantities(model; track=(:mu, :r)))) ==
               Set([@vn(mu), @vn(r)])
-        @test isempty(tracked_quantities(model, NoQuantities()))
-        @test isempty(tracked_quantities(model, SomeQuantities(())))
+        @test isempty(tracked_quantities(model; track=false))
+        @test isempty(tracked_quantities(model; track=()))
         @test length(keys(tracked_quantities(model))) == 4
 
         accs = AccumulatorTuple(
@@ -241,6 +241,36 @@ end
         @test is_accumulating_tq(AccumulatorTuple(TrackedQuantityAccumulator()), Val(:b))
     end
 
+    @testset "track shorthands match their specs" begin
+        model = tq_demo([1.0, 2.0])
+        vecmodel = VecModel(model, AutoForwardDiff())
+        params = vector_parameters(vecmodel, StableRNG(468))
+        shorthands_and_specs = [
+            true => AllQuantities(),
+            false => NoQuantities(),
+            :s => SomeQuantities((:s,)),
+            (:mu, :r) => SomeQuantities((:mu, :r)),
+        ]
+        @testset "$shorthand" for (shorthand, spec) in shorthands_and_specs
+            @test simulate(model, StableRNG(468); track=shorthand) ==
+                  simulate(model, StableRNG(468); track=spec)
+            @test tracked_quantities(model, StableRNG(468); track=shorthand) ==
+                  tracked_quantities(model, StableRNG(468); track=spec)
+            @test simulate(vecmodel, params; track=shorthand) ==
+                  simulate(vecmodel, params; track=spec)
+        end
+        @test_throws "`track` must be a `Bool`, `Symbol`, tuple of `Symbol`s, or `TrackedQuantitySpec`" simulate(
+            model;
+            track=[:s],
+        )
+    end
+
+    @testset "ModelResult ==" begin
+        model = tq_demo([1.0, 2.0])
+        @test simulate(model, StableRNG(468)) == simulate(model, StableRNG(468))
+        @test simulate(model, StableRNG(468)) != simulate(model, StableRNG(469))
+    end
+
     @testset "submodels" begin
         model = tq_outer()
         all_tqs = tracked_quantities(model)
@@ -248,12 +278,12 @@ end
         @test haskey(all_tqs, @vn(b.z))
         @test haskey(all_tqs, @vn(c))
 
-        a_tqs = tracked_quantities(model, SomeQuantities((:a,)))
+        a_tqs = tracked_quantities(model; track=:a)
         @test haskey(a_tqs, @vn(a.z))
         @test !haskey(a_tqs, @vn(b))
         @test !haskey(a_tqs, @vn(c))
 
-        b_tqs = tracked_quantities(model, SomeQuantities((:b,)))
+        b_tqs = tracked_quantities(model; track=:b)
         @test !haskey(b_tqs, @vn(a))
         @test haskey(b_tqs, @vn(b.z))
 
@@ -289,17 +319,16 @@ end
         @test haskey(parameters(result), @vn(a))
         @test !haskey(parameters(result), @vn(mu))
         @test !haskey(parameters(model), @vn(mu))
-        @test isempty(tracked_quantities(model, NoQuantities()))
+        @test isempty(tracked_quantities(model; track=false))
 
         @test Set(keys(tracked_quantities(model))) ==
               Set([@vn(mu), @vn(mu1), @vn(s), @vn(r)])
-        @test collect(keys(tracked_quantities(model, SomeQuantities((:s,))))) == [@vn(s)]
-        @test isempty(tracked_quantities(model, FromPrior(), NoQuantities()))
+        @test collect(keys(tracked_quantities(model; track=:s))) == [@vn(s)]
+        @test isempty(tracked_quantities(model, FromPrior(); track=false))
         latents = VarNamedTuple(; a=1.0, b=2.0, y=[0.0, 0.0])
         tqs = tracked_quantities(model, latents)
         @test tqs[@vn(mu)] ≈ [3.0, 5.0]
-        @test collect(keys(tracked_quantities(model, latents, SomeQuantities((:r,))))) ==
-              [@vn(r)]
+        @test collect(keys(tracked_quantities(model, latents; track=:r))) == [@vn(r)]
     end
 
     @testset "Wren keeps TQs and parameters separate" begin
@@ -330,10 +359,10 @@ end
             @track c = b
         end
         model = tq_chain()
-        @test isempty(tracked_quantities(model, NoQuantities()))
-        @test_throws "b was evaluated" tracked_quantities(model, AllQuantities())
-        @test_throws "b was evaluated" tracked_quantities(model, SomeQuantities((:c,)))
-        @test_throws "b was evaluated" tracked_quantities(model, SomeQuantities((:b,)))
+        @test isempty(tracked_quantities(model; track=false))
+        @test_throws "b was evaluated" tracked_quantities(model; track=true)
+        @test_throws "b was evaluated" tracked_quantities(model; track=:c)
+        @test_throws "b was evaluated" tracked_quantities(model; track=:b)
 
         @wren function tq_transitive()
             a ~ Normal()
@@ -342,7 +371,7 @@ end
             @track d = c + 1
         end
         model = tq_transitive()
-        d_only = tracked_quantities(model, SomeQuantities((:d,)))
+        d_only = tracked_quantities(model; track=:d)
         @test collect(keys(d_only)) == [@vn(d)]
         all_tqs = tracked_quantities(model)
         @test all_tqs[@vn(d)] ≈ all_tqs[@vn(b)] + 2
@@ -396,14 +425,14 @@ parameter_keys(chain) = Set(FlexiChains.parameters(chain))
     chn = prior_chain(StableRNG(468), tq_model_without_tqs(), 10, 2)
 
     tqs_all = tracked_quantities(model, chn)
-    tqs_only = tracked_quantities(model, chn; track=SomeQuantities((:x2, :a)))
+    tqs_only = tracked_quantities(model, chn; track=(:x2, :a))
 
     @testset "keys" begin
         @test parameter_keys(tqs_all) == Set([@vn(x2), @vn(xp1), @vn(a.z)])
         @test parameter_keys(tqs_only) == Set([@vn(x2), @vn(a.z)])
-        @test parameter_keys(tracked_quantities(model, chn; track=AllQuantities())) ==
+        @test parameter_keys(tracked_quantities(model, chn; track=true)) ==
               parameter_keys(tqs_all)
-        @test isempty(parameter_keys(tracked_quantities(model, chn; track=NoQuantities())))
+        @test isempty(parameter_keys(tracked_quantities(model, chn; track=false)))
     end
 
     @testset "forms agree on shared keys" begin
@@ -442,11 +471,30 @@ parameter_keys(chain) = Set(FlexiChains.parameters(chain))
         @test issubset(Set([@vn(x2), @vn(xp1), @vn(a.z)]), parameter_keys(simulated))
         @test simulated[@vn(x2)] == chn[@vn(x)] .^ 2
 
-        simulated_x2_only =
-            simulate(model, chn; rng=StableRNG(468), track=SomeQuantities((:x2,)))
+        simulated_x2_only = simulate(model, chn; rng=StableRNG(468), track=:x2)
         @test @vn(x2) in parameter_keys(simulated_x2_only)
         @test !(@vn(xp1) in parameter_keys(simulated_x2_only))
         @test !(@vn(a.z) in parameter_keys(simulated_x2_only))
+    end
+
+    @testset "track shorthands match their specs" begin
+        shorthands_and_specs = [
+            true => AllQuantities(),
+            false => NoQuantities(),
+            :x2 => SomeQuantities((:x2,)),
+            (:x2, :a) => SomeQuantities((:x2, :a)),
+        ]
+        # `==` on these chains returns `missing`; `isequal` compares them fully.
+        @testset "$shorthand" for (shorthand, spec) in shorthands_and_specs
+            @test isequal(
+                simulate(model, chn; rng=StableRNG(468), track=shorthand),
+                simulate(model, chn; rng=StableRNG(468), track=spec),
+            )
+            @test isequal(
+                tracked_quantities(model, chn; rng=StableRNG(468), track=shorthand),
+                tracked_quantities(model, chn; rng=StableRNG(468), track=spec),
+            )
+        end
     end
 
     @testset "parameters take precedence over tracked quantities" begin

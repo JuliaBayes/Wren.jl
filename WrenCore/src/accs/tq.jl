@@ -38,6 +38,24 @@ struct SomeQuantities{names} <: TrackedQuantitySpec
     SomeQuantities(names::Tuple{Vararg{Symbol}}) = new{names}()
 end
 
+"""
+    to_tq_spec(track)::TrackedQuantitySpec
+
+Converts `true` to `AllQuantities()`, `false` to `NoQuantities()`, and wraps a `Symbol` or
+tuple of `Symbol`s in `SomeQuantities()`.
+"""
+to_tq_spec(spec::TrackedQuantitySpec) = spec
+to_tq_spec(track::Bool) = track ? AllQuantities() : NoQuantities()
+to_tq_spec(name::Symbol) = SomeQuantities((name,))
+to_tq_spec(names::Tuple{Vararg{Symbol}}) = SomeQuantities(names)
+function to_tq_spec(track)
+    throw(
+        ArgumentError(
+            "`track` must be a `Bool`, `Symbol`, tuple of `Symbol`s, or `TrackedQuantitySpec`",
+        ),
+    )
+end
+
 _tq_requested(::AllQuantities, ::Val) = true
 _tq_requested(::NoQuantities, ::Val) = false
 _tq_requested(::SomeQuantities{names}, ::Val{sym}) where {names,sym} = sym in names
