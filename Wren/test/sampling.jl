@@ -91,16 +91,17 @@ end
             chn1 = sampler(Xoshiro(468), model)
             chn2 = sampler(Xoshiro(468), model)
             @test FlexiChains.has_same_data(chn1, chn2)
-            @testset "$make_progress" for make_progress in (
-                () -> true,
-                TermBackend,
-                ProgressLoggingBackend,
-                PlainTextBackend,
-                () -> (TermBackend(), PlainTextBackend()),
-            )
+            progress_specs = [
+                true,
+                TermBackend(),
+                ProgressLoggingBackend(),
+                PlainTextBackend(),
+                (TermBackend(), PlainTextBackend()),
+            ]
+            @testset "$progress_spec" for progress_spec in progress_specs
                 displayed = redirect_stdout(devnull) do
                     redirect_stderr(devnull) do
-                        sampler(Xoshiro(468), model; progress=make_progress())
+                        sampler(Xoshiro(468), model; progress=progress_spec)
                     end
                 end
                 @test FlexiChains.has_same_data(chn1, displayed)
