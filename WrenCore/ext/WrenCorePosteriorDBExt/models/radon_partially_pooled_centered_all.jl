@@ -2,14 +2,16 @@
 module RadonPartiallyPooledCenteredAll
 
 using PosteriorDB
-using WrenCore: @wren, @observe, @batch, @iid
+using WrenCore: @wren
 using WrenDists: WrenDists as WD
 
 const data = let
     pdb = PosteriorDB.database()
-    PosteriorDB.load(PosteriorDB.dataset(
-        PosteriorDB.posterior(pdb, "radon_all-radon_partially_pooled_centered"),
-    ))
+    PosteriorDB.load(
+        PosteriorDB.dataset(
+            PosteriorDB.posterior(pdb, "radon_all-radon_partially_pooled_centered"),
+        ),
+    )
 end
 
 @wren function radon_partially_pooled_centered(J, county_idx, log_radon)
@@ -25,8 +27,7 @@ end
     return nothing
 end
 
-const wren_model = radon_partially_pooled_centered(
-    data["J"], data["county_idx"], data["log_radon"],
-)
+const model =
+    radon_partially_pooled_centered(data["J"], data["county_idx"], data["log_radon"])
 
 end

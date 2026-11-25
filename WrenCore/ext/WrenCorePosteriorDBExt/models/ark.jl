@@ -3,7 +3,7 @@
 module ArK
 
 using PosteriorDB
-using WrenCore: @wren, @observe, @batch, @iid
+using WrenCore: @wren
 using WrenDists: WrenDists as WD
 
 const data = let
@@ -21,7 +21,7 @@ end
     end
 end
 
-const wren_model = let
+const model = let
     K = data["K"]
     T = data["T"]
     series = data["y"]

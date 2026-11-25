@@ -1,11 +1,10 @@
 name: TagBot
 
 on:
-  # TODO(penelopeysm): Re-enable once the repo is public.
-  # issue_comment:
-  #   types:
-  #     - created
-  # workflow_dispatch:
+  issue_comment:
+    types:
+      - created
+  workflow_dispatch:
   
 permissions:
   contents: write
@@ -15,7 +14,21 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || github.actor == 'JuliaTagBot'
     runs-on: ubuntu-latest
     steps:
-      - uses: JuliaRegistries/TagBot@14d7645453716d7a2f09b1da0504a024f97462a1 # 1.25.10
+      - name: Tag Wren
+        uses: JuliaRegistries/TagBot@14d7645453716d7a2f09b1da0504a024f97462a1 # 1.25.10
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           ssh: ${{ secrets.DOCUMENTER_KEY }}
+          subdir: Wren
+      - name: Tag WrenCore
+        uses: JuliaRegistries/TagBot@14d7645453716d7a2f09b1da0504a024f97462a1 # 1.25.10
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ssh: ${{ secrets.DOCUMENTER_KEY }}
+          subdir: WrenCore
+      - name: Tag WrenDists
+        uses: JuliaRegistries/TagBot@14d7645453716d7a2f09b1da0504a024f97462a1 # 1.25.10
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ssh: ${{ secrets.DOCUMENTER_KEY }}
+          subdir: WrenDists

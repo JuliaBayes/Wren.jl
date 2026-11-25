@@ -2,18 +2,24 @@
 module RadonHierarchicalInterceptCenteredAll
 
 using PosteriorDB
-using WrenCore: @wren, @observe, @batch, @iid
+using WrenCore: @wren
 using WrenDists: WrenDists as WD
 
 const data = let
     pdb = PosteriorDB.database()
-    PosteriorDB.load(PosteriorDB.dataset(
-        PosteriorDB.posterior(pdb, "radon_all-radon_hierarchical_intercept_centered"),
-    ))
+    PosteriorDB.load(
+        PosteriorDB.dataset(
+            PosteriorDB.posterior(pdb, "radon_all-radon_hierarchical_intercept_centered"),
+        ),
+    )
 end
 
 @wren function radon_hierarchical_intercept_centered(
-    J, county_idx, log_uppm, floor_measure, log_radon,
+    J,
+    county_idx,
+    log_uppm,
+    floor_measure,
+    log_radon,
 )
     @iid alpha ~ WD.Flat() size=J
     @iid beta ~ WD.Normal(0.0, 10.0) size=2
@@ -28,8 +34,12 @@ end
     return nothing
 end
 
-const wren_model = radon_hierarchical_intercept_centered(
-    data["J"], data["county_idx"], data["log_uppm"], data["floor_measure"], data["log_radon"],
+const model = radon_hierarchical_intercept_centered(
+    data["J"],
+    data["county_idx"],
+    data["log_uppm"],
+    data["floor_measure"],
+    data["log_radon"],
 )
 
 end

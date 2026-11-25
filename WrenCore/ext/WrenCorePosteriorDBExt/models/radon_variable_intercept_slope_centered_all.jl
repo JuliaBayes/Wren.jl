@@ -2,18 +2,23 @@
 module RadonVariableInterceptSlopeCenteredAll
 
 using PosteriorDB
-using WrenCore: @wren, @observe, @batch, @iid
+using WrenCore: @wren
 using WrenDists: WrenDists as WD
 
 const data = let
     pdb = PosteriorDB.database()
-    PosteriorDB.load(PosteriorDB.dataset(
-        PosteriorDB.posterior(pdb, "radon_all-radon_variable_intercept_slope_centered"),
-    ))
+    PosteriorDB.load(
+        PosteriorDB.dataset(
+            PosteriorDB.posterior(pdb, "radon_all-radon_variable_intercept_slope_centered"),
+        ),
+    )
 end
 
 @wren function radon_variable_intercept_slope_centered(
-    J, county_idx, floor_measure, log_radon,
+    J,
+    county_idx,
+    floor_measure,
+    log_radon,
 )
     sigma_y ~ WD.HalfNormal(0.0, 1.0)
     sigma_alpha ~ WD.HalfNormal(0.0, 1.0)
@@ -31,8 +36,11 @@ end
     return nothing
 end
 
-const wren_model = radon_variable_intercept_slope_centered(
-    data["J"], data["county_idx"], data["floor_measure"], data["log_radon"],
+const model = radon_variable_intercept_slope_centered(
+    data["J"],
+    data["county_idx"],
+    data["floor_measure"],
+    data["log_radon"],
 )
 
 end

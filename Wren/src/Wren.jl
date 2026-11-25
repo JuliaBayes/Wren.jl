@@ -3,12 +3,10 @@ module Wren
 using WrenCore
 
 # Samplers
+include("samplers/progress.jl")
 include("samplers/prior.jl")
 include("samplers/nuts.jl")
-export prior, nuts
-
-include("optimization.jl")
-export optimize, MAP, MLE
+export prior, nuts, AbstractInitialization, FindFiniteDensity
 
 # Distributions
 module Dists
@@ -26,6 +24,7 @@ using WrenCore:
     @sample,
     @observe,
     @batch,
+    @track,
     # Models
     Model,
     condition,
@@ -33,11 +32,15 @@ using WrenCore:
     simulate,
     ModelResult,
     return_value,
+    tracked_quantities,
+    TrackedQuantitySpec,
+    AllQuantities,
+    SomeQuantities,
+    NoQuantities,
     logjoint,
     logprior,
     # Vectorisation
     VecModel,
-    logdensity,
     vector_parameters,
     lp,
     lp_and_grad,
@@ -52,7 +55,13 @@ using WrenCore:
     WithExpectedResult,
     # Initialisations for MCMC
     FromPrior,
+    FromUnconstrainedInterval,
     FromValues,
+    # Optimisation
+    optimize,
+    MAP,
+    MLE,
+    PointEstimate,
     # PosteriorDB
     posteriordb_model,
     available_posteriordb_models
@@ -65,6 +74,7 @@ export WrenCore,
     @sample,
     @observe,
     @batch,
+    @track,
     # Models
     Model,
     condition,
@@ -72,11 +82,15 @@ export WrenCore,
     simulate,
     ModelResult,
     return_value,
+    tracked_quantities,
+    TrackedQuantitySpec,
+    AllQuantities,
+    SomeQuantities,
+    NoQuantities,
     logjoint,
     logprior,
     # Vectorisation
     VecModel,
-    logdensity,
     vector_parameters,
     lp,
     lp_and_grad,
@@ -91,7 +105,13 @@ export WrenCore,
     WithExpectedResult,
     # Initialisations for MCMC
     FromPrior,
+    FromUnconstrainedInterval,
     FromValues,
+    # Optimisation
+    optimize,
+    MAP,
+    MLE,
+    PointEstimate,
     # PosteriorDB
     posteriordb_model,
     available_posteriordb_models
@@ -102,11 +122,14 @@ export @vn, @vnt, VarNamedTuple, VarName, parameters
 using DensityInterface: logdensityof
 export logdensityof
 
-using StatsAPI: loglikelihood, predict
-export loglikelihood, predict
+using StatsAPI: loglikelihood
+export loglikelihood
 
-using DifferentiationInterface: AutoForwardDiff, AutoReverseDiff, AutoMooncake, AutoEnzyme
-export AutoForwardDiff, AutoReverseDiff, AutoMooncake, AutoEnzyme
+using DifferentiationInterface:
+    AutoForwardDiff, AutoReverseDiff, AutoMooncake, AutoMooncakeForward, AutoEnzyme
+export AutoForwardDiff, AutoReverseDiff, AutoMooncake, AutoMooncakeForward, AutoEnzyme
+using ADTypes: AutoReactant
+export AutoReactant
 
 using EnzymeCore: Forward, Reverse
 export Forward, Reverse

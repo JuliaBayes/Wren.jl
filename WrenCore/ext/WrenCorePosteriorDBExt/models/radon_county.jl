@@ -2,14 +2,14 @@
 module RadonCounty
 
 using PosteriorDB
-using WrenCore: @wren, @observe, @batch, @iid
+using WrenCore: @wren
 using WrenDists: WrenDists as WD
 
 const data = let
     pdb = PosteriorDB.database()
-    PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-        pdb, "radon_mod-radon_county",
-    )))
+    PosteriorDB.load(
+        PosteriorDB.dataset(PosteriorDB.posterior(pdb, "radon_mod-radon_county")),
+    )
 end
 
 @wren function radon_county(county, y, J)
@@ -24,6 +24,6 @@ end
     return nothing
 end
 
-const wren_model = radon_county(data["county"], data["y"], data["J"])
+const model = radon_county(data["county"], data["y"], data["J"])
 
 end

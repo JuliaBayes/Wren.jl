@@ -48,7 +48,7 @@ Base.rand(rng::Random.AbstractRNG, d::IndependentArray) =
 Base.rand(d::Independent) = rand(Random.default_rng(), d)
 
 DensityInterface.DensityKind(::Independent) = DensityInterface.HasDensity()
-function _check_size(d::Independent, x::AbstractArray)
+function _check_size(d, x::AbstractArray)
     size(x) == size(d) ||
         throw(DimensionMismatch("expected size $(size(d)), got $(size(x))"))
     return nothing
@@ -69,17 +69,21 @@ Sum of `logdensityof(dist, xᵢ)` over every draw `xᵢ` stored in `x`. Add meth
 function to provide closed-form expressions for specific measures.
 """
 function _iid_logdensityof(dist::UnivariateDist, x::AbstractArray)
-    return sum(Base.Fix1(logdensityof, dist), x; init=_zero_logdensity(dist, x))
+    return _sum_or_zero(Base.Fix1(logdensityof, dist), x, _zero_logdensity(dist, x))
 end
 
 function _zero_logdensity(dist::WrenDist, x::AbstractArray)
     return zero(float(promote_type(eltype(x), noisetype(dist))))
 end
 
+# Equivalent to `sum(f, x; init=zero_value)`, but the sum-with-init-kwarg is slower under AD
+# (and VERY much slower under Mooncake in particular). See #326.
+@inline _sum_or_zero(f, x, zero_value) = isempty(x) ? zero_value : sum(f, x)
+
 # Each slice is one draw. This fallback is CPU-only.
 function _iid_logdensityof(dist::MultivariateDist, x::AbstractArray{<:Any,M}) where {M}
     slices = eachslice(x; dims=ntuple(i -> i + 1, Val(M - 1)))
-    return sum(Base.Fix1(logdensityof, dist), slices; init=_zero_logdensity(dist, x))
+    return _sum_or_zero(Base.Fix1(logdensityof, dist), slices, _zero_logdensity(dist, x))
 end
 
 # --- ElementwiseLink / ElementwiseInvLink ---
@@ -161,16 +165,34 @@ end
 Plaice.from_vec(d::Independent) = Plaice.Reshape(size(d))
 Plaice.to_vec(d::Independent) = Plaice.Vec(size(d))
 
-# TODO(penelopeysm): this doesn't look correct, except for univariates.
 Base.length(d::Independent) = prod(size(d))
 Plaice.vec_length(d::Independent) = length(d)
 Plaice.unconstrained_vec_length(d::Independent) = length(d)
+Plaice.unconstrained_vec_length(d::IIDMultivariate) =
+    Plaice.unconstrained_vec_length(_dist(d)) * prod(_dims(d))
 
-# Entry `i` of the vectorised sample is entry `i` of `vec(x)`, and every transform here is
-# elementwise, so the constrained and unconstrained optics coincide.
+# Scalar transforms preserve the coordinate optics.
 _index_optics(d) = [VarNames.Index(Tuple(I), (;)) for I in vec(CartesianIndices(size(d)))]
 Plaice.optic_vec(d::Independent) = _index_optics(d)
 Plaice.unconstrained_optic_vec(d::Independent) = _index_optics(d)
+
+_append_iid_indices(::Nothing, indices::Tuple) = nothing
+function _append_iid_indices(optic::VarNames.AbstractOptic, indices::Tuple)
+    isempty(indices) && return optic
+    last = VarNames.olast(optic)
+    return if last isa VarNames.Index
+        VarNames.Index((last.ix..., indices...), last.kw) ∘ VarNames.oinit(optic)
+    else
+        VarNames.Index(indices, (;)) ∘ optic
+    end
+end
+
+function Plaice.unconstrained_optic_vec(d::IIDMultivariate)
+    return vec([
+        _append_iid_indices(optic, Tuple(I)) for
+        optic in Plaice.unconstrained_optic_vec(_dist(d)), I in CartesianIndices(_dims(d))
+    ])
+end
 
 function Plaice.from_unconstrained_vec(d::IIDUnivariate)
     return ElementwiseInvLink(
@@ -182,22 +204,21 @@ function Plaice.to_unconstrained_vec(d::IIDUnivariate)
     return ElementwiseLink(Plaice.scalar_to_scalar_bijector(_dist(d)), _dims(d))
 end
 
-function _check_identity_link(d::IIDMultivariate)
-    Plaice.from_unconstrained_vec(_dist(d)) isa Plaice.TypedIdentity || throw(
+Plaice.from_unconstrained_vec(d::IIDMultivariate) =
+    Plaice.inverse(Plaice.to_unconstrained_vec(d))
+function Plaice.to_unconstrained_vec(d::IIDMultivariate)
+    bijector = Plaice.to_unconstrained_vec(_dist(d))
+    bijector isa Plaice.TypedIdentity && return Plaice.Vec(size(d))
+    iszero(prod(_dims(d))) && throw(
         ArgumentError(
-            "iid over a multivariate measure is only supported when the measure is " *
-            "already unconstrained; got $(_dist(d)).",
+            "empty constrained multivariate iid transforms are not supported by Plaice",
         ),
     )
-    return nothing
-end
-function Plaice.from_unconstrained_vec(d::IIDMultivariate)
-    _check_identity_link(d)
-    return Plaice.Reshape(size(d))
-end
-function Plaice.to_unconstrained_vec(d::IIDMultivariate)
-    _check_identity_link(d)
-    return Plaice.Vec(size(d))
+    return Plaice.ProductVecTransform(
+        Plaice.Elementwise(bijector, _dims(d)),
+        nothing,
+        size(_dist(d)),
+    )
 end
 
 function Plaice.from_unconstrained_vec(d::IndependentArray)

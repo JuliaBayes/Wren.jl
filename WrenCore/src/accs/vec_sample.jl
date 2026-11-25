@@ -53,10 +53,8 @@ function scope(acc::VecSampleAccumulator, vn::VarName)
 end
 
 reset(acc::VecSampleAccumulator) = acc
-split(acc::VecSampleAccumulator) = acc
 Base.copy(acc::VecSampleAccumulator) = VecSampleAccumulator(copy(acc.vals), acc.vecinfo)
-combine(acc1::VecSampleAccumulator, ::VecSampleAccumulator) = acc1
-function combine_with_namespace(
+function combine_from_scope(
     parent::VecSampleAccumulator,
     ::VecSampleAccumulator, # child
     ::VarName,
