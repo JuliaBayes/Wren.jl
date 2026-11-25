@@ -10,17 +10,38 @@ using Random: AbstractRNG, default_rng
 using VarNames: VarNames, varname, VarName, VarNamedTuple, vnt_pretty_print
 using StatsAPI: StatsAPI
 
-function _issue_error(str)
-    error(
-        "$str.\n\nPlease report this issue at https://github.com/JuliaBayes/Wren.jl/issues. Thank you!\n",
-    )
-end
-
 function _docs_link(str)
     return "https://juliabayes.org/Wren.jl/$str"
 end
 
-const WREN_COMPILATION_DEBUG = Ref(false)
+function _source_location(source::LineNumberNode)
+    source.file === nothing && return "unknown location"
+    file = String(source.file)
+    pkgdir = dirname(@__DIR__)
+    if startswith(file, pkgdir)
+        file = joinpath("WrenCore", relpath(file, pkgdir))
+    end
+    return string(replace(file, '\\' => '/'), ":", source.line)
+end
+
+"""
+    @_issue_error msg
+
+Throw an internal Wren error, including the source location
+and a request to report the issue.
+"""
+macro _issue_error(msg)
+    location = _source_location(__source__)
+    return :($_throw_issue_error($(esc(msg)), $location))
+end
+
+@noinline function _throw_issue_error(msg, location)
+    error(
+        "$msg.\n\nThis is an internal error in Wren (from $location). " *
+        "Please report this issue at " *
+        "https://github.com/JuliaBayes/Wren.jl/issues. Thank you!\n",
+    )
+end
 
 # Parameter spaces
 include("space.jl")
@@ -69,6 +90,7 @@ include("latents/vector.jl")
 include("accs/vectorised_params.jl")
 include("accs/vec_sample.jl")
 include("vecmodel.jl")
+include("initialization.jl")
 
 # User-facing interface
 include("evaluate.jl")
@@ -150,10 +172,14 @@ export @wren,
     test_ad,
     reduce_copies,
     target_transform,
+    # Initialisation
+    AbstractInitialization,
+    FindFiniteDensity,
     # Optimisation
     optimize,
     MAP,
     MLE,
+    PointEstimate,
     # FlexiChains
     to_flexichain,
     # PosteriorDB

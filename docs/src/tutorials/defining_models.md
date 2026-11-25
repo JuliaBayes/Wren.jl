@@ -208,8 +208,8 @@ However, the name of a tracked quantity must be a single symbol, so names like `
     To create a snapshot of `my_array` at the time it is initialised, you need to copy explicitly: `@track snapshot = deepcopy(my_array)`.
 
 By default, all tracked quantities are calculated and returned during model evaluation or MCMC sampling.
-You can, however, skip the statements marked with `@track`—for example because they're expensive and not needed at this time—by passing `track=NoQuantities()` to `simulate`, `prior` or `nuts`.
-If you want to keep specific tracked quantities, use `SomeQuantities((:x,))` instead.
+You can, however, skip the statements marked with `@track`—for example because they're expensive and not needed at this time—by passing `track=false` to `simulate`, `tracked_quantities`, `prior` or `nuts`.
+If you want to keep specific tracked quantities, pass their names instead, e.g. `track=:x` or `track=(:x, :y)`.
 
 !!! note "Side effects may be skipped"
 
@@ -230,7 +230,7 @@ end
 simulate(with_addloglikelihood())
 ```
 
-!!! "warning"
+!!! warning
 
     `@addloglikelihood` should only be used as an escape hatch in cases where none of the above syntax works at all.
     If you have a reason for using this, please [do let us know](https://github.com/JuliaBayes/Wren.jl/issues) as it may indicate that some other feature is missing from Wren.

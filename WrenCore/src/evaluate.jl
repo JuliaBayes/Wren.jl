@@ -55,6 +55,19 @@ struct ModelResult{V<:VarNamedTuple,G<:VarNamedTuple,R,LP<:Number,LL<:Number}
     loglikelihood::LL
 end
 
+function Base.:(==)(a::ModelResult, b::ModelResult)
+    fields = fieldnames(ModelResult)
+    return mapreduce(x -> getfield(a, x) == getfield(b, x), &, fields)
+end
+function Base.isequal(a::ModelResult, b::ModelResult)
+    fields = fieldnames(ModelResult)
+    return all(x -> isequal(getfield(a, x), getfield(b, x)), fields)
+end
+function Base.hash(result::ModelResult, h::UInt)
+    fields = ntuple(i -> getfield(result, i), fieldcount(ModelResult))
+    return hash((ModelResult, fields), h)
+end
+
 function Base.show(io::IO, ::MIME"text/plain", result::ModelResult)
     println(io, "ModelResult")
     print(io, "├─ ")
@@ -91,8 +104,8 @@ function Base.show(io::IO, ::MIME"text/plain", result::ModelResult)
 end
 
 """
-    simulate(model::Model; track::TrackedQuantitySpec=AllQuantities())
-    simulate(model::Model, latents; track::TrackedQuantitySpec=AllQuantities())
+    simulate(model::Model; track=AllQuantities())
+    simulate(model::Model, latents; track=AllQuantities())
 
 Draw a sample from `model`, using the given latent source. If one is not provided,
 draws from the prior distribution.
@@ -102,19 +115,21 @@ be an `AbstractRNG` (to draw from the prior) or a `VarNamedTuple` of values.
 
 Returns the params, tracked quantities selected by `track`, return value, log-prior, and
 log-likelihood of the model packaged in a [`ModelResult`](@ref).
+
+By default, all tracked quantities will be included in the result. To include only one or a
+selection of tracked quantities, pass a Symbol or a tuple of Symbols; to include none, pass
+`track=false` or an empty tuple. If you are using `simulate` in a performance-sensitive loop,
+you should instead pass one of [`AllQuantities`](@ref), [`SomeQuantities`](@ref), or
+[`NoQuantities`](@ref).
 """
-function simulate(
-    model::Model,
-    latents::AbstractLatentSource;
-    track::TrackedQuantitySpec=AllQuantities(),
-)
+function simulate(model::Model, latents::AbstractLatentSource; track=AllQuantities())
     retval, accs = evaluate(
         model,
         latents,
         OriginalSpace(),
         AccumulatorTuple(
             ParamsAccumulator(),
-            TrackedQuantityAccumulator(track),
+            TrackedQuantityAccumulator(to_tq_spec(track)),
             LogPriorAccumulator(),
             LogLikelihoodAccumulator(),
         ),
@@ -128,28 +143,24 @@ function simulate(
         loglikelihood(accs),
     )
 end
-function simulate(model::Model, latents; track::TrackedQuantitySpec=AllQuantities())
+function simulate(model::Model, latents; track=AllQuantities())
     return simulate(model, to_latent_source(latents); track)
 end
-simulate(model::Model; track::TrackedQuantitySpec=AllQuantities()) =
-    simulate(model, FromPrior(); track)
+simulate(model::Model; track=AllQuantities()) = simulate(model, FromPrior(); track)
 
 """
-    simulate(
-        vecmodel::VecModel,
-        params::AbstractVector;
-        track::TrackedQuantitySpec=AllQuantities(),
-    )::ModelResult
+    simulate(vecmodel::VecModel, params::AbstractVector; track=AllQuantities())::ModelResult
 
 Evaluate the model of `vecmodel` at the parameter vector `params`, which is in the parameter
 space of `vecmodel`. The log-prior and log-likelihood in the result are in original space.
-The result holds the tracked quantities selected by `track`.
+
+By default, all tracked quantities will be included in the result. To include only one or a
+selection of tracked quantities, pass a Symbol or a tuple of Symbols; to include none, pass
+`track=false` or an empty tuple. If you are using `simulate` in a performance-sensitive loop,
+you should instead pass one of [`AllQuantities`](@ref), [`SomeQuantities`](@ref), or
+[`NoQuantities`](@ref).
 """
-function simulate(
-    vecmodel::VecModel,
-    params::AbstractVector;
-    track::TrackedQuantitySpec=AllQuantities(),
-)
+function simulate(vecmodel::VecModel, params::AbstractVector; track=AllQuantities())
     _check_vecmodel_dimension(params, vecmodel)
     retval, accs = evaluate(
         vecmodel.model,
@@ -157,7 +168,7 @@ function simulate(
         vecmodel.parameter_space,
         AccumulatorTuple(
             ParamsAccumulator(),
-            TrackedQuantityAccumulator(track),
+            TrackedQuantityAccumulator(to_tq_spec(track)),
             LogPriorAccumulator(),
             LogLikelihoodAccumulator(),
         ),
@@ -255,11 +266,17 @@ Get the tracked quantities (values recorded by `@track` statements) from a
 tracked_quantities(result::ModelResult) = result.tracked_quantities
 
 """
-    tracked_quantities(model::Model, track::TrackedQuantitySpec=AllQuantities())
-    tracked_quantities(model::Model, latents, track::TrackedQuantitySpec=AllQuantities())
+    tracked_quantities(model::Model; track=AllQuantities())
+    tracked_quantities(model::Model, latents; track=AllQuantities())
 
 Obtain the tracked quantities selected by `track`, calculated with a given set of latent
 values. If no latent values are provided, they are drawn from the prior distribution.
+
+By default, all tracked quantities will be included. To include only one or a selection
+of tracked quantities, pass a Symbol or a tuple of Symbols; to include none, pass
+`track=false` or an empty tuple. If you are using `tracked_quantities` in a
+performance-sensitive loop, you should instead pass one of [`AllQuantities`](@ref),
+[`SomeQuantities`](@ref), or [`NoQuantities`](@ref).
 
 `latents` is converted to a latent source with [`to_latent_source`](@ref), so it can also
 be an `AbstractRNG` (to draw from the prior) or a `VarNamedTuple` of values.
@@ -270,27 +287,23 @@ the parameters.
 """
 function tracked_quantities(
     model::Model,
-    latents::AbstractLatentSource,
-    track::TrackedQuantitySpec=AllQuantities(),
+    latents::AbstractLatentSource;
+    track=AllQuantities(),
 )
     _, accs = evaluate(
         model,
         latents,
         OriginalSpace(),
-        AccumulatorTuple(TrackedQuantityAccumulator(track)),
+        AccumulatorTuple(TrackedQuantityAccumulator(to_tq_spec(track))),
         EvalContext{false}(),
     )
     return tracked_quantities(accs)
 end
-function tracked_quantities(
-    model::Model,
-    latents,
-    track::TrackedQuantitySpec=AllQuantities(),
-)
-    return tracked_quantities(model, to_latent_source(latents), track)
+function tracked_quantities(model::Model, latents; track=AllQuantities())
+    return tracked_quantities(model, to_latent_source(latents); track)
 end
-function tracked_quantities(model::Model, track::TrackedQuantitySpec=AllQuantities())
-    return tracked_quantities(model, FromPrior(), track)
+function tracked_quantities(model::Model; track=AllQuantities())
+    return tracked_quantities(model, FromPrior(); track)
 end
 
 ############################################################################################
