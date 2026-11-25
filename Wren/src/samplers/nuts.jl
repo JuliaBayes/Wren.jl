@@ -65,9 +65,8 @@ Each chain starts from an independent prior draw unless `initialization` is supp
 `reduce_copies` is passed to [`VecModel`](@ref): when sampling with Enzyme, it skips copies
 of model arguments that turn out not to be needed (see [`reduce_copies`](@ref)).
 
-`progress` configures how sampling progress is displayed: `true` uses `TermBackend`,
-`false` displays nothing. To choose a backend, pass it directly; to use several, pass
-a tuple of backends.
+Configure `progress` displays by passing a backend, or several as a tuple. The default
+`progress=true` uses `TermBackend`, and setting `progress=false` skips progress displays.
 
 Tracked quantities selected by `track` will be included in the returned chain. Note that
 tracked quantities are not evaluated during the log-density step, but only once per iteration.
@@ -101,7 +100,7 @@ function nuts(
     niters::Integer,
     nchains::Integer=1;
     adtype::DI.AbstractADType=DI.AutoEnzyme(; mode=Reverse),
-    progress::ProgressSpec=true,
+    progress::Union{AbstractBackend,Bool}=true,
     reduce_copies::Bool=true,
     track::TrackedQuantitySpec=AllQuantities(),
     dynamichmc_kwargs...,

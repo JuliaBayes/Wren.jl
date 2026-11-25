@@ -1,11 +1,9 @@
 using Random: Random
-using MCMCProgress: MCMCProgress, TermBackend, ProgressLoggingBackend, PlainTextBackend
+using MCMCProgress: MCMCProgress, TermBackend, ProgressLoggingBackend, PlainTextBackend, AbstractBackend
 using ProgressLogging: ProgressLogging
 using Term: Term
 
-# TODO: replace with `MCMCProgress.AbstractBackend` once MCMCProgress v0.2 is released
-const ProgressBackend = Union{TermBackend,ProgressLoggingBackend,PlainTextBackend}
-const ProgressSpec = Union{Bool,ProgressBackend,Tuple{Vararg{ProgressBackend}}}
+const ProgressSpec = Union{Bool,AbstractBackend,Tuple{Vararg{AbstractBackend}}}
 
 progress_backends(show_progress::Bool) = show_progress ? (TermBackend(),) : ()
 progress_backends(backend::ProgressBackend) = (backend,)

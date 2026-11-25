@@ -16,9 +16,8 @@ using MCMCProgress: Determinate, advance!, chain_at, close_phase!, open_phase!
 Sample from the prior distribution of a Wren model. The returned chain holds the tracked
 quantities selected by `track`.
 
-`progress` configures how sampling progress is displayed: `true` uses `TermBackend`,
-`false` displays nothing. To choose a backend, pass it directly; to use several, pass
-a tuple of backends.
+Configure `progress` displays by passing a backend, or several as a tuple. The default
+`progress=true` uses `TermBackend`, and setting `progress=false` skips progress displays.
 
 See also: [`TrackedQuantitySpec`](@ref)
 """
