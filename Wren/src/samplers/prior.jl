@@ -10,23 +10,24 @@ using MCMCProgress: Determinate, advance!, chain_at, close_phase!, open_phase!
         niters::Integer,
         nchains::Integer=1;
         progress=true,
-        track::TrackedQuantitySpec=AllQuantities(),
+        track=AllQuantities(),
     ) -> FlexiChains.VNChain
 
-Sample from the prior distribution of a Wren model. The returned chain holds the tracked
-quantities selected by `track`.
+Sample from the prior distribution of a Wren model.
 
 Configure `progress` displays by passing a backend, or several as a tuple. The default
 `progress=true` uses `TermBackend`, and setting `progress=false` skips progress displays.
 
-See also: [`TrackedQuantitySpec`](@ref)
+By default, all tracked quantities will be included in the returned chain. To include only
+one or a selection of tracked quantities, pass a Symbol or a tuple of Symbols; to include
+none, pass `track=false` or an empty tuple.
 """
 function prior(
     model::Model,
     niters::Integer,
     nchains::Integer=1;
     progress::ProgressSpec=true,
-    track::TrackedQuantitySpec=AllQuantities(),
+    track=AllQuantities(),
 )
     return prior(Random.default_rng(), model, niters, nchains; progress, track)
 end
@@ -36,9 +37,10 @@ function prior(
     niters::Integer,
     nchains::Integer=1;
     progress::ProgressSpec=true,
-    track::TrackedQuantitySpec=AllQuantities(),
+    track=AllQuantities(),
 )
     copy!(Random.TaskLocalRNG(), rng)
+    tq_spec = WrenCore.to_tq_spec(track)
     backends = progress_backends(progress)
     show_progress = !isempty(backends)
 
@@ -46,7 +48,7 @@ function prior(
     label = "Sampling $(model.name) from the prior"
     results = with_progress(backends, label, nchains) do run
         tasks = @sync [
-            Threads.@spawn _prior_chain(model, niters, run, j, track) for j in 1:nchains
+            Threads.@spawn _prior_chain(model, niters, run, j, tq_spec) for j in 1:nchains
         ]
         stack(fetch.(tasks))
     end
@@ -68,7 +70,7 @@ function _prior_chain(
     niters::Integer,
     run,
     j::Integer,
-    track::TrackedQuantitySpec,
+    track::WrenCore.TrackedQuantitySpec,
 )
     chain_model = WrenCore._copy_for_thread(model)
     phase = if run === nothing

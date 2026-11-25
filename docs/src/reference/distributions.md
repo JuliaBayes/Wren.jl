@@ -32,6 +32,7 @@ WrenDists.Weibull
 WrenDists.HalfNormal
 WrenDists.HalfCauchy
 WrenDists.HalfTDist
+WrenDists.PositiveFlat
 ```
 
 ### Continuous bounded
@@ -39,6 +40,7 @@ WrenDists.HalfTDist
 ```@docs
 WrenDists.Uniform
 WrenDists.Beta
+WrenDists.TruncatedFlat
 ```
 
 ### Discrete

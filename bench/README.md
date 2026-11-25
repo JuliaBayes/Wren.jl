@@ -15,6 +15,8 @@ To run the benchmarks locally (e.g. to try out local changes), run:
 julia --project=bench bench/suite/run.jl --no-save
 ```
 
+This just prints to stdout without any other effects.
+
 ### Instructions for production benchmarking
 
 Generally, we'll want to run prod benchmarks on:
@@ -54,16 +56,12 @@ inconsistent. (If one day we have dedicated machines, we could do that
 instead.) Instead, the production benchmarks are currently manually run on
 Penny's laptop.
 
-The suite can also be run on CI by hand, from the 'Benchmarks' workflow in the
-Actions tab. The results table is shown in the job summary and the JSON file
-is uploaded as an artifact; tick 'save' to also save it to the
-`benchmark-results` branch.
-
 ### The website
 
 `web/` is a small website that shows one run as a table, or compares two runs
 (pick a 'tip' and a 'base'; cells are coloured by how much faster or slower tip
-is, and hovering shows the base time).
+is, and hovering shows the base time). Its 'History' tab has a chart for each
+model showing the times of all runs, in commit order.
 
 It's hosted at https://juliabayes.org/Wren.jl/bench/. The 'Benchmark website'
 workflow (`.github/workflows/bench-site.yml`) builds it and publishes it to the

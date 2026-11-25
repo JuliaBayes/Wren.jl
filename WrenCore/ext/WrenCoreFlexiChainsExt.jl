@@ -108,15 +108,16 @@ end
         model::WrenCore.Model,
         chain::FlexiChains.VNChain;
         rng::Random.AbstractRNG=Random.default_rng(),
-        track::TrackedQuantitySpec=AllQuantities(),
+        track=AllQuantities(),
     ) -> FlexiChains.VNChain
 
-Simulate from `model` at every iteration in `chain`. Variables that `chain` does not hold
-are drawn from the prior using `rng`.
+Simulate from `model` using the parameters at each iteration of `chain`. If a parameter
+required by `model` is not stored in `chain`, that parameter will be drawn from the prior
+distribution using `rng`.
 
 The returned `FlexiChain` will contain all the simulated variables, the tracked quantities
-selected by `track`, as well as the variables already present in the input `chain`, which
-implies that:
+selected by `track` (see [`TrackedQuantitySpec`](@ref WrenCore.TrackedQuantitySpec)), as
+well as the variables already present in the input `chain`, which implies that:
 
 - variables that are in the `chain` are fixed to their respective values;
 - variables that arent in the `chain` are resampled according to the model;
@@ -132,18 +133,17 @@ considered as prior terms. However, note that the log-prior of the returned chai
 contain the log-prior terms of the parameters already present in the input `chain`. Thus, if
 you want to obtain the log-probability of the simulated variables only, you can subtract the
 two log-prior terms.
-
-See also: [`TrackedQuantitySpec`](@ref WrenCore.TrackedQuantitySpec)
 """
 function WrenCore.simulate(
     model::WrenCore.Model,
     chain::VNChain;
     rng::AbstractRNG=default_rng(),
-    track::WrenCore.TrackedQuantitySpec=WrenCore.AllQuantities(),
+    track=WrenCore.AllQuantities(),
 )
     fallback = WrenCore.FromPrior(rng)
+    tq_spec = WrenCore.to_tq_spec(track)
     results = map(FlexiChains.parameters_at(chain)) do vnt
-        WrenCore.simulate(model, WrenCore.FromValues(vnt, fallback); track)
+        WrenCore.simulate(model, WrenCore.FromValues(vnt, fallback); track=tq_spec)
     end
     simulated_chain = WrenCore.to_flexichain(
         results;
@@ -158,12 +158,12 @@ end
         model::WrenCore.Model,
         chain::FlexiChains.VNChain;
         rng::Random.AbstractRNG=Random.default_rng(),
-        track::TrackedQuantitySpec=AllQuantities(),
+        track=WrenCore.AllQuantities(),
     ) -> FlexiChains.VNChain
 
-Re-evaluate `model` at each iteration of `chain` and return a chain holding only the
-tracked quantities requested with `track`. If a variable required by `model` is not stored
-in `chain`, that variable will be drawn from the prior distribution.
+Re-evaluate `model` at each iteration of `chain` and return a chain holding the tracked
+quantities requested with `track`. If a parameter required by `model` is not stored in
+`chain`, that parameter will be drawn from the prior distribution using `rng`.
 
 See also: [`TrackedQuantitySpec`](@ref WrenCore.TrackedQuantitySpec)
 """
@@ -171,11 +171,12 @@ function WrenCore.tracked_quantities(
     model::WrenCore.Model,
     chain::VNChain;
     rng::AbstractRNG=default_rng(),
-    track::WrenCore.TrackedQuantitySpec=WrenCore.AllQuantities(),
+    track=WrenCore.AllQuantities(),
 )
     fallback = WrenCore.FromPrior(rng)
+    tq_spec = WrenCore.to_tq_spec(track)
     tq_matrix = map(FlexiChains.parameters_at(chain)) do vnt
-        WrenCore.tracked_quantities(model, WrenCore.FromValues(vnt, fallback), track)
+        WrenCore.tracked_quantities(model, WrenCore.FromValues(vnt, fallback); track=tq_spec)
     end
     return WrenCore.to_flexichain(
         tq_matrix;
@@ -242,8 +243,8 @@ end
         chain::FlexiChains.VNChain
     ) -> FlexiChains.VNChain
 
-Return the parameters of `model` at each iteration of `chain`. If a variable required by
-`model` is not stored in `chain`, that variable will be drawn from the prior distribution.
+Return the parameters of `model` at each iteration of `chain`. If a parameter required by
+`model` is not stored in `chain`, that parameter will be drawn from the prior distribution.
 
 This function differs from [`simulate`](@ref) in that it contains _only_ parameters. That
 makes it more efficient than `simulate`, which also computes the log-density terms.

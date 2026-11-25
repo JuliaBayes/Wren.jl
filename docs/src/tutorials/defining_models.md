@@ -181,7 +181,7 @@ end
 It's worth pointing out here that `@batch` is not 'magical': it works only with a restricted set of syntax and is not guaranteed to be faster than a naive for-loop.
 It is often worth [benchmarking your model](@ref benchmarking) if you want to optimise performance.
 
-### `@track`
+### [`@track`](@id track)
 
 Inside a model body, you may have other quantities of interest that you want to extract, even if they are not parameters.
 You can mark these quantities with the `@track` macro.
@@ -199,6 +199,23 @@ model = with_track() | (; y=1.0)
 simulate(model)
 ```
 
+You can write any expression on the right-hand side of `@track sym = expr`, including `begin` or `let` blocks.
+However, the name of a tracked quantity must be a single symbol, so names like `@track x[1]` or `@track x.a` are not allowed.
+
+!!! note "Tracked quantities are not copied"
+
+    After initialising a tracked quantity `@track my_array`, mutating `my_array` will change its values.
+    To create a snapshot of `my_array` at the time it is initialised, you need to copy explicitly: `@track snapshot = deepcopy(my_array)`.
+
+By default, all tracked quantities are calculated and returned during model evaluation or MCMC sampling.
+You can, however, skip the statements marked with `@track`—for example because they're expensive and not needed at this time—by passing `track=false` to `simulate`, `tracked_quantities`, `prior` or `nuts`.
+If you want to keep specific tracked quantities, pass their names instead, e.g. `track=:x` or `track=(:x, :y)`.
+
+!!! note "Side effects may be skipped"
+
+    Quantities marked with `@track` are not evaluated unless they are explicitly requested.
+    This means that if you write, for example, `@track x = push!(my_vec, elem)` and `x` is not requested or otherwise used, the side effect of `push!` will not be executed (i.e. `my_vec` will not be mutated).
+
 ### [`@addloglikelihood`](@id addloglike)
 
 This manually increments the log-likelihood of the model.
@@ -213,7 +230,7 @@ end
 simulate(with_addloglikelihood())
 ```
 
-!!! "warning"
+!!! warning
 
     `@addloglikelihood` should only be used as an escape hatch in cases where none of the above syntax works at all.
     If you have a reason for using this, please [do let us know](https://github.com/JuliaBayes/Wren.jl/issues) as it may indicate that some other feature is missing from Wren.

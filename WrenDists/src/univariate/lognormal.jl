@@ -97,4 +97,4 @@ function DensityInterface.logdensityof(d::BatchedLogNormal, x)
         value - lognorm
     end
 end
-Plaice.scalar_to_scalar_bijector(::BatchedLogNormal) = Plaice.Log(0.0, 1)
+Plaice.scalar_to_scalar_bijector(d::BatchedLogNormal) = Plaice.Log(zero(noisetype(d)), 1)

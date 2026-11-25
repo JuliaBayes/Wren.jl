@@ -3,7 +3,7 @@ module WrenDists
 using DensityInterface: DensityInterface, logdensityof
 using EnzymeCore: EnzymeCore, EnzymeRules, Annotation, Const
 using IrrationalConstants: invsqrt2, log2π, logπ, logtwo, sqrt2, sqrtπ
-using LogExpFunctions: log1mexp, log1pexp, logistic, xlogy, xlog1py
+using LogExpFunctions: log1mexp, log1pexp, log1psq, logistic, xlogy, xlog1py
 using LinearAlgebra: Diagonal, LowerTriangular, UniformScaling, diag
 using Random: Random, AbstractRNG
 using ReactantCore: within_compile
@@ -37,6 +37,8 @@ include("univariate/laplace.jl")
 include("univariate/cauchy.jl")
 include("univariate/logistic.jl")
 include("univariate/flat.jl")
+include("univariate/truncatedflat.jl")
+include("univariate/positiveflat.jl")
 include("univariate/gamma.jl")
 include("univariate/inversegamma.jl")
 include("univariate/tdist.jl")
@@ -96,7 +98,9 @@ export Bernoulli,
     Normal,
     Poisson,
     PoissonLog,
+    PositiveFlat,
     TDist,
+    TruncatedFlat,
     Uniform,
     Weibull
 
