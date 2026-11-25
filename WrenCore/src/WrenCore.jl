@@ -69,12 +69,14 @@ include("latents/vector.jl")
 include("accs/vectorised_params.jl")
 include("accs/vec_sample.jl")
 include("vecmodel.jl")
+include("initialization.jl")
 
 # User-facing interface
 include("evaluate.jl")
 include("condition.jl")
 include("test_ad.jl")
 include("test_utils.jl")
+include("optimization.jl")
 
 # Overloaded in extensions
 function to_flexichain end
@@ -88,6 +90,7 @@ export @wren,
     @observe,
     @batch,
     @track,
+    Model,
     AbstractLatentSource,
     AbstractTransform,
     AbstractParameterSpace,
@@ -148,6 +151,14 @@ export @wren,
     test_ad,
     reduce_copies,
     target_transform,
+    # Initialisation
+    AbstractInitialization,
+    FindFiniteDensity,
+    # Optimisation
+    optimize,
+    MAP,
+    MLE,
+    PointEstimate,
     # FlexiChains
     to_flexichain,
     # PosteriorDB

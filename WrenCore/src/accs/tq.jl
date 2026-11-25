@@ -12,6 +12,8 @@ abstract type TrackedQuantitySpec end
     AllQuantities()
 
 Select every tracked quantity.
+
+See also: [`SomeQuantities`](@ref), [`NoQuantities`](@ref)
 """
 struct AllQuantities <: TrackedQuantitySpec end
 
@@ -19,6 +21,8 @@ struct AllQuantities <: TrackedQuantitySpec end
     NoQuantities()
 
 Select no tracked quantities.
+
+See also: [`AllQuantities`](@ref), [`SomeQuantities`](@ref)
 """
 struct NoQuantities <: TrackedQuantitySpec end
 
@@ -27,9 +31,29 @@ struct NoQuantities <: TrackedQuantitySpec end
 
 Select the tracked quantities named in `names`. The name of a submodel, such as `:a` in
 `a ~ sub(...)`, selects every tracked quantity of that submodel.
+
+See also: [`AllQuantities`](@ref), [`NoQuantities`](@ref)
 """
 struct SomeQuantities{names} <: TrackedQuantitySpec
     SomeQuantities(names::Tuple{Vararg{Symbol}}) = new{names}()
+end
+
+"""
+    to_tq_spec(track)::TrackedQuantitySpec
+
+Converts `true` to `AllQuantities()`, `false` to `NoQuantities()`, and wraps a `Symbol` or
+tuple of `Symbol`s in `SomeQuantities()`.
+"""
+to_tq_spec(spec::TrackedQuantitySpec) = spec
+to_tq_spec(track::Bool) = track ? AllQuantities() : NoQuantities()
+to_tq_spec(name::Symbol) = SomeQuantities((name,))
+to_tq_spec(names::Tuple{Vararg{Symbol}}) = SomeQuantities(names)
+function to_tq_spec(track)
+    throw(
+        ArgumentError(
+            "`track` must be a `Bool`, `Symbol`, tuple of `Symbol`s, or `TrackedQuantitySpec`",
+        ),
+    )
 end
 
 _tq_requested(::AllQuantities, ::Val) = true
@@ -40,6 +64,8 @@ _tq_requested(::SomeQuantities{names}, ::Val{sym}) where {names,sym} = sym in na
     TrackedQuantityAccumulator(spec::TrackedQuantitySpec=AllQuantities())
 
 Record the values of the `@track` statements selected by `spec` in a `VarNamedTuple`.
+
+See also: [`TrackedQuantitySpec`](@ref)
 """
 struct TrackedQuantityAccumulator{S<:TrackedQuantitySpec,V<:VarNamedTuple} <:
        AbstractAccumulator

@@ -6,10 +6,7 @@ using WrenCore
 include("samplers/progress.jl")
 include("samplers/prior.jl")
 include("samplers/nuts.jl")
-export prior, nuts
-
-include("optimization.jl")
-export optimize, MAP, MLE
+export prior, nuts, AbstractInitialization, FindFiniteDensity
 
 # Distributions
 module Dists
@@ -58,7 +55,13 @@ using WrenCore:
     WithExpectedResult,
     # Initialisations for MCMC
     FromPrior,
+    FromUnconstrainedInterval,
     FromValues,
+    # Optimisation
+    optimize,
+    MAP,
+    MLE,
+    PointEstimate,
     # PosteriorDB
     posteriordb_model,
     available_posteriordb_models
@@ -102,7 +105,13 @@ export WrenCore,
     WithExpectedResult,
     # Initialisations for MCMC
     FromPrior,
+    FromUnconstrainedInterval,
     FromValues,
+    # Optimisation
+    optimize,
+    MAP,
+    MLE,
+    PointEstimate,
     # PosteriorDB
     posteriordb_model,
     available_posteriordb_models

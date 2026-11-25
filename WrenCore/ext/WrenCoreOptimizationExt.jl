@@ -1,21 +1,30 @@
-module WrenOptimizationExt
+module WrenCoreOptimizationExt
 
-using Wren
 using WrenCore
 import DifferentiationInterface as DI
 import Optimization
 using VarNames: densify!!
 
-function Wren.optimize(
+function WrenCore.optimize(
     model::Model,
     solver;
     adtype::DI.AbstractADType=DEFAULT_AD,
-    latent_source=FromPrior(),
+    init=FromPrior(),
     lp_function=logjoint,
     reduce_copies=true,
     kwargs...,
 )
-    density = VecModel(model, adtype; latent_source, lp_function, reduce_copies)
+    # The starting point is set by `init`, so don't let users pass Optimization.jl's `u0`.
+    haskey(kwargs, :u0) &&
+        throw(ArgumentError("Use `init` instead of `u0` to set the starting point."))
+    init = WrenCore.to_initialization(init)
+    density = VecModel(
+        model,
+        adtype;
+        latent_source=WrenCore._initial_source(init),
+        lp_function,
+        reduce_copies,
+    )
     fg = function (gradient, x, p)
         gradient === nothing && return -lp(density, x)
         value, _ = lp_and_grad!(gradient, density, x)
@@ -27,10 +36,13 @@ function Wren.optimize(
         grad=(g, x, p) -> (fg(g, x, p); nothing),
         fg,
     )
-    problem = Optimization.OptimizationProblem(objective, copy(density.sample))
+    problem = Optimization.OptimizationProblem(
+        objective,
+        WrenCore._initial_position(density, init),
+    )
     solution = Optimization.solve(problem, solver; kwargs...)
     params = densify!!(parameters(density, solution.u))
-    return (; params, solution)
+    return PointEstimate(lp_function, params, -solution.objective, density, solution)
 end
 
 end
