@@ -9,7 +9,7 @@ using MCMCProgress: Determinate, advance!, chain_at, close_phase!, open_phase!
         model::Model,
         niters::Integer,
         nchains::Integer=1;
-        progress=true,
+        progress::ProgressSpec=true,
         track=AllQuantities(),
     ) -> FlexiChains.VNChain
 

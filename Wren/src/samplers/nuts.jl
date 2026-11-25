@@ -49,7 +49,7 @@ close_phases!(::DynamicHMC.NoProgressReport) = nothing
         niters::Integer,
         nchains::Integer=1;
         adtype::DI.AbstractADType=DI.AutoEnzyme(; mode=Enzyme.Reverse),
-        progress=true,
+        progress::ProgressSpec=true,
         reduce_copies::Bool=true,
         track=AllQuantities(),
         init=nothing,
