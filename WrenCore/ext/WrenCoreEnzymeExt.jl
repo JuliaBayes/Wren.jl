@@ -24,12 +24,12 @@ Specifically, this:
   will enable runtime activity (with a warning).
 """
 function WrenCore._handle_enzyme(vm::WrenCore.VecModel{M,<:DI.AutoEnzyme}) where {M<:Model}
-    err = try
+    err, bt = try
         lp_and_grad(vm, vm.sample)
         # Successful
         return vm
     catch e
-        e
+        e, catch_backtrace()
     end
     if err isa Enzyme.Compiler.EnzymeRuntimeActivityError &&
        WrenCore.AUTO_RUNTIME_ACTIVITY[] !== false
@@ -47,8 +47,14 @@ function WrenCore._handle_enzyme(vm::WrenCore.VecModel{M,<:DI.AutoEnzyme}) where
     end
     # Throw outside the `catch` block so that the error isn't shown with Enzyme's
     # internal stacktrace, or printed a second time as "caused by".
-    # In debug mode, throw the original error so that it's shown in full.
-    if err isa Enzyme.Compiler.EnzymeError && !WrenCore.WREN_COMPILATION_DEBUG[]
+    if err isa Enzyme.Compiler.EnzymeError
+        # `_module=WrenCore` so that this is enabled by `JULIA_DEBUG=WrenCore`, rather
+        # than needing the name of this extension.
+        @debug(
+            "Enzyme error when differentiating model $(vm.model.name)",
+            exception=(err, bt),
+            _module=WrenCore,
+        )
         throw(WrenEnzymeError(err))
     else
         throw(err)
@@ -72,8 +78,8 @@ stacktrace, since the stacktrace only points into Wren internals; the useful inf
 (including where in the model the error happened) is in Enzyme's own error message. The
 original error is stored in the `err` field.
 
-If `WrenCore.WREN_COMPILATION_DEBUG[]` is `true`, Enzyme errors are not wrapped, and are
-shown in full.
+To also see the original error with its full stacktrace, enable debug logging for WrenCore
+with `ENV["JULIA_DEBUG"] = "WrenCore"`.
 """
 struct WrenEnzymeError{E<:Exception} <: Exception
     err::E
@@ -122,9 +128,9 @@ function _show_enzyme_error(io::IO, ::Enzyme.Compiler.IllegalTypeAnalysisExcepti
 
            with the definition of your model to help reproduce the error.
 
-        4. You can obtain a full stack trace by setting
+        4. You can obtain a full stack trace by enabling debug logging for WrenCore:
 
-               WrenCore.WREN_COMPILATION_DEBUG[] = true
+               ENV["JULIA_DEBUG"] = "WrenCore"
 
            Note however that this stack trace is often very long and quite unhelpful
            (indeed, that is why we hide it by default).
