@@ -2,15 +2,15 @@
 module DogsHierarchical
 
 using PosteriorDB
-using WrenCore: @wren, @observe, @batch
+using WrenCore: @wren
 using WrenDists: WrenDists as WD
 using ..Dogs: dog_history
 
 const data = let
     pdb = PosteriorDB.database()
-    PosteriorDB.load(PosteriorDB.dataset(
-        PosteriorDB.posterior(pdb, "dogs-dogs_hierarchical"),
-    ))
+    PosteriorDB.load(
+        PosteriorDB.dataset(PosteriorDB.posterior(pdb, "dogs-dogs_hierarchical")),
+    )
 end
 
 @wren function dogs_hierarchical(y, shocks, avoids)
@@ -23,7 +23,7 @@ end
     return nothing
 end
 
-const wren_model = let
+const model = let
     y = data["y"]
     all(==(1), view(y, :, 1)) || throw(ArgumentError("expected first trial successes"))
     response, shocks, avoids = dog_history(y)

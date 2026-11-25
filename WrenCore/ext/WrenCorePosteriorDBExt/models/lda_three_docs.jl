@@ -2,22 +2,24 @@
 module LDAThreeDocs
 
 using PosteriorDB
-using WrenCore: @wren, @addloglikelihood
+using WrenCore: @wren
 using WrenDists: WrenDists as WD
 using ..LogAddExp: logaddexp
 
 const data = let
     pdb = PosteriorDB.database()
-    PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-        pdb, "three_docs1200-ldaK2",
-    )))
+    PosteriorDB.load(
+        PosteriorDB.dataset(PosteriorDB.posterior(pdb, "three_docs1200-ldaK2")),
+    )
 end
 
 function lda_logdensity(w, doc, theta, phi)
     total = zero(theta[1, 1] + phi[1, 1])
     for n in eachindex(w)
-        total += logaddexp(log(theta[1, doc[n]]) + log(phi[w[n], 1]),
-            log(theta[2, doc[n]]) + log(phi[w[n], 2]))
+        total += logaddexp(
+            log(theta[1, doc[n]]) + log(phi[w[n], 1]),
+            log(theta[2, doc[n]]) + log(phi[w[n], 2]),
+        )
     end
     return total
 end
@@ -35,7 +37,7 @@ end
     return nothing
 end
 
-const wren_model = let
+const model = let
     data["V"] == 3 && data["M"] == 3 && data["N"] == 1200 ||
         error("unexpected public three-document LDA fixture")
     lda_k2(data["w"], data["doc"], data["V"], data["M"])

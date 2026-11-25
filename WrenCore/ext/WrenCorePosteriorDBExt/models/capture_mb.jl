@@ -3,7 +3,7 @@ module CaptureMb
 
 using PosteriorDB
 using ..LogAddExp: logaddexp
-using WrenCore: @wren, @addloglikelihood, logdensityof
+using WrenCore: @wren, logdensityof
 using WrenDists: WrenDists as WD
 using ..CaptureCommon: capture_counts
 
@@ -18,7 +18,7 @@ function capture_mb_logp(omega, p, c, y, seen)
     for i in axes(y, 1)
         row = zero(total)
         for j in axes(y, 2)
-            prob = j == 1 || y[i, j - 1] == 0 ? p : c
+            prob = j == 1 || y[i, j-1] == 0 ? p : c
             row += logdensityof(WD.Bernoulli(prob), y[i, j])
         end
         row += present
@@ -35,7 +35,7 @@ end
     return nothing
 end
 
-const wren_model = let
+const model = let
     y = data["y"]
     capture_mb(y, capture_counts(y) .> 0)
 end

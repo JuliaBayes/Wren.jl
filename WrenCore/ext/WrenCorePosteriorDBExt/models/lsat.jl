@@ -2,12 +2,14 @@
 module LSAT
 
 using PosteriorDB
-using WrenCore: @wren, @observe, @batch, @iid
+using WrenCore: @wren
 using WrenDists: WrenDists as WD
 
 const data = let
     pdb = PosteriorDB.database()
-    PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(pdb, "lsat_data-lsat_model")))
+    PosteriorDB.load(
+        PosteriorDB.dataset(PosteriorDB.posterior(pdb, "lsat_data-lsat_model")),
+    )
 end
 
 function expanded_responses(data)
@@ -15,7 +17,7 @@ function expanded_responses(data)
     r = Matrix{Int}(undef, T, N)
     previous = 0
     for pattern in 1:data["R"]
-        for student in (previous + 1):data["culm"][pattern]
+        for student in (previous+1):data["culm"][pattern]
             for question in 1:T
                 r[question, student] = data["response"][pattern, question]
             end
@@ -41,6 +43,6 @@ end
     return nothing
 end
 
-const wren_model = lsat(expanded_responses(data), data["T"], data["N"])
+const model = lsat(expanded_responses(data), data["T"], data["N"])
 
 end

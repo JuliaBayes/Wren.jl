@@ -1,7 +1,7 @@
 <script lang="ts">
     import { changeColour, compare, type Comparison } from "./compare";
     import { formatChange, formatTime } from "./format";
-    import { modelUrl, runSha } from "./github";
+    import { modelUrl } from "./github";
     import type { Entry, Run } from "./types";
 
     interface Props {
@@ -103,7 +103,7 @@
             {@const model = tip.models.get(name)!}
             {@const baseModel = base?.models.get(name)}
             {@const primal = model.entries.get(PRIMAL)}
-            {@const url = modelUrl(name, runSha(tip.meta))}
+            {@const url = modelUrl(name)}
             <tr>
                 <td class="model">
                     {#if url !== null}

@@ -3,14 +3,14 @@ module DogsNonhierarchical
 
 using PosteriorDB
 using LogExpFunctions: log1pexp
-using WrenCore: @wren, @addloglikelihood, @iid, logdensityof
+using WrenCore: @wren, logdensityof
 using WrenDists: WrenDists as WD
 
 const data = let
     pdb = PosteriorDB.database()
-    PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-        pdb, "dogs-dogs_nonhierarchical",
-    )))
+    PosteriorDB.load(
+        PosteriorDB.dataset(PosteriorDB.posterior(pdb, "dogs-dogs_nonhierarchical")),
+    )
 end
 
 function dog_loglikelihood(y, mu1, mu2, sigma1, sigma2, rho, z1, z2)
@@ -43,14 +43,12 @@ end
 
     rho = 2 * rho_unit - 1
     # Logistic priors on the two unconstrained locations are tracked in #208.
-    @addloglikelihood -log1pexp(-mu1) - log1pexp(mu1) -
-        log1pexp(-mu2) - log1pexp(mu2)
-    @addloglikelihood dog_loglikelihood(y, mu1, mu2, sigma1, sigma2,
-        rho, z1, z2)
+    @addloglikelihood -log1pexp(-mu1) - log1pexp(mu1) - log1pexp(-mu2) - log1pexp(mu2)
+    @addloglikelihood dog_loglikelihood(y, mu1, mu2, sigma1, sigma2, rho, z1, z2)
     return nothing
 end
 
-const wren_model = let
+const model = let
     data["n_dogs"] == 30 && data["n_trials"] == 25 ||
         error("unexpected public dogs fixture")
     dogs_nonhierarchical(data["y"])

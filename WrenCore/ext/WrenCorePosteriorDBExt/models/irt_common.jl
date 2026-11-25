@@ -45,7 +45,7 @@ function graded_logdensity(y, eta, thresholds, offset, first, m)
     selected = score
     lognormalizer = score
     for r in 1:m
-        score += eta - offset - thresholds[first + r - 1]
+        score += eta - offset - thresholds[first+r-1]
         selected = y == r ? score : selected
         lognormalizer = logaddexp(lognormalizer, score)
     end

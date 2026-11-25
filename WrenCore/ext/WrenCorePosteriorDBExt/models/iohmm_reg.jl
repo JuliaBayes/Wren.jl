@@ -3,14 +3,14 @@ module IOHMMReg
 
 using PosteriorDB
 using ..LogAddExp: logaddexp
-using WrenCore: @wren, @addloglikelihood, @iid, logdensityof
+using WrenCore: @wren, logdensityof
 using WrenDists: WrenDists as WD
 
 const data = let
     pdb = PosteriorDB.database()
-    PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-        pdb, "iohmm_reg_simulated-iohmm_reg",
-    )))
+    PosteriorDB.load(
+        PosteriorDB.dataset(PosteriorDB.posterior(pdb, "iohmm_reg_simulated-iohmm_reg")),
+    )
 end
 
 linear_predictor(u, t, w) =
@@ -29,12 +29,9 @@ linear_predictor(u, t, w) =
     sigma3 ~ WD.HalfNormal(0.0, 3.0)
 
 
-    g1 = log(pi[1]) +
-        logdensityof(WD.Normal(linear_predictor(u, 1, b1), sigma1), y[1])
-    g2 = log(pi[2]) +
-        logdensityof(WD.Normal(linear_predictor(u, 1, b2), sigma2), y[1])
-    g3 = log(pi[3]) +
-        logdensityof(WD.Normal(linear_predictor(u, 1, b3), sigma3), y[1])
+    g1 = log(pi[1]) + logdensityof(WD.Normal(linear_predictor(u, 1, b1), sigma1), y[1])
+    g2 = log(pi[2]) + logdensityof(WD.Normal(linear_predictor(u, 1, b2), sigma2), y[1])
+    g3 = log(pi[3]) + logdensityof(WD.Normal(linear_predictor(u, 1, b3), sigma3), y[1])
     for t in 2:length(y)
         r1 = linear_predictor(u, t, w1)
         r2 = linear_predictor(u, t, w2)
@@ -42,20 +39,19 @@ linear_predictor(u, t, w) =
         normalizer = logaddexp(logaddexp(r1, r2), r3)
         # The source Stan program uses logA[t][i] for every destination j.
         # Thus this transition factor is shared across all three next states.
-        shared = logaddexp(logaddexp(g1 + r1 - normalizer,
-            g2 + r2 - normalizer), g3 + r3 - normalizer)
-        g1 = shared +
-            logdensityof(WD.Normal(linear_predictor(u, t, b1), sigma1), y[t])
-        g2 = shared +
-            logdensityof(WD.Normal(linear_predictor(u, t, b2), sigma2), y[t])
-        g3 = shared +
-            logdensityof(WD.Normal(linear_predictor(u, t, b3), sigma3), y[t])
+        shared = logaddexp(
+            logaddexp(g1 + r1 - normalizer, g2 + r2 - normalizer),
+            g3 + r3 - normalizer,
+        )
+        g1 = shared + logdensityof(WD.Normal(linear_predictor(u, t, b1), sigma1), y[t])
+        g2 = shared + logdensityof(WD.Normal(linear_predictor(u, t, b2), sigma2), y[t])
+        g3 = shared + logdensityof(WD.Normal(linear_predictor(u, t, b3), sigma3), y[t])
     end
     @addloglikelihood logaddexp(logaddexp(g1, g2), g3)
     return nothing
 end
 
-const wren_model = let
+const model = let
     data["K"] == 3 && data["M"] == 4 ||
         error("public input-output HMM fixture requires K=3, M=4")
     iohmm_reg(data["y"], data["u"])

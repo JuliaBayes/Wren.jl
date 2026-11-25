@@ -3,12 +3,14 @@ module Bones
 
 using PosteriorDB
 using LogExpFunctions: log1pexp
-using WrenCore: @wren, @addloglikelihood, @iid
+using WrenCore: @wren
 using WrenDists: WrenDists as WD
 
 const data = let
     pdb = PosteriorDB.database()
-    PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(pdb, "bones_data-bones_model")))
+    PosteriorDB.load(
+        PosteriorDB.dataset(PosteriorDB.posterior(pdb, "bones_data-bones_model")),
+    )
 end
 
 function bones_logp(grade, gamma, delta, ncat, theta)
@@ -21,15 +23,15 @@ function bones_logp(grade, gamma, delta, ncat, theta)
             eta = delta[j] * (theta[i] - gamma[j, 1])
             total -= log1pexp(eta)
         elseif category == last
-            eta = delta[j] * (theta[i] - gamma[j, last - 1])
+            eta = delta[j] * (theta[i] - gamma[j, last-1])
             total -= log1pexp(-eta)
         else
-            previous = delta[j] * (theta[i] - gamma[j, category - 1])
+            previous = delta[j] * (theta[i] - gamma[j, category-1])
             current = delta[j] * (theta[i] - gamma[j, category])
             # log(logistic(previous) - logistic(current)), without subtracting
             # two probabilities that may round to the same number.
-            total += -log1pexp(-previous) - log1pexp(current) +
-                log(-expm1(current - previous))
+            total +=
+                -log1pexp(-previous) - log1pexp(current) + log(-expm1(current - previous))
         end
     end
     return total
@@ -41,7 +43,7 @@ end
     return nothing
 end
 
-const wren_model = bones(data["grade"], data["gamma"], data["delta"],
-                         data["ncat"], data["nChild"])
+const model =
+    bones(data["grade"], data["gamma"], data["delta"], data["ncat"], data["nChild"])
 
 end

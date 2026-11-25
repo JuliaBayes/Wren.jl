@@ -2,7 +2,7 @@
 module DogsLog
 
 using PosteriorDB
-using WrenCore: @wren, @observe, @batch, @iid
+using WrenCore: @wren
 using WrenDists: WrenDists as WD
 using ..Dogs: dog_history
 
@@ -23,6 +23,6 @@ end
     return nothing
 end
 
-const wren_model = dogs_log(dog_history(data["y"])...)
+const model = dogs_log(dog_history(data["y"])...)
 
 end

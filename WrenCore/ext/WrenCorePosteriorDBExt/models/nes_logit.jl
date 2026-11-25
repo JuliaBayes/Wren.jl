@@ -2,14 +2,14 @@
 module NESLogit
 
 using PosteriorDB
-using WrenCore: @wren, @observe, @batch, @iid
+using WrenCore: @wren
 using WrenDists: WrenDists as WD
 
 const data = let
     pdb = PosteriorDB.database()
-    PosteriorDB.load(PosteriorDB.dataset(
-        PosteriorDB.posterior(pdb, "nes_logit_data-nes_logit_model"),
-    ))
+    PosteriorDB.load(
+        PosteriorDB.dataset(PosteriorDB.posterior(pdb, "nes_logit_data-nes_logit_model")),
+    )
 end
 
 @wren function nes_logit(income, vote)
@@ -22,6 +22,6 @@ end
     return nothing
 end
 
-const wren_model = nes_logit(data["income"], data["vote"])
+const model = nes_logit(data["income"], data["vote"])
 
 end

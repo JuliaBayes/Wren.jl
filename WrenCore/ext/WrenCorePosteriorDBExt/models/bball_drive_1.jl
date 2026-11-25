@@ -3,14 +3,14 @@ module BballDrive1
 
 using PosteriorDB
 using ..LogAddExp: logaddexp
-using WrenCore: @wren, @addloglikelihood, logdensityof
+using WrenCore: @wren, logdensityof
 using WrenDists: WrenDists as WD
 
 const data = let
     pdb = PosteriorDB.database()
-    PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-        pdb, "bball_drive_event_1-hmm_drive_1",
-    )))
+    PosteriorDB.load(
+        PosteriorDB.dataset(PosteriorDB.posterior(pdb, "bball_drive_event_1-hmm_drive_1")),
+    )
 end
 
 @wren function hmm_drive_1(u, v, tau, rho)
@@ -26,21 +26,26 @@ end
 
     # The ordered means still require their transform Jacobians.
     # Native ordered priors are tracked in #207.
-    @addloglikelihood raw_phi_gap + raw_lambda_gap +
-        logdensityof(WD.Normal(0.0, 1.0), phi1) +
-        logdensityof(WD.Normal(3.0, 1.0), phi2) +
-        logdensityof(WD.Normal(0.0, 1.0), lambda1) +
-        logdensityof(WD.Normal(3.0, 1.0), lambda2)
+    @addloglikelihood raw_phi_gap +
+                      raw_lambda_gap +
+                      logdensityof(WD.Normal(0.0, 1.0), phi1) +
+                      logdensityof(WD.Normal(3.0, 1.0), phi2) +
+                      logdensityof(WD.Normal(0.0, 1.0), lambda1) +
+                      logdensityof(WD.Normal(3.0, 1.0), lambda2)
 
-    g1 = logdensityof(WD.Normal(phi1, tau), u[1]) +
+    g1 =
+        logdensityof(WD.Normal(phi1, tau), u[1]) +
         logdensityof(WD.Normal(lambda1, rho), v[1])
-    g2 = logdensityof(WD.Normal(phi2, tau), u[1]) +
+    g2 =
+        logdensityof(WD.Normal(phi2, tau), u[1]) +
         logdensityof(WD.Normal(lambda2, rho), v[1])
     for t in 2:length(u)
-        next1 = logdensityof(WD.Normal(phi1, tau), u[t]) +
+        next1 =
+            logdensityof(WD.Normal(phi1, tau), u[t]) +
             logdensityof(WD.Normal(lambda1, rho), v[t]) +
             logaddexp(g1 + log(p11), g2 + log(p21))
-        next2 = logdensityof(WD.Normal(phi2, tau), u[t]) +
+        next2 =
+            logdensityof(WD.Normal(phi2, tau), u[t]) +
             logdensityof(WD.Normal(lambda2, rho), v[t]) +
             logaddexp(g1 + log1p(-p11), g2 + log1p(-p21))
         g1, g2 = next1, next2
@@ -49,7 +54,7 @@ end
     return nothing
 end
 
-const wren_model = let
+const model = let
     data["K"] == 2 || error("public basketball HMM fixture requires K=2")
     data["alpha"] == [4 2; 2 4] || error("unexpected transition prior")
     hmm_drive_1(data["u"], data["v"], data["tau"], data["rho"])

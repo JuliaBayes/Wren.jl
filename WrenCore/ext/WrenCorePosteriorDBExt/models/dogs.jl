@@ -2,7 +2,7 @@
 module Dogs
 
 using PosteriorDB
-using WrenCore: @wren, @observe, @batch, @iid
+using WrenCore: @wren
 using WrenDists: WrenDists as WD
 
 const data = let
@@ -12,10 +12,9 @@ end
 
 function dog_history(y)
     dogs, trials = size(y)
-    shocks = [sum((y[j, s] for s in 1:(t - 1)); init=0)
-        for t in 1:trials for j in 1:dogs]
-    avoids = [t - 1 - sum((y[j, s] for s in 1:(t - 1)); init=0)
-        for t in 1:trials for j in 1:dogs]
+    shocks = [sum((y[j, s] for s in 1:(t-1)); init=0) for t in 1:trials for j in 1:dogs]
+    avoids =
+        [t - 1 - sum((y[j, s] for s in 1:(t-1)); init=0) for t in 1:trials for j in 1:dogs]
     return vec(y), shocks, avoids
 end
 
@@ -28,6 +27,6 @@ end
     return nothing
 end
 
-const wren_model = dogs_model(dog_history(data["y"])...)
+const model = dogs_model(dog_history(data["y"])...)
 
 end

@@ -3,13 +3,15 @@ module CaptureMtbh
 
 using PosteriorDB
 using ..LogAddExp: logaddexp
-using WrenCore: @wren, @addloglikelihood, @iid, logdensityof
+using WrenCore: @wren, logdensityof
 using WrenDists: WrenDists as WD
 using ..CaptureCommon: capture_counts
 
 const data = let
     pdb = PosteriorDB.database()
-    PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(pdb, "Mtbh_data-Mtbh_model")))
+    PosteriorDB.load(
+        PosteriorDB.dataset(PosteriorDB.posterior(pdb, "Mtbh_data-Mtbh_model")),
+    )
 end
 
 function capture_mtbh_logp(omega, mean_p, gamma, sigma, eps_raw, y, seen)
@@ -19,8 +21,7 @@ function capture_mtbh_logp(omega, mean_p, gamma, sigma, eps_raw, y, seen)
         row = zero(total)
         for j in axes(y, 2)
             mean_logit = log(mean_p[j]) - log1p(-mean_p[j])
-            eta = mean_logit + sigma * eps_raw[i] +
-                (j == 1 ? 0.0 : gamma * y[i, j - 1])
+            eta = mean_logit + sigma * eps_raw[i] + (j == 1 ? 0.0 : gamma * y[i, j-1])
             row += logdensityof(WD.BernoulliLogit(eta), y[i, j])
         end
         row += present
@@ -39,7 +40,7 @@ end
     return nothing
 end
 
-const wren_model = let
+const model = let
     y = data["y"]
     capture_mtbh(y, capture_counts(y) .> 0)
 end

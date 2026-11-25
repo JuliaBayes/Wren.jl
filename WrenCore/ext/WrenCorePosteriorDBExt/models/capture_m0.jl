@@ -3,7 +3,7 @@ module CaptureM0
 
 using PosteriorDB
 using ..LogAddExp: logaddexp
-using WrenCore: @wren, @addloglikelihood, logdensityof
+using WrenCore: @wren, logdensityof
 using WrenDists: WrenDists as WD
 using ..CaptureCommon: capture_counts
 
@@ -29,6 +29,6 @@ end
     return nothing
 end
 
-const wren_model = capture_m0(capture_counts(data["y"]), data["T"])
+const model = capture_m0(capture_counts(data["y"]), data["T"])
 
 end

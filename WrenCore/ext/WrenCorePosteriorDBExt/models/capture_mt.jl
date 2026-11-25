@@ -3,7 +3,7 @@ module CaptureMt
 
 using PosteriorDB
 using ..LogAddExp: logaddexp
-using WrenCore: @wren, @addloglikelihood, @iid, logdensityof
+using WrenCore: @wren, logdensityof
 using WrenDists: WrenDists as WD
 using ..CaptureCommon: capture_counts
 
@@ -33,7 +33,7 @@ end
     return nothing
 end
 
-const wren_model = let
+const model = let
     y = data["y"]
     capture_mt(y, capture_counts(y) .> 0)
 end

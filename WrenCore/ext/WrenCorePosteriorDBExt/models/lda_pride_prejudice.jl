@@ -2,7 +2,7 @@
 module LDAPridePrejudice
 
 using PosteriorDB
-using WrenCore: @wren, @addloglikelihood
+using WrenCore: @wren
 using WrenDists: WrenDists as WD
 using ..LogAddExp: logaddexp
 
@@ -12,8 +12,7 @@ function lda_logdensity(w, doc, theta, phi)
         m, word = doc[n], w[n]
         word_logp = log(theta[1, m]) + log(phi[1][word])
         for k in 2:5
-            word_logp = logaddexp(word_logp,
-                log(theta[k, m]) + log(phi[k][word]))
+            word_logp = logaddexp(word_logp, log(theta[k, m]) + log(phi[k][word]))
         end
         total += word_logp
     end
@@ -33,21 +32,23 @@ end
     phi3 ~ WD.Dirichlet(beta)
     phi4 ~ WD.Dirichlet(beta)
     phi5 ~ WD.Dirichlet(beta)
-    @addloglikelihood lda_logdensity(w, doc, theta,
-        (phi1, phi2, phi3, phi4, phi5))
+    @addloglikelihood lda_logdensity(w, doc, theta, (phi1, phi2, phi3, phi4, phi5))
     return nothing
 end
 
 function load_case(name, M)
     pdb = PosteriorDB.database()
     data = PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(pdb, name)))
-    data["V"] == 1495 && data["M"] == M && data["N"] == 32877 &&
-        length(data["alpha"]) == 5 && length(data["beta"]) == 1495 ||
+    data["V"] == 1495 &&
+    data["M"] == M &&
+    data["N"] == 32877 &&
+    length(data["alpha"]) == 5 &&
+    length(data["beta"]) == 1495 ||
         error("unexpected public Pride and Prejudice LDA fixture: $name")
     return lda_k5(data["w"], data["doc"], M, data["alpha"], data["beta"])
 end
 
-const chapter = (wren_model=load_case("prideprejudice_chapter-ldaK5", 61),)
-const paragraph = (wren_model=load_case("prideprejudice_paragraph-ldaK5", 2025),)
+const chapter = load_case("prideprejudice_chapter-ldaK5", 61)
+const paragraph = load_case("prideprejudice_paragraph-ldaK5", 2025)
 
 end

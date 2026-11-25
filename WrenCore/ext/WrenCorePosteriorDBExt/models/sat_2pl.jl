@@ -2,22 +2,18 @@
 module SAT2PL
 
 using PosteriorDB
-using WrenCore: @wren, @addloglikelihood, @iid, logdensityof
+using WrenCore: @wren, logdensityof
 using WrenDists: WrenDists as WD
 
 const data = let
     pdb = PosteriorDB.database()
-    PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-        pdb, "sat-hier_2pl",
-    )))
+    PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(pdb, "sat-hier_2pl")))
 end
 
-function sat_logdensity(y, ii, jj, theta, xi1, xi2, mu1, mu2,
-        tau1, tau2, rho)
+function sat_logdensity(y, ii, jj, theta, xi1, xi2, mu1, mu2, tau1, tau2, rho)
     total = zero(mu1 + mu2 + tau1 + tau2 + rho)
     residual_scale = sqrt(1 - rho^2)
-    log_normalizer = log(2 * pi) + log(tau1) + log(tau2) +
-        log(residual_scale)
+    log_normalizer = log(2 * pi) + log(tau1) + log(tau2) + log(residual_scale)
     for i in eachindex(xi1)
         z1 = (xi1[i] - mu1) / tau1
         z2 = ((xi2[i] - mu2) / tau2 - rho * z1) / residual_scale
@@ -41,12 +37,11 @@ end
     rho_unit ~ WD.Beta(4.0, 4.0)
 
     rho = 2 * rho_unit - 1
-    @addloglikelihood sat_logdensity(y, ii, jj, theta, xi1, xi2,
-        mu1, mu2, tau1, tau2, rho)
+    @addloglikelihood sat_logdensity(y, ii, jj, theta, xi1, xi2, mu1, mu2, tau1, tau2, rho)
     return nothing
 end
 
-const wren_model = let
+const model = let
     data["I"] == 32 && data["J"] == 600 && data["N"] == 19200 ||
         error("unexpected public SAT fixture")
     hier_2pl(data["y"], data["ii"], data["jj"], data["I"], data["J"])

@@ -2,7 +2,7 @@
 module IRT2PL
 
 using PosteriorDB
-using WrenCore: @wren, @observe, @batch, @iid
+using WrenCore: @wren
 using WrenDists: WrenDists as WD
 
 const data = let
@@ -30,6 +30,6 @@ end
     return nothing
 end
 
-const wren_model = irt_2pl(data["y"], data["I"], data["J"])
+const model = irt_2pl(data["y"], data["I"], data["J"])
 
 end

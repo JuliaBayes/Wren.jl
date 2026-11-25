@@ -2,14 +2,14 @@
 module GLMM1
 
 using PosteriorDB
-using WrenCore: @wren, @observe, @batch, @iid
+using WrenCore: @wren
 using WrenDists: WrenDists as WD
 
 const data = let
     pdb = PosteriorDB.database()
-    PosteriorDB.load(PosteriorDB.dataset(
-        PosteriorDB.posterior(pdb, "GLMM_data-GLMM1_model"),
-    ))
+    PosteriorDB.load(
+        PosteriorDB.dataset(PosteriorDB.posterior(pdb, "GLMM_data-GLMM1_model")),
+    )
 end
 
 @wren function glmm1_model(nsite, obs, obssite)
@@ -23,6 +23,6 @@ end
     return nothing
 end
 
-const wren_model = glmm1_model(data["nsite"], data["obs"], data["obssite"])
+const model = glmm1_model(data["nsite"], data["obs"], data["obssite"])
 
 end
