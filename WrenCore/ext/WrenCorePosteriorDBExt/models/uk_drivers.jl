@@ -3,18 +3,33 @@ module UKDrivers
 
 using PosteriorDB
 using Statistics: mean, std
-using WrenCore: @wren, @addloglikelihood, @iid, logdensityof
+using WrenCore: @wren, logdensityof
 using WrenDists: WrenDists as WD
 
 const data = let
     pdb = PosteriorDB.database()
-    PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-        pdb, "uk_drivers-state_space_stochastic_level_stochastic_seasonal",
-    )))
+    PosteriorDB.load(
+        PosteriorDB.dataset(
+            PosteriorDB.posterior(
+                pdb,
+                "uk_drivers-state_space_stochastic_level_stochastic_seasonal",
+            ),
+        ),
+    )
 end
 
-function state_space_loglikelihood(y, x, w, mu, seasonal, beta, lambda,
-        sigma1, sigma2, sigma3)
+function state_space_loglikelihood(
+    y,
+    x,
+    w,
+    mu,
+    seasonal,
+    beta,
+    lambda,
+    sigma1,
+    sigma2,
+    sigma3,
+)
     total = zero(beta + lambda + sigma1)
     previous_mu = zero(total)
     for t in eachindex(y)
@@ -24,13 +39,14 @@ function state_space_loglikelihood(y, x, w, mu, seasonal, beta, lambda,
         if t >= 12
             previous_season = zero(total)
             for lag in 1:11
-                previous_season += seasonal[t - lag]
+                previous_season += seasonal[t-lag]
             end
-            total += logdensityof(WD.Normal(-previous_season, sigma1),
-                seasonal[t])
+            total += logdensityof(WD.Normal(-previous_season, sigma1), seasonal[t])
         end
-        total += logdensityof(WD.Normal(mu[t] + beta * x[t] + lambda * w[t] +
-            seasonal[t], sigma3), y[t])
+        total += logdensityof(
+            WD.Normal(mu[t] + beta * x[t] + lambda * w[t] + seasonal[t], sigma3),
+            y[t],
+        )
         previous_mu = mu[t]
     end
     return total
@@ -51,16 +67,28 @@ end
     # Stan's positive_ordered[3] transform and the three untruncated
     # Student-t prior factors on its positive components.
     # Native positive-ordered prior support is tracked in #207.
-    @addloglikelihood raw_sigma1 + raw_sigma_gap2 + raw_sigma_gap3 +
-        logdensityof(WD.TDist(4.0, 0.0, 1.0), sigma1) +
-        logdensityof(WD.TDist(4.0, 0.0, 1.0), sigma2) +
-        logdensityof(WD.TDist(4.0, 0.0, 1.0), sigma3)
-    @addloglikelihood state_space_loglikelihood(y, x, w, mu, seasonal,
-        beta, lambda, sigma1, sigma2, sigma3)
+    @addloglikelihood raw_sigma1 +
+                      raw_sigma_gap2 +
+                      raw_sigma_gap3 +
+                      logdensityof(WD.TDist(4.0, 0.0, 1.0), sigma1) +
+                      logdensityof(WD.TDist(4.0, 0.0, 1.0), sigma2) +
+                      logdensityof(WD.TDist(4.0, 0.0, 1.0), sigma3)
+    @addloglikelihood state_space_loglikelihood(
+        y,
+        x,
+        w,
+        mu,
+        seasonal,
+        beta,
+        lambda,
+        sigma1,
+        sigma2,
+        sigma3,
+    )
     return nothing
 end
 
-const wren_model = let
+const model = let
     y = data["y"]
     data["n"] == 192 || error("unexpected UK drivers fixture")
     lower = mean(y) - 3 * std(y)

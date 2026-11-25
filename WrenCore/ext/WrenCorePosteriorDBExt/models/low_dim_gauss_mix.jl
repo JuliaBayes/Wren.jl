@@ -3,14 +3,16 @@ module LowDimGaussMix
 
 using PosteriorDB
 using ..LowDimGaussMixCollapse: low_dim_mixture_logp
-using WrenCore: @wren, @addloglikelihood, @iid, logdensityof
+using WrenCore: @wren, logdensityof
 using WrenDists: WrenDists as WD
 
 const data = let
     pdb = PosteriorDB.database()
-    PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-        pdb, "low_dim_gauss_mix-low_dim_gauss_mix",
-    )))
+    PosteriorDB.load(
+        PosteriorDB.dataset(
+            PosteriorDB.posterior(pdb, "low_dim_gauss_mix-low_dim_gauss_mix"),
+        ),
+    )
 end
 
 @wren function low_dim_gauss_mix(y)
@@ -26,6 +28,6 @@ end
     return nothing
 end
 
-const wren_model = low_dim_gauss_mix(data["y"])
+const model = low_dim_gauss_mix(data["y"])
 
 end

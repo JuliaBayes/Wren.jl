@@ -2,7 +2,7 @@
 module ARMA11
 
 using PosteriorDB
-using WrenCore: @wren, @observe, @batch
+using WrenCore: @wren
 using WrenDists: WrenDists as WD
 
 const data = let
@@ -21,7 +21,7 @@ end
     predictions[1] = prediction
     previous_error = y[1] - prediction
     for t in 2:length(y)
-        prediction = mu + phi * y[t - 1] + theta * previous_error
+        prediction = mu + phi * y[t-1] + theta * previous_error
         predictions[t] = prediction
         previous_error = y[t] - prediction
     end
@@ -31,6 +31,6 @@ end
     return nothing
 end
 
-const wren_model = arma11(data["y"])
+const model = arma11(data["y"])
 
 end

@@ -2,14 +2,14 @@
 module Dugongs
 
 using PosteriorDB
-using WrenCore: @wren, @observe, @batch
+using WrenCore: @wren
 using WrenDists: WrenDists as WD
 
 const data = let
     pdb = PosteriorDB.database()
-    PosteriorDB.load(PosteriorDB.dataset(
-        PosteriorDB.posterior(pdb, "dugongs_data-dugongs_model"),
-    ))
+    PosteriorDB.load(
+        PosteriorDB.dataset(PosteriorDB.posterior(pdb, "dugongs_data-dugongs_model")),
+    )
 end
 
 @wren function dugongs_model(x, y)
@@ -26,6 +26,6 @@ end
     return nothing
 end
 
-const wren_model = dugongs_model(data["x"], data["Y"])
+const model = dugongs_model(data["x"], data["Y"])
 
 end

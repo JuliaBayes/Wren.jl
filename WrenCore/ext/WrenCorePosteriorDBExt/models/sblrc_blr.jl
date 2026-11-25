@@ -9,6 +9,6 @@ const data = let
     PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(pdb, "sblrc-blr")))
 end
 
-const wren_model = sblri_blr(data["y"], data["X"], data["D"])
+const model = sblri_blr(data["y"], data["X"], data["D"])
 
 end

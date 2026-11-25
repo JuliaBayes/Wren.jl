@@ -2,7 +2,7 @@
 module Garch11
 
 using PosteriorDB
-using WrenCore: @wren, @observe, @batch, @addloglikelihood
+using WrenCore: @wren
 using WrenDists: WrenDists as WD
 
 const data = let
@@ -34,8 +34,7 @@ end
     sigma = Vector{typeof(alpha0 + mu)}(undef, length(y))
     sigma[1] = sigma1
     for t in 2:length(y)
-        sigma[t] = sqrt(alpha0 + alpha1 * (y[t - 1] - mu)^2 +
-            beta1 * sigma[t - 1]^2)
+        sigma[t] = sqrt(alpha0 + alpha1 * (y[t-1] - mu)^2 + beta1 * sigma[t-1]^2)
     end
     @batch for t in eachindex(y)
         @observe y[t] ~ WD.Normal(mu, sigma[t])
@@ -43,6 +42,6 @@ end
     return nothing
 end
 
-const wren_model = garch11(data["y"], data["sigma1"])
+const model = garch11(data["y"], data["sigma1"])
 
 end

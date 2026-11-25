@@ -3,12 +3,14 @@ module GPPoissonRegression
 
 using PosteriorDB
 using LinearAlgebra: Symmetric, I, cholesky, issuccess
-using WrenCore: @wren, @observe, @batch, @addloglikelihood, @iid
+using WrenCore: @wren
 using WrenDists: WrenDists as WD
 
 const data = let
     pdb = PosteriorDB.database()
-    PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(pdb, "gp_pois_regr-gp_pois_regr")))
+    PosteriorDB.load(
+        PosteriorDB.dataset(PosteriorDB.posterior(pdb, "gp_pois_regr-gp_pois_regr")),
+    )
 end
 
 @wren function gp_pois_regr(counts, dist_sq, N)
@@ -29,7 +31,7 @@ end
     return nothing
 end
 
-const wren_model = let
+const model = let
     x = data["x"]
     gp_pois_regr(data["k"], (x .- x') .^ 2, data["N"])
 end

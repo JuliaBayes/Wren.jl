@@ -2,14 +2,14 @@
 module SesameOnePred
 
 using PosteriorDB
-using WrenCore: @wren, @observe, @batch, @iid, @addloglikelihood
+using WrenCore: @wren
 using WrenDists: WrenDists as WD
 
 const data = let
     pdb = PosteriorDB.database()
-    PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-        pdb, "sesame_data-sesame_one_pred_a",
-    )))
+    PosteriorDB.load(
+        PosteriorDB.dataset(PosteriorDB.posterior(pdb, "sesame_data-sesame_one_pred_a")),
+    )
 end
 
 @wren function sesame_one_pred(encouraged, watched)
@@ -25,6 +25,6 @@ end
     return nothing
 end
 
-const wren_model = sesame_one_pred(data["encouraged"], data["watched"])
+const model = sesame_one_pred(data["encouraged"], data["watched"])
 
 end

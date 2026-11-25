@@ -2,7 +2,7 @@
 module GLMPoisson
 
 using PosteriorDB
-using WrenCore: @wren, @observe, @batch
+using WrenCore: @wren
 using WrenDists: WrenDists as WD
 
 const data = let
@@ -19,14 +19,16 @@ end
     beta1 ~ WD.Uniform(-10.0, 10.0)
     beta2 ~ WD.Uniform(-10.0, 10.0)
     beta3 ~ WD.Uniform(-10.0, 10.0)
-    log_lambda = alpha .+ beta1 .* year .+ beta2 .* year_squared .+ beta3 .* year_cubed
+    @track log_lambda =
+        alpha .+ beta1 .* year .+ beta2 .* year_squared .+ beta3 .* year_cubed
     @batch for i in eachindex(counts)
         @observe counts[i] ~ WD.PoissonLog(log_lambda[i])
     end
+    @track lambda = exp.(log_lambda)
     return nothing
 end
 
-const wren_model = let
+const model = let
     counts = data["C"]
     year = data["year"]
     glm_poisson_model(counts, year, year .^ 2, year .^ 3)

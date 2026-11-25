@@ -41,9 +41,10 @@ struct Model{A<:NamedTuple,C<:NamedTuple,F,CA<:Val}
         enzyme_copy_argnames::Val=Val{sort(keys(args))}(),
         conditioned::NamedTuple=NamedTuple(),
         _unsafe_reuse_evaluation_fn=nothing,
+        _unsafe_skip_dealias::Bool=false,
     )
         # Copy arguments upon model construction.
-        dealiased_args = map(_dealias, args)
+        dealiased_args = _unsafe_skip_dealias ? args : map(_dealias, args)
         # Regenerate the evaluation function if it wasn't provided.
         evaluation_fn = if _unsafe_reuse_evaluation_fn === nothing
             make_evaluation_fn(keys(args), stmts, mod)
@@ -91,7 +92,8 @@ _can_shallow_copy_elements(::Type{T}) where {T} =
     isbitstype(T) ||
     (isconcretetype(T) && !ismutabletype(T) && Base.datatype_pointerfree(T))
 _dealias(v::T) where {T} = isbitstype(T) ? v : deepcopy(v)
-# Models contain `Module`s, which can't be deepcopied. It is currently my belief that models
+# Models contain `Module`s, which can't be deepcopied by default (see the
+# `Base.deepcopy_internal` method for `Model`). It is currently my belief that models
 # should be immutable (or at least pretend to be), and thus we should not need to deepcopy
 # models that are passed as arguments to models. However, this may need to be revisited.
 _dealias(model::Model) = model
@@ -170,6 +172,27 @@ end
 # The constructor copies all other arguments with `_dealias`.
 _copy_model_arg(v) = v
 _copy_model_arg(model::Model) = _copy_for_thread(model)
+
+# The default `deepcopy` fails on models because the `mod` field is a `Module`. The module,
+# the evaluation function, and the statements never change, so they are shared; the
+# arguments and conditioned values are deepcopied. The constructor's `_dealias` step is
+# skipped so that the copied arguments stay the same objects as those in `stackdict` (e.g.
+# a `VecModel`'s log-density function refers to the model's arguments too).
+function Base.deepcopy_internal(model::Model, stackdict::IdDict)
+    haskey(stackdict, model) && return stackdict[model]::typeof(model)
+    copied = Model(
+        model.name,
+        Base.deepcopy_internal(model.args, stackdict),
+        model.stmts,
+        model.mod;
+        conditioned=Base.deepcopy_internal(model.conditioned, stackdict),
+        enzyme_copy_argnames=model.enzyme_copy_argnames,
+        _unsafe_reuse_evaluation_fn=model.evaluation_fn,
+        _unsafe_skip_dealias=true,
+    )
+    stackdict[model] = copied
+    return copied
+end
 
 """
     EvalContext{Enzyme}
@@ -389,6 +412,33 @@ end
 
 macro addloglikelihood(args...)
     error("@addloglikelihood must be used inside @wren")
+end
+
+"""
+    @track name = expr
+    @track name
+
+Record the value of `expr` as the tracked quantity `name` in a `@wren` model.
+`@track name` is short for `@track name = name`. `name` must be a single symbol.
+
+`@track` must be a statement of the model body. It is not supported inside `@batch` or
+inside functions defined in the model; we discourage using it inside `@submodel`.
+
+If `name` is used later in the model body, `expr` is also assigned to `name` and runs on
+every evaluation of the model. If `name` is used only by later tracked quantities, it
+is assigned only when one of those tracked quantities is requested. Otherwise `name` is
+not defined in the model body.
+
+!!! warning
+    If `name` is not used later in the model body and the tracked quantity is not
+    requested, `expr` is not run at all.
+    Note that this means side effects in `expr` do not happen!
+
+    Relatedly, if `expr` assigns to a variable defined elsewhere in the model body,
+    that assignment happens only when `name` is requested.
+"""
+macro track(args...)
+    error("@track must be used inside a @wren model body")
 end
 
 function _wren(expr::Expr, mod::Module; internal_to_ir::Bool=false)

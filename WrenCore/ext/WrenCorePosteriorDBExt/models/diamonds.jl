@@ -3,7 +3,7 @@ module Diamonds
 
 using PosteriorDB
 using Statistics: mean
-using WrenCore: @wren, @observe, @batch, @iid
+using WrenCore: @wren
 using WrenDists: WrenDists as WD
 
 const data = let
@@ -24,7 +24,7 @@ end
     return nothing
 end
 
-const wren_model = let
+const model = let
     X = data["X"]
     Xc = X[:, 2:end] .- mean(X[:, 2:end]; dims=1)
     diamonds(data["Y"], Xc, data["prior_only"])

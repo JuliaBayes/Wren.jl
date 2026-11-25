@@ -90,10 +90,9 @@ function accumulate_observe!!(
 end
 
 reset(::SitenameCountAccumulator) = SitenameCountAccumulator()
-split(::SitenameCountAccumulator) = SitenameCountAccumulator()
 Base.copy(acc::SitenameCountAccumulator) = acc
 
-function combine(acc1::SitenameCountAccumulator, acc2::SitenameCountAccumulator)
+function _combine(acc1::SitenameCountAccumulator, acc2::SitenameCountAccumulator)
     # Replace any of acc2's entries that are already present in acc1 with SeenMultipleTimes
     deduped = VarNames.map_pairs!!(acc2.entries) do (key, value)
         haskey(acc1.entries, key) ? SeenMultipleTimes() : value
@@ -109,7 +108,7 @@ function combine(acc1::SitenameCountAccumulator, acc2::SitenameCountAccumulator)
     return SitenameCountAccumulator(merge(acc1.entries, deduped))
 end
 
-function combine_with_namespace(
+function combine_from_scope(
     acc1::SitenameCountAccumulator,
     acc2::SitenameCountAccumulator,
     vn::VarName,
@@ -119,7 +118,7 @@ function combine_with_namespace(
         v isa SeenMultipleTimes ? v : VarNames.prefix(v, vn)
     end
     nested = VarNames.templated_setindex!!(VarNamedTuple(), prefixed, vn, template)
-    return combine(acc1, SitenameCountAccumulator(nested))
+    return _combine(acc1, SitenameCountAccumulator(nested))
 end
 
 """

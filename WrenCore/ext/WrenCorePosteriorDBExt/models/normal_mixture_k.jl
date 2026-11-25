@@ -2,15 +2,15 @@
 module NormalMixtureK
 
 using PosteriorDB
-using WrenCore: @wren, @addloglikelihood, @iid, logdensityof
+using WrenCore: @wren, logdensityof
 using WrenDists: WrenDists as WD
 using ..LogAddExp: logaddexp
 
 const data = let
     pdb = PosteriorDB.database()
-    PosteriorDB.load(PosteriorDB.dataset(
-        PosteriorDB.posterior(pdb, "normal_5-normal_mixture_k"),
-    ))
+    PosteriorDB.load(
+        PosteriorDB.dataset(PosteriorDB.posterior(pdb, "normal_5-normal_mixture_k")),
+    )
 end
 
 function mixture_k_logp(theta, mu, sigma, y)
@@ -35,6 +35,6 @@ end
     return nothing
 end
 
-const wren_model = normal_mixture_k(data["y"], data["K"])
+const model = normal_mixture_k(data["y"], data["K"])
 
 end

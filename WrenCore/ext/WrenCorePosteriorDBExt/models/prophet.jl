@@ -2,14 +2,14 @@
 module Prophet
 
 using PosteriorDB
-using WrenCore: @wren, @observe, @batch, @iid
+using WrenCore: @wren
 using WrenDists: WrenDists as WD
 
 const data = let
     pdb = PosteriorDB.database()
-    PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-        pdb, "rstan_downloads-prophet",
-    )))
+    PosteriorDB.load(
+        PosteriorDB.dataset(PosteriorDB.posterior(pdb, "rstan_downloads-prophet")),
+    )
 end
 
 @wren function prophet_linear(y, t, t_change, A, X, sigmas, tau, s_a, s_m)
@@ -26,14 +26,24 @@ end
     return nothing
 end
 
-const wren_model = let
+const model = let
     data["trend_indicator"] == 0 || error("public Prophet fixture requires linear trend")
     sigmas = data["sigmas"]
-    all(==(sigmas[1]), sigmas) || error("public Prophet fixture has varying beta scales")
+    all(==(sigmas[1]), sigmas) ||
+        error("public Prophet fixture has varying beta scales")
     t, t_change = data["t"], data["t_change"]
     A = Float64.(t .>= t_change')
-    prophet_linear(data["y"], t, t_change, A, data["X"], sigmas,
-        data["tau"], data["s_a"], data["s_m"])
+    prophet_linear(
+        data["y"],
+        t,
+        t_change,
+        A,
+        data["X"],
+        sigmas,
+        data["tau"],
+        data["s_a"],
+        data["s_m"],
+    )
 end
 
 end

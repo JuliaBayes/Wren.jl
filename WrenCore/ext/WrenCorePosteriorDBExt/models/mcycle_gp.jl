@@ -2,14 +2,12 @@
 module McycleGP
 
 using PosteriorDB
-using WrenCore: @wren, @observe, @batch, @iid
+using WrenCore: @wren
 using WrenDists: WrenDists as WD
 
 const data = let
     pdb = PosteriorDB.database()
-    PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-        pdb, "mcycle_gp-accel_gp",
-    )))
+    PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(pdb, "mcycle_gp-accel_gp")))
 end
 
 # brms' approximate GP: basis functions weighted by the square root of the
@@ -30,8 +28,15 @@ end
     @iid zgp_sigma ~ WD.Normal(0.0, 1.0) size=size(Xgp_sigma, 2)
     if prior_only == 0
         mu = Intercept .+ approximate_gp(Xgp, slambda, sdgp, lscale, zgp)
-        sigma = exp.(Intercept_sigma .+ approximate_gp(Xgp_sigma, slambda_sigma,
-            sdgp_sigma, lscale_sigma, zgp_sigma))
+        sigma = exp.(
+            Intercept_sigma .+ approximate_gp(
+                Xgp_sigma,
+                slambda_sigma,
+                sdgp_sigma,
+                lscale_sigma,
+                zgp_sigma,
+            ),
+        )
         @batch for i in eachindex(Y)
             @observe Y[i] ~ WD.Normal(mu[i], sigma[i])
         end
@@ -39,9 +44,13 @@ end
     return nothing
 end
 
-const wren_model = accel_gp(
-    data["Y"], data["Xgp_1"], vec(data["slambda_1"]),
-    data["Xgp_sigma_1"], vec(data["slambda_sigma_1"]), data["prior_only"],
+const model = accel_gp(
+    data["Y"],
+    data["Xgp_1"],
+    vec(data["slambda_1"]),
+    data["Xgp_sigma_1"],
+    vec(data["slambda_sigma_1"]),
+    data["prior_only"],
 )
 
 end

@@ -2,18 +2,25 @@
 module LossCurveSislob
 
 using PosteriorDB
-using WrenCore: @wren, @observe, @batch, @iid
+using WrenCore: @wren
 using WrenDists: WrenDists as WD
 
 const data = let
     pdb = PosteriorDB.database()
-    PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-        pdb, "loss_curves-losscurve_sislob",
-    )))
+    PosteriorDB.load(
+        PosteriorDB.dataset(PosteriorDB.posterior(pdb, "loss_curves-losscurve_sislob")),
+    )
 end
 
-@wren function losscurve_sislob(loss, cohort_id, t_idx, t_value, premium,
-                                growthmodel_id, n_cohort)
+@wren function losscurve_sislob(
+    loss,
+    cohort_id,
+    t_idx,
+    t_value,
+    premium,
+    growthmodel_id,
+    n_cohort,
+)
     omega ~ WD.LogNormal(0.0, 0.5)
     theta ~ WD.LogNormal(0.0, 0.5)
     # Wren evaluates these before LR, whose conditional prior needs their values.
@@ -40,9 +47,14 @@ end
     return nothing
 end
 
-const wren_model = losscurve_sislob(
-    data["loss"], data["cohort_id"], data["t_idx"], data["t_value"],
-    data["premium"], data["growthmodel_id"], data["n_cohort"],
+const model = losscurve_sislob(
+    data["loss"],
+    data["cohort_id"],
+    data["t_idx"],
+    data["t_value"],
+    data["premium"],
+    data["growthmodel_id"],
+    data["n_cohort"],
 )
 
 end

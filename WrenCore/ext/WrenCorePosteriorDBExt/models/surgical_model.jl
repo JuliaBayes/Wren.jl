@@ -2,14 +2,14 @@
 module SurgicalModel
 
 using PosteriorDB
-using WrenCore: @wren, @observe, @batch, @iid
+using WrenCore: @wren
 using WrenDists: WrenDists as WD
 
 const data = let
     pdb = PosteriorDB.database()
-    PosteriorDB.load(PosteriorDB.dataset(PosteriorDB.posterior(
-        pdb, "surgical_data-surgical_model",
-    )))
+    PosteriorDB.load(
+        PosteriorDB.dataset(PosteriorDB.posterior(pdb, "surgical_data-surgical_model")),
+    )
 end
 
 @wren function surgical_model(r, n)
@@ -23,6 +23,6 @@ end
     return nothing
 end
 
-const wren_model = surgical_model(data["r"], data["n"])
+const model = surgical_model(data["r"], data["n"])
 
 end
