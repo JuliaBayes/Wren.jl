@@ -14,8 +14,6 @@ function _docs_link(str)
     return "https://juliabayes.org/Wren.jl/$str"
 end
 
-const WREN_COMPILATION_DEBUG = Ref(false)
-
 function _source_location(source::LineNumberNode)
     source.file === nothing && return "unknown location"
     file = String(source.file)
