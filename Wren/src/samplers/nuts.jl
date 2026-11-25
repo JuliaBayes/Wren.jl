@@ -100,7 +100,7 @@ function nuts(
     niters::Integer,
     nchains::Integer=1;
     adtype::DI.AbstractADType=DI.AutoEnzyme(; mode=Reverse),
-    progress::Union{AbstractBackend,Bool}=true,
+    progress::ProgressSpec=true,
     reduce_copies::Bool=true,
     track::TrackedQuantitySpec=AllQuantities(),
     dynamichmc_kwargs...,

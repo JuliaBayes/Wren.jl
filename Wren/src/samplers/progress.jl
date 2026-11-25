@@ -6,8 +6,8 @@ using Term: Term
 const ProgressSpec = Union{Bool,AbstractBackend,Tuple{Vararg{AbstractBackend}}}
 
 progress_backends(show_progress::Bool) = show_progress ? (TermBackend(),) : ()
-progress_backends(backend::ProgressBackend) = (backend,)
-progress_backends(backends::Tuple{Vararg{ProgressBackend}}) = backends
+progress_backends(backend::AbstractBackend) = (backend,)
+progress_backends(backends::Tuple{Vararg{AbstractBackend}}) = backends
 
 function with_progress(f, backends::Tuple, label::AbstractString, nchains::Integer)
     isempty(backends) && return f(nothing)
