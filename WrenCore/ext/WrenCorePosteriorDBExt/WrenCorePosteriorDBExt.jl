@@ -3,53 +3,117 @@ module WrenCorePosteriorDBExt
 using WrenCore: WrenCore
 
 include("models/ark.jl")
-include("models/eight_schools_centered.jl")
+include("models/earnings.jl")
+include("models/eight_schools.jl")
 include("models/glm_binomial.jl")
 include("models/glm_poisson.jl")
 include("models/glmm_poisson.jl")
 include("models/gp_regr.jl")
-include("models/kidscore_interaction.jl")
+include("models/kidscore.jl")
+include("models/kilpisjarvi.jl")
+include("models/mesquite.jl")
 include("models/mh.jl")
-include("models/rate1.jl")
+include("models/nes.jl")
+include("models/pilots.jl")
 include("models/radon_county_intercept_all.jl")
 include("models/radon_county_intercept_mn.jl")
 include("models/radon_hierarchical_intercept_noncentered_all.jl")
 include("models/radon_hierarchical_intercept_noncentered_mn.jl")
 include("models/radon_partially_pooled_noncentered_all.jl")
 include("models/radon_partially_pooled_noncentered_mn.jl")
+include("models/radon_pooled.jl")
 include("models/radon_variable_intercept_noncentered_all.jl")
 include("models/radon_variable_intercept_noncentered_mn.jl")
 include("models/radon_variable_intercept_slope_noncentered_all.jl")
 include("models/radon_variable_intercept_slope_noncentered_mn.jl")
 include("models/radon_variable_slope_noncentered_all.jl")
 include("models/radon_variable_slope_noncentered_mn.jl")
+include("models/rates.jl")
+include("models/rats_model.jl")
 include("models/sblri_blr.jl")
+include("models/wells.jl")
 
-# Maps PosteriorDB posterior names to the modules defining the models. Each module must
-# define `wren_model`.
+# Maps PosteriorDB posterior names to the Wren models.
 const MODELS = Dict(
-    "arK-arK" => ArK,
-    "eight_schools-eight_schools_centered" => EightSchoolsCentered,
-    "GLM_Binomial_data-GLM_Binomial_model" => GLMBinomial,
-    "GLM_Poisson_Data-GLM_Poisson_model" => GLMPoisson,
-    "GLMM_Poisson_data-GLMM_Poisson_model" => GLMMPoisson,
-    "gp_pois_regr-gp_regr" => GPRegr,
-    "kidiq-kidscore_interaction" => KidscoreInteraction,
-    "Mh_data-Mh_model" => Mh,
-    "Rate_1_data-Rate_1_model" => Rate1,
-    "radon_all-radon_county_intercept" => RadonCountyInterceptAll,
-    "radon_all-radon_hierarchical_intercept_noncentered" => RadonHierarchicalInterceptNoncenteredAll,
-    "radon_all-radon_partially_pooled_noncentered" => RadonPartiallyPooledNoncenteredAll,
-    "radon_all-radon_variable_intercept_noncentered" => RadonVariableInterceptNoncenteredAll,
-    "radon_all-radon_variable_intercept_slope_noncentered" => RadonVariableInterceptSlopeNoncenteredAll,
-    "radon_all-radon_variable_slope_noncentered" => RadonVariableSlopeNoncenteredAll,
-    "radon_mn-radon_county_intercept" => RadonCountyInterceptMn,
-    "radon_mn-radon_hierarchical_intercept_noncentered" => RadonHierarchicalInterceptNoncenteredMn,
-    "radon_mn-radon_partially_pooled_noncentered" => RadonPartiallyPooledNoncenteredMn,
-    "radon_mn-radon_variable_intercept_noncentered" => RadonVariableInterceptNoncenteredMn,
-    "radon_mn-radon_variable_intercept_slope_noncentered" => RadonVariableInterceptSlopeNoncenteredMn,
-    "radon_mn-radon_variable_slope_noncentered" => RadonVariableSlopeNoncenteredMn,
-    "sblri-blr" => SblriBLR,
+    "arK-arK" => ArK.model,
+    "earnings-earn_height" => Earnings.earn_height,
+    "earnings-log10earn_height" => Earnings.log10earn_height,
+    "earnings-logearn_height" => Earnings.logearn_height,
+    "earnings-logearn_height_male" => Earnings.logearn_height_male,
+    "earnings-logearn_interaction" => Earnings.logearn_interaction,
+    "earnings-logearn_interaction_z" => Earnings.logearn_interaction_z,
+    "earnings-logearn_logheight_male" => Earnings.logearn_logheight_male,
+    "eight_schools-eight_schools_centered" => EightSchools.centered,
+    "eight_schools-eight_schools_noncentered" => EightSchools.noncentered,
+    "GLM_Binomial_data-GLM_Binomial_model" => GLMBinomial.model,
+    "GLM_Poisson_Data-GLM_Poisson_model" => GLMPoisson.model,
+    "GLMM_Poisson_data-GLMM_Poisson_model" => GLMMPoisson.model,
+    "gp_pois_regr-gp_regr" => GPRegr.model,
+    "kidiq-kidscore_interaction" => Kidscore.interaction,
+    "kidiq-kidscore_momhs" => Kidscore.momhs,
+    "kidiq-kidscore_momhsiq" => Kidscore.momhsiq,
+    "kidiq-kidscore_momiq" => Kidscore.momiq,
+    "kidiq_with_mom_work-kidscore_interaction_c" => Kidscore.interaction_c,
+    "kidiq_with_mom_work-kidscore_interaction_c2" => Kidscore.interaction_c2,
+    "kidiq_with_mom_work-kidscore_interaction_z" => Kidscore.interaction_z,
+    "kidiq_with_mom_work-kidscore_mom_work" => Kidscore.mom_work,
+    "kilpisjarvi_mod-kilpisjarvi" => Kilpisjarvi.model,
+    "mesquite-logmesquite" => Mesquite.logmesquite,
+    "mesquite-logmesquite_logva" => Mesquite.logmesquite_logva,
+    "mesquite-logmesquite_logvas" => Mesquite.logmesquite_logvas,
+    "mesquite-logmesquite_logvash" => Mesquite.logmesquite_logvash,
+    "mesquite-logmesquite_logvolume" => Mesquite.logmesquite_logvolume,
+    "mesquite-mesquite" => Mesquite.mesquite,
+    "Mh_data-Mh_model" => Mh.model,
+    "nes1972-nes" => NES.nes1972,
+    "nes1976-nes" => NES.nes1976,
+    "nes1980-nes" => NES.nes1980,
+    "nes1984-nes" => NES.nes1984,
+    "nes1988-nes" => NES.nes1988,
+    "nes1992-nes" => NES.nes1992,
+    "nes1996-nes" => NES.nes1996,
+    "nes2000-nes" => NES.nes2000,
+    "pilots-pilots" => Pilots.model,
+    "radon_all-radon_county_intercept" => RadonCountyInterceptAll.model,
+    "radon_all-radon_hierarchical_intercept_noncentered" =>
+        RadonHierarchicalInterceptNoncenteredAll.model,
+    "radon_all-radon_partially_pooled_noncentered" =>
+        RadonPartiallyPooledNoncenteredAll.model,
+    "radon_all-radon_pooled" => RadonPooled.radon_all,
+    "radon_all-radon_variable_intercept_noncentered" =>
+        RadonVariableInterceptNoncenteredAll.model,
+    "radon_all-radon_variable_intercept_slope_noncentered" =>
+        RadonVariableInterceptSlopeNoncenteredAll.model,
+    "radon_all-radon_variable_slope_noncentered" =>
+        RadonVariableSlopeNoncenteredAll.model,
+    "radon_mn-radon_county_intercept" => RadonCountyInterceptMn.model,
+    "radon_mn-radon_hierarchical_intercept_noncentered" =>
+        RadonHierarchicalInterceptNoncenteredMn.model,
+    "radon_mn-radon_partially_pooled_noncentered" =>
+        RadonPartiallyPooledNoncenteredMn.model,
+    "radon_mn-radon_pooled" => RadonPooled.radon_mn,
+    "radon_mn-radon_variable_intercept_noncentered" =>
+        RadonVariableInterceptNoncenteredMn.model,
+    "radon_mn-radon_variable_intercept_slope_noncentered" =>
+        RadonVariableInterceptSlopeNoncenteredMn.model,
+    "radon_mn-radon_variable_slope_noncentered" =>
+        RadonVariableSlopeNoncenteredMn.model,
+    "Rate_1_data-Rate_1_model" => Rates.rate1,
+    "Rate_2_data-Rate_2_model" => Rates.rate2,
+    "Rate_3_data-Rate_3_model" => Rates.rate3,
+    "Rate_4_data-Rate_4_model" => Rates.rate4,
+    "Rate_5_data-Rate_5_model" => Rates.rate5,
+    "rats_data-rats_model" => RatsModel.model,
+    "sblri-blr" => SblriBLR.model,
+    "wells_data-wells_daae_c_model" => Wells.daae_c_model,
+    "wells_data-wells_dae_c_model" => Wells.dae_c_model,
+    "wells_data-wells_dae_inter_model" => Wells.dae_inter_model,
+    "wells_data-wells_dae_model" => Wells.dae_model,
+    "wells_data-wells_dist" => Wells.wells_dist,
+    "wells_data-wells_dist100_model" => Wells.dist100_model,
+    "wells_data-wells_dist100ars_model" => Wells.dist100ars_model,
+    "wells_data-wells_interaction_c_model" => Wells.interaction_c_model,
+    "wells_data-wells_interaction_model" => Wells.interaction_model,
 )
 const MODEL_NAMES = sort!(collect(keys(MODELS)))
 
@@ -70,7 +134,7 @@ function WrenCore.posteriordb_model(name::AbstractString)
             join(MODEL_NAMES, ", "),
         ),
     )
-    return MODELS[name].wren_model
+    return MODELS[name]
 end
 
 """

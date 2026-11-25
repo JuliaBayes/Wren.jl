@@ -8,6 +8,7 @@ using Test
     include("univariate/normal.jl")
     include("univariate/laplace.jl")
     include("univariate/cauchy.jl")
+    include("univariate/logistic.jl")
     include("univariate/tdist.jl")
     include("univariate/flat.jl")
 
@@ -20,10 +21,12 @@ using Test
     include("univariate/halfnormal.jl")
     include("univariate/halfcauchy.jl")
     include("univariate/halftdist.jl")
+    include("univariate/positiveflat.jl")
 
     # Continuous bounded
     include("univariate/beta.jl")
     include("univariate/uniform.jl")
+    include("univariate/truncatedflat.jl")
 
     # Discrete univariate
     include("univariate/bernoulli.jl")

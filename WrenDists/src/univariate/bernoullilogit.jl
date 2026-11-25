@@ -47,7 +47,7 @@ function DensityInterface.logdensityof(d::BatchedBernoulliLogit, x)
         s = zero(T)
         for i in eachindex(x, η)
             ηi = convert(T, η[i])
-            s += convert(T, x[i]) * ηi - log1pexp(ηi)
+            s -= x[i] == one(x[i]) ? log1pexp(-ηi) : log1pexp(ηi)
         end
         s
     end

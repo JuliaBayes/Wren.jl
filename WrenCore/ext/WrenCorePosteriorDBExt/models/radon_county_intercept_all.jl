@@ -2,14 +2,14 @@
 module RadonCountyInterceptAll
 
 using PosteriorDB
-using WrenCore: @wren, @observe, @batch, @iid
+using WrenCore: @wren
 using WrenDists: WrenDists as WD
 
 const data = let
     pdb = PosteriorDB.database()
-    PosteriorDB.load(PosteriorDB.dataset(
-        PosteriorDB.posterior(pdb, "radon_all-radon_county_intercept"),
-    ))
+    PosteriorDB.load(
+        PosteriorDB.dataset(PosteriorDB.posterior(pdb, "radon_all-radon_county_intercept")),
+    )
 end
 
 @wren function radon_county_intercept(J, county_idx, floor_measure, log_radon)
@@ -23,8 +23,11 @@ end
     return nothing
 end
 
-const wren_model = radon_county_intercept(
-    data["J"], data["county_idx"], data["floor_measure"], data["log_radon"],
+const model = radon_county_intercept(
+    data["J"],
+    data["county_idx"],
+    data["floor_measure"],
+    data["log_radon"],
 )
 
 end
