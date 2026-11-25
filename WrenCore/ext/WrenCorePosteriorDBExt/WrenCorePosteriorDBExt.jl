@@ -15,19 +15,13 @@ include("models/mesquite.jl")
 include("models/mh.jl")
 include("models/nes.jl")
 include("models/pilots.jl")
-include("models/radon_county_intercept_all.jl")
-include("models/radon_county_intercept_mn.jl")
-include("models/radon_hierarchical_intercept_noncentered_all.jl")
-include("models/radon_hierarchical_intercept_noncentered_mn.jl")
-include("models/radon_partially_pooled_noncentered_all.jl")
-include("models/radon_partially_pooled_noncentered_mn.jl")
+include("models/radon_county_intercept.jl")
+include("models/radon_hierarchical_intercept_noncentered.jl")
+include("models/radon_partially_pooled_noncentered.jl")
 include("models/radon_pooled.jl")
-include("models/radon_variable_intercept_noncentered_all.jl")
-include("models/radon_variable_intercept_noncentered_mn.jl")
-include("models/radon_variable_intercept_slope_noncentered_all.jl")
-include("models/radon_variable_intercept_slope_noncentered_mn.jl")
-include("models/radon_variable_slope_noncentered_all.jl")
-include("models/radon_variable_slope_noncentered_mn.jl")
+include("models/radon_variable_intercept_noncentered.jl")
+include("models/radon_variable_intercept_slope_noncentered.jl")
+include("models/radon_variable_slope_noncentered.jl")
 include("models/rates.jl")
 include("models/rats_model.jl")
 include("models/sblri_blr.jl")
@@ -74,30 +68,30 @@ const MODELS = Dict(
     "nes1996-nes" => NES.nes1996,
     "nes2000-nes" => NES.nes2000,
     "pilots-pilots" => Pilots.model,
-    "radon_all-radon_county_intercept" => RadonCountyInterceptAll.model,
+    "radon_all-radon_county_intercept" => RadonCountyIntercept.radon_all,
     "radon_all-radon_hierarchical_intercept_noncentered" =>
-        RadonHierarchicalInterceptNoncenteredAll.model,
+        RadonHierarchicalInterceptNoncentered.radon_all,
     "radon_all-radon_partially_pooled_noncentered" =>
-        RadonPartiallyPooledNoncenteredAll.model,
+        RadonPartiallyPooledNoncentered.radon_all,
     "radon_all-radon_pooled" => RadonPooled.radon_all,
     "radon_all-radon_variable_intercept_noncentered" =>
-        RadonVariableInterceptNoncenteredAll.model,
+        RadonVariableInterceptNoncentered.radon_all,
     "radon_all-radon_variable_intercept_slope_noncentered" =>
-        RadonVariableInterceptSlopeNoncenteredAll.model,
+        RadonVariableInterceptSlopeNoncentered.radon_all,
     "radon_all-radon_variable_slope_noncentered" =>
-        RadonVariableSlopeNoncenteredAll.model,
-    "radon_mn-radon_county_intercept" => RadonCountyInterceptMn.model,
+        RadonVariableSlopeNoncentered.radon_all,
+    "radon_mn-radon_county_intercept" => RadonCountyIntercept.radon_mn,
     "radon_mn-radon_hierarchical_intercept_noncentered" =>
-        RadonHierarchicalInterceptNoncenteredMn.model,
+        RadonHierarchicalInterceptNoncentered.radon_mn,
     "radon_mn-radon_partially_pooled_noncentered" =>
-        RadonPartiallyPooledNoncenteredMn.model,
+        RadonPartiallyPooledNoncentered.radon_mn,
     "radon_mn-radon_pooled" => RadonPooled.radon_mn,
     "radon_mn-radon_variable_intercept_noncentered" =>
-        RadonVariableInterceptNoncenteredMn.model,
+        RadonVariableInterceptNoncentered.radon_mn,
     "radon_mn-radon_variable_intercept_slope_noncentered" =>
-        RadonVariableInterceptSlopeNoncenteredMn.model,
+        RadonVariableInterceptSlopeNoncentered.radon_mn,
     "radon_mn-radon_variable_slope_noncentered" =>
-        RadonVariableSlopeNoncenteredMn.model,
+        RadonVariableSlopeNoncentered.radon_mn,
     "Rate_1_data-Rate_1_model" => Rates.rate1,
     "Rate_2_data-Rate_2_model" => Rates.rate2,
     "Rate_3_data-Rate_3_model" => Rates.rate3,
