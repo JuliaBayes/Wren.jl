@@ -16,7 +16,7 @@ function get_used_symbols(expr::Union{Expr,WrenExpr})
 end
 get_used_symbols(stmt::OtherStatement) = get_used_symbols(stmt.expr)
 function get_used_symbols(::AbstractWrenExpr)
-    _issue_error("unhandled node in get_used_symbols")
+    @_issue_error("unhandled node in get_used_symbols")
 end
 
 get_lhs_index_symbols(::Symbol) = Set{Symbol}()
@@ -105,7 +105,7 @@ end
 
 parse_variables!(::Any, ::DataflowAnalysisState) = nothing # e.g. literal
 parse_variables!(::T, ::DataflowAnalysisState) where {T<:AbstractWrenExpr} =
-    _issue_error("unhandled node of type $(T) in dataflow analysis")
+    @_issue_error("unhandled node of type $(T) in dataflow analysis")
 parse_variables!(::LineNumberNode, ::DataflowAnalysisState) = nothing
 function parse_variables!(sym::Symbol, state::DataflowAnalysisState)
     mark_symbol_used!(state, Set([sym]))
@@ -241,7 +241,7 @@ end
 
 reconstruct_statement(@nospecialize(x::Any), ::DataflowAnalysisResult) = x
 reconstruct_statement(::T, ::DataflowAnalysisResult) where {T<:AbstractWrenExpr} =
-    _issue_error("unhandled node of type $(T) in reconstruct_statement")
+    @_issue_error("unhandled node of type $(T) in reconstruct_statement")
 function reconstruct_statement(stmt::Sample, result::DataflowAnalysisResult)
     lhs_is_reused = stmt.lhs_top_level_symbol in result.required_syms
     return Accessors.@set stmt.lhs_is_reused = lhs_is_reused
@@ -305,12 +305,7 @@ function analyse_dataflow(
         state = analyse_dataflow_once(stmts, args, skippable_tqs)
         unrequired_tqs = setdiff(state.tq_syms, state.required_syms)
         if unrequired_tqs == skippable_tqs
-            if WREN_COMPILATION_DEBUG[]
-                @info "[dataflow.jl] lhs_syms = $(state.lhs_syms)"
-                @info "[dataflow.jl] required_syms = $(state.required_syms)"
-                @info "[dataflow.jl] tq_uses = $(state.tq_uses)"
-                @info "[dataflow.jl] args_to_copy = $(state.args_to_copy)"
-            end
+            @debug "Dataflow analysis" lhs_syms=state.lhs_syms required_syms=state.required_syms tq_uses=state.tq_uses args_to_copy=state.args_to_copy
             return state
         end
         skippable_tqs = unrequired_tqs
