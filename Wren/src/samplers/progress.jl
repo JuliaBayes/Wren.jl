@@ -1,5 +1,6 @@
 using Random: Random
-using MCMCProgress: MCMCProgress, TermBackend, ProgressLoggingBackend, PlainTextBackend, AbstractBackend
+using MCMCProgress:
+    MCMCProgress, TermBackend, ProgressLoggingBackend, PlainTextBackend, AbstractBackend
 using ProgressLogging: ProgressLogging
 using Term: Term
 
