@@ -52,10 +52,15 @@ function DensityInterface.logdensityof(d::BatchedBernoulliLogit, x)
     else
         T = float(promote_type(eltype(x), eltype(η)))
         s = zero(T)
+        # Check support with a branch-free flag rather than per term, which keeps this
+        # loop as fast as the plain sign-selected `log1pexp`.
+        valid = true
         for i in eachindex(x, η)
             ηi = convert(T, η[i])
-            s += bernoullilogit_logmass(ηi, x[i])
+            xi = x[i]
+            valid &= iszero(xi) | isone(xi)
+            s -= isone(xi) ? log1pexp(-ηi) : log1pexp(ηi)
         end
-        s
+        valid ? s : convert(T, -Inf)
     end
 end
