@@ -432,11 +432,11 @@ The model is exactly the same, except that we now pass in a vector of observatio
 
 ```@example beginner
 @wren function time_to_office_expanded_1(meets)
-    s ~ Bernoulli(0.1)                           # Oversleeping
-    d ~ Uniform(0, 15)                           # Train delay
-    commute = 30 + d + (s * 10)                  # Total commute time
-    for meet in meets
-        @observe meet ~ Normal(commute + 10, 3)  # Time we meet on each day
+    s ~ Bernoulli(0.1)                               # Oversleeping
+    d ~ Uniform(0, 15)                               # Train delay
+    commute = 30 + d + (s * 10)                      # Total commute time
+    for i in eachindex(meets)
+        @observe meets[i] ~ Normal(commute + 10, 3)  # Time we meet on each day
     end
     return nothing
 end
