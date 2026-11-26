@@ -203,4 +203,32 @@ if x > 4
 end
 ```
 
-Wren contains some code for handling cases where the names of parameters vary but their number is constant, but this is not an official guarantee right now.
+Names can differ between mutually exclusive branches while sharing a vector slot:
+
+```@example vecmodel
+@wren function branch_names()
+    x ~ Normal()
+    if x > 0
+        y ~ Normal()
+    else
+        z ~ Normal()
+    end
+end
+
+initial = FromValues(VarNamedTuple(; x=1.0, y=2.0))
+vm = VecModel(branch_names(), Wren.DEFAULT_AD; latent_source=initial)
+lp_and_grad(vm, [-1.0, 2.0])  # The second coordinate now supplies z.
+```
+
+Wren infers a shared slot when a straight-line top-level `if`/`else` has one differing latent name in each arm.
+Those names must not be sampled elsewhere. Names common to both arms keep their slots even when their order changes.
+For control flow that Wren cannot resolve, declare the groups explicitly:
+
+```julia
+VecModel(model, adtype; aliases=((@vn(y), @vn(z)),))
+```
+
+Each group must sample exactly one member per evaluation, with the same vector width and representation.
+Aliases support plain top-level distribution latents in `OriginalSpace()` or `UnconstrainedSpace()`.
+An explicit tuple replaces inference; `aliases=()` disables it.
+Names outside these groups must remain fixed, and the total vector dimension must remain constant.

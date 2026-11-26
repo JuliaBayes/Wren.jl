@@ -22,6 +22,7 @@ using Test
     include("batch/typestability.jl")
     include("ext/flexichains.jl")
     include("aliasing.jl")
+    include("branch_aliases.jl")
     include("submodel.jl")
     include("tq.jl")
     include("enzyme_conditioning.jl")

@@ -35,6 +35,7 @@ function accumulate_assume!!(
     sitename::Val,
 )
     rat = _get_range_and_transform(acc.vecinfo, vn, sitename)
+    _check_alias_block(acc.vecinfo.aliases, vn, right, rat)
     vectorised_tval = _get_vector_tval(val, tval, vn, right, logjac)
     vec_val = get_internal_value(vectorised_tval)
     copyto!(acc.vals, first(rat.range), vec_val, 1, length(vec_val))

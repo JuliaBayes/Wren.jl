@@ -84,11 +84,13 @@ include("model/dataflow.jl")
 include("model/model.jl")
 include("model/submodel.jl")
 include("model/emit.jl")
+include("model/aliases.jl")
 
 # Vectorisation
 include("latents/vector.jl")
 include("accs/vectorised_params.jl")
 include("accs/vec_sample.jl")
+include("vecmodel_aliases.jl")
 include("vecmodel.jl")
 include("initialization.jl")
 

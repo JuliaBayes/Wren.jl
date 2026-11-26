@@ -162,18 +162,23 @@ you should instead pass one of [`AllQuantities`](@ref), [`SomeQuantities`](@ref)
 """
 function simulate(vecmodel::VecModel, params::AbstractVector; track=AllQuantities())
     _check_vecmodel_dimension(params, vecmodel)
-    retval, accs = evaluate(
-        vecmodel.model,
-        FromVector(params, vecmodel.vecinfo),
-        vecmodel.parameter_space,
+    accs = _with_alias_check(
         AccumulatorTuple(
             ParamsAccumulator(),
             TrackedQuantityAccumulator(to_tq_spec(track)),
             LogPriorAccumulator(),
             LogLikelihoodAccumulator(),
         ),
+        vecmodel.vecinfo,
+    )
+    retval, accs = evaluate(
+        vecmodel.model,
+        FromVector(params, vecmodel.vecinfo),
+        vecmodel.parameter_space,
+        accs,
         EvalContext{false}(),
     )
+    _check_aliases(accs)
     return ModelResult(
         VarNames.parameters(accs),
         tracked_quantities(accs),
@@ -243,6 +248,7 @@ function VarNames.parameters(vecmodel::VecModel, params::AbstractVector)
     _check_vecmodel_dimension(params, vecmodel)
     source = FromVector(params, vecmodel.vecinfo)
     accs = AccumulatorTuple(ParamsAccumulator())
+    accs = _with_alias_check(accs, vecmodel.vecinfo)
     _, accs = evaluate(
         vecmodel.model,
         source,
@@ -250,6 +256,7 @@ function VarNames.parameters(vecmodel::VecModel, params::AbstractVector)
         accs,
         EvalContext{false}(),
     )
+    _check_aliases(accs)
     return VarNames.parameters(accs)
 end
 
@@ -347,13 +354,15 @@ is in the parameter space of `vecmodel`.
 """
 function return_value(vecmodel::VecModel, params::AbstractVector)
     _check_vecmodel_dimension(params, vecmodel)
-    retval, _ = evaluate(
+    accs = _with_alias_check(AccumulatorTuple(), vecmodel.vecinfo)
+    retval, accs = evaluate(
         vecmodel.model,
         FromVector(params, vecmodel.vecinfo),
         vecmodel.parameter_space,
-        AccumulatorTuple(),
+        accs,
         EvalContext{false}(),
     )
+    _check_aliases(accs)
     return retval
 end
 
