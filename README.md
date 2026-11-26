@@ -49,3 +49,9 @@ nuts(model, 1000, 4)
 │  Tuple{Float64, Float64}  return_value                           │
 ╰──────────────────────────────────────────────────────────────────╯
 ```
+
+## Why Wren?
+
+Mostly because the developer team likes birds and the name is short and easy to say.
+
+It also rhymes with [Gen](https://github.com/probcomp/Gen.jl), another Julia PPL.
