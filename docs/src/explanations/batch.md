@@ -5,15 +5,7 @@ For many standard cases this will Just Work.
 However, there are also very many cases where it will refuse to work.
 This page will try to explain the reasons behind this design, and how to work around it (if possible).
 
-!!! note "Minibatches"
-
-    It is also intended for the `@batch` macro to be a way to implement minibatches / subsampling in Wren.
-    This has not yet been implemented, but should not be overly difficult to add.
-
-    When this is done, it will be slightly unfortunate that the `@batch` macro will have overloaded semantics.
-    At the present moment we don't anticipate that this should be a problem.
-    However, if this proves to be a blocker for you, please do [open an issue](https://github.com/JuliaBayes/Wren.jl/issues)!
-    We can consider how to design this to separate the two use cases.
+For minibatch density scaling, specify `size=full_size` as described in [the Syntax page](@ref batched).
 
 ## Why batch?
 

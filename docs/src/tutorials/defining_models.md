@@ -178,6 +178,13 @@ The following has exactly the same semantics as the version without `@batch`, bu
 end
 ```
 
+In `@batch size=full_size for i in indices ... end`, `full_size` must be finite and positive.
+The batch must be nonempty and weights each prior and likelihood contribution by `full_size / length(indices)`.
+This weights the original-space density, so coordinate Jacobians apply once.
+Other accumulators retain their usual behavior.
+Subsampling local latent variables does not guarantee an unbiased estimate of the full unconstrained log joint.
+Sample a nonempty observation batch uniformly when estimating a full log likelihood.
+
 It's worth pointing out here that `@batch` is not 'magical': it works only with a restricted set of syntax and is not guaranteed to be faster than a naive for-loop.
 It is often worth [benchmarking your model](@ref benchmarking) if you want to optimise performance.
 
