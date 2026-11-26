@@ -1,5 +1,6 @@
 [deps]
 DifferentiationInterface = "a0c0ee7d-e4b9-4e03-894e-1c5f64a51d63"
+DifferentiationInterfaceTest = "a82114a7-5aa3-49a8-9643-716bb13727a3"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
 EnzymeTestUtils = "12d8515a-0907-448a-8884-5fe00fdf1c5a"
@@ -16,4 +17,5 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 WrenDists = "2ad4af40-d7c9-42b2-92b0-e09d37d1e75a"
 
 [compat]
+DifferentiationInterfaceTest = "0.11"
 Plaice = "0.1.1"
