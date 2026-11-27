@@ -88,13 +88,12 @@ Here are a few motivations:
     In general, naive `for` loops are problematic for Reactant because they are _unrolled_, i.e., Reactant generates XLA code that has one copy of the loop body for each iteration of the loop.
     This can lead to massive blow-ups in compilation time.
     The general way around this is to either vectorise the code yourself, or use Reactant's `@trace for ... end` macro, which lowers instead to StableHLO control flow operations.
-    Unfortunately, the implementation of `@trace` generates a closure inside the model body, which is disallowed by RuntimeGeneratedFunctions.jl, and so cannot be used in Wren models.
+    Write `Reactant.@trace` explicitly for loops or branches that depend on traced values.
+    Wren expands these macros before generating the evaluator, so they can appear in the model body.
+    Unannotated control flow keeps its native Julia behavior.
 
-!!! note
-
-    It's okay to use `@trace` in the definition of a function that Wren calls; you just can't use `@trace` at top-level in the model body itself.
-
-    Thus, part of the intent of `@batch` is to abstract away this problem from users: instead of having to figure out `@trace` and all its friends, users can just write `@batch` and have it work (ideally).
+    `VecModel(model, AutoReactant(...))` converts model arguments for Reactant automatically.
+    For direct evaluation, use `Reactant.to_rarray(model)` and pass the converted model to `simulate` inside a Reactant-compiled function.
 
 It's worth noting that a skilled user could of course implement all of these themselves.
 In fact, a skilled user could simply define a log-density function themselves and circumvent the PPL entirely!

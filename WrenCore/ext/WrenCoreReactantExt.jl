@@ -3,7 +3,9 @@ module WrenCoreReactantExt
 using ADTypes: AutoEnzyme, AutoReactant
 using Enzyme: Enzyme
 using Reactant: Reactant
-using WrenCore: WrenCore
+using WrenCore: WrenCore, Plaice
+
+include("reactant_evaluation.jl")
 
 """
     ReactantPrep
@@ -38,6 +40,7 @@ function WrenCore.VecModel(
     reduce_copies::Bool=true,
 )
     vecinfo, sample = WrenCore._prepare_vecmodel_info(model, latent_source, parameter_space)
+    model = Reactant.to_rarray(model)
 
     accs = WrenCore.AccumulatorTuple(
         WrenCore.LogPriorAccumulator(),
@@ -45,20 +48,9 @@ function WrenCore.VecModel(
         WrenCore.LogLikelihoodAccumulator(),
     )
 
-    # TODO(penelopeysm): This **shouldn't** be necessary, in an ideal world. The model
-    # arguments should be 'constant' data that Reactant doesn't need to trace -- only
-    # the parameters should be traced.
-    # However, Reactant gets incredibly slow when doing some matmuls with untraced arrays.
-    # See e.g.
-    #  - https://github.com/EnzymeAD/Reactant.jl/issues/3167
-    #  - https://github.com/EnzymeAD/Reactant.jl/issues/3195
-    # and there are probably more examples which we haven't found. So we just blanket-trace
-    # the model args here.
-    model_args = Reactant.to_rarray(model.args)
-
     lp_func = WrenCore._VecModelLP(
         model.evaluation_fn,
-        model_args,
+        model.args,
         model.conditioned,
         model.enzyme_copy_argnames,
         # TODO(penelopeysm): We'll conservatively copy the model args here just like we do
@@ -72,8 +64,13 @@ function WrenCore.VecModel(
 
     reactant_sample = Reactant.to_rarray(sample)
     value_and_gradient_at = ValueAndGradientCallable(lp_func, adtype)
-    compiled_lp = Reactant.@compile lp_func(reactant_sample)
-    compiled_value_and_gradient = Reactant.@compile value_and_gradient_at(reactant_sample)
+    # The evaluator was just defined by Core.eval, after this caller's world age.
+    compiled_lp = Base.invokelatest(Reactant.Compiler.compile, lp_func, (reactant_sample,))
+    compiled_value_and_gradient = Base.invokelatest(
+        Reactant.Compiler.compile,
+        value_and_gradient_at,
+        (reactant_sample,),
+    )
     adprep = ReactantPrep(compiled_lp, compiled_value_and_gradient)
 
     return WrenCore.VecModel(

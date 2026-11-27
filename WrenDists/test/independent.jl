@@ -30,7 +30,7 @@ test_dist(
         Distributions.Normal(0.0, 1.0),
         Distributions.Normal(3.0, 0.5),
     ]);
-    test_reactant=false, # array-of-struct problem
+    test_reactant=RUN_REACTANT,
     other_ad_testcases=(
         let
             f(x) = logdensityof(

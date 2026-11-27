@@ -226,17 +226,29 @@ to overload `_needs_copy`, as the generated function only has access to the meth
 `_needs_copy` that were present at the compilation world age.
 """
 @inline _maybe_dealias(::EvalContext{true}, ::Val{S}, ::Val{name}, v::V) where {S,name,V} =
-    name in S && _needs_copy(V) ? _dealias(v) : v
+    (name in S && _needs_copy(V)) ? _dealias(v) : v
 @inline _maybe_dealias(::EvalContext{false}, ::Val, ::Val, v) = v
 
-function make_evaluation_fn(
+# Reactant's branch dataflow ignores gensyms. Accumulators must remain visible to @trace.
+_evaluation_fn_args() =
+    ntuple(_ -> Symbol("wren_local_", replace(string(gensym()), '#' => '_')), 7)
+
+function evaluation_fn_expr(
     argnames::Tuple{Vararg{Symbol}},
-    stmts::Vector{<:Union{AbstractWrenExpr,LineNumberNode}},
-    mod::Module,
+    stmts::Vector{<:Union{AbstractWrenExpr,LineNumberNode}};
+    fn_args=_evaluation_fn_args(),
 )
     body = Expr(:block)
-    @gensym model_args enzyme_copy_argnames ctx
-    @gensym accs conditioned latent_source parameter_space retval
+    (
+        latent_source,
+        parameter_space,
+        accs,
+        model_args,
+        conditioned,
+        enzyme_copy_argnames,
+        ctx,
+    ) = fn_args
+    retval = gensym()
     for k in argnames
         # Conditioning an argument replaces it, so the model sees one value for `k`.
         push!(
@@ -260,22 +272,19 @@ function make_evaluation_fn(
         emit_statements(stmts, accs, conditioned, latent_source, parameter_space, ctx)
     push!(body.args, :($retval = $model_body))
     push!(body.args, :(return ($retval, $accs)))
+    return Expr(:function, Expr(:tuple, fn_args...), body)
+end
+
+function make_evaluation_fn(argnames, stmts, mod::Module)
+    return make_evaluation_fn(evaluation_fn_expr(argnames, stmts), mod)
+end
+
+function make_evaluation_fn(expr::Expr, mod::Module)
+    # Expand macros before RGF converts their closures to opaque closures.
     return RuntimeGeneratedFunctions.RuntimeGeneratedFunction(
         mod,
         mod,
-        :(
-            function (
-                $latent_source,
-                $parameter_space,
-                $accs,
-                $model_args,
-                $conditioned,
-                $enzyme_copy_argnames,
-                $ctx,
-            )
-                $body
-            end
-        ),
+        macroexpand(mod, expr),
     )
 end
 
