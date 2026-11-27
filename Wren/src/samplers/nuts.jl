@@ -49,7 +49,7 @@ close_phases!(::DynamicHMC.NoProgressReport) = nothing
         niters::Integer,
         nchains::Integer=1;
         adtype::DI.AbstractADType=DI.AutoEnzyme(; mode=Enzyme.Reverse),
-        progress::Bool=true,
+        progress::ProgressSpec=true,
         reduce_copies::Bool=true,
         track=AllQuantities(),
         init=nothing,
@@ -69,6 +69,9 @@ Each chain starts from an independent prior draw by default. Use `init` to selec
 `reduce_copies` is passed to [`VecModel`](@ref): when sampling with Enzyme, it skips copies
 of model arguments that turn out not to be needed (see [`reduce_copies`](@ref)).
 
+Configure `progress` displays by passing a backend, or several as a tuple. The default
+`progress=true` uses `TermBackend`, and setting `progress=false` skips progress displays.
+
 By default, all tracked quantities will be included in the returned chain. To include only
 one or a selection of tracked quantities, pass a Symbol or a tuple of Symbols; to include
 none, pass `track=false` or an empty tuple. Note that tracked quantities are not evaluated
@@ -79,7 +82,7 @@ function nuts(
     niters::Integer,
     nchains::Integer=1;
     adtype::DI.AbstractADType=DI.AutoEnzyme(; mode=Reverse),
-    progress::Bool=true,
+    progress::ProgressSpec=true,
     reduce_copies::Bool=true,
     track=AllQuantities(),
     init=nothing,
@@ -106,13 +109,16 @@ function nuts(
     niters::Integer,
     nchains::Integer=1;
     adtype::DI.AbstractADType=DI.AutoEnzyme(; mode=Reverse),
-    progress::Bool=true,
+    progress::ProgressSpec=true,
     reduce_copies::Bool=true,
     track=AllQuantities(),
     init=nothing,
     initial_stepsize::Union{Nothing,Real}=nothing,
     dynamichmc_kwargs...,
 )
+    backends = progress_backends(progress)
+    show_progress = !isempty(backends)
+
     haskey(dynamichmc_kwargs, :initialization) && throw(
         ArgumentError(
             "Use `init` for starting points and `initial_stepsize` for the step size.",
@@ -123,12 +129,12 @@ function nuts(
     init = init === nothing ? nothing : WrenCore.to_initialization(init)
     source = init === nothing ? WrenCore.FromPrior() : WrenCore._initial_source(init)
     # AD preparation
-    if progress
+    if show_progress
         t = time()
         print("Doing AD preparation... ")
     end
     vm_single = WrenCore.VecModel(model, adtype; reduce_copies, latent_source=source)
-    if progress
+    if show_progress
         println("done in $(round(time() - t, digits=2)) seconds.")
         t = time()
     end
@@ -142,7 +148,7 @@ function nuts(
 
     t = time()
     label = "Sampling $(model.name)"
-    outputs = with_progress(progress, label, nchains) do run
+    outputs = with_progress(backends, label, nchains) do run
         tasks = @sync [
             Threads.@spawn _nuts_chain(
                 vm_single,
@@ -158,7 +164,7 @@ function nuts(
         fetch.(tasks)
     end
 
-    if progress
+    if show_progress
         println("Sampling done in $(round(time() - t, digits=2)) seconds.")
         t = time()
         print("Constructing chain... ")
@@ -166,7 +172,7 @@ function nuts(
     model_results = stack(first.(outputs))
     stats = stack(last.(outputs))
     chn = WrenCore.to_flexichain(model_results, stats)
-    if progress
+    if show_progress
         println("took $(round(time() - t, digits=2)) seconds")
     end
     return chn

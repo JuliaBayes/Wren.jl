@@ -137,6 +137,9 @@ export Forward, Reverse
 using LinearAlgebra: I, Diagonal, Symmetric
 export I, Diagonal, Symmetric
 
+using MCMCProgress: TermBackend, ProgressLoggingBackend, PlainTextBackend
+export TermBackend, ProgressLoggingBackend, PlainTextBackend
+
 using FlexiChains:
     Wide,
     Long,
