@@ -102,9 +102,8 @@ Base.size(d::BatchedTDist) = size(d.μ)
 
 function Base.rand(rng::AbstractRNG, d::BatchedTDist)
     F = rngtype(d)
-    N = length(d.μ)
-    z = randn(rng, F, N)
-    u = rand(rng, F, N)
+    z = randn(rng, F, size(d))
+    u = rand(rng, F, size(d))
     logv = gammalogquantile.(d.ν ./ 2, u)
     t = z ./ sqrt.(exp.(logv) ./ (d.ν ./ 2))
     return d.μ .+ d.σ .* t

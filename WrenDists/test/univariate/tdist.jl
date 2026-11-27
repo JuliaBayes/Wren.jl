@@ -121,6 +121,12 @@ end
     end
 end
 
+@testset "BatchedTDist matrix sampling" begin
+    d = WrenDists.BatchedTDist(fill(4.0f0, 2, 3), Float32[1 2 3; 4 5 6], fill(0.5f0, 2, 3))
+    flat = WrenDists.BatchedTDist(vec(d.ν), vec(d.μ), vec(d.σ))
+    @test rand(Xoshiro(8675309), d) == reshape(rand(Xoshiro(8675309), flat), size(d))
+end
+
 test_dist(
     "BatchedTDist",
     WrenDists.BatchedTDist(FillArrays.Fill(4.0, 3), [1.0, 2.0, 3.0], [0.5, 1.0, 2.0]),

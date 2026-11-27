@@ -44,7 +44,7 @@ struct BatchedLogNormal{M<:AbstractArray,S<:AbstractArray} <: BatchedUnivariate
 end
 Base.size(d::BatchedLogNormal) = size(d.μ)
 function Base.rand(rng::AbstractRNG, d::BatchedLogNormal)
-    return exp.(randn(rng, noisetype(d), size(d)) .* d.σ .+ d.μ)
+    return exp.(randn(rng, rngtype(d), size(d)) .* d.σ .+ d.μ)
 end
 
 function _lognormal_loop(mu, sigma, x)
