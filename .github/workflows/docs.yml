@@ -28,6 +28,28 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
       - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # 3.0.2
       - uses: julia-actions/cache@b7788abd52452d5bc033d69796e110d9906af4ab # 3.2.0
+      - uses: typst-community/setup-typst@00ad6338f0b34724ea002136bfb701a6c18585b0 # 5.3.2
+        with:
+          typst-version: 0.15.1
+
+      - name: Install cheatsheet fonts
+        run: |
+          fonts="$RUNNER_TEMP/fonts"
+          mkdir -p "$fonts"
+          curl -sSfL -o "$RUNNER_TEMP/plex-sans.zip" 'https://github.com/IBM/plex/releases/download/%40ibm/plex-sans%401.3.6/ibm-plex-sans.zip'
+          unzip -q "$RUNNER_TEMP/plex-sans.zip" -d "$fonts"
+          curl -sSfL https://github.com/cormullion/juliamono/releases/download/v0.63.2/JuliaMono-ttf.tar.gz | tar -xz -C "$fonts"
+
+      # Typst substitutes missing fonts with only a warning, so any warning fails the build.
+      - name: Build cheatsheets
+        run: |
+          set -o pipefail
+          typst compile --ignore-system-fonts --font-path "$RUNNER_TEMP/fonts" \
+            --root docs/src/assets docs/src/assets/cheatsheets/wren-api.typ 2>&1 | tee "$RUNNER_TEMP/typst.log"
+          if grep -q '^warning:' "$RUNNER_TEMP/typst.log"; then
+            echo "::error::typst emitted warnings while building the cheatsheets"
+            exit 1
+          fi
 
       - name: Install docs dependencies
         working-directory: docs
