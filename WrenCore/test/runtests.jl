@@ -23,6 +23,7 @@ using Test
     include("ext/flexichains.jl")
     include("aliasing.jl")
     include("submodel.jl")
+    include("conditioning_errors.jl")
     include("tq.jl")
     include("enzyme_conditioning.jl")
     include("vecmodel.jl")

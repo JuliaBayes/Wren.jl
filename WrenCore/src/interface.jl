@@ -265,6 +265,8 @@ For a submodel, the value under its namespace is a `NamedTuple` of the child's
 conditioned variables, for example `model | (child=(y=data,),)`.
 Values replace existing keys as in `merge(::NamedTuple, ::NamedTuple)`, including a
 nested submodel namespace. Nested values are not merged recursively.
+Invalid lookups during evaluation report the affected variable or submodel namespace
+and the supplied value.
 """
 function condition(model::Model, values::NamedTuple)
     new_conditioned = merge(conditioned(model), values)
