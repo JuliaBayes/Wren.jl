@@ -24,8 +24,21 @@
 #   - WREN_BENCH_CPU: set to `false` to skip the CPU Enzyme timings, apart from the
 #     single evaluation that the Reactant results are checked against (default `true`)
 #
-# Note that everything here is Float64. Consumer GPUs are often much slower at Float64
-# than Float32, so the GPU timings will look a lot better on data-centre GPUs.
+# Float32 vs Float64
+# ------------------
+#
+# The float type is taken from the log-probability type preference of WrenCore and
+# DynamicPPL, which must agree. The data, the priors, and the parameters all use that type.
+# Because these preferences are compile-time constants, you need one Julia session to set
+# them and a fresh one to run the benchmark. To switch to Float32, run from this folder:
+#
+#     julia --project=. -e 'using WrenCore, DynamicPPL; WrenCore.set_logprob_type!(Float32); DynamicPPL.set_logprob_type!(Float32)'
+#
+# and then run the benchmark as above. To switch back, do the same with Float64. (This
+# writes the preferences to `LocalPreferences.toml` in this folder.)
+#
+# Consumer GPUs are often much slower at Float64 than Float32, so the Float64 GPU timings
+# will look a lot better on data-centre GPUs.
 
 using ADTypes: AutoEnzyme, AutoReactant
 using Chairmarks: @be
@@ -49,9 +62,19 @@ ENV["DATADEPS_ALWAYS_ACCEPT"] = "true"
 const SECONDS = parse(Float64, get(ENV, "WREN_BENCH_SECONDS", "5.0"))
 const RUN_CPU = parse(Bool, get(ENV, "WREN_BENCH_CPU", "true"))
 
+const T = WrenCore.LogProbType
+if DynamicPPL.LogProbType !== T
+    error(
+        "WrenCore's log-probability type is $T but DynamicPPL's is " *
+        "$(DynamicPPL.LogProbType). See the comments at the top of this file for how to " *
+        "set them.",
+    )
+end
+T in (Float32, Float64) || error("This script only supports Float32 and Float64, not $T")
+
 const mnist_data = MNIST(split=:train)
 # N x 784 matrix of pixel values in [0, 1], one row per image
-const X = Matrix(Float64.(reshape(mnist_data.features, 28 * 28, :))')
+const X = Matrix(T.(reshape(mnist_data.features, 28 * 28, :))')
 # Convert labels from 0-9 to 1-10 for 1-based indexing in Julia
 const LABELS = mnist_data.targets .+ 1
 const C = 10 # Number of labels
@@ -72,8 +95,8 @@ end
 # 1. DPPL as written
 DynamicPPL.@model function dppl_arg(X, y, C)
     N, D = size(X)
-    W ~ filldist(Normal(), C - 1, D)
-    b ~ filldist(Normal(), C - 1)
+    W ~ filldist(Normal(zero(eltype(X)), one(eltype(X))), C - 1, D)
+    b ~ filldist(Normal(zero(eltype(X)), one(eltype(X))), C - 1)
     probabilities = softmax(logits_of(W, b, X); dims=1)
     for i in 1:N
         y[i] ~ Categorical(probabilities[:, i])
@@ -83,8 +106,8 @@ end
 # 2. DPPL, y created inside the model and conditioned on
 DynamicPPL.@model function dppl_cond(X, C)
     N, D = size(X)
-    W ~ filldist(Normal(), C - 1, D)
-    b ~ filldist(Normal(), C - 1)
+    W ~ filldist(Normal(zero(eltype(X)), one(eltype(X))), C - 1, D)
+    b ~ filldist(Normal(zero(eltype(X)), one(eltype(X))), C - 1)
     probabilities = softmax(logits_of(W, b, X); dims=1)
     y = Vector{Int}(undef, N)
     for i in 1:N
@@ -95,16 +118,16 @@ end
 # 3. DPPL, vectorised likelihood via @addlogprob!
 DynamicPPL.@model function dppl_addlogprob(X, y, C)
     N, D = size(X)
-    W ~ filldist(Normal(), C - 1, D)
-    b ~ filldist(Normal(), C - 1)
+    W ~ filldist(Normal(zero(eltype(X)), one(eltype(X))), C - 1, D)
+    b ~ filldist(Normal(zero(eltype(X)), one(eltype(X))), C - 1)
     @addlogprob! (; loglikelihood=categorical_loglik(logits_of(W, b, X), y))
 end
 
 # 4. Wren, no @batch
 @wren function wren_nobatch(X, y, C)
     N, D = size(X)
-    @iid W ~ WD.Normal() size=(C-1, D)
-    @iid b ~ WD.Normal() size=(C-1)
+    @iid W ~ WD.Normal(zero(eltype(X)), one(eltype(X))) size=(C-1, D)
+    @iid b ~ WD.Normal(zero(eltype(X)), one(eltype(X))) size=(C-1)
     probabilities = softmax(logits_of(W, b, X); dims=1)
     for i in 1:N
         @observe y[i] ~ WD.Categorical(probabilities[:, i])
@@ -114,8 +137,8 @@ end
 # 5. Wren, @batch
 @wren function wren_batch(X, y, C)
     N, D = size(X)
-    @iid W ~ WD.Normal() size=(C-1, D)
-    @iid b ~ WD.Normal() size=(C-1)
+    @iid W ~ WD.Normal(zero(eltype(X)), one(eltype(X))) size=(C-1, D)
+    @iid b ~ WD.Normal(zero(eltype(X)), one(eltype(X))) size=(C-1)
     probabilities = softmax(logits_of(W, b, X); dims=1)
     @batch for i in 1:N
         @observe y[i] ~ WD.Categorical(probabilities[:, i])
@@ -125,8 +148,8 @@ end
 # 6. Wren, vectorised likelihood via @addloglikelihood
 @wren function wren_addll(X, y, C)
     N, D = size(X)
-    @iid W ~ WD.Normal() size=(C-1, D)
-    @iid b ~ WD.Normal() size=(C-1)
+    @iid W ~ WD.Normal(zero(eltype(X)), one(eltype(X))) size=(C-1, D)
+    @iid b ~ WD.Normal(zero(eltype(X)), one(eltype(X))) size=(C-1)
     @addloglikelihood categorical_loglik(logits_of(W, b, X), y)
 end
 
@@ -170,16 +193,22 @@ print_error(name, e) =
 
 maxreldiff(a, b) = maximum(abs.(a .- b) ./ max.(abs.(b), 1e-12))
 
+# Different variants add things up in different orders, so in Float32 they only agree to
+# about 1e-5.
+const LP_RTOL = T === Float64 ? 1e-8 : 1e-4
+const GRAD_RTOL = T === Float64 ? 1e-6 : 1e-3
+
 # Warn (rather than error) on a mismatch, so that one bad result doesn't throw away a
 # long run.
 function check(name, v, g, ref_lp, ref_grad)
-    if !isapprox(v, ref_lp; rtol=1e-8) || !isapprox(g, ref_grad; rtol=1e-6)
+    if !isapprox(v, ref_lp; rtol=LP_RTOL) || !isapprox(g, ref_grad; rtol=GRAD_RTOL)
         @warn "$name does not match the reference" v ref_lp maxreldiff(g, ref_grad)
     end
 end
 
 function main()
     println("Reactant device: ", string(first(Reactant.devices())))
+    println("Float type: ", T)
     println("Julia threads: ", Threads.nthreads())
     println("Chairmarks sampling time per measurement: $(SECONDS) s\n")
 
@@ -188,6 +217,11 @@ function main()
         VecModel(wren_batch(X, LABELS, C), WREN_AD; latent_source=FromPrior(Xoshiro(468)))
     params = wren_ref.sample
     ref_lp, ref_grad = lp_and_grad(wren_ref, params)
+    if eltype(params) !== T || typeof(ref_lp) !== T || eltype(ref_grad) !== T
+        @warn "Something was promoted away from $T" eltype(params) typeof(ref_lp) eltype(
+            ref_grad,
+        )
+    end
 
     print_header()
 
