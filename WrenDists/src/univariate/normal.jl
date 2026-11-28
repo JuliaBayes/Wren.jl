@@ -37,7 +37,15 @@ function _iid_logdensityof(dist::Normal, x::AbstractArray)
     μ = dist.μ
     _, _, σ = promote(zero(eltype(x)), μ, dist.σ)
     inv_σ = inv(float(σ))
-    z2 = _sum_or_zero(xi -> abs2((xi - μ) * inv_σ), x, zero(inv_σ))
+    z2 = if within_compile()
+        # Under Reactant, the function passed to `sum` must not capture `μ` or `σ`, because
+        # they can be traced numbers. `sum` over a reshaped view (which is what `@iid`
+        # parameters are) with such a function falls back to a loop over every element,
+        # which runs one GPU kernel per element.
+        _sum_or_zero(abs2, x .- μ, zero(inv_σ)) * abs2(inv_σ)
+    else
+        _sum_or_zero(xi -> abs2((xi - μ) * inv_σ), x, zero(inv_σ))
+    end
     lognorm = logdensityof(dist, oftype(z2, μ))
     return length(x) * lognorm - z2 / 2
 end
