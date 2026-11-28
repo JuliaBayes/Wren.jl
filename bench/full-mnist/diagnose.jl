@@ -295,6 +295,10 @@ function main()
     end
     println("\n(NaN means not measured.)")
 
+    # The profile tables are cut to the terminal size, which is only 80 columns when the
+    # output goes to a file. Make them big enough to show everything.
+    ENV["COLUMNS"] = "250"
+    ENV["LINES"] = "500"
     if RUN_PROFILE
         for T in TYPES
             (; X, Xt, y, W, b) = device_data[T]
@@ -304,7 +308,7 @@ function main()
                 println("Kernel profile: gradient of $name, $T")
                 println("="^91)
                 try
-                    fg = @compile value_and_grad(f, W, b, X, Xt, y)
+                    fg = @compile sync=true value_and_grad(f, W, b, X, Xt, y)
                     Reactant.Profiler.@profile fg(f, W, b, X, Xt, y)
                 catch e
                     println("ERROR: ", first(split(sprint(showerror, e), '\n')))
