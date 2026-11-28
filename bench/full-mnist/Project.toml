@@ -1,0 +1,17 @@
+[deps]
+ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
+Chairmarks = "0ca39b1e-fe0b-4e98-acfc-b1656634c4de"
+DifferentiationInterface = "a0c0ee7d-e4b9-4e03-894e-1c5f64a51d63"
+Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
+DynamicPPL = "366bfd00-2699-11ea-058f-f148b4cae6d8"
+Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
+LogDensityProblems = "6fdf6af0-433a-55f7-b3ed-c6c6e0b8df7c"
+LogExpFunctions = "2ab3a3ac-af41-5b50-aa03-7779005ae688"
+MLDatasets = "eb30cadb-4394-5ae3-aed4-317e484a6458"
+Reactant = "3c362404-f566-11ee-1572-e11a4b42c853"
+WrenCore = "008b59e7-bbda-4991-901b-b08f5cfc584d"
+WrenDists = "2ad4af40-d7c9-42b2-92b0-e09d37d1e75a"
+
+[sources]
+WrenCore = {path = "../../WrenCore"}
+WrenDists = {path = "../../WrenDists"}

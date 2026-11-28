@@ -1,0 +1,22 @@
+ubuntu@129-213-89-133:~/Julia-Virginia/Wren.jl/bench/full-mnist$ cat f64.txt
+Reactant device: CUDA:0 NVIDIA A100-SXM4-40GB
+Julia threads: 30
+Chairmarks sampling time per measurement: 2.0 s
+
+variant                                       lp    allocs       lp+grad    allocs
+──────────────────────────────────────────────────────────────────────────────────
+5. Wren (@batch) [Reactant]             47.76 ms        21     170.86 ms        28
+6. Wren (@addloglikelihood) [Reactant]      47.91 ms        21     171.39 ms        28
+
+After #369 fix
+
+ubuntu@129-213-145-38:~/Julia-Virginia/Wren.jl/bench/full-mnist$ NTFY_TOPIC=julia_wren_gpu_runs_complete ./run_and_notify.sh gpu.jl f64.txt
+Reactant device: CUDA:0 NVIDIA A100-SXM4-40GB
+Float type: Float64
+Julia threads: 30
+Chairmarks sampling time per measurement: 2.0 s
+
+variant                                       lp    allocs       lp+grad    allocs
+──────────────────────────────────────────────────────────────────────────────────
+5. Wren (@batch) [Reactant]              0.73 ms        21       1.34 ms        28
+6. Wren (@addloglikelihood) [Reactant]       0.68 ms        21       1.25 ms        28
